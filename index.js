@@ -5,7 +5,8 @@ const http = require('http');
 // Configuration
 const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
 const REWARBLE_API_KEY = process.env.REWARBLE_API_KEY;
-const TON_EMAIL_REWARBLE = "issamhamouhadi@gmail.com";
+// URL corrigée selon la doc
+const REWARBLE_API_URL = "https://api.rewarble.com/client/1.00/redeem"; 
 const ADMIN_DISCORD_ID = "1520551977854042114";
 
 const channelStates = new Map();
@@ -15,7 +16,7 @@ const client = new Client({
     partials: [Partials.GuildMember, Partials.User, Partials.Message]
 });
 
-// Événement : Nouveau membre
+// Événements Join/Leave
 client.on('guildMemberAdd', async (member) => {
     try {
         const admin = await client.users.fetch(ADMIN_DISCORD_ID);
@@ -23,7 +24,6 @@ client.on('guildMemberAdd', async (member) => {
     } catch (e) { console.error("❌ Erreur envoi DM join:", e); }
 });
 
-// Événement : Membre qui quitte
 client.on('guildMemberRemove', async (member) => {
     try {
         const admin = await client.users.fetch(ADMIN_DISCORD_ID);
@@ -33,12 +33,9 @@ client.on('guildMemberRemove', async (member) => {
 
 client.once('clientReady', async () => {
     console.log(`✅ Bot connecté en tant que ${client.user.tag}`);
-    try {
-        const admin = await client.users.fetch(ADMIN_DISCORD_ID);
-        await admin.send("🤖 Bot en ligne et opérationnel.");
-    } catch (e) { console.error("❌ Erreur envoi admin:", e); }
 });
 
+// Gestion interaction
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isButton()) return;
     await interaction.deferReply({ ephemeral: true });
@@ -77,112 +74,68 @@ client.on('interactionCreate', async (interaction) => {
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
-    // Commande !setup
     if (message.content === '!setup' && message.author.id === ADMIN_DISCORD_ID) {
-        const menu = `💎 **CONTENT & PRICES** 💎
-
-**Once you redeem the code type your selected product number to receive it in your dm’s!**
-
----
-
-✨ **PHOTOS** ✨
-1. **Boobs** → **€5**
-2. **Ass** → **€5**
-3. **Full Body** → **€5**
-4. **Lingerie Try-On** → **€5**
-5. **Mirror Pic** → **€5**
-
----
-
-🔥 **VIDEOS** 🔥
-6. **5-Min Video** → **€10**
-7. **Shower / Bath** → **€10**
-
----
-
-💦 **SPECIAL** 💦
-8. **Friends Nude** → **€15**
-9. **Surprise Pack** (3-5 items) → **€15**
-
----
-
-💌 **PERSONALIZED**
-10. **Sexting** → **On request**
-11. **Custom** → **On request**
-
----
-
-**💵 HOW TO PAY**
-Buy your code via **G2A Gift Card**:
-
-• **5€** → [Buy here](https://www.g2a.com/fr/paypal-gift-card-5-gbp-by-rewarble-global-i10000339995022)
-• **10€** → [Buy here](https://www.g2a.com/fr/rewarble-super-gift-card-10-gbp-by-rewarble-key-united-kingdom-i10000506957028)
-• **15€** → [Buy here](https://www.g2a.com/fr/paypal-gift-card-15-gbp-by-rewarble-global-i10000339995023)
-
-**After payment, redeem the code by typing:** \`!redeem [your code]\`
-
-If you have any problems or questions don’t hesitate to dm me!`;
-
+        const menu = `💎 **CONTENT & PRICES** 💎\n\n**Once you redeem the code type your selected product number!**\n\n1. Boobs | 2. Ass | 3. Full Body | 4. Lingerie | 5. Mirror Pic\n6. 5-Min Video | 7. Shower/Bath\n8. Friends Nude | 9. Surprise Pack\n10. Sexting | 11. Custom\n\n**After payment, redeem the code by typing:** \`!redeem [your code]\``;
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId('open_shop_channel').setLabel('📩 Redeem Code').setStyle(ButtonStyle.Primary),
             new ButtonBuilder().setCustomId('open_support_ticket').setLabel('🎧 Need Support?').setStyle(ButtonStyle.Secondary)
         );
-        
         await message.channel.send({ content: menu, components: [row] });
         message.delete().catch(() => {});
         return;
     }
 
-    // Commande !close
     if (message.content.trim().toLowerCase() === '!close') {
         if (message.author.id !== ADMIN_DISCORD_ID) return;
-        try {
-            await message.channel.delete();
-        } catch (err) {
-            console.error("❌ Erreur lors de la suppression :", err);
-        }
+        try { await message.channel.delete(); } catch (err) { console.error(err); }
         return;
     }
 
-    // Commande !say
-    if (message.content.startsWith('!say ') && message.author.id === ADMIN_DISCORD_ID) {
-        const textToSay = message.content.slice(5).trim();
-        if (textToSay.length > 0) {
-            await message.channel.send(textToSay);
-            await message.delete().catch(() => {});
-        }
-        return;
-    }
-
-    // Gestion du shop
+    // Gestion Shop
     if (message.channel?.name?.startsWith('shop-')) {
-        let input = message.content.trim();
-        if (input.toLowerCase().startsWith('!redeem')) {
-            input = input.replace(/!redeem/i, '').trim();
-        }
-
         const state = channelStates.get(message.channel.id);
         if (!state) return;
 
+        const content = message.content.trim();
+        
         if (!state.validated) {
+            if (!content.toLowerCase().startsWith('!redeem')) return; 
+            
+            const code = content.replace(/^!redeem\s+/i, '');
+
             try {
-                const response = await axios.post('https://api.rewarble.com/v1/redeem', 
-                { code: input, user_email: TON_EMAIL_REWARBLE }, 
+                // Requête corrigée selon documentation
+                const response = await axios.post(REWARBLE_API_URL, 
+                { code: code }, 
                 { headers: { 'Authorization': `Bearer ${REWARBLE_API_KEY}`, 'Content-Type': 'application/json' } });
                 
-                if (response.data.success) { 
+                if (response.data) { // Si la réponse est reçue, c'est que le code est valide
                     state.validated = true; 
                     channelStates.set(message.channel.id, state); 
-                    message.reply("✅ Validated! Type your product number (1-9)."); 
+                    message.reply("✅ Code validated! Type your product number (1-11)."); 
                 }
             } catch (error) { 
-                message.reply(`❌ API Error: ${error.response ? error.response.status : error.message}`);
+                message.reply(`❌ API Error: ${error.response ? error.response.data.reason || error.response.status : error.message}`);
+            }
+        } else {
+            const num = content;
+            const PRODUCT_LINKS = {
+                "1": "https://lien-vers-ton-drive.com/boobs", "2": "https://lien-vers-ton-drive.com/ass",
+                "3": "https://lien-vers-ton-drive.com/fullbody", "4": "https://lien-vers-ton-drive.com/lingerie",
+                "5": "https://lien-vers-ton-drive.com/mirror", "6": "https://lien-vers-ton-drive.com/video5min",
+                "7": "https://lien-vers-ton-drive.com/shower", "8": "https://lien-vers-ton-drive.com/friends",
+                "9": "https://lien-vers-ton-drive.com/surprisepack"
+            };
+            if (PRODUCT_LINKS[num]) {
+                message.reply(`🎉 Here is your link: ${PRODUCT_LINKS[num]}`);
+            } else if (["10", "11"].includes(num)) {
+                message.reply("📩 You requested a custom service. I have notified the Admin!");
+                const admin = await client.users.fetch(ADMIN_DISCORD_ID);
+                await admin.send(`⚠️ User <@${message.author.id}> requested item #${num} in channel ${message.channel.name}`);
             }
         }
     }
 });
 
 http.createServer((req, res) => { res.writeHead(200); res.end('Online'); }).listen(3000);
-
-console.log("DEBUG - Bot démarré avec succès.");
 client.login(DISCORD_BOT_TOKEN);
