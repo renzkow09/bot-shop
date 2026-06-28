@@ -54,10 +54,10 @@ client.on('guildMemberAdd', async (member) => {
         });
 
         // Message d'accueil personnalisé dans son salon privé
-        await channel.send(`👋 Bienvenue <@${member.id}> ! Ceci est ton salon privé sécurisé.\n\nPour recevoir ton fichier automatiquement, achète ton code Rewarble et tape la commande ici :\n\`!redeem [ton_code]\`\n\n*Personne d'autre ne peut voir ce salon, ton code est en sécurité !*`);
+        await channel.send(`👋 Welcome <@${member.id}> ! Here you can put your code.\n\nTo get your file, type  :\n\`!redeem [ton_code]\`\n\n*Nobody can see this channel, your code is safe!*`);
         
     } catch (error) {
-        console.error("🔴 Erreur lors de la création du salon privé :", error);
+        console.error("🔴 Error while making the channel:", error);
     }
 });
 
@@ -112,7 +112,7 @@ client.on('messageCreate', async (message) => {
         const voucherCode = message.content.split(' ')[1];
 
         if (!voucherCode) {
-            return message.reply("❌ Tu dois fournir un code valide. Exemple : `!redeem 123456`");
+            return message.reply("❌ You must put a valid code. Exemple : `!redeem 123456`");
         }
 
         // 🧪 Code de test
@@ -120,14 +120,14 @@ client.on('messageCreate', async (message) => {
             await message.reply("🧪 **[MODE TEST]** Code de simulation détecté...");
             await message.reply("✅ Paiement validé avec succès !");
             try {
-                await message.author.send("🎉 **[TEST]** Merci pour ton achat ! Voici ton lien : [METS_LE_LIEN_DE_TON_FICHIER_ICI]");
+                await message.author.send("🎉 **[TEST]** Thanks for buying ! Here is your link! : https://play-lh.googleusercontent.com/HIfrKDswSBoGygCLl7kl_BbwesYz2pnXzvCI4RzAaZ0S-rc0U7lInAsj5XpAMR0te5qnnfWkUjtjVWvGdpir-g");
                 return;
             } catch (dmError) {
-                return message.reply("⚠️ Tes messages privés sont fermés. Débloque-les pour recevoir le fichier !");
+                return message.reply("⚠️ Your dm's are blocked. Unlock your dm's to get your link !");
             }
         }
 
-        await message.reply("🔄 Vérification du code auprès de Rewarble...");
+        await message.reply("🔄 Verifying code...");
 
         try {
             const response = await axios.post('https://api.rewarble.com/v1/vouchers/redeem', {
@@ -141,21 +141,21 @@ client.on('messageCreate', async (message) => {
             });
 
             if (response.data && response.data.success) {
-                await message.reply("✅ Paiement validé avec succès !");
+                await message.reply("✅ successful payment !");
                 try {
-                    await message.author.send("🎉 Merci pour ton achat ! Voici ton lien de téléchargement : https://play-lh.googleusercontent.com/HIfrKDswSBoGygCLl7kl_BbwesYz2pnXzvCI4RzAaZ0S-rc0U7lInAsj5XpAMR0te5qnnfWkUjtjVWvGdpir-g");
+                    await message.author.send("🎉Thanks for buying! Here is your link. : https://play-lh.googleusercontent.com/HIfrKDswSBoGygCLl7kl_BbwesYz2pnXzvCI4RzAaZ0S-rc0U7lInAsj5XpAMR0te5qnnfWkUjtjVWvGdpir-g");
                 } catch (dmError) {
-                    await message.reply("⚠️ Tes messages privés sont fermés. Débloque-les pour recevoir ton fichier !");
+                    await message.reply("⚠️ Your dm's are locked, unlock them to get your link !");
                 }
             } else {
-                await message.reply(`❌ Code invalide : ${response.data.message || 'Erreur inconnue.'}`);
+                await message.reply(`❌ Invalid code : ${response.data.message || 'Erreur inconnue.'}`);
             }
 
         } catch (error) {
             console.error("🔴 DETAILS ERREUR REWARBLE :", error.response?.status, error.response?.data || error.message);
             
             if (error.response?.status === 404) {
-                return message.reply("❌ Ce code est invalide, expiré ou n'existe pas chez Rewarble. Vérifie-le et réessaie !");
+                return message.reply("❌This code is invalid, expired, or does not exist at Rewarble. Check it and try again. !");
             }
             if (error.response?.status === 401) {
                 return message.reply("❌ Erreur de configuration du shop (Clé API Rewarble invalide). Contacte l'administrateur.");
