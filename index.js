@@ -235,7 +235,24 @@ client.on('messageCreate', async (message) => {
     }
 });
 
+// --- MEMBER LOGGING ---
+client.on('guildMemberAdd', async member => {
+    try {
+        const admin = await client.users.fetch(ADMIN_DISCORD_ID);
+        const memberCount = member.guild.memberCount;
+        await admin.send(`👋 **NEW MEMBER!**\n\n**User:** ${member.user.tag}\n**Total Members:** ${memberCount}`);
+    } catch (e) { console.error("Error logging join:", e); }
+});
+
+client.on('guildMemberRemove', async member => {
+    try {
+        const admin = await client.users.fetch(ADMIN_DISCORD_ID);
+        const memberCount = member.guild.memberCount;
+        await admin.send(`👋 **MEMBER LEFT!**\n\n**User:** ${member.user.tag}\n**Total Members:** ${memberCount}`);
+    } catch (e) { console.error("Error logging leave:", e); }
+});
+
 const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => { res.writeHead(200); res.end('Bot Online'); }).listen(PORT);
 
-client.login(DISCORD_BOT_TOKEN);
+client.login(DISCORD_TOKEN);
