@@ -8,13 +8,19 @@ const REWARBLE_API_KEY = "f3b7cce0-1f2d-4329-b629-c4f37bbfd8b9";
 const TON_EMAIL_REWARBLE = "issamhamouhadi@gmail.com";
 const ADMIN_DISCORD_ID = "1520551977854042114"; 
 
-// 📁 Liens de téléchargement pour tes produits actifs (8 et 9)
+// 📁 Configuration des liens de téléchargement (Remplace par tes vrais liens Méga / Drive)
 const PRODUCT_LINKS = {
-    "8": "https://link-to-your-mega-or-drive.com/product8", // Friends Nude
-    "9": "https://link-to-your-mega-or-drive.com/product9"  // Surprise Pack
+    "1": "https://lien-vers-ton-drive.com/boobs",
+    "2": "https://lien-vers-ton-drive.com/ass",
+    "3": "https://lien-vers-ton-drive.com/fullbody",
+    "4": "https://lien-vers-ton-drive.com/lingerie",
+    "5": "https://lien-vers-ton-drive.com/mirror",
+    "6": "https://lien-vers-ton-drive.com/video5min",
+    "7": "https://lien-vers-ton-drive.com/shower",
+    "8": "https://lien-vers-ton-drive.com/friends",
+    "9": "https://lien-vers-ton-drive.com/surprisepack"
 };
 
-// 🧠 Suivi des salons clients
 const channelStates = new Map();
 
 // 🛡️ Système Anti-Crash
@@ -65,43 +71,66 @@ client.on('interactionCreate', async (interaction) => {
 });
 
 // ==========================================================
-// 🤖 TRAITEMENT AUTOMATIQUE (CODE ET NUMÉRO DE PRODUIT)
+// 🤖 TRAITEMENT AUTOMATIQUE
 // ==========================================================
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
     // ==========================================
-    // 🛠️ ADMIN COMMAND : !setup (Ton texte exact doublé pour le \r)
+    // 🛠️ ADMIN COMMAND : !setup (TON VRAI TEXTE ENTIER)
     // ==========================================
     if (message.content === '!setup' && message.author.id === ADMIN_DISCORD_ID) {
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
                 .setCustomId('open_shop_channel')
-                .setLabel('📩 Click here to open your Private Checkout')
+                .setLabel('📩 Open Private Checkout')
                 .setStyle(ButtonStyle.Primary)
         );
 
-        const menuMessage = `💦 **SPECIAL** 💦
-8. **Friends Nude**    $\\rightarrow$ **€15**
-9. **Surprise Pack** (3-5 items) $\\rightarrow$ **€15**
+        const menuMessage = `💎 **CONTENT & PRICES** 💎
+
+**Once you redeem the code type your selected product number to receive it in your dm’s!**
+
+---
+
+✨ **PHOTOS** ✨
+1. **Boobs**          → **€5**
+2. **Ass**            → **€5**
+3. **Full Body**      → **€5**
+4. **Lingerie Try-On** → **€5**
+5. **Mirror Pic**     → **€5**
+
+---
+
+🔥 **VIDEOS** 🔥
+6. **5-Min Video**     → **€10**
+7. **Shower / Bath**   → **€10**
+
+---
+
+💦 **SPECIAL** 💦
+8. **Friends Nude**          → **€15**
+9. **Surprise Pack** (3-5 items) → **€15**
 
 ---
 
 💌 **PERSONALIZED**
-10. **Sexting** $\\rightarrow$ **On request**
-11. **Custom** $\\rightarrow$ **On request**
+10. **Sexting** → **On request**
+11. **Custom**  → **On request**
 
 ---
 
 💵 **HOW TO PAY**
 Buy your code via **G2A Gift Card**:
 
-• **5€** $\\rightarrow$ [Buy here](https://www.g2a.com/fr/paypal-gift-card-5-gbp-by-rewarble-global-i10000339995022)
-• **10€** $\\rightarrow$ [Buy here](https://www.g2a.com/fr/rewarble-super-gift-card-10-gbp-by-rewarble-key-united-kingdom-i10000506957028)
-• **15€** $\\rightarrow$ [Buy here](https://www.g2a.com/fr/paypal-gift-card-15-gbp-by-rewarble-global-i10000339995023)
+• **5€** → [Buy here](https://www.g2a.com/fr/paypal-gift-card-5-gbp-by-rewarble-global-i10000339995022)
+• **10€** → [Buy here](https://www.g2a.com/fr/rewarble-super-gift-card-10-gbp-by-rewarble-key-united-kingdom-i10000506957028)
+• **15€** → [Buy here](https://www.g2a.com/fr/paypal-gift-card-15-gbp-by-rewarble-global-i10000339995023)
 
 ---
-👇 **After buying your card, click the button below to open your private room and claim your files!**`;
+👇 **After buying your card, click the button below to open your private room and claim your files!**
+
+*If you have any problems or questions don’t hesitate to dm me!*`;
 
         await message.channel.send({
             content: menuMessage,
@@ -115,7 +144,7 @@ Buy your code via **G2A Gift Card**:
         return message.channel.delete().catch(() => {});
     }
 
-    // Gestion du salon privé du client
+    // Gestion dans le salon privé du client
     if (message.channel.name && message.channel.name.startsWith('shop-')) {
         const input = message.content.trim();
         if (input.startsWith('!')) return;
@@ -128,7 +157,7 @@ Buy your code via **G2A Gift Card**:
             if (input === "TEST1234") {
                 state.validated = true;
                 channelStates.set(message.channel.id, state);
-                return await message.reply("✅ **Payment successfully validated!**\n\n🔢 **Step 2:** Now, please type your product number (**8** or **9**) to receive it in your DMs.");
+                return await message.reply("✅ **Payment successfully validated!**\n\n🔢 **Step 2:** Now, please type your product number (**1 to 9**) to receive it in your DMs.");
             }
 
             await message.reply("🔄 Verifying your voucher code with Rewarble...");
@@ -144,7 +173,7 @@ Buy your code via **G2A Gift Card**:
                 if (response.data && response.data.success) {
                     state.validated = true;
                     channelStates.set(message.channel.id, state);
-                    await message.reply("✅ **Payment successfully validated!**\n\n🔢 **Step 2:** Now, please type your product number (**8** or **9**) to receive it in your DMs.");
+                    await message.reply("✅ **Payment successfully validated!**\n\n🔢 **Step 2:** Now, please type your product number (**1 to 9**) to receive it in your DMs.");
                 } else {
                     await message.reply(`❌ Invalid code: ${response.data.message || 'Unknown error.'}`);
                 }
@@ -157,7 +186,7 @@ Buy your code via **G2A Gift Card**:
             return;
         }
 
-        // ÉTAPE B : SÉLECTION DU NUMÉRO
+        // ÉTAPE B : ENVOI DU PRODUIT (1 à 9)
         if (state.validated) {
             if (input === "10" || input === "11") {
                 return message.reply("💌 For personalized options (Sexting/Custom), please contact the Admin directly in DM!");
@@ -165,7 +194,7 @@ Buy your code via **G2A Gift Card**:
 
             const selectedLink = PRODUCT_LINKS[input];
             if (!selectedLink) {
-                return message.reply("❌ Invalid number. Please enter **8** or **9**.");
+                return message.reply("❌ Invalid number. Please enter a number between **1 and 9**.");
             }
 
             try {
