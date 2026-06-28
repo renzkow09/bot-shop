@@ -8,7 +8,7 @@ const REWARBLE_API_KEY = "f3b7cce0-1f2d-4329-b629-c4f37bbfd8b9";
 const TON_EMAIL_REWARBLE = "issamhamouhadi@gmail.com";
 const ADMIN_DISCORD_ID = "1520551977854042114"; 
 
-// 📁 Configuration des liens de téléchargement (Remplace par tes vrais liens Méga / Drive)
+// 📁 Configuration des liens de téléchargement
 const PRODUCT_LINKS = {
     "1": "https://lien-vers-ton-drive.com/boobs",
     "2": "https://lien-vers-ton-drive.com/ass",
@@ -38,7 +38,7 @@ const client = new Client({
 client.once('ready', () => console.log(`✅ Bot en ligne : ${client.user.tag}`));
 
 // ==========================================================
-// 📩 INTERACTION : CRÉATION DU SALON PRIVÉ PERSONNALISÉ (+ AUTO-DELETE 30 MIN)
+// 📩 INTERACTION : CRÉATION DU SALON PRIVÉ PERSONNALISÉ
 // ==========================================================
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isButton() || interaction.customId !== 'open_shop_channel') return;
@@ -65,7 +65,7 @@ client.on('interactionCreate', async (interaction) => {
 
         await interaction.editReply({ content: `✅ Your private room is ready: <#${channel.id}>`, ephemeral: true });
 
-        // ⏱️ AUTO-DELETE: Suppression automatique du salon après 30 minutes d'inactivité (1800000 ms)
+        // ⏱️ AUTO-DELETE après 30 minutes d'inactivité
         setTimeout(() => {
             if (interaction.guild.channels.cache.has(channel.id)) {
                 channel.send("⚠️ *Channel automatically closed due to 30 minutes of inactivity.*");
@@ -79,14 +79,12 @@ client.on('interactionCreate', async (interaction) => {
 });
 
 // ==========================================================
-// 🤖 TRAITEMENT AUTOMATIQUE
+// 🤖 TRAITEMENT AUTOMATIQUE & FAQ CLIENTS
 // ==========================================================
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
-    // ==========================================
-    // 🛠️ ADMIN COMMAND : !setup (Tutoriel simplifié + Prix originaux)
-    // ==========================================
+    // 🛠️ ADMIN COMMAND : !setup
     if (message.content === '!setup' && message.author.id === ADMIN_DISCORD_ID) {
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
@@ -138,19 +136,25 @@ client.on('messageCreate', async (message) => {
 
 *Need help? Feel free to DM me directly!*`;
 
-        await message.channel.send({
-            content: menuMessage,
-            components: [row]
-        });
-        
+        await message.channel.send({ content: menuMessage, components: [row] });
         return message.delete().catch(() => {});
     }
 
+    // 🛠️ ADMIN COMMAND : !close
     if (message.content === '!close' && message.author.id === ADMIN_DISCORD_ID) {
         return message.channel.delete().catch(() => {});
     }
 
-    // Gestion dans le salon privé du client
+    // 🛠️ ADMIN COMMAND : !clear [nombre]
+    if (message.content.startsWith('!clear') && message.author.id === ADMIN_DISCORD_ID) {
+        const amount = parseInt(message.content.split(' ')[1]) || 100;
+        await message.channel.bulkDelete(amount, true).catch(() => {});
+        return;
+    }
+
+    // ======================================================
+    // 💬 GESTION DANS LE SALON PRIVÉ DU CLIENT (shop-...)
+    // ======================================================
     if (message.channel.name && message.channel.name.startsWith('shop-')) {
         const input = message.content.trim();
         if (input.startsWith('!')) return;
@@ -158,7 +162,37 @@ client.on('messageCreate', async (message) => {
         const state = channelStates.get(message.channel.id);
         if (!state) return;
 
-        // ÉTAPE A : VALIDATION DU CODE
+        const lowerInput = input.toLowerCase();
+        const isProductNumber = ["1","2","3","4","5","6","7","8","9","10","11"].includes(input);
+        const isTestCode = (input === "TEST1234");
+        const containsSpace = input.includes(' ');
+        const isSingleWordGreeting = ['help', 'aide', 'bonjour', 'hello', 'hi', 'salut', 'paypal', 'legit', 'scam', 'fake', 'question'].includes(lowerInput);
+
+        // --------------------------------------------------
+        // 🧠 SYSTÈME FAQ (Se déclenche si le client pose une question)
+        // --------------------------------------------------
+        if ((containsSpace || isSingleWordGreeting) && !isProductNumber && !isTestCode) {
+            
+            if (['help', 'aide', 'bonjour', 'hello', 'hi', 'salut', 'stuck', 'comment'].some(kw => lowerInput.includes(kw))) {
+                return message.reply("👋 **Need some help? Here is how it works:**\n\n1️⃣ Buy a G2A Gift Card from the main menu links.\n2️⃣ Copy the Rewarble code you received and **paste it right here**.\n3️⃣ Type your product number (1 to 9).\n\n*(Still stuck? Send a direct DM to the Admin!)*");
+            }
+            if (['paypal', 'card', 'pay', 'buy', 'payer', 'crypto', 'apple'].some(kw => lowerInput.includes(kw))) {
+                return message.reply("💳 **How to pay:**\nClick the G2A links in the main menu! G2A safely accepts **PayPal, Apple Pay, Credit Cards, and Crypto**. Once purchased, you will get a code to paste here.");
+            }
+            if (['legit', 'scam', 'safe', 'trust', 'anonym', 'arnaque', 'fake', 'preuve'].some(kw => lowerInput.includes(kw))) {
+                return message.reply("🔒 **100% Safe & Anonymous:**\nThis checkout room is strictly private. When your payment code is verified by the API, the files are sent directly to your private DMs and this room deletes itself automatically!");
+            }
+            if (['dm', 'receive', 'link', 'lien', 'reçu', 'rien', 'locked', 'closed'].some(kw => lowerInput.includes(kw))) {
+                return message.reply("📩 **Didn't get your files?**\nPlease check your Discord Privacy Settings and make sure **'Allow direct messages from server members'** is turned ON!");
+            }
+
+            // Si c'est une phrase mais qu'aucun mot-clé n'a été reconnu :
+            return message.reply("🤖 *I am an automated checkout bot. Please paste your raw G2A Gift Card code to proceed.*\n\n💡 If you have a specific question not answered here, please **send a DM to the Admin directly**!");
+        }
+
+        // --------------------------------------------------
+        // ÉTAPE A : VALIDATION DU CODE REWARBLE
+        // --------------------------------------------------
         if (!state.validated) {
             if (input === "TEST1234") {
                 state.validated = true;
@@ -192,7 +226,9 @@ client.on('messageCreate', async (message) => {
             return;
         }
 
-        // ÉTAPE B : ENVOI DU PRODUIT (1 à 9)
+        // --------------------------------------------------
+        // ÉTAPE B : LIVRAISON DU PRODUIT
+        // --------------------------------------------------
         if (state.validated) {
             if (input === "10" || input === "11") {
                 return message.reply("💌 For personalized options (Sexting/Custom), please contact the Admin directly in DM!");
