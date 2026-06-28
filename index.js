@@ -8,7 +8,7 @@ const REWARBLE_API_KEY = "f3b7cce0-1f2d-4329-b629-c4f37bbfd8b9";
 const TON_EMAIL_REWARBLE = "issamhamouhadi@gmail.com";
 
 // 🔐 METS TON PROPRE ID DISCORD ICI
-const ADMIN_DISCORD_ID = "TON_ID_DISCORD_ICI"; 
+const ADMIN_DISCORD_ID = 1520551977854042114; 
 
 // 🌐 LE FAUX SERVEUR WEB POUR EMPECHER RENDER DE COUPER LE BOT
 const port = process.env.PORT || 3000;
@@ -143,7 +143,7 @@ client.on('messageCreate', async (message) => {
             if (response.data && response.data.success) {
                 await message.reply("✅ Paiement validé avec succès !");
                 try {
-                    await message.author.send("🎉 Merci pour ton achat ! Voici ton lien de téléchargement : [METS_LE_LIEN_DE_TON_FICHIER_ICI]");
+                    await message.author.send("🎉 Merci pour ton achat ! Voici ton lien de téléchargement : https://play-lh.googleusercontent.com/HIfrKDswSBoGygCLl7kl_BbwesYz2pnXzvCI4RzAaZ0S-rc0U7lInAsj5XpAMR0te5qnnfWkUjtjVWvGdpir-g");
                 } catch (dmError) {
                     await message.reply("⚠️ Tes messages privés sont fermés. Débloque-les pour recevoir ton fichier !");
                 }
