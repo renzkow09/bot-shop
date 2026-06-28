@@ -169,25 +169,45 @@ client.on('messageCreate', async (message) => {
         const isSingleWordGreeting = ['help', 'aide', 'bonjour', 'hello', 'hi', 'salut', 'paypal', 'legit', 'scam', 'fake', 'question'].includes(lowerInput);
 
         // --------------------------------------------------
-        // 🧠 SYSTÈME FAQ (Se déclenche si le client pose une question)
+        // 🧠 SYSTÈME FAQ (100% English)
         // --------------------------------------------------
         if ((containsSpace || isSingleWordGreeting) && !isProductNumber && !isTestCode) {
             
-            if (['help', 'aide', 'bonjour', 'hello', 'hi', 'salut', 'stuck', 'comment'].some(kw => lowerInput.includes(kw))) {
-                return message.reply("👋 **Need some help? Here is how it works:**\n\n1️⃣ Buy a G2A Gift Card from the main menu links.\n2️⃣ Copy the Rewarble code you received and **paste it right here**.\n3️⃣ Type your product number (1 to 9).\n\n*(Still stuck? Send a direct DM to the Admin!)*");
-            }
-            if (['paypal', 'card', 'pay', 'buy', 'payer', 'crypto', 'apple'].some(kw => lowerInput.includes(kw))) {
-                return message.reply("💳 **How to pay:**\nClick the G2A links in the main menu! G2A safely accepts **PayPal, Apple Pay, Credit Cards, and Crypto**. Once purchased, you will get a code to paste here.");
-            }
-            if (['legit', 'scam', 'safe', 'trust', 'anonym', 'arnaque', 'fake', 'preuve'].some(kw => lowerInput.includes(kw))) {
-                return message.reply("🔒 **100% Safe & Anonymous:**\nThis checkout room is strictly private. When your payment code is verified by the API, the files are sent directly to your private DMs and this room deletes itself automatically!");
-            }
-            if (['dm', 'receive', 'link', 'lien', 'reçu', 'rien', 'locked', 'closed'].some(kw => lowerInput.includes(kw))) {
-                return message.reply("📩 **Didn't get your files?**\nPlease check your Discord Privacy Settings and make sure **'Allow direct messages from server members'** is turned ON!");
+            const faqResponses = [
+                {
+                    keywords: ['help', 'aide', 'bonjour', 'hello', 'hi', 'salut', 'start', 'commencer', 'comment'],
+                    reply: "👋 **Welcome! Here is how to proceed:**\n1️⃣ Select your item and note the price.\n2️⃣ Buy the matching G2A Gift Card from the menu links.\n3️⃣ Paste your voucher code here.\n4️⃣ Type your product number to receive the files instantly in your DMs."
+                },
+                {
+                    keywords: ['paypal', 'card', 'pay', 'payer', 'apple', 'crypto', 'visa', 'mastercard', 'payment'],
+                    reply: "💳 **Payment Methods:**\nG2A supports PayPal, Credit/Debit Cards (Visa/Mastercard), Apple Pay, Google Pay, and Crypto. It is 100% secure."
+                },
+                {
+                    keywords: ['legit', 'scam', 'safe', 'trust', 'arnaque', 'fake', 'preuve', 'fiable', 'serieux', 'is it'],
+                    reply: "🔒 **100% Safe & Anonymous:**\n- Payments are processed via G2A (trusted provider).\n- Delivery is fully automated and sent privately to your DMs.\n- This chat room is deleted after the transaction for your privacy."
+                },
+                {
+                    keywords: ['dm', 'reçu', 'lien', 'message', 'inbox', 'locked', 'bloqué', 'privé', 'envoyé', 'receive'],
+                    reply: "📩 **Not receiving your files?**\nPlease check your Discord Privacy Settings: *User Settings > Privacy & Safety > Allow direct messages from server members*. Enable it and type your product number again."
+                },
+                {
+                    keywords: ['remboursement', 'refund', 'change', 'autre', 'return'],
+                    reply: "🔄 **Refund Policy:**\nAs these are digital products delivered instantly, no refunds are possible once the files are sent. If you have a technical issue with your code, contact the Admin via DM."
+                },
+                {
+                    keywords: ['temps', 'combien de temps', 'duration', 'fast', 'speed'],
+                    reply: "⚡ **Speed:**\nEverything is automated! Once you provide your code, validation takes under 10 seconds, and delivery is immediate."
+                }
+            ];
+
+            // Recherche la réponse en anglais
+            for (const item of faqResponses) {
+                if (item.keywords.some(kw => lowerInput.includes(kw))) {
+                    return message.reply(item.reply);
+                }
             }
 
-            // Si c'est une phrase mais qu'aucun mot-clé n'a été reconnu :
-            return message.reply("🤖 *I am an automated checkout bot. Please paste your raw G2A Gift Card code to proceed.*\n\n💡 If you have a specific question not answered here, please **send a DM to the Admin directly**!");
+            return message.reply("🤖 *I am an automated checkout bot.*\n\n💡 **Tip:** Paste your G2A code to pay, or ask me about **payment**, **safety**, or **delivery**.");
         }
 
         // --------------------------------------------------
