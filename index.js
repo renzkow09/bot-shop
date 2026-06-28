@@ -2,11 +2,11 @@ const { Client, GatewayIntentBits, Partials, ButtonBuilder, ActionRowBuilder, Bu
 const axios = require('axios');
 const http = require('http');
 
-// Configuration sécurisée via variables d'environnement
+// Configuration
 const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
 const REWARBLE_API_KEY = process.env.REWARBLE_API_KEY;
 const TON_EMAIL_REWARBLE = "issamhamouhadi@gmail.com";
-const ADMIN_DISCORD_ID = "1520551977854042114"; 
+const ADMIN_DISCORD_ID = "1520551977854042114"; // Vérifie que c'est bien ton ID
 
 const PRODUCT_LINKS = {
     "1": "https://lien-vers-ton-drive.com/boobs",
@@ -27,7 +27,7 @@ const client = new Client({
     partials: [Partials.GuildMember, Partials.User, Partials.Message]
 });
 
-client.once('ready', async () => {
+client.once('clientReady', async () => {
     console.log(`✅ Bot connecté en tant que ${client.user.tag}`);
     try {
         const admin = await client.users.fetch(ADMIN_DISCORD_ID);
@@ -73,6 +73,7 @@ client.on('interactionCreate', async (interaction) => {
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
+    // Commande !setup
     if (message.content === '!setup' && message.author.id === ADMIN_DISCORD_ID) {
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId('open_shop_channel').setLabel('📩 Redeem Code').setStyle(ButtonStyle.Primary),
@@ -83,6 +84,20 @@ client.on('messageCreate', async (message) => {
         message.delete().catch(() => {});
     }
 
+    // Commande !close améliorée
+    if (message.content.trim().toLowerCase() === '!close') {
+        if (message.author.id !== ADMIN_DISCORD_ID) return;
+        
+        console.log(`Tentative de fermeture par ${message.author.tag} dans ${message.channel.name}`);
+        
+        try {
+            await message.channel.delete();
+        } catch (err) {
+            console.error("❌ Erreur lors de la suppression :", err);
+        }
+    }
+
+    // Gestion du shop
     if (message.channel.name && message.channel.name.startsWith('shop-')) {
         const input = message.content.trim();
         const state = channelStates.get(message.channel.id);
@@ -108,8 +123,7 @@ client.on('messageCreate', async (message) => {
 
 http.createServer((req, res) => { res.writeHead(200); res.end('Online'); }).listen(3000);
 
-// --- Diagnostic ---
-console.log("DEBUG - DISCORD_BOT_TOKEN existe :", !!process.env.DISCORD_BOT_TOKEN);
-console.log("DEBUG - Longueur du token :", process.env.DISCORD_BOT_TOKEN ? process.env.DISCORD_BOT_TOKEN.length : 0);
+// Logs de diagnostic pour Render
+console.log("DEBUG - Token chargé (longueur):", process.env.DISCORD_BOT_TOKEN ? process.env.DISCORD_BOT_TOKEN.length : 0);
 
 client.login(DISCORD_BOT_TOKEN);
