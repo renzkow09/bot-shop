@@ -2,7 +2,6 @@ const { Client, GatewayIntentBits, ButtonBuilder, ActionRowBuilder, ButtonStyle,
 const axios = require('axios');
 const http = require('http');
 
-// Configuration
 const DISCORD_BOT_TOKEN = "MTUyMDczOTA4MDcxNDA2MzkzMg.Gull-T.FsxRVmFUSPTm1lWD0dzneR_o9tDydHHXSe_6Dc";
 const REWARBLE_API_KEY = "f3b7cce0-1f2d-4329-b629-c4f37bbfd8b9";
 const TON_EMAIL_REWARBLE = "issamhamouhadi@gmail.com";
@@ -23,62 +22,59 @@ const PRODUCT_LINKS = {
 const channelStates = new Map();
 
 process.on('unhandledRejection', (reason) => console.error('🔴 Rejection:', reason));
-process.on('uncaughtException', (err) => console.error('🔴 Exception:', err));
-
 const port = process.env.PORT || 3000;
 http.createServer((req, res) => { res.writeHead(200); res.end('Online'); }).listen(port);
 
-const client = new Client({
-    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildMembers]
+const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildMembers] });
+
+// 🔔 NOTIFICATIONS DM POUR L'ADMIN
+client.on('guildMemberAdd', async (member) => {
+    const user = await client.users.fetch(ADMIN_DISCORD_ID);
+    const time = new Date().toLocaleTimeString('fr-FR', { timeZone: 'Europe/Brussels' });
+    user.send(`📥 **New Member:** ${member.user.tag}\n🕒 **Time:** ${time}\n👥 **Total members:** ${member.guild.memberCount}`);
 });
 
-client.once('ready', () => console.log(`✅ Bot en ligne : ${client.user.tag}`));
+client.on('guildMemberRemove', async (member) => {
+    const user = await client.users.fetch(ADMIN_DISCORD_ID);
+    const time = new Date().toLocaleTimeString('fr-FR', { timeZone: 'Europe/Brussels' });
+    user.send(`📤 **Member Left:** ${member.user.tag}\n🕒 **Time:** ${time}\n👥 **Total members:** ${member.guild.memberCount}`);
+});
 
-// 📩 INTERACTION : BOUTONS
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isButton()) return;
     await interaction.deferReply({ ephemeral: true });
 
-    try {
-        // BOUTON SHOP
-        if (interaction.customId === 'open_shop_channel') {
-            const channel = await interaction.guild.channels.create({
-                name: `shop-${interaction.user.username}`,
-                type: ChannelType.GuildText,
-                permissionOverwrites: [
-                    { id: interaction.guild.id, deny: ['ViewChannel'] },
-                    { id: interaction.user.id, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'] },
-                    { id: client.user.id, allow: ['ViewChannel', 'SendMessages', 'ManageChannels'] }
-                ],
-            });
-            channelStates.set(channel.id, { validated: false });
-            await channel.send(`👋 Welcome <@${interaction.user.id}>! Paste your G2A code to verify payment.`);
-            await interaction.editReply({ content: `✅ Shop room ready: <#${channel.id}>`, ephemeral: true });
-            
-            setTimeout(() => { if (interaction.guild.channels.cache.has(channel.id)) channel.delete().catch(() => {}); }, 1800000);
-        }
-
-        // BOUTON SUPPORT
-        if (interaction.customId === 'open_support_ticket') {
-            const channel = await interaction.guild.channels.create({
-                name: `support-${interaction.user.username}`,
-                type: ChannelType.GuildText,
-                permissionOverwrites: [
-                    { id: interaction.guild.id, deny: ['ViewChannel'] },
-                    { id: interaction.user.id, allow: ['ViewChannel', 'SendMessages'] },
-                    { id: ADMIN_DISCORD_ID, allow: ['ViewChannel', 'SendMessages'] },
-                    { id: client.user.id, allow: ['ViewChannel', 'SendMessages'] }
-                ],
-            });
-            await channel.send(`🎧 **Support Ticket for <@${interaction.user.id}>**\n\nHello! Please describe your issue. The Admin has been notified.`);
-            await interaction.editReply({ content: `✅ Support room ready: <#${channel.id}>`, ephemeral: true });
-        }
-    } catch (e) {
-        await interaction.editReply({ content: "❌ Error.", ephemeral: true });
+    if (interaction.customId === 'open_shop_channel') {
+        const channel = await interaction.guild.channels.create({
+            name: `shop-${interaction.user.username}`,
+            type: ChannelType.GuildText,
+            permissionOverwrites: [
+                { id: interaction.guild.id, deny: ['ViewChannel'] },
+                { id: interaction.user.id, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'] },
+                { id: client.user.id, allow: ['ViewChannel', 'SendMessages', 'ManageChannels'] }
+            ],
+        });
+        channelStates.set(channel.id, { validated: false });
+        await channel.send(`👋 Welcome <@${interaction.user.id}>! Paste your G2A code here.`);
+        await interaction.editReply({ content: `✅ Shop room: <#${channel.id}>`, ephemeral: true });
+        setTimeout(() => { if (interaction.guild.channels.cache.has(channel.id)) channel.delete().catch(() => {}); }, 1800000);
+    } 
+    else if (interaction.customId === 'open_support_ticket') {
+        const channel = await interaction.guild.channels.create({
+            name: `support-${interaction.user.username}`,
+            type: ChannelType.GuildText,
+            permissionOverwrites: [
+                { id: interaction.guild.id, deny: ['ViewChannel'] },
+                { id: interaction.user.id, allow: ['ViewChannel', 'SendMessages'] },
+                { id: ADMIN_DISCORD_ID, allow: ['ViewChannel', 'SendMessages'] },
+                { id: client.user.id, allow: ['ViewChannel', 'SendMessages'] }
+            ],
+        });
+        await channel.send(`🎧 **Support Ticket for <@${interaction.user.id}>**\n\nHello! Please describe your issue. The Admin will be with you shortly.`);
+        await interaction.editReply({ content: `✅ Support room: <#${channel.id}>`, ephemeral: true });
     }
 });
 
-// 🤖 TRAITEMENT
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
@@ -88,52 +84,40 @@ client.on('messageCreate', async (message) => {
             new ButtonBuilder().setCustomId('open_support_ticket').setLabel('🎧 Need Support?').setStyle(ButtonStyle.Secondary)
         );
 
-        const menu = `💎 **CONTENT & PRICES** 💎
-1-5. **Photos** → **€5** | 6-7. **Videos** → **€10** | 8-9. **Special** → **€15**
+        const menu = `💎 **CONTENT & PRICES** 💎\n\n**Once you redeem the code type your selected product number to receive it in your dm’s!**\n\n---\n\n✨ **PHOTOS** ✨\n1. **Boobs**          → **€5**\n2. **Ass**            → **€5**\n3. **Full Body**      → **€5**\n4. **Lingerie Try-On** → **€5**\n5. **Mirror Pic**     → **€5**\n\n---\n\n🔥 **VIDEOS** 🔥\n6. **5-Min Video**     → **€10**\n7. **Shower / Bath**   → **€10**\n\n---\n\n💦 **SPECIAL** 💦\n8. **Friends Nude**          → **€15**\n9. **Surprise Pack** (3-5 items) → **€15**\n\n---\n\n💌 **PERSONALIZED**\n10. **Sexting** → **On request**\n11. **Custom**  → **On request**\n\n---\n\n💵 **HOW TO PAY**\nBuy your code via **G2A Gift Card**:\n\n• **5€** → [Buy here](https://www.g2a.com/fr/paypal-gift-card-5-gbp-by-rewarble-global-i10000339995022)\n• **10€** → [Buy here](https://www.g2a.com/fr/rewarble-super-gift-card-10-gbp-by-rewarble-key-united-kingdom-i10000506957028)\n• **15€** → [Buy here](https://www.g2a.com/fr/paypal-gift-card-15-gbp-by-rewarble-global-i10000339995023)\n\n---\n👇 **After buying your card, click the button below to open your private room and claim your files!**\n\n*If you have any problems or questions don’t hesitate to dm me!*`;
 
-⚡ **HOW TO BUY:** 
-1. Buy G2A Card via links. 2. Click "Redeem Code". 3. Paste code & type product number.`;
         await message.channel.send({ content: menu, components: [row] });
         return message.delete().catch(() => {});
     }
 
     if (message.content === '!close' && message.author.id === ADMIN_DISCORD_ID) return message.channel.delete().catch(() => {});
-    if (message.content.startsWith('!clear') && message.author.id === ADMIN_DISCORD_ID) {
-        await message.channel.bulkDelete(parseInt(message.content.split(' ')[1]) || 100, true).catch(() => {});
-        return;
-    }
-
-    // FAQ DANS SHOP
+    
     if (message.channel.name && message.channel.name.startsWith('shop-')) {
         const input = message.content.trim();
         const state = channelStates.get(message.channel.id);
         if (!state) return;
 
-        // FAQ SYSTEM
         if (input.includes(' ') && !["1","2","3","4","5","6","7","8","9"].includes(input)) {
-            const faqResponses = [
-                { kw: ['help', 'aide', 'hello', 'start'], reply: "👋 **How to:** 1. Buy G2A card. 2. Paste code here. 3. Type number." },
-                { kw: ['paypal', 'payment', 'card'], reply: "💳 **Payment:** G2A accepts PayPal, Cards, Crypto, Apple Pay." },
-                { kw: ['safe', 'legit', 'scam'], reply: "🔒 **100% Safe:** Automated delivery, encrypted payment, private chat." }
+            const faq = [
+                { kw: ['help','aide','hello'], reply: "👋 **How to:** 1. Buy G2A card. 2. Paste code here. 3. Type number." },
+                { kw: ['paypal','pay'], reply: "💳 **Payment:** G2A accepts PayPal, Cards, Crypto, Apple Pay." },
+                { kw: ['safe','legit','scam'], reply: "🔒 **100% Safe:** Automated delivery, encrypted payment, private chat." }
             ];
-            for (let item of faqResponses) { if (item.kw.some(k => input.toLowerCase().includes(k))) return message.reply(item.reply); }
+            for (let item of faq) { if (item.kw.some(k => input.toLowerCase().includes(k))) return message.reply(item.reply); }
         }
 
-        // VALIDATION
         if (!state.validated) {
-            if (input === "TEST1234") { state.validated = true; channelStates.set(message.channel.id, state); return message.reply("✅ Validated! Enter product number 1-9."); }
             try {
                 const response = await axios.post('https://api.rewarble.com/v1/vouchers/redeem', { code: input, user_email: TON_EMAIL_REWARBLE }, { headers: { 'Authorization': `Bearer ${REWARBLE_API_KEY}` } });
-                if (response.data.success) { state.validated = true; channelStates.set(message.channel.id, state); message.reply("✅ Validated! Enter product number 1-9."); }
+                if (response.data.success) { state.validated = true; channelStates.set(message.channel.id, state); message.reply("✅ Validated! Type your product number (1-9)."); }
                 else message.reply("❌ Invalid code.");
-            } catch { message.reply("❌ Error connecting to API."); }
+            } catch { message.reply("❌ API Error."); }
             return;
         }
 
-        // LIVRAISON
         if (state.validated && PRODUCT_LINKS[input]) {
-            await message.author.send(`🎉 Here is your product: ${PRODUCT_LINKS[input]}`);
-            await message.reply("✅ Sent to your DMs!");
+            await message.author.send(`🎉 Product #${input}: ${PRODUCT_LINKS[input]}`);
+            await message.reply("✅ Sent to DMs!");
             channelStates.delete(message.channel.id);
             setTimeout(() => { message.channel.delete().catch(() => {}); }, 10000);
         }
