@@ -82,22 +82,31 @@ client.on('messageCreate', async (message) => {
         const menu = `💎 **CONTENT & PRICES** 💎\n\n---\n👇 **After buying your card, click the button below!**`;
         await message.channel.send({ content: menu, components: [row] });
         message.delete().catch(() => {});
-        return; // Important pour arrêter ici
+        return;
     }
 
     // Commande !close
     if (message.content.trim().toLowerCase() === '!close') {
         if (message.author.id !== ADMIN_DISCORD_ID) return;
-        
         try {
             await message.channel.delete();
         } catch (err) {
             console.error("❌ Erreur lors de la suppression :", err);
         }
-        return; // Arrête l'exécution ici pour éviter de lire le canal supprimé
+        return;
     }
 
-    // Gestion du shop (Sécurisé avec ?.)
+    // Commande !say
+    if (message.content.startsWith('!say ') && message.author.id === ADMIN_DISCORD_ID) {
+        const textToSay = message.content.slice(5).trim();
+        if (textToSay.length > 0) {
+            await message.channel.send(textToSay);
+            await message.delete().catch(() => {});
+        }
+        return;
+    }
+
+    // Gestion du shop
     if (message.channel?.name?.startsWith('shop-')) {
         const input = message.content.trim();
         const state = channelStates.get(message.channel.id);
