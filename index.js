@@ -8,18 +8,6 @@ const REWARBLE_API_KEY = process.env.REWARBLE_API_KEY;
 const TON_EMAIL_REWARBLE = "issamhamouhadi@gmail.com";
 const ADMIN_DISCORD_ID = "1520551977854042114";
 
-const PRODUCT_LINKS = {
-    "1": "https://lien-vers-ton-drive.com/boobs",
-    "2": "https://lien-vers-ton-drive.com/ass",
-    "3": "https://lien-vers-ton-drive.com/fullbody",
-    "4": "https://lien-vers-ton-drive.com/lingerie",
-    "5": "https://lien-vers-ton-drive.com/mirror",
-    "6": "https://lien-vers-ton-drive.com/video5min",
-    "7": "https://lien-vers-ton-drive.com/shower",
-    "8": "https://lien-vers-ton-drive.com/friends",
-    "9": "https://lien-vers-ton-drive.com/surprisepack"
-};
-
 const channelStates = new Map();
 
 const client = new Client({ 
@@ -50,7 +38,7 @@ client.on('interactionCreate', async (interaction) => {
             ],
         });
         channelStates.set(channel.id, { validated: false });
-        await channel.send(`👋 Welcome <@${interaction.user.id}>! Paste your G2A code here.`);
+        await channel.send(`👋 Welcome <@${interaction.user.id}>! Redeem your code by typing: \`!redeem [your code]\``);
         await interaction.editReply({ content: `✅ Shop room: <#${channel.id}>`, ephemeral: true });
         setTimeout(() => { if (interaction.guild.channels.cache.has(channel.id)) channel.delete().catch(() => {}); }, 1800000);
     } 
@@ -75,11 +63,55 @@ client.on('messageCreate', async (message) => {
 
     // Commande !setup
     if (message.content === '!setup' && message.author.id === ADMIN_DISCORD_ID) {
+        const menu = `💎 **CONTENT & PRICES** 💎
+
+**Once you redeem the code type your selected product number to receive it in your dm’s!**
+
+---
+
+✨ **PHOTOS** ✨
+1. **Boobs** → **€5**
+2. **Ass** → **€5**
+3. **Full Body** → **€5**
+4. **Lingerie Try-On** → **€5**
+5. **Mirror Pic** → **€5**
+
+---
+
+🔥 **VIDEOS** 🔥
+6. **5-Min Video** → **€10**
+7. **Shower / Bath** → **€10**
+
+---
+
+💦 **SPECIAL** 💦
+8. **Friends Nude** → **€15**
+9. **Surprise Pack** (3-5 items) → **€15**
+
+---
+
+💌 **PERSONALIZED**
+10. **Sexting** → **On request**
+11. **Custom** → **On request**
+
+---
+
+**💵 HOW TO PAY**
+Buy your code via **G2A Gift Card**:
+
+• **5€** → [Buy here](https://www.g2a.com/fr/paypal-gift-card-5-gbp-by-rewarble-global-i10000339995022)
+• **10€** → [Buy here](https://www.g2a.com/fr/rewarble-super-gift-card-10-gbp-by-rewarble-key-united-kingdom-i10000506957028)
+• **15€** → [Buy here](https://www.g2a.com/fr/paypal-gift-card-15-gbp-by-rewarble-global-i10000339995023)
+
+**After payment, redeem the code by typing:** \`!redeem [your code]\`
+
+If you have any problems or questions don’t hesitate to dm me!`;
+
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId('open_shop_channel').setLabel('📩 Redeem Code').setStyle(ButtonStyle.Primary),
             new ButtonBuilder().setCustomId('open_support_ticket').setLabel('🎧 Need Support?').setStyle(ButtonStyle.Secondary)
         );
-        const menu = `💎 **CONTENT & PRICES** 💎\n\n---\n👇 **After buying your card, click the button below!**`;
+        
         await message.channel.send({ content: menu, components: [row] });
         message.delete().catch(() => {});
         return;
@@ -108,7 +140,12 @@ client.on('messageCreate', async (message) => {
 
     // Gestion du shop
     if (message.channel?.name?.startsWith('shop-')) {
-        const input = message.content.trim();
+        // Nettoyer le message pour extraire le code (ignore "!redeem ")
+        let input = message.content.trim();
+        if (input.toLowerCase().startsWith('!redeem')) {
+            input = input.replace(/!redeem/i, '').trim();
+        }
+
         const state = channelStates.get(message.channel.id);
         if (!state) return;
 
