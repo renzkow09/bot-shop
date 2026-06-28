@@ -15,6 +15,22 @@ const client = new Client({
     partials: [Partials.GuildMember, Partials.User, Partials.Message]
 });
 
+// Événement : Nouveau membre
+client.on('guildMemberAdd', async (member) => {
+    try {
+        const admin = await client.users.fetch(ADMIN_DISCORD_ID);
+        await admin.send(`📥 **Nouveau membre :** ${member.user.tag} vient de rejoindre le serveur.`);
+    } catch (e) { console.error("❌ Erreur envoi DM join:", e); }
+});
+
+// Événement : Membre qui quitte
+client.on('guildMemberRemove', async (member) => {
+    try {
+        const admin = await client.users.fetch(ADMIN_DISCORD_ID);
+        await admin.send(`📤 **Départ :** ${member.user.tag} a quitté le serveur.`);
+    } catch (e) { console.error("❌ Erreur envoi DM leave:", e); }
+});
+
 client.once('clientReady', async () => {
     console.log(`✅ Bot connecté en tant que ${client.user.tag}`);
     try {
@@ -140,7 +156,6 @@ If you have any problems or questions don’t hesitate to dm me!`;
 
     // Gestion du shop
     if (message.channel?.name?.startsWith('shop-')) {
-        // Nettoyer le message pour extraire le code (ignore "!redeem ")
         let input = message.content.trim();
         if (input.toLowerCase().startsWith('!redeem')) {
             input = input.replace(/!redeem/i, '').trim();
