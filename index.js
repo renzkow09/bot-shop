@@ -129,10 +129,21 @@ client.on('messageCreate', async (message) => {
                     message.reply("❌ Invalid code or response from API.");
                 }
             } catch (error) { 
-                // C'est ici que tu verras la vraie erreur
-                const errorMsg = error.response ? JSON.stringify(error.response.data) : error.message;
-                console.error("Erreur API :", errorMsg);
-                message.reply(`❌ API Error: ${errorMsg}`);
+                if (error.response) {
+                    // Le serveur a répondu (ex: 400, 401, 403, 404, 500)
+                    const status = error.response.status;
+                    const data = JSON.stringify(error.response.data);
+                    console.error("Erreur Status:", status, "Data:", data);
+                    message.reply(`❌ API Error: Statut ${status}. (Détails : ${data})`);
+                } else if (error.request) {
+                    // La requête a été envoyée mais aucune réponse reçue
+                    console.error("Pas de réponse:", error.request);
+                    message.reply("❌ API Error: Le serveur ne répond pas (Time out).");
+                } else {
+                    // Erreur lors de la configuration
+                    console.error("Erreur Config:", error.message);
+                    message.reply(`❌ API Error: ${error.message}`);
+                }
             }
             return;
         }
