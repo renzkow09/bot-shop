@@ -21,41 +21,35 @@ const PRODUCT_LINKS = {
 
 const channelStates = new Map();
 
-// Initialisation du client avec Partials
 const client = new Client({ 
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildMembers],
     partials: [Partials.GuildMember, Partials.User, Partials.Message]
 });
 
-// Diagnostic : Confirmation de démarrage
 client.once('ready', async () => {
     console.log(`✅ Bot connecté en tant que ${client.user.tag}`);
     try {
         const admin = await client.users.fetch(ADMIN_DISCORD_ID);
-        await admin.send("🤖 Bot en ligne et opérationnel. Les notifications de membres sont activées.");
+        await admin.send("🤖 Bot en ligne et opérationnel.");
     } catch (e) {
-        console.error("❌ Impossible d'envoyer le message de test à l'admin (DM bloqués ?) :", e);
+        console.error("❌ Impossible d'envoyer le message de test à l'admin :", e);
     }
 });
 
-// Notifications avec logs de debug
 client.on('guildMemberAdd', async (member) => {
-    console.log(`📥 Membre rejoint : ${member.user.tag}`);
     try {
         const user = await client.users.fetch(ADMIN_DISCORD_ID);
         await user.send(`📥 **New Member:** ${member.user.tag}\n👥 **Total members:** ${member.guild.memberCount}`);
-    } catch (err) { console.error("❌ Erreur lors de l'envoi de la notif (Add) :", err); }
+    } catch (err) { console.error("❌ Erreur Add:", err); }
 });
 
 client.on('guildMemberRemove', async (member) => {
-    console.log(`📤 Membre quitté : ${member.user.tag}`);
     try {
         const user = await client.users.fetch(ADMIN_DISCORD_ID);
         await user.send(`📤 **Member Left:** ${member.user.tag}\n👥 **Total members:** ${member.guild.memberCount}`);
-    } catch (err) { console.error("❌ Erreur lors de l'envoi de la notif (Remove) :", err); }
+    } catch (err) { console.error("❌ Erreur Remove:", err); }
 });
 
-// --- Reste de ton code inchangé ---
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isButton()) return;
     await interaction.deferReply({ ephemeral: true });
@@ -99,8 +93,7 @@ client.on('messageCreate', async (message) => {
             new ButtonBuilder().setCustomId('open_shop_channel').setLabel('📩 Redeem Code').setStyle(ButtonStyle.Primary),
             new ButtonBuilder().setCustomId('open_support_ticket').setLabel('🎧 Need Support?').setStyle(ButtonStyle.Secondary)
         );
-
-        const menu = `💎 **CONTENT & PRICES** 💎\n\n**Once you redeem the code type your selected product number to receive it in your dm’s!**\n\n---\n\n✨ **PHOTOS** ✨\n1. **Boobs**          → **€5**\n2. **Ass**            → **€5**\n3. **Full Body**      → **€5**\n4. **Lingerie Try-On** → **€5**\n5. **Mirror Pic**     → **€5**\n\n---\n\n🔥 **VIDEOS** 🔥\n6. **5-Min Video**     → **€10**\n7. **Shower / Bath**   → **€10**\n\n---\n\n💦 **SPECIAL** 💦\n8. **Friends Nude**          → **€15**\n9. **Surprise Pack** (3-5 items) → **€15**\n\n---\n\n💌 **PERSONALIZED**\n10. **Sexting** → **On request**\n11. **Custom**  → **On request**\n\n---\n\n💵 **HOW TO PAY**\nBuy your code via **G2A Gift Card**:\n\n• **5€** → [Buy here](https://www.g2a.com/fr/paypal-gift-card-5-gbp-by-rewarble-global-i10000339995022)\n• **10€** → [Buy here](https://www.g2a.com/fr/rewarble-super-gift-card-10-gbp-by-rewarble-key-united-kingdom-i10000506957028)\n• **15€** → [Buy here](https://www.g2a.com/fr/paypal-gift-card-15-gbp-by-rewarble-global-i10000339995023)\n\n---\n👇 **After buying your card, click the button below to open your private room and claim your files!**\n\n*If you have any problems or questions don’t hesitate to dm me!*`;
+        const menu = `💎 **CONTENT & PRICES** 💎\n\n**Once you redeem the code type your selected product number to receive it in your dm’s!**\n\n---\n✨ **PHOTOS** ✨\n1. **Boobs** → **€5**\n2. **Ass** → **€5**\n3. **Full Body** → **€5**\n4. **Lingerie Try-On** → **€5**\n5. **Mirror Pic** → **€5**\n---\n🔥 **VIDEOS** 🔥\n6. **5-Min Video** → **€10**\n7. **Shower / Bath** → **€10**\n---\n💦 **SPECIAL** 💦\n8. **Friends Nude** → **€15**\n9. **Surprise Pack** → **€15**\n---\n💌 **PERSONALIZED**\n10. **Sexting** → **On request**\n11. **Custom** → **On request**\n---\n💵 **HOW TO PAY**\nBuy your code via **G2A Gift Card**:\n\n• **5€** → [Buy here](https://www.g2a.com/fr/paypal-gift-card-5-gbp-by-rewarble-global-i10000339995022)\n• **10€** → [Buy here](https://www.g2a.com/fr/rewarble-super-gift-card-10-gbp-by-rewarble-key-united-kingdom-i10000506957028)\n• **15€** → [Buy here](https://www.g2a.com/fr/paypal-gift-card-15-gbp-by-rewarble-global-i10000339995023)\n---\n👇 **After buying your card, click the button below to open your private room and claim your files!**`;
 
         await message.channel.send({ content: menu, components: [row] });
         return message.delete().catch(() => {});
@@ -124,10 +117,23 @@ client.on('messageCreate', async (message) => {
 
         if (!state.validated) {
             try {
-                const response = await axios.post('https://api.rewarble.com/v1/vouchers/redeem', { code: input, user_email: TON_EMAIL_REWARBLE }, { headers: { 'Authorization': `Bearer ${REWARBLE_API_KEY}` } });
-                if (response.data.success) { state.validated = true; channelStates.set(message.channel.id, state); message.reply("✅ Validated! Type your product number (1-9)."); }
-                else message.reply("❌ Invalid code.");
-            } catch { message.reply("❌ API Error."); }
+                const response = await axios.post('https://api.rewarble.com/v1/vouchers/redeem', 
+                { code: input, user_email: TON_EMAIL_REWARBLE }, 
+                { headers: { 'Authorization': `Bearer ${REWARBLE_API_KEY}`, 'Content-Type': 'application/json' } });
+                
+                if (response.data.success) { 
+                    state.validated = true; 
+                    channelStates.set(message.channel.id, state); 
+                    message.reply("✅ Validated! Type your product number (1-9)."); 
+                } else {
+                    message.reply("❌ Invalid code or response from API.");
+                }
+            } catch (error) { 
+                // C'est ici que tu verras la vraie erreur
+                const errorMsg = error.response ? JSON.stringify(error.response.data) : error.message;
+                console.error("Erreur API :", errorMsg);
+                message.reply(`❌ API Error: ${errorMsg}`);
+            }
             return;
         }
 
@@ -140,7 +146,5 @@ client.on('messageCreate', async (message) => {
     }
 });
 
-// Serveur HTTP pour garder le bot éveillé
 http.createServer((req, res) => { res.writeHead(200); res.end('Online'); }).listen(3000);
-
 client.login(DISCORD_BOT_TOKEN);
