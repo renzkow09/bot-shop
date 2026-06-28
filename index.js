@@ -255,4 +255,6 @@ client.on('guildMemberRemove', async member => {
 const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => { res.writeHead(200); res.end('Bot Online'); }).listen(PORT);
 
-client.login(DISCORD_BOT_TOKEN);
+client.login(process.env.DISCORD_BOT_TOKEN);
+
+
