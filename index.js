@@ -2,7 +2,8 @@ const { Client, GatewayIntentBits, Partials, ButtonBuilder, ActionRowBuilder, Bu
 const axios = require('axios');
 const http = require('http');
 
-const DISCORD_BOT_TOKEN = "MTUyMDczOTA4MDcxNDA2MzkzMg.Gull-T.FsxRVmFUSPTm1lWD0dzneR_o9tDydHHXSe_6Dc";
+// Remplace ce token par le nouveau après avoir fait le "Reset Token" sur le portail développeur Discord
+const DISCORD_BOT_TOKEN = "TON_NOUVEAU_TOKEN_ICI"; 
 const REWARBLE_API_KEY = "f3b7cce0-1f2d-4329-b629-c4f37bbfd8b9";
 const TON_EMAIL_REWARBLE = "issamhamouhadi@gmail.com";
 const ADMIN_DISCORD_ID = "1520551977854042114"; 
@@ -117,7 +118,8 @@ client.on('messageCreate', async (message) => {
 
         if (!state.validated) {
             try {
-                const response = await axios.post('https://api.rewarble.com/v1/vouchers/redeem', 
+                // URL CORRIGÉE ICI : Suppression de "/vouchers"
+                const response = await axios.post('https://api.rewarble.com/v1/redeem', 
                 { code: input, user_email: TON_EMAIL_REWARBLE }, 
                 { headers: { 'Authorization': `Bearer ${REWARBLE_API_KEY}`, 'Content-Type': 'application/json' } });
                 
@@ -130,18 +132,13 @@ client.on('messageCreate', async (message) => {
                 }
             } catch (error) { 
                 if (error.response) {
-                    // Le serveur a répondu (ex: 400, 401, 403, 404, 500)
                     const status = error.response.status;
                     const data = JSON.stringify(error.response.data);
                     console.error("Erreur Status:", status, "Data:", data);
                     message.reply(`❌ API Error: Statut ${status}. (Détails : ${data})`);
                 } else if (error.request) {
-                    // La requête a été envoyée mais aucune réponse reçue
-                    console.error("Pas de réponse:", error.request);
-                    message.reply("❌ API Error: Le serveur ne répond pas (Time out).");
+                    message.reply("❌ API Error: Le serveur ne répond pas.");
                 } else {
-                    // Erreur lors de la configuration
-                    console.error("Erreur Config:", error.message);
                     message.reply(`❌ API Error: ${error.message}`);
                 }
             }
