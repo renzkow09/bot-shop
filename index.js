@@ -6,7 +6,7 @@ const http = require('http');
 const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
 const REWARBLE_API_KEY = process.env.REWARBLE_API_KEY;
 const TON_EMAIL_REWARBLE = "issamhamouhadi@gmail.com";
-const ADMIN_DISCORD_ID = "1520551977854042114"; // Vérifie que c'est bien ton ID
+const ADMIN_DISCORD_ID = "1520551977854042114";
 
 const PRODUCT_LINKS = {
     "1": "https://lien-vers-ton-drive.com/boobs",
@@ -82,23 +82,23 @@ client.on('messageCreate', async (message) => {
         const menu = `💎 **CONTENT & PRICES** 💎\n\n---\n👇 **After buying your card, click the button below!**`;
         await message.channel.send({ content: menu, components: [row] });
         message.delete().catch(() => {});
+        return; // Important pour arrêter ici
     }
 
-    // Commande !close améliorée
+    // Commande !close
     if (message.content.trim().toLowerCase() === '!close') {
         if (message.author.id !== ADMIN_DISCORD_ID) return;
-        
-        console.log(`Tentative de fermeture par ${message.author.tag} dans ${message.channel.name}`);
         
         try {
             await message.channel.delete();
         } catch (err) {
             console.error("❌ Erreur lors de la suppression :", err);
         }
+        return; // Arrête l'exécution ici pour éviter de lire le canal supprimé
     }
 
-    // Gestion du shop
-    if (message.channel.name && message.channel.name.startsWith('shop-')) {
+    // Gestion du shop (Sécurisé avec ?.)
+    if (message.channel?.name?.startsWith('shop-')) {
         const input = message.content.trim();
         const state = channelStates.get(message.channel.id);
         if (!state) return;
@@ -123,7 +123,5 @@ client.on('messageCreate', async (message) => {
 
 http.createServer((req, res) => { res.writeHead(200); res.end('Online'); }).listen(3000);
 
-// Logs de diagnostic pour Render
-console.log("DEBUG - Token chargé (longueur):", process.env.DISCORD_BOT_TOKEN ? process.env.DISCORD_BOT_TOKEN.length : 0);
-
+console.log("DEBUG - Bot démarré avec succès.");
 client.login(DISCORD_BOT_TOKEN);
