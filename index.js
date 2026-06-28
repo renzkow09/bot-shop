@@ -63,7 +63,7 @@ client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
     // ==========================================
-    // 🛠️ ADMIN COMMAND : !setup (Génère le menu complet de l'image)
+    // 🛠️ ADMIN COMMAND : !setup (Génère ton vrai menu)
     // ==========================================
     if (message.content === '!setup' && message.author.id === ADMIN_DISCORD_ID) {
         const row = new ActionRowBuilder().addComponents(
@@ -73,25 +73,25 @@ client.on('messageCreate', async (message) => {
                 .setStyle(ButtonStyle.Primary)
         );
 
-        // Remplace les liens "https://link-to-buy..." par tes vrais liens d'achat G2A
+        // Texte exact de ton shop avec tes liens G2A opérationnels
         const menuMessage = `💦 **SPECIAL** 💦
-8. **Friends Nude**    $\rightarrow$ **€15**
-9. **Surprise Pack** (3-5 items) $\rightarrow$ **€15**
+8. **Friends Nude**     -> **€15**
+9. **Surprise Pack** (3-5 items) -> **€15**
 
 ---
 
 💌 **PERSONALIZED**
-10. **Sexting** $\rightarrow$ **On request**
-11. **Custom** $\rightarrow$ **On request**
+10. **Sexting** -> **On request**
+11. **Custom** -> **On request**
 
 ---
 
 💵 **HOW TO PAY**
 Buy your code via **G2A Gift Card**:
 
-• **5€** $\rightarrow$ [Buy here](https://www.g2a.com/fr/paypal-gift-card-5-gbp-by-rewarble-global-i10000339995022)
-• **10€** $\rightarrow$ [Buy here](https://www.g2a.com/fr/rewarble-super-gift-card-10-gbp-by-rewarble-key-united-kingdom-i10000506957028)
-• **15€** $\rightarrow$ [Buy here](https://www.g2a.com/fr/paypal-gift-card-15-gbp-by-rewarble-global-i10000339995023)
+• **5€** -> [Buy here](https://www.g2a.com/fr/paypal-gift-card-5-gbp-by-rewarble-global-i10000339995022)
+• **10€** -> [Buy here](https://www.g2a.com/fr/rewarble-super-gift-card-10-gbp-by-rewarble-key-united-kingdom-i10000506957028)
+• **15€** -> [Buy here](https://www.g2a.com/fr/paypal-gift-card-15-gbp-by-rewarble-global-i10000339995023)
 
 ---
 👇 **After buying your card, click the button below to open your private room and claim your files!**`;
