@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, ButtonBuilder, ActionRowBuilder, ButtonStyle, ChannelType } = require('discord.js');
+const { Client, GatewayIntentBits, Partials, ButtonBuilder, ActionRowBuilder, ButtonStyle, ChannelType } = require('discord.js');
 const axios = require('axios');
 const http = require('http');
 
@@ -21,25 +21,41 @@ const PRODUCT_LINKS = {
 
 const channelStates = new Map();
 
-process.on('unhandledRejection', (reason) => console.error('🔴 Rejection:', reason));
-const port = process.env.PORT || 3000;
-http.createServer((req, res) => { res.writeHead(200); res.end('Online'); }).listen(port);
+// Initialisation du client avec Partials
+const client = new Client({ 
+    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildMembers],
+    partials: [Partials.GuildMember, Partials.User, Partials.Message]
+});
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildMembers] });
+// Diagnostic : Confirmation de démarrage
+client.once('ready', async () => {
+    console.log(`✅ Bot connecté en tant que ${client.user.tag}`);
+    try {
+        const admin = await client.users.fetch(ADMIN_DISCORD_ID);
+        await admin.send("🤖 Bot en ligne et opérationnel. Les notifications de membres sont activées.");
+    } catch (e) {
+        console.error("❌ Impossible d'envoyer le message de test à l'admin (DM bloqués ?) :", e);
+    }
+});
 
-// 🔔 NOTIFICATIONS DM POUR L'ADMIN
+// Notifications avec logs de debug
 client.on('guildMemberAdd', async (member) => {
-    const user = await client.users.fetch(ADMIN_DISCORD_ID);
-    const time = new Date().toLocaleTimeString('fr-FR', { timeZone: 'Europe/Brussels' });
-    user.send(`📥 **New Member:** ${member.user.tag}\n🕒 **Time:** ${time}\n👥 **Total members:** ${member.guild.memberCount}`);
+    console.log(`📥 Membre rejoint : ${member.user.tag}`);
+    try {
+        const user = await client.users.fetch(ADMIN_DISCORD_ID);
+        await user.send(`📥 **New Member:** ${member.user.tag}\n👥 **Total members:** ${member.guild.memberCount}`);
+    } catch (err) { console.error("❌ Erreur lors de l'envoi de la notif (Add) :", err); }
 });
 
 client.on('guildMemberRemove', async (member) => {
-    const user = await client.users.fetch(ADMIN_DISCORD_ID);
-    const time = new Date().toLocaleTimeString('fr-FR', { timeZone: 'Europe/Brussels' });
-    user.send(`📤 **Member Left:** ${member.user.tag}\n🕒 **Time:** ${time}\n👥 **Total members:** ${member.guild.memberCount}`);
+    console.log(`📤 Membre quitté : ${member.user.tag}`);
+    try {
+        const user = await client.users.fetch(ADMIN_DISCORD_ID);
+        await user.send(`📤 **Member Left:** ${member.user.tag}\n👥 **Total members:** ${member.guild.memberCount}`);
+    } catch (err) { console.error("❌ Erreur lors de l'envoi de la notif (Remove) :", err); }
 });
 
+// --- Reste de ton code inchangé ---
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isButton()) return;
     await interaction.deferReply({ ephemeral: true });
@@ -123,5 +139,8 @@ client.on('messageCreate', async (message) => {
         }
     }
 });
+
+// Serveur HTTP pour garder le bot éveillé
+http.createServer((req, res) => { res.writeHead(200); res.end('Online'); }).listen(3000);
 
 client.login(DISCORD_BOT_TOKEN);
