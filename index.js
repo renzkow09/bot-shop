@@ -1,13 +1,13 @@
 const { Client, GatewayIntentBits } = require('discord.js');
 const axios = require('axios');
-const http = require('http'); // 👈 Ajouté pour créer la feinte de site web
+const http = require('http'); // 👈 Indispensable pour tricher avec Render !
 
-// Tout est configuré et prêt à l'emploi !
+// Configuration de ton bot
 const DISCORD_BOT_TOKEN = "MTUyMDczOTA4MDcxNDA2MzkzMg.Gull-T.FsxRVmFUSPTm1lWD0dzneR_o9tDydHHXSe_6Dc";
 const REWARBLE_API_KEY = "f3b7cce0-1f2d-4329-b629-c4f37bbfd8b9";
 const TON_EMAIL_REWARBLE = "issamhamouhadi@gmail.com";
 
-// 🌐 MINI SERVEUR POUR EMPECHER RENDER DE COUPER LE BOT
+// 🌐 LE FAUX SERVEUR WEB POUR EMPECHER RENDER DE COUPE LE BOT
 const port = process.env.PORT || 3000;
 http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
@@ -31,7 +31,7 @@ client.once('ready', () => {
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
-    // La commande pour tes clients : !redeem [code]
+    // Commande : !redeem [code]
     if (message.content.startsWith('!redeem ')) {
         const voucherCode = message.content.split(' ')[1];
 
@@ -42,7 +42,6 @@ client.on('messageCreate', async (message) => {
         await message.reply("🔄 Vérification du code auprès de Rewarble...");
 
         try {
-            // Connexion sécurisée à l'API officielle de Rewarble
             const response = await axios.post('https://api.rewarble.com/v1/vouchers/redeem', {
                 code: voucherCode,
                 user_email: TON_EMAIL_REWARBLE
@@ -53,11 +52,8 @@ client.on('messageCreate', async (message) => {
                 }
             });
 
-            // Si Rewarble valide le ticket et ajoute les fonds sur ton compte
             if (response.data && response.data.success) {
                 await message.reply("✅ Paiement validé avec succès !");
-                
-                // Envoi automatique du produit au client en message privé
                 try {
                     await message.author.send("🎉 Merci pour ton achat ! Voici ton lien de téléchargement : [METS_LE_LIEN_DE_TON_FICHIER_ICI]");
                 } catch (dmError) {
@@ -68,9 +64,8 @@ client.on('messageCreate', async (message) => {
             }
 
         } catch (error) {
-            // Cette ligne va afficher la réponse exacte de Rewarble dans tes logs Render
+            // Pour pister le bug Rewarble s'il y en a un
             console.error("🔴 DETAILS ERREUR REWARBLE :", error.response?.status, error.response?.data || error.message);
-
             const errMsg = error.response?.data?.message || "Impossible de joindre l'API de Rewarble.";
             await message.reply(`❌ Erreur technique : ${errMsg}`);
         }
