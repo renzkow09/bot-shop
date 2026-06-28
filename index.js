@@ -26,7 +26,7 @@ client.on('messageCreate', async (message) => {
         const voucherCode = message.content.split(' ')[1];
 
         if (!voucherCode) {
-            return message.reply("❌ Tu devez fournir un code valide. Exemple : `!redeem 123456`");
+            return message.reply("❌ Tu dois fournir un code valide. Exemple : `!redeem 123456`");
         }
 
         await message.reply("🔄 Vérification du code auprès de Rewarble...");
@@ -58,6 +58,9 @@ client.on('messageCreate', async (message) => {
             }
 
         } catch (error) {
+            // Cette ligne va afficher la réponse exacte de Rewarble (le code HTTP et le texte de l'erreur) dans tes logs Render
+            console.error("🔴 DETAILS ERREUR REWARBLE :", error.response?.status, error.response?.data || error.message);
+
             const errMsg = error.response?.data?.message || "Impossible de joindre l'API de Rewarble.";
             await message.reply(`❌ Erreur technique : ${errMsg}`);
         }
