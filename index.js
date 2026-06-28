@@ -1,153 +1,134 @@
-const { Client, GatewayIntentBits } = require('discord.js');
+const { Client, GatewayIntentBits, ButtonBuilder, ActionRowBuilder, ButtonStyle, ChannelType } = require('discord.js');
 const axios = require('axios');
-const http = require('http'); // 🌐 Required to keep the bot alive on Render
+const http = require('http'); // 🌐 Maintien en ligne sur Render
 
 // Configuration
 const DISCORD_BOT_TOKEN = "MTUyMDczOTA4MDcxNDA2MzkzMg.Gull-T.FsxRVmFUSPTm1lWD0dzneR_o9tDydHHXSe_6Dc";
 const REWARBLE_API_KEY = "f3b7cce0-1f2d-4329-b629-c4f37bbfd8b9";
 const TON_EMAIL_REWARBLE = "issamhamouhadi@gmail.com";
-
-// 🔐 YOUR DISCORD ID (Fixed as a String to prevent precision loss)
 const ADMIN_DISCORD_ID = "1520551977854042114"; 
 
-// 🛡️ ANTI-CRASH SYSTEM: Prevents Render from stopping the bot if a Discord permission error occurs
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('🔴 Unhandled Rejection at:', promise, 'reason:', reason);
-});
-process.on('uncaughtException', (err, origin) => {
-    console.error('🔴 Uncaught Exception:', err, 'origin:', origin);
-});
+// 🛡️ Système Anti-Crash
+process.on('unhandledRejection', (reason) => console.error('🔴 Rejection:', reason));
+process.on('uncaughtException', (err) => console.error('🔴 Exception:', err));
 
-// 🌐 WEB SERVER TO PREVENT RENDER FROM SLEEPING
+// 🌐 Serveur Web pour Render
 const port = process.env.PORT || 3000;
-http.createServer((req, res) => {
-    res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('Shop Bot is running 24/7!');
-}).listen(port, () => {
-    console.log(`✅ Dummy server activated on port ${port}`);
-});
+http.createServer((req, res) => { res.writeHead(200); res.end('Online'); }).listen(port);
 
 const client = new Client({
-    intents: [
-        GatewayIntentBits.Guilds, 
-        GatewayIntentBits.GuildMessages, 
-        GatewayIntentBits.MessageContent,
-        GatewayIntentBits.GuildMembers // 👥 Required to detect new clients joining
-    ]
+    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildMembers]
 });
 
-client.once('ready', () => {
-    console.log(`✅ Bot logged in as ${client.user.tag}!`);
-});
+client.once('ready', () => console.log(`✅ Bot en ligne : ${client.user.tag}`));
 
 // ==========================================================
-// EVENT: Create private "buy-here" channel when client joins
+// 📩 INTERACTION : CRÉATION DU SALON PRIVÉ PERSONNALISÉ
 // ==========================================================
-client.on('guildMemberAdd', async (member) => {
+client.on('interactionCreate', async (interaction) => {
+    if (!interaction.isButton() || interaction.customId !== 'open_shop_channel') return;
+
+    await interaction.deferReply({ ephemeral: true });
+
     try {
-        // Creates a private text channel named "buy-here"
-        const channel = await member.guild.channels.create({
-            name: 'buy-here',
-            type: 0, // GuildText
+        const channel = await interaction.guild.channels.create({
+            name: `shop-${interaction.user.username}`,
+            type: ChannelType.GuildText,
             permissionOverwrites: [
-                {
-                    id: member.guild.id, // @everyone
-                    deny: ['ViewChannel'], // Hide from everyone
-                },
-                {
-                    id: member.id, // The specific joining client
-                    allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'], // Authorize them
-                },
-                {
-                    id: client.user.id, // 🤖 Forces the bot to keep its own permissions inside the channel
-                    allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'ManageChannels'],
-                }
+                { id: interaction.guild.id, deny: ['ViewChannel'] }, // Cache pour le serveur
+                { id: interaction.user.id, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'] }, // Autorise le client
+                { id: client.user.id, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'ManageChannels'] } // Autorise le bot
             ],
         });
 
-        // English enticing marketing welcome message
-        await channel.send(`👋 Welcome <@${member.id}> to our premium store! Your private checkout is ready.
+        // Message d'accueil dans le salon privé du client
+        await channel.send(`👋 Welcome <@${interaction.user.id}>!
         
-✨ **Don't wait up! Get instant access to your products right now.** Premium quality is just one step away. Grab your Rewarble voucher and unlock your file instantly!
+🛒 **To complete your purchase:**
+Just **paste your G2A Gift Card code** right here and press Enter.
 
-🛒 **How to claim your product:**
-1️⃣ Purchase your Rewarble voucher code from your preferred reseller.
-2️⃣ Drop it right here in this channel by typing:
-\`!redeem [your_code]\`
+📩 *Your product will be delivered directly to your Direct Messages (DMs) for 100% privacy.*`);
 
-⚡ *Your code is 100% safe here. Nobody else can see this channel. Let's get started!*`);
-        
+        await interaction.editReply({ content: `✅ Your private room is ready: <#${channel.id}>`, ephemeral: true });
+
     } catch (error) {
-        console.error("🔴 Error creating private channel:", error);
+        await interaction.editReply({ content: "❌ Error opening room. Contact admin.", ephemeral: true });
     }
 });
 
+// ==========================================================
+// 🤖 TRAITEMENT AUTOMATIQUE & ENVOI EN DM
+// ==========================================================
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
     // ==========================================
-    // COMMAND 1: !solde (Admin only)
+    // 🛠️ ADMIN COMMAND : !setup (Génère le menu complet de l'image)
     // ==========================================
-    if (message.content === '!solde') {
-        if (message.author.id !== ADMIN_DISCORD_ID) {
-            return message.reply("❌ You do not have permission to view the shop balance.");
-        }
+    if (message.content === '!setup' && message.author.id === ADMIN_DISCORD_ID) {
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId('open_shop_channel')
+                .setLabel('📩 Open Private Checkout & Redeem')
+                .setStyle(ButtonStyle.Primary)
+        );
 
-        await message.reply("🔄 Fetching your Rewarble account balance...");
+        // Remplace les liens "https://link-to-buy..." par tes vrais liens d'achat G2A
+        const menuMessage = `💦 **SPECIAL** 💦
+8. **Friends Nude**    $\rightarrow$ **€15**
+9. **Surprise Pack** (3-5 items) $\rightarrow$ **€15**
 
-        try {
-            const response = await axios.get('https://api.rewarble.com/v1/users/balance', {
-                headers: {
-                    'Authorization': `Bearer ${REWARBLE_API_KEY}`,
-                    'Content-Type': 'application/json'
-                }
-            });
+---
 
-            const solde = response.data.balance || 0;
-            const devise = response.data.currency || "EUR";
-            await message.reply(`💰 Your current Rewarble balance is **${solde} ${devise}**.`);
+💌 **PERSONALIZED**
+10. **Sexting** $\rightarrow$ **On request**
+11. **Custom** $\rightarrow$ **On request**
 
-        } catch (error) {
-            console.error("🔴 BALANCE FETCH ERROR:", error.response?.status, error.response?.data || error.message);
-            await message.reply("❌ Unable to fetch balance. Please verify your configuration.");
-        }
+---
+
+💵 **HOW TO PAY**
+Buy your code via **G2A Gift Card**:
+
+• **5€** $\rightarrow$ [Buy here](https://www.g2a.com/fr/paypal-gift-card-5-gbp-by-rewarble-global-i10000339995022)
+• **10€** $\rightarrow$ [Buy here](https://www.g2a.com/fr/rewarble-super-gift-card-10-gbp-by-rewarble-key-united-kingdom-i10000506957028)
+• **15€** $\rightarrow$ [Buy here](https://www.g2a.com/fr/paypal-gift-card-15-gbp-by-rewarble-global-i10000339995023)
+
+---
+👇 **After buying your card, click the button below to open your private room and claim your files!**`;
+
+        await message.channel.send({
+            content: menuMessage,
+            components: [row]
+        });
+        
+        return message.delete().catch(() => {});
     }
 
-    // ==========================================
-    // COMMAND 2: !close (Admin only - deletes channel)
-    // ==========================================
-    if (message.content === '!close') {
-        if (message.author.id !== ADMIN_DISCORD_ID) {
-            return message.reply("❌ Only the administrator can close this channel.");
-        }
-        await message.reply("🔒 Closing and deleting this channel in 5 seconds...");
-        setTimeout(() => {
-            message.channel.delete().catch(console.error);
-        }, 5000);
+    // Commande Admin : Clôture manuelle au cas où
+    if (message.content === '!close' && message.author.id === ADMIN_DISCORD_ID) {
+        return message.channel.delete().catch(() => {});
     }
 
-    // ==========================================
-    // COMMAND 3: !redeem [code] (For Clients)
-    // ==========================================
-    if (message.content.startsWith('!redeem ')) {
-        const voucherCode = message.content.split(' ')[1];
+    // Détection automatique dans le salon privé du client
+    if (message.channel.name && message.channel.name.startsWith('shop-')) {
+        const voucherCode = message.content.trim();
+        if (voucherCode.startsWith('!')) return;
 
-        if (!voucherCode) {
-            return message.reply("❌ You must provide a valid code. Example: \`!redeem 123456\`");
-        }
-
-        // 🧪 MOCK TEST CODE
+        // 🧪 MODE TEST AUTOMATISÉ
         if (voucherCode === "TEST1234") {
-            await message.reply("🧪 **[TEST MODE]** Simulation code detected...");
-            await message.reply("✅ Payment successfully validated!");
+            await message.reply("🔄 Verifying your code...");
             try {
-                await message.author.send("🎉 **[TEST]** Thank you for your purchase! Here is your download link: https://play-lh.googleusercontent.com/HIfrKDswSBoGygCLl7kl_BbwesYz2pnXzvCI4RzAaZ0S-rc0U7lInAsj5XpAMR0te5qnnfWkUjtjVWvGdpir-g");
-                return;
+                await message.author.send("🎉 **[TEST MODE]** Thank you for your purchase! Here is your download link:\nhttps://play-lh.googleusercontent.com/HIfrKDswSBoGygCLl7kl_BbwesYz2pnXzvCI4RzAaZ0S-rc0U7lInAsj5XpAMR0te5qnnfWkUjtjVWvGdpir-g");
+                
+                await message.reply("✅ **Payment successfully validated!**\n📩 The link has been sent to your DMs.\n🔒 *This channel will close automatically in 10 seconds.*");
+                setTimeout(() => { message.channel.delete().catch(() => {}); }, 10000);
             } catch (dmError) {
-                return message.reply("⚠️ Your Direct Messages (DMs) are closed. Please enable them in your Discord Privacy Settings to receive your file!");
+                await message.reply("⚠️ **Your DMs are locked!** I couldn't send the link.\nPlease open your Discord Privacy Settings (Allow DMs from server members) and paste your code again!");
             }
+            return;
         }
 
+        // 🟢 MODE RÉEL REWARBLE
         await message.reply("🔄 Verifying your voucher code with Rewarble...");
 
         try {
@@ -155,35 +136,27 @@ client.on('messageCreate', async (message) => {
                 code: voucherCode,
                 user_email: TON_EMAIL_REWARBLE
             }, {
-                headers: {
-                    'Authorization': `Bearer ${REWARBLE_API_KEY}`,
-                    'Content-Type': 'application/json'
-                }
+                headers: { 'Authorization': `Bearer ${REWARBLE_API_KEY}`, 'Content-Type': 'application/json' }
             });
 
             if (response.data && response.data.success) {
-                await message.reply("✅ Payment successfully validated!");
                 try {
-                    await message.author.send("🎉 Thank you for your purchase! Here is your download link: https://play-lh.googleusercontent.com/HIfrKDswSBoGygCLl7kl_BbwesYz2pnXzvCI4RzAaZ0S-rc0U7lInAsj5XpAMR0te5qnnfWkUjtjVWvGdpir-g");
+                    await message.author.send("🎉 Thank you for your purchase! Here is your download link:\nhttps://play-lh.googleusercontent.com/HIfrKDswSBoGygCLl7kl_BbwesYz2pnXzvCI4RzAaZ0S-rc0U7lInAsj5XpAMR0te5qnnfWkUjtjVWvGdpir-g");
+                    
+                    await message.reply("✅ **Payment successfully validated!**\n📩 The link has been sent to your DMs.\n🔒 *This channel will close automatically in 10 seconds.*");
+                    setTimeout(() => { message.channel.delete().catch(() => {}); }, 10000);
                 } catch (dmError) {
-                    await message.reply("⚠️ Your Direct Messages (DMs) are closed. Please open them to receive your file!");
+                    await message.reply("⚠️ **Payment validated, but your DMs are closed!** I couldn't send the link.\nPlease open your DMs in your Privacy Settings, then re-paste your code here to receive the file.");
                 }
             } else {
                 await message.reply(`❌ Invalid code: ${response.data.message || 'Unknown error.'}`);
             }
 
         } catch (error) {
-            console.error("🔴 REWARBLE API ERROR:", error.response?.status, error.response?.data || error.message);
-            
             if (error.response?.status === 404) {
-                return message.reply("❌ This code is invalid, expired, or does not exist on Rewarble. Please double-check and try again!");
+                return message.reply("❌ This code is invalid or expired. Please check it and try again.");
             }
-            if (error.response?.status === 401) {
-                return message.reply("❌ Shop configuration error (Invalid API Key). Please contact the administrator.");
-            }
-
-            const errMsg = error.response?.data?.message || "Unable to reach Rewarble API.";
-            await message.reply(`❌ Technical error: ${errMsg}`);
+            await message.reply("❌ Technical error with Rewarble API. Please try again later.");
         }
     }
 });
