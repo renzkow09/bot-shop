@@ -1,10 +1,20 @@
 const { Client, GatewayIntentBits } = require('discord.js');
 const axios = require('axios');
+const http = require('http'); // 👈 Ajouté pour créer la feinte de site web
 
 // Tout est configuré et prêt à l'emploi !
 const DISCORD_BOT_TOKEN = "MTUyMDczOTA4MDcxNDA2MzkzMg.Gull-T.FsxRVmFUSPTm1lWD0dzneR_o9tDydHHXSe_6Dc";
 const REWARBLE_API_KEY = "f3b7cce0-1f2d-4329-b629-c4f37bbfd8b9";
 const TON_EMAIL_REWARBLE = "issamhamouhadi@gmail.com";
+
+// 🌐 MINI SERVEUR POUR EMPECHER RENDER DE COUPER LE BOT
+const port = process.env.PORT || 3000;
+http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('Bot Shop en ligne H24 !');
+}).listen(port, () => {
+    console.log(`✅ Serveur de feinte activé sur le port ${port}`);
+});
 
 const client = new Client({
     intents: [
@@ -58,7 +68,7 @@ client.on('messageCreate', async (message) => {
             }
 
         } catch (error) {
-            // Cette ligne va afficher la réponse exacte de Rewarble (le code HTTP et le texte de l'erreur) dans tes logs Render
+            // Cette ligne va afficher la réponse exacte de Rewarble dans tes logs Render
             console.error("🔴 DETAILS ERREUR REWARBLE :", error.response?.status, error.response?.data || error.message);
 
             const errMsg = error.response?.data?.message || "Impossible de joindre l'API de Rewarble.";
