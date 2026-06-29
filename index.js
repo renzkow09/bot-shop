@@ -169,12 +169,16 @@ client.on('messageCreate', async (message) => {
                     const gain = apiData.amount || apiData.value || apiData.credit || "(Voir JSON)";
                     const nouveauSolde = apiData.balance || apiData.new_balance || apiData.total || "(Voir JSON)";
 
+                    // Affichage de la devise d'origine récupérée depuis l'API Rewarble
+                    const currency = apiData.faceValueCurrency ? apiData.faceValueCurrency.toUpperCase() : 'EUR';
+                    const finalGain = apiData.faceValue || gain;
+
                     await adminUser.send(
                         `🚨 **NOUVEL ENCAISSEMENT REWARBLE !**\n\n` +
                         `👤 **Client :** <@${message.author.id}> (\`${message.author.username}\`)\n` +
                         `📍 **Salon :** #${message.channel.name}\n` +
                         `🏷️ **Code :** \`${input}\`\n\n` +
-                        `💵 **Argent gagné :** \`+${gain} €\`\n` +
+                        `💵 **Argent gagné :** \`+${finalGain} ${currency}\`\n` +
                         `🏦 **Nouveau Solde :** \`${nouveauSolde} €\`\n\n` +
                         `*Réponse brute du serveur Rewarble :*\n\`\`\`json\n${JSON.stringify(apiData, null, 2)}\n\`\`\``
                     );
@@ -256,5 +260,3 @@ const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => { res.writeHead(200); res.end('Bot Online'); }).listen(PORT);
 
 client.login(process.env.DISCORD_BOT_TOKEN);
-
-
