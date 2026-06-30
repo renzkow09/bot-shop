@@ -73,7 +73,23 @@ client.on('messageCreate', async (message) => {
     if (message.author.id === ADMIN_DISCORD_ID) {
 
         if (message.content === '!setup') {
-            const menu = `💎 **CONTENT & PRICES** 💎\n\n**Once you redeem the code type your selected product number to receive it in your dm’s!**\n\n---\n\n✨ **PHOTOS** ✨\n1. **Boobs** → **€5**\n2. **Ass** → **€5**\n3. **Full Body** → **€5**\n4. **Lingerie Try-On** → **€5**\n5. **Mirror Pic** → **€5**\n\n---\n\n🔥 **VIDEOS** 🔥\n6. **5-Min Video** → **€10**\n7. **Shower / Bath** → **€10**\n\n---\n\n💦 **SPECIAL** 💦\n8. **Friends Nude** → **€15**\n9. **Surprise Pack** (3-5 items) → **€15**\n\n---\n\n💌 **PERSONALIZED**\n10. **Sexting** → **On request**\n11. **Custom** → **On request**\n\n---\n\n**💵 HOW TO PAY**\nBuy your code via **G2A Gift Card**:\n\n• **5€** → [Buy here](https://www.g2a.com/fr/paypal-gift-card-5-gbp-by-rewarble-global-i10000339995022)\n• **10€** → [Buy here](https://www.g2a.com/fr/rewarble-super-gift-card-10-gbp-by-rewarble-key-united-kingdom-i10000506957028)\n• **15€** → [Buy here](https://www.g2a.com/fr/paypal-gift-card-15-gbp-by-rewarble-global-i10000339995023)\n• **20€** → [Buy here](https://www.g2a.com/fr/paypal-gift-card-20-gbp-by-rewarble-global-i10000339995015)\n\n**After payment, redeem the code by pasting your code**\n\nIf you have any problems or questions don’t hesitate to dm me!`;
+            const menu = `# 💎 VIP MENU & PRICES 💎\n> *Instant automatic delivery in your DMs! 🚀*\n\n` +
+            `### ✨ PHOTOS (€5)\n` +
+            `**1.** Boobs   |   **2.** Ass   |   **3.** Full Body\n` +
+            `**4.** Lingerie Try-On   |   **5.** Mirror Pic\n\n` +
+            `### 🔥 VIDEOS (€10)\n` +
+            `**6.** 5-Min Video   |   **7.** Shower / Bath\n\n` +
+            `### 💦 SPECIAL (€15)\n` +
+            `**8.** Friends Nude   |   **9.** Surprise Pack (3-5 items)\n\n` +
+            `### 💌 PERSONALIZED (On Request)\n` +
+            `**10.** Sexting   |   **11.** Custom\n\n` +
+            `━━━━━━━━━━━━━━━━━━━━━━\n` +
+            `# 💳 HOW TO BUY ?\n` +
+            `**STEP 1:** Get your Rewarble Gift Card on G2A:\n` +
+            `🛒 [Buy €5](https://www.g2a.com/fr/paypal-gift-card-5-gbp-by-rewarble-global-i10000339995022)  |  🛒 [Buy €10](https://www.g2a.com/fr/rewarble-super-gift-card-10-gbp-by-rewarble-key-united-kingdom-i10000506957028)  |  🛒 [Buy €15](https://www.g2a.com/fr/paypal-gift-card-15-gbp-by-rewarble-global-i10000339995023)  |  🛒 [Buy €20](https://www.g2a.com/fr/paypal-gift-card-20-gbp-by-rewarble-global-i10000339995015)\n\n` +
+            `**STEP 2:** Click the **📩 Redeem Code** button below.\n` +
+            `**STEP 3:** Paste your code, type the item number, and check your DMs! 🎉\n\n` +
+            `*Need help? Click "🎧 Need Support?" below!*`;
             
             const row = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId('open_shop_channel').setLabel('📩 Redeem Code').setStyle(ButtonStyle.Primary),
