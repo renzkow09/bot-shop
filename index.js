@@ -7,11 +7,11 @@ const http = require('http');
 // ==========================================
 const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
 const REWARBLE_API_KEY = process.env.REWARBLE_API_KEY;
+const REVIEW_CHANNEL_ID = "TON_ID_DU_SALON_REVIEWS"; // <--- REMPLACE PAR TON ID DE SALON ICI
 
-// Sécurité : Vérifie si le token est bien renseigné sur Render
 if (!DISCORD_BOT_TOKEN) {
-    console.error("❌ ERREUR CRITIQUE : Le DISCORD_BOT_TOKEN est introuvable ! Ajoute-le dans l'onglet 'Environment' sur Render.");
-    process.exit(1); // Stoppe proprement si pas de token
+    console.error("❌ ERREUR CRITIQUE : Le DISCORD_BOT_TOKEN est introuvable !");
+    process.exit(1);
 }
 
 const REWARBLE_API_URL = "https://api.rewarble.com/client/1.00/redeem"; 
@@ -19,12 +19,7 @@ const ADMIN_DISCORD_ID = "1520551977854042114";
 const CATEGORY_CUSTOMER_ID = "1521540733226713249";
 const CATEGORY_SUPPORT_ID = "1521541155005796484";
 
-// ==========================================
-// DONNEES DU SHOP
-// ==========================================
-const TEST_VOUCHERS = {
-    "GOYAVE5": 5
-};
+const TEST_VOUCHERS = { "GOYAVE5": 5 };
 
 const PRODUCT_DATA = {
     "1": { name: "Boobs", price: "€5" },
@@ -55,16 +50,6 @@ const PRODUCT_LINKS = {
 const channelStates = new Map();
 
 // ==========================================
-// BOUCLIER ANTI-CRASH (COMPLET)
-// ==========================================
-process.on('unhandledRejection', (error) => {
-    console.error('🛡️ [Unhandled Rejection] :', error);
-});
-process.on('uncaughtException', (error) => {
-    console.error('💥 [Uncaught Exception] :', error);
-});
-
-// ==========================================
 // INITIALISATION DU BOT
 // ==========================================
 const client = new Client({ 
@@ -72,12 +57,8 @@ const client = new Client({
     partials: [Partials.GuildMember, Partials.User, Partials.Message]
 });
 
-client.once('clientReady', async () => {
-    console.log(`✅ Bot ready: ${client.user.tag}`);
-});
-
 // ==========================================
-// GESTION DES BOUTONS ET MENUS
+// GESTION DES INTERACTIONS
 // ==========================================
 client.on('interactionCreate', async (interaction) => {
     if (interaction.isButton()) {
@@ -95,10 +76,9 @@ client.on('interactionCreate', async (interaction) => {
                 ],
             });
             channelStates.set(channel.id, { validated: false, amount: 0 });
-            await channel.send(`👋 Welcome <@${interaction.user.id}>!\n\n**Please paste your Rewarble voucher code below to verify your payment.**`);
+            await channel.send(`👋 Welcome <@${interaction.user.id}>!\n\n**Please paste your Rewarble voucher code below.**`);
             await interaction.editReply({ content: `✅ Room ready: <#${channel.id}>` });
-        } 
-        else if (interaction.customId === 'open_support_ticket') {
+        } else if (interaction.customId === 'open_support_ticket') {
             const channel = await interaction.guild.channels.create({
                 name: `support-${interaction.user.username}`,
                 type: ChannelType.GuildText,
@@ -120,13 +100,24 @@ client.on('interactionCreate', async (interaction) => {
             await interaction.deferUpdate();
             const selected = interaction.values[0];
 
+            // Embed Esthétique de Livraison
+            const successEmbed = new EmbedBuilder()
+                .setColor('#FFD700')
+                .setTitle('✨ Purchase Successful!')
+                .setDescription(`Thank you for your trust. Here is your link for **${PRODUCT_DATA[selected].name}**:\n\n🔗 ${PRODUCT_LINKS[selected]}`)
+                .addFields({
+                    name: '💖 Happy with your purchase?',
+                    value: `Please support us by leaving a review in <#${REVIEW_CHANNEL_ID}>!\n\n*Mention your review on your next order for a discount!*`
+                })
+                .setFooter({ text: 'This ticket will auto-close in 45 seconds.' });
+
             if (PRODUCT_LINKS[selected]) {
                 try {
-                    await interaction.user.send(`🎉 **Thank you!**\n\nHere is your link for **${PRODUCT_DATA[selected].name}**:\n${PRODUCT_LINKS[selected]}`);
-                    await interaction.channel.send(`📬 **Sent to your DMs!**\n*This ticket will auto-close in 45 seconds.*`);
+                    await interaction.user.send({ embeds: [successEmbed] });
+                    await interaction.channel.send(`📬 **Sent to your DMs!**`);
                     setTimeout(() => { if (interaction.channel) interaction.channel.delete().catch(() => {}); }, 45000);
                 } catch (e) {
-                    await interaction.channel.send(`⚠️ **I couldn't DM you!**\nHere is your link:\n${PRODUCT_LINKS[selected]}`);
+                    await interaction.channel.send({ content: `⚠️ **I couldn't DM you!**`, embeds: [successEmbed] });
                 }
             } else if (["10", "11"].includes(selected)) {
                 await interaction.channel.send(`📩 **Custom request (${PRODUCT_DATA[selected].name}) registered!**\nAdmin notified.`);
@@ -138,7 +129,7 @@ client.on('interactionCreate', async (interaction) => {
 });
 
 // ==========================================
-// GESTION DES MESSAGES
+// GESTION MESSAGES & SHOP LOGIC
 // ==========================================
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
@@ -150,28 +141,16 @@ client.on('messageCreate', async (message) => {
                 new ButtonBuilder().setCustomId('open_support_ticket').setLabel('🎧 Support').setStyle(ButtonStyle.Secondary)
             );
             await message.channel.send({ content: "# 💎 VIP MENU\nClick below to buy:", components: [row] });
-            return;
         }
-        if (message.content === '!close') {
-            await message.reply("🔒 Closing this channel...");
-            setTimeout(() => { message.channel.delete().catch(() => {}); }, 2000);
-            return;
-        }
-        // Commande !say ajoutée ici
         if (message.content.startsWith('!say ')) {
             const args = message.content.split(' ');
             const targetId = args[1];
             const textToSend = args.slice(2).join(' ');
-
-            if (!targetId || !textToSend) return message.reply("⚠️ Usage: `!say <channelID> Ton message`");
-            try {
+            if (targetId && textToSend) {
                 const targetChannel = await client.channels.fetch(targetId);
                 await targetChannel.send(textToSend);
                 message.react('✅');
-            } catch (e) {
-                message.reply("❌ Impossible d'envoyer le message : " + e.message);
             }
-            return;
         }
     }
 
@@ -180,91 +159,24 @@ client.on('messageCreate', async (message) => {
         if (!state || state.validated) return;
 
         const input = message.content.trim();
-
-        // 1. TEST VOUCHER LOGIC
-        if (TEST_VOUCHERS[input]) {
-            state.validated = true;
-            state.amount = TEST_VOUCHERS[input];
-            
-            const menu = new StringSelectMenuBuilder().setCustomId('product_select').setPlaceholder('Select your product...');
-            for (const [id, data] of Object.entries(PRODUCT_DATA)) {
-                menu.addOptions(new StringSelectMenuOptionBuilder().setLabel(data.name).setDescription(`Price: ${data.price}`).setValue(id));
+        if (TEST_VOUCHERS[input] || input.length >= 8) {
+            try {
+                if (!TEST_VOUCHERS[input]) await axios.post(REWARBLE_API_URL, { code: input }, { headers: { 'Authorization': `Bearer ${REWARBLE_API_KEY}` } });
+                state.validated = true;
+                const menu = new StringSelectMenuBuilder().setCustomId('product_select').setPlaceholder('Select your product...');
+                for (const [id, data] of Object.entries(PRODUCT_DATA)) {
+                    menu.addOptions(new StringSelectMenuOptionBuilder().setLabel(data.name).setDescription(`Price: ${data.price}`).setValue(id));
+                }
+                await message.reply({ content: "✅ **Code validated! Select your item below:**", components: [new ActionRowBuilder().addComponents(menu)] });
+            } catch (e) {
+                message.reply("❌ Invalid code.");
             }
-            await message.reply({ content: `✅ **Code Validated!**\n**Amount credited: ${state.amount}€**\nSelect your item:`, components: [new ActionRowBuilder().addComponents(menu)] });
-            return;
-        }
-
-        // 2. REAL API LOGIC
-        if (input.length < 8) return;
-        try {
-            const response = await axios.post(REWARBLE_API_URL, { code: input }, { headers: { 'Authorization': `Bearer ${REWARBLE_API_KEY}` } });
-            state.validated = true;
-            
-            const menu = new StringSelectMenuBuilder().setCustomId('product_select').setPlaceholder('Select your product...');
-            for (const [id, data] of Object.entries(PRODUCT_DATA)) {
-                menu.addOptions(new StringSelectMenuOptionBuilder().setLabel(data.name).setDescription(`Price: ${data.price}`).setValue(id));
-            }
-            await message.reply({ content: "✅ **Code validated! Select your item below:**", components: [new ActionRowBuilder().addComponents(menu)] });
-        } catch (e) {
-            message.reply("❌ Invalid code.");
         }
     }
 });
 
 // ==========================================
-// NOTIFICATIONS D'ARRIVEE ET DEPART (ADMIN)
+// SERVEUR WEB (RENDER) & LOGIN
 // ==========================================
-client.on('guildMemberAdd', async (member) => {
-    try {
-        const admin = await client.users.fetch(ADMIN_DISCORD_ID);
-        const joinEmbed = new EmbedBuilder()
-            .setColor('#2ecc71') // Vert
-            .setTitle('📥 New Member Joined')
-            .setDescription(`**${member.user.tag}** has just joined the server!`)
-            .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
-            .addFields(
-                { name: 'User ID', value: `\`${member.id}\``, inline: true },
-                { name: 'Total Server Members', value: `**${member.guild.memberCount}**`, inline: true }
-            )
-            .setTimestamp()
-            .setFooter({ text: 'Server Monitor System' });
-
-        await admin.send({ embeds: [joinEmbed] });
-    } catch (error) {
-        console.error('Erreur Join DM :', error);
-    }
-});
-
-client.on('guildMemberRemove', async (member) => {
-    try {
-        const admin = await client.users.fetch(ADMIN_DISCORD_ID);
-        const leaveEmbed = new EmbedBuilder()
-            .setColor('#e74c3c') // Rouge
-            .setTitle('📤 Member Left')
-            .setDescription(`**${member.user.tag}** has left the server.`)
-            .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
-            .addFields(
-                { name: 'User ID', value: `\`${member.id}\``, inline: true },
-                { name: 'Total Server Members', value: `**${member.guild.memberCount}**`, inline: true }
-            )
-            .setTimestamp()
-            .setFooter({ text: 'Server Monitor System' });
-
-        await admin.send({ embeds: [leaveEmbed] });
-    } catch (error) {
-        console.error('Erreur Leave DM :', error);
-    }
-});
-
-// ==========================================
-// SERVEUR WEB (REQUIS PAR RENDER) & LOGIN
-// ==========================================
-const PORT = process.env.PORT || 3000;
-http.createServer((req, res) => { 
-    res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('Bot Online'); 
-}).listen(PORT, '0.0.0.0', () => {
-    console.log(`🌐 Serveur web lancé sur le port ${PORT}`);
-});
-
+http.createServer((req, res) => { res.end('Bot Online'); }).listen(process.env.PORT || 3000);
 client.login(DISCORD_BOT_TOKEN);
