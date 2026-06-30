@@ -8,6 +8,13 @@ const REWARBLE_API_KEY = process.env.REWARBLE_API_KEY;
 const REWARBLE_API_URL = "https://api.rewarble.com/client/1.00/redeem"; 
 const ADMIN_DISCORD_ID = "1520551977854042114";
 
+// ==========================================
+// 🚨 CONFIGURATION DES CATÉGORIES (MISES À JOUR)
+// ==========================================
+const CATEGORY_CUSTOMER_ID = "1521540733226713249";
+const CATEGORY_SUPPORT_ID = "1521541155005796484";
+// ==========================================
+
 const channelStates = new Map();
 
 // Bouclier Anti-Crash réseau
@@ -35,10 +42,12 @@ client.on('interactionCreate', async (interaction) => {
         const channel = await interaction.guild.channels.create({
             name: `shop-${interaction.user.username}`,
             type: ChannelType.GuildText,
+            parent: CATEGORY_CUSTOMER_ID, // Classement automatique dans la catégorie Customer
             permissionOverwrites: [
-                { id: interaction.guild.id, deny: ['ViewChannel'] },
-                { id: interaction.user.id, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'] },
-                { id: client.user.id, allow: ['ViewChannel', 'SendMessages', 'ManageChannels'] }
+                { id: interaction.guild.id, deny: ['ViewChannel'] }, // Bloque le reste du serveur
+                { id: interaction.user.id, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'] }, // Autorise le client
+                { id: ADMIN_DISCORD_ID, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'] }, // Autorise uniquement TOI
+                { id: client.user.id, allow: ['ViewChannel', 'SendMessages', 'ManageChannels'] } // Autorise le bot
             ],
         });
         channelStates.set(channel.id, { validated: false, isValidating: false });
@@ -49,11 +58,12 @@ client.on('interactionCreate', async (interaction) => {
         const channel = await interaction.guild.channels.create({
             name: `support-${interaction.user.username}`,
             type: ChannelType.GuildText,
+            parent: CATEGORY_SUPPORT_ID, // Classement automatique dans la catégorie Support
             permissionOverwrites: [
-                { id: interaction.guild.id, deny: ['ViewChannel'] },
-                { id: interaction.user.id, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'] },
-                { id: ADMIN_DISCORD_ID, allow: ['ViewChannel', 'SendMessages'] },
-                { id: client.user.id, allow: ['ViewChannel', 'SendMessages'] }
+                { id: interaction.guild.id, deny: ['ViewChannel'] }, // Bloque le reste du serveur
+                { id: interaction.user.id, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'] }, // Autorise le client
+                { id: ADMIN_DISCORD_ID, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'] }, // Autorise uniquement TOI
+                { id: client.user.id, allow: ['ViewChannel', 'SendMessages'] } // Autorise le bot
             ],
         });
         await channel.send(`🎧 **Support Ticket for <@${interaction.user.id}>**\n\nHello! Please describe your issue. The Admin will be with you shortly.`);
