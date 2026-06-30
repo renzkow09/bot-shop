@@ -7,7 +7,7 @@ const http = require('http');
 // ==========================================
 const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
 const REWARBLE_API_KEY = process.env.REWARBLE_API_KEY;
-const REVIEW_CHANNEL_ID = "TON_ID_DU_SALON_REVIEWS"; // <--- REMPLACE PAR TON ID DE SALON ICI
+const REVIEW_CHANNEL_ID = "1521625370929922078"; // <--- REMPLACE PAR TON ID DE SALON ICI
 
 if (!DISCORD_BOT_TOKEN) {
     console.error("❌ ERREUR CRITIQUE : Le DISCORD_BOT_TOKEN est introuvable !");
