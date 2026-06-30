@@ -157,6 +157,22 @@ client.on('messageCreate', async (message) => {
             setTimeout(() => { message.channel.delete().catch(() => {}); }, 2000);
             return;
         }
+        // Commande !say ajoutée ici
+        if (message.content.startsWith('!say ')) {
+            const args = message.content.split(' ');
+            const targetId = args[1];
+            const textToSend = args.slice(2).join(' ');
+
+            if (!targetId || !textToSend) return message.reply("⚠️ Usage: `!say <channelID> Ton message`");
+            try {
+                const targetChannel = await client.channels.fetch(targetId);
+                await targetChannel.send(textToSend);
+                message.react('✅');
+            } catch (e) {
+                message.reply("❌ Impossible d'envoyer le message : " + e.message);
+            }
+            return;
+        }
     }
 
     if (message.channel?.name?.startsWith('shop-')) {
