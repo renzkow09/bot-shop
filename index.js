@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, Partials, ButtonBuilder, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ButtonStyle, ChannelType } = require('discord.js');
+const { Client, GatewayIntentBits, Partials, ButtonBuilder, ActionRowBuilder, ButtonStyle, ChannelType, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } = require('discord.js');
 const axios = require('axios');
 const http = require('http');
 
@@ -20,9 +20,10 @@ const PRODUCT_CATALOG = [
     { id: "6", label: "5-Min Video", price: 10, link: "https://drive.google.com/ton_lien_video5min" },
     { id: "7", label: "Shower / Bath", price: 10, link: "https://drive.google.com/ton_lien_shower" },
     { id: "8", label: "Friends Nude", price: 15, link: "https://drive.google.com/ton_lien_friends" },
-    { id: "9", label: "Surprise Pack (3-5 items)", price: 15, link: "https://drive.google.com/ton_lien_surprisepack" }
+    { id: "9", label: "Surprise Pack (3-5 items)", price: 15, link: "https://drive.google.com/ton_lien_surprisepack" },
+    { id: "10", label: "Sexting (Custom)", price: "Ask", link: "CUSTOM" },
+    { id: "11", label: "Custom Request", price: "Ask", link: "CUSTOM" }
 ];
-// ==========================================
 
 const CATEGORY_CUSTOMER_ID = "1521540733226713249";
 const CATEGORY_SUPPORT_ID = "1521541155005796484";
@@ -33,8 +34,16 @@ const client = new Client({
     partials: [Partials.GuildMember, Partials.User, Partials.Message]
 });
 
+client.once('clientReady', async () => {
+    console.log(`✅ Bot connecté : ${client.user.tag}`);
+});
+
+// ==========================================
+// 1. GESTION DES INTERACTIONS (Boutons & Menu)
+// ==========================================
 client.on('interactionCreate', async (interaction) => {
-    // 1. Gestion des Boutons (Menu Principal)
+    
+    // GESTION BOUTONS
     if (interaction.isButton()) {
         await interaction.deferReply({ ephemeral: true });
         if (interaction.customId === 'open_shop_channel') {
@@ -49,64 +58,79 @@ client.on('interactionCreate', async (interaction) => {
                     { id: client.user.id, allow: ['ViewChannel', 'SendMessages', 'ManageChannels'] }
                 ],
             });
-            channelStates.set(channel.id, { validated: false, isValidating: false, balance: 0 });
+            channelStates.set(channel.id, { validated: false, isValidating: false });
             await channel.send(`👋 Welcome <@${interaction.user.id}>!\n\n**Please paste your Rewarble code below.**`);
             await interaction.editReply({ content: `✅ Room: <#${channel.id}>`, ephemeral: true });
         }
-        else if (interaction.customId === 'open_support_ticket') {
-            // ... (logique support identique)
-        }
-    } 
-    
-    // 2. GESTION DU MENU DÉROULANT (Produits)
-    else if (interaction.isStringSelectMenu()) {
-        if (interaction.customId === 'product_menu') {
+    }
+
+    // GESTION MENU DÉROULANT
+    if (interaction.isStringSelectMenu()) {
+        if (interaction.customId === 'product_select') {
             await interaction.deferUpdate();
-            const state = channelStates.get(interaction.channel.id);
-            const selectedId = interaction.values[0];
-            const product = PRODUCT_CATALOG.find(p => p.id === selectedId);
+            const product = PRODUCT_CATALOG.find(p => p.id === interaction.values[0]);
 
-            if (state.balance < product.price) {
-                return interaction.followUp({ content: `❌ **Insufficient balance!** You have ${state.balance}€, but this product costs ${product.price}€.`, ephemeral: true });
+            if (product.link === "CUSTOM") {
+                await interaction.channel.send(`📩 **Custom request registered!**\nI have notified the Admin, they will contact you soon.`);
+                const admin = await client.users.fetch(ADMIN_DISCORD_ID);
+                await admin.send(`🔔 **COMMANDE SPÉCIALE**\nLe client <@${interaction.user.id}> a demandé: ${product.label}`);
+            } else {
+                try {
+                    await interaction.user.send(`🎉 **Here is your link for ${product.label}:**\n${product.link}`);
+                    await interaction.channel.send("📬 **Sent in DM!** Closing in 45s...");
+                } catch (e) {
+                    await interaction.followUp({ content: `⚠️ **DM blocked!** Here is your link: ${product.link}`, ephemeral: true });
+                }
             }
-
-            try {
-                await interaction.user.send(`🎉 **Here is your link for ${product.label}:**\n${product.link}`);
-                await interaction.channel.send("📬 **Sent in DM!** Auto-closing in 45s...");
-                setTimeout(() => { if (interaction.channel) interaction.channel.delete().catch(() => {}); }, 45000);
-            } catch (e) {
-                await interaction.followUp({ content: `⚠️ **DM blocked!** Here is your link: ${product.link}`, ephemeral: true });
-            }
+            
+            setTimeout(() => { if (interaction.channel) interaction.channel.delete().catch(() => {}); }, 45000);
         }
     }
 });
 
+// ==========================================
+// 2. GESTION DES MESSAGES
+// ==========================================
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
-    // ... (logique !setup, !close identique)
 
+    // Commandes Admin
+    if (message.author.id === ADMIN_DISCORD_ID && message.content === '!setup') {
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('open_shop_channel').setLabel('📩 Redeem Code').setStyle(ButtonStyle.Primary)
+        );
+        await message.channel.send({ content: "# 💎 VIP MENU\nClick below to start:", components: [row] });
+        message.delete().catch(() => {});
+    }
+
+    // Logique Shop
     if (message.channel?.name?.startsWith('shop-')) {
         const state = channelStates.get(message.channel.id);
         if (!state) return;
 
         if (!state.validated) {
-            // ... (logique de validation Rewarble identique)
-            // Une fois validé, au lieu de demander le numéro, on envoie le menu :
-            state.validated = true;
-            state.balance = apiData.faceValue; // Stocke la valeur
-            
-            const row = new ActionRowBuilder().addComponents(
-                new StringSelectMenuBuilder()
-                    .setCustomId('product_menu')
-                    .setPlaceholder('Select a product...')
+            // Validation API (Identique au tien)
+            try {
+                const response = await axios.post(REWARBLE_API_URL, { code: message.content.trim() }, { headers: { 'Authorization': `Bearer ${REWARBLE_API_KEY}` } });
+                state.validated = true;
+                
+                // --- GÉNÉRATION DU MENU ---
+                const selectMenu = new StringSelectMenuBuilder()
+                    .setCustomId('product_select')
+                    .setPlaceholder('👉 Choose your product')
                     .addOptions(PRODUCT_CATALOG.map(p => new StringSelectMenuOptionBuilder()
-                        .setLabel(`${p.label} - ${p.price}€`)
+                        .setLabel(`${p.label} (${p.price}€)`)
                         .setValue(p.id)
-                    ))
-            );
-            await message.reply({ content: "✅ **Code validated! Select your product:**", components: [row] });
+                    ));
+
+                const row = new ActionRowBuilder().addComponents(selectMenu);
+                await message.reply({ content: "✅ **Code validated! Select your product:**", components: [row] });
+
+            } catch (error) {
+                message.reply("❌ Invalid code.");
+            }
         }
     }
 });
 
-// ... (reste du code)
+client.login(DISCORD_BOT_TOKEN);
