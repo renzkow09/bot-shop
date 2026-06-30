@@ -1,4 +1,9 @@
-const { Client, GatewayIntentBits, Partials, ButtonBuilder, ActionRowBuilder, ButtonStyle, ChannelType, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ComponentType } = require('discord.js');
+C'est ajouté ! Pour rendre ces notifications vraiment esthétiques, claires et bien séparées des autres messages, j'ai utilisé les **Embeds** de Discord (des blocs de messages colorés avec des bordures et des images).
+Le bot t'enverra (via ton ADMIN_DISCORD_ID) un Embed vert avec la photo de profil du membre quand quelqu'un rejoint, et un Embed rouge quand quelqu'un part, tout en gardant le texte en anglais.
+J'ai ajouté EmbedBuilder dans la première ligne d'importation et inséré les événements d'arrivée/départ juste avant la connexion du bot.
+Voici ton code final et complet :
+```javascript
+const { Client, GatewayIntentBits, Partials, ButtonBuilder, ActionRowBuilder, ButtonStyle, ChannelType, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ComponentType, EmbedBuilder } = require('discord.js');
 const axios = require('axios');
 const http = require('http');
 
@@ -169,6 +174,52 @@ client.on('messageCreate', async (message) => {
     }
 });
 
+// 📥 ANNONCE D'ARRIVÉE EN PRIVÉ (ADMIN)
+client.on('guildMemberAdd', async (member) => {
+    try {
+        const admin = await client.users.fetch(ADMIN_DISCORD_ID);
+        const joinEmbed = new EmbedBuilder()
+            .setColor('#2ecc71') // Vert esthétique
+            .setTitle('📥 New Member Joined')
+            .setDescription(`**${member.user.tag}** has just joined the server!`)
+            .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
+            .addFields(
+                { name: 'User ID', value: `\`${member.id}\``, inline: true },
+                { name: 'Total Server Members', value: `**${member.guild.memberCount}**`, inline: true }
+            )
+            .setTimestamp()
+            .setFooter({ text: 'Server Monitor System' });
+
+        await admin.send({ embeds: [joinEmbed] });
+    } catch (error) {
+        console.error('Erreur lors de l\'envoi du DM de join à l\'admin:', error);
+    }
+});
+
+// 📤 ANNONCE DE DÉPART EN PRIVÉ (ADMIN)
+client.on('guildMemberRemove', async (member) => {
+    try {
+        const admin = await client.users.fetch(ADMIN_DISCORD_ID);
+        const leaveEmbed = new EmbedBuilder()
+            .setColor('#e74c3c') // Rouge esthétique
+            .setTitle('📤 Member Left')
+            .setDescription(`**${member.user.tag}** has left the server.`)
+            .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
+            .addFields(
+                { name: 'User ID', value: `\`${member.id}\``, inline: true },
+                { name: 'Total Server Members', value: `**${member.guild.memberCount}**`, inline: true }
+            )
+            .setTimestamp()
+            .setFooter({ text: 'Server Monitor System' });
+
+        await admin.send({ embeds: [leaveEmbed] });
+    } catch (error) {
+        console.error('Erreur lors de l\'envoi du DM de leave à l\'admin:', error);
+    }
+});
+
 const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => { res.end('Bot Online'); }).listen(PORT);
 client.login(DISCORD_BOT_TOKEN);
+
+```
