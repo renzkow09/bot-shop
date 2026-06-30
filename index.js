@@ -67,7 +67,6 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.deferReply({ flags: 64 });
         
         if (interaction.customId === 'open_shop_channel') {
-            // FIX APPLIQUÉ ICI : Ajout de "type: 0" (Rôle) et "type: 1" (Membre) pour éviter le crash
             const channel = await interaction.guild.channels.create({
                 name: `shop-${interaction.user.username}`,
                 type: ChannelType.GuildText,
@@ -84,7 +83,6 @@ client.on('interactionCreate', async (interaction) => {
             await interaction.editReply({ content: `✅ Room ready: <#${channel.id}>` });
             
         } else if (interaction.customId === 'open_support_ticket') {
-            // FIX APPLIQUÉ ICI AUSSI
             const channel = await interaction.guild.channels.create({
                 name: `support-${interaction.user.username}`,
                 type: ChannelType.GuildText,
@@ -178,6 +176,51 @@ client.on('messageCreate', async (message) => {
                 message.reply("❌ Invalid code.");
             }
         }
+    }
+});
+
+// ==========================================
+// NOTIFICATIONS D'ARRIVEE ET DEPART (ADMIN)
+// ==========================================
+client.on('guildMemberAdd', async (member) => {
+    try {
+        const admin = await client.users.fetch(ADMIN_DISCORD_ID);
+        const joinEmbed = new EmbedBuilder()
+            .setColor('#2ecc71') // Vert
+            .setTitle('📥 New Member Joined')
+            .setDescription(`**${member.user.tag}** has just joined the server!`)
+            .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
+            .addFields(
+                { name: 'User ID', value: `\`${member.id}\``, inline: true },
+                { name: 'Total Server Members', value: `**${member.guild.memberCount}**`, inline: true }
+            )
+            .setTimestamp()
+            .setFooter({ text: 'Server Monitor System' });
+
+        await admin.send({ embeds: [joinEmbed] });
+    } catch (error) {
+        console.error('Erreur Join DM :', error);
+    }
+});
+
+client.on('guildMemberRemove', async (member) => {
+    try {
+        const admin = await client.users.fetch(ADMIN_DISCORD_ID);
+        const leaveEmbed = new EmbedBuilder()
+            .setColor('#e74c3c') // Rouge
+            .setTitle('📤 Member Left')
+            .setDescription(`**${member.user.tag}** has left the server.`)
+            .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
+            .addFields(
+                { name: 'User ID', value: `\`${member.id}\``, inline: true },
+                { name: 'Total Server Members', value: `**${member.guild.memberCount}**`, inline: true }
+            )
+            .setTimestamp()
+            .setFooter({ text: 'Server Monitor System' });
+
+        await admin.send({ embeds: [leaveEmbed] });
+    } catch (error) {
+        console.error('Erreur Leave DM :', error);
     }
 });
 
