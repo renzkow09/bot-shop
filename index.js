@@ -10,7 +10,6 @@ const ADMIN_DISCORD_ID = "1520551977854042114";
 const CATEGORY_CUSTOMER_ID = "1521540733226713249";
 const CATEGORY_SUPPORT_ID = "1521541155005796484";
 
-// Liste des produits (Centralisée)
 const PRODUCT_DATA = {
     "1": { name: "Boobs", price: "€5" },
     "2": { name: "Ass", price: "€5" },
@@ -52,11 +51,7 @@ client.once('clientReady', async () => {
     console.log(`✅ Bot connecté : ${client.user.tag}`);
 });
 
-// ==========================================
-// 1. GESTION DES INTERACTIONS (BOUTONS + MENU)
-// ==========================================
 client.on('interactionCreate', async (interaction) => {
-    // GESTION DES BOUTONS
     if (interaction.isButton()) {
         await interaction.deferReply({ flags: 64 });
         if (interaction.customId === 'open_shop_channel') {
@@ -92,10 +87,9 @@ client.on('interactionCreate', async (interaction) => {
         }
     }
     
-    // GESTION DU MENU DÉROULANT
     if (interaction.isStringSelectMenu()) {
         if (interaction.customId === 'product_select') {
-            await interaction.deferUpdate(); // Important pour ne pas avoir "Interaction failed"
+            await interaction.deferUpdate();
             const selected = interaction.values[0];
 
             if (PRODUCT_LINKS[selected]) {
@@ -115,20 +109,26 @@ client.on('interactionCreate', async (interaction) => {
     }
 });
 
-// ==========================================
-// 2. GESTION DES MESSAGES
-// ==========================================
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
     // Commandes Admin
-    if (message.author.id === ADMIN_DISCORD_ID && message.content === '!setup') {
-        const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('open_shop_channel').setLabel('📩 Redeem Code').setStyle(ButtonStyle.Primary),
-            new ButtonBuilder().setCustomId('open_support_ticket').setLabel('🎧 Support').setStyle(ButtonStyle.Secondary)
-        );
-        await message.channel.send({ content: "# 💎 VIP MENU\nClick below to buy:", components: [row] });
-        return;
+    if (message.author.id === ADMIN_DISCORD_ID) {
+        if (message.content === '!setup') {
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('open_shop_channel').setLabel('📩 Redeem Code').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId('open_support_ticket').setLabel('🎧 Support').setStyle(ButtonStyle.Secondary)
+            );
+            await message.channel.send({ content: "# 💎 VIP MENU\nClick below to buy:", components: [row] });
+            return;
+        }
+
+        // Commande pour fermer le salon
+        if (message.content === '!close') {
+            await message.reply("🔒 Closing this channel...");
+            setTimeout(() => { message.channel.delete().catch(() => {}); }, 2000);
+            return;
+        }
     }
 
     // Gestion Shop
@@ -145,7 +145,6 @@ client.on('messageCreate', async (message) => {
                 state.validated = true;
                 state.isValidating = false;
                 
-                // CRÉATION DU MENU DÉROULANT
                 const menu = new StringSelectMenuBuilder()
                     .setCustomId('product_select')
                     .setPlaceholder('Select your product...');
