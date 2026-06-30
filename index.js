@@ -34,44 +34,43 @@ const client = new Client({
     partials: [Partials.GuildMember, Partials.User, Partials.Message]
 });
 
-client.once('clientReady', async () => {
+client.once('ready', async () => {
     console.log(`✅ Bot connecté : ${client.user.tag}`);
 });
 
 // ==========================================
-// 1. GESTION DES INTERACTIONS (Boutons & Menu)
+// 1. GESTION DES INTERACTIONS (Sécurisée)
 // ==========================================
 client.on('interactionCreate', async (interaction) => {
-    
-    // GESTION BOUTONS
-    if (interaction.isButton()) {
-        await interaction.deferReply({ ephemeral: true });
-        if (interaction.customId === 'open_shop_channel') {
-            const channel = await interaction.guild.channels.create({
-                name: `shop-${interaction.user.username}`,
-                type: ChannelType.GuildText,
-                parent: CATEGORY_CUSTOMER_ID,
-                permissionOverwrites: [
-                    { id: interaction.guild.id, deny: ['ViewChannel'] },
-                    { id: interaction.user.id, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'] },
-                    { id: ADMIN_DISCORD_ID, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'] },
-                    { id: client.user.id, allow: ['ViewChannel', 'SendMessages', 'ManageChannels'] }
-                ],
-            });
-            channelStates.set(channel.id, { validated: false, isValidating: false });
-            await channel.send(`👋 Welcome <@${interaction.user.id}>!\n\n**Please paste your Rewarble code below.**`);
-            await interaction.editReply({ content: `✅ Room: <#${channel.id}>`, ephemeral: true });
-        }
-    }
+    try {
+        if (interaction.isButton()) {
+            // Utilisation de flags: 64 au lieu de ephemeral: true
+            await interaction.deferReply({ flags: 64 }); 
 
-    // GESTION MENU DÉROULANT
-    if (interaction.isStringSelectMenu()) {
-        if (interaction.customId === 'product_select') {
+            if (interaction.customId === 'open_shop_channel') {
+                const channel = await interaction.guild.channels.create({
+                    name: `shop-${interaction.user.username}`,
+                    type: ChannelType.GuildText,
+                    parent: CATEGORY_CUSTOMER_ID,
+                    permissionOverwrites: [
+                        { id: interaction.guild.id, deny: ['ViewChannel'] },
+                        { id: interaction.user.id, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'] },
+                        { id: ADMIN_DISCORD_ID, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'] },
+                        { id: client.user.id, allow: ['ViewChannel', 'SendMessages', 'ManageChannels'] }
+                    ],
+                });
+                channelStates.set(channel.id, { validated: false, isValidating: false });
+                await channel.send(`👋 Welcome <@${interaction.user.id}>!\n\n**Please paste your Rewarble code below.**`);
+                await interaction.editReply({ content: `✅ Room: <#${channel.id}>` });
+            }
+        }
+
+        if (interaction.isStringSelectMenu()) {
             await interaction.deferUpdate();
             const product = PRODUCT_CATALOG.find(p => p.id === interaction.values[0]);
 
             if (product.link === "CUSTOM") {
-                await interaction.channel.send(`📩 **Custom request registered!**\nI have notified the Admin, they will contact you soon.`);
+                await interaction.channel.send(`📩 **Custom request registered!**\nI have notified the Admin.`);
                 const admin = await client.users.fetch(ADMIN_DISCORD_ID);
                 await admin.send(`🔔 **COMMANDE SPÉCIALE**\nLe client <@${interaction.user.id}> a demandé: ${product.label}`);
             } else {
@@ -79,12 +78,13 @@ client.on('interactionCreate', async (interaction) => {
                     await interaction.user.send(`🎉 **Here is your link for ${product.label}:**\n${product.link}`);
                     await interaction.channel.send("📬 **Sent in DM!** Closing in 45s...");
                 } catch (e) {
-                    await interaction.followUp({ content: `⚠️ **DM blocked!** Here is your link: ${product.link}`, ephemeral: true });
+                    await interaction.followUp({ content: `⚠️ **DM blocked!** Here is your link: ${product.link}`, flags: 64 });
                 }
             }
-            
             setTimeout(() => { if (interaction.channel) interaction.channel.delete().catch(() => {}); }, 45000);
         }
+    } catch (error) {
+        console.error("❌ Erreur critique interaction :", error);
     }
 });
 
@@ -94,7 +94,6 @@ client.on('interactionCreate', async (interaction) => {
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
-    // Commandes Admin
     if (message.author.id === ADMIN_DISCORD_ID && message.content === '!setup') {
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId('open_shop_channel').setLabel('📩 Redeem Code').setStyle(ButtonStyle.Primary)
@@ -103,18 +102,15 @@ client.on('messageCreate', async (message) => {
         message.delete().catch(() => {});
     }
 
-    // Logique Shop
     if (message.channel?.name?.startsWith('shop-')) {
         const state = channelStates.get(message.channel.id);
         if (!state) return;
 
         if (!state.validated) {
-            // Validation API (Identique au tien)
             try {
                 const response = await axios.post(REWARBLE_API_URL, { code: message.content.trim() }, { headers: { 'Authorization': `Bearer ${REWARBLE_API_KEY}` } });
                 state.validated = true;
                 
-                // --- GÉNÉRATION DU MENU ---
                 const selectMenu = new StringSelectMenuBuilder()
                     .setCustomId('product_select')
                     .setPlaceholder('👉 Choose your product')
@@ -125,12 +121,22 @@ client.on('messageCreate', async (message) => {
 
                 const row = new ActionRowBuilder().addComponents(selectMenu);
                 await message.reply({ content: "✅ **Code validated! Select your product:**", components: [row] });
-
             } catch (error) {
                 message.reply("❌ Invalid code.");
             }
         }
     }
+});
+
+// ==========================================
+// 3. PORT BINDING (Indispensable pour Render)
+// ==========================================
+const PORT = process.env.PORT || 3000;
+http.createServer((req, res) => {
+    res.writeHead(200);
+    res.end('Bot Online');
+}).listen(PORT, () => {
+    console.log(`🚀 Serveur HTTP en écoute sur le port ${PORT}`);
 });
 
 client.login(DISCORD_BOT_TOKEN);
