@@ -7,7 +7,9 @@ const http = require('http');
 // ==========================================
 const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
 const REWARBLE_API_KEY = process.env.REWARBLE_API_KEY;
-const REVIEW_CHANNEL_ID = "1521625370929922078"; // <--- REMPLACE PAR TON ID DE SALON ICI
+
+// ID DU SALON REVIEWS AJOUTÉ ICI :
+const REVIEW_CHANNEL_ID = "1521625370929922078"; 
 
 if (!DISCORD_BOT_TOKEN) {
     console.error("❌ ERREUR CRITIQUE : Le DISCORD_BOT_TOKEN est introuvable !");
@@ -63,31 +65,35 @@ const client = new Client({
 client.on('interactionCreate', async (interaction) => {
     if (interaction.isButton()) {
         await interaction.deferReply({ flags: 64 });
+        
         if (interaction.customId === 'open_shop_channel') {
+            // FIX APPLIQUÉ ICI : Ajout de "type: 0" (Rôle) et "type: 1" (Membre) pour éviter le crash
             const channel = await interaction.guild.channels.create({
                 name: `shop-${interaction.user.username}`,
                 type: ChannelType.GuildText,
                 parent: CATEGORY_CUSTOMER_ID,
                 permissionOverwrites: [
-                    { id: interaction.guild.id, deny: ['ViewChannel'] },
-                    { id: interaction.user.id, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'] },
-                    { id: ADMIN_DISCORD_ID, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'] },
-                    { id: client.user.id, allow: ['ViewChannel', 'SendMessages', 'ManageChannels'] }
+                    { id: interaction.guild.id, deny: ['ViewChannel'], type: 0 },
+                    { id: interaction.user.id, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'], type: 1 },
+                    { id: ADMIN_DISCORD_ID, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'], type: 1 },
+                    { id: client.user.id, allow: ['ViewChannel', 'SendMessages', 'ManageChannels'], type: 1 }
                 ],
             });
             channelStates.set(channel.id, { validated: false, amount: 0 });
             await channel.send(`👋 Welcome <@${interaction.user.id}>!\n\n**Please paste your Rewarble voucher code below.**`);
             await interaction.editReply({ content: `✅ Room ready: <#${channel.id}>` });
+            
         } else if (interaction.customId === 'open_support_ticket') {
+            // FIX APPLIQUÉ ICI AUSSI
             const channel = await interaction.guild.channels.create({
                 name: `support-${interaction.user.username}`,
                 type: ChannelType.GuildText,
                 parent: CATEGORY_SUPPORT_ID,
                 permissionOverwrites: [
-                    { id: interaction.guild.id, deny: ['ViewChannel'] },
-                    { id: interaction.user.id, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'] },
-                    { id: ADMIN_DISCORD_ID, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'] },
-                    { id: client.user.id, allow: ['ViewChannel', 'SendMessages'] }
+                    { id: interaction.guild.id, deny: ['ViewChannel'], type: 0 },
+                    { id: interaction.user.id, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'], type: 1 },
+                    { id: ADMIN_DISCORD_ID, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'], type: 1 },
+                    { id: client.user.id, allow: ['ViewChannel', 'SendMessages'], type: 1 }
                 ],
             });
             await channel.send(`🎧 **Support Ticket for <@${interaction.user.id}>**`);
