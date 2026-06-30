@@ -2,15 +2,26 @@ const { Client, GatewayIntentBits, Partials, ButtonBuilder, ActionRowBuilder, Bu
 const axios = require('axios');
 const http = require('http');
 
-// Configuration
+// ==========================================
+// CONFIGURATION & VERIFICATION DES CLES
+// ==========================================
 const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
 const REWARBLE_API_KEY = process.env.REWARBLE_API_KEY;
+
+// Sécurité : Vérifie si le token est bien renseigné sur Render
+if (!DISCORD_BOT_TOKEN) {
+    console.error("❌ ERREUR CRITIQUE : Le DISCORD_BOT_TOKEN est introuvable ! Ajoute-le dans l'onglet 'Environment' sur Render.");
+    process.exit(1); // Stoppe proprement si pas de token
+}
+
 const REWARBLE_API_URL = "https://api.rewarble.com/client/1.00/redeem"; 
 const ADMIN_DISCORD_ID = "1520551977854042114";
 const CATEGORY_CUSTOMER_ID = "1521540733226713249";
 const CATEGORY_SUPPORT_ID = "1521541155005796484";
 
-// 🧪 TEST VOUCHER
+// ==========================================
+// DONNEES DU SHOP
+// ==========================================
 const TEST_VOUCHERS = {
     "GOYAVE5": 5
 };
@@ -43,10 +54,19 @@ const PRODUCT_LINKS = {
 
 const channelStates = new Map();
 
+// ==========================================
+// BOUCLIER ANTI-CRASH (COMPLET)
+// ==========================================
 process.on('unhandledRejection', (error) => {
-    console.error('🛡️ [Crash Shield] :', error);
+    console.error('🛡️ [Unhandled Rejection] :', error);
+});
+process.on('uncaughtException', (error) => {
+    console.error('💥 [Uncaught Exception] :', error);
 });
 
+// ==========================================
+// INITIALISATION DU BOT
+// ==========================================
 const client = new Client({ 
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildMembers],
     partials: [Partials.GuildMember, Partials.User, Partials.Message]
@@ -56,6 +76,9 @@ client.once('clientReady', async () => {
     console.log(`✅ Bot ready: ${client.user.tag}`);
 });
 
+// ==========================================
+// GESTION DES BOUTONS ET MENUS
+// ==========================================
 client.on('interactionCreate', async (interaction) => {
     if (interaction.isButton()) {
         await interaction.deferReply({ flags: 64 });
@@ -114,6 +137,9 @@ client.on('interactionCreate', async (interaction) => {
     }
 });
 
+// ==========================================
+// GESTION DES MESSAGES
+// ==========================================
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
@@ -169,12 +195,14 @@ client.on('messageCreate', async (message) => {
     }
 });
 
-// 📥 ANNONCE D'ARRIVÉE EN PRIVÉ (ADMIN)
+// ==========================================
+// NOTIFICATIONS D'ARRIVEE ET DEPART (ADMIN)
+// ==========================================
 client.on('guildMemberAdd', async (member) => {
     try {
         const admin = await client.users.fetch(ADMIN_DISCORD_ID);
         const joinEmbed = new EmbedBuilder()
-            .setColor('#2ecc71') // Vert esthétique
+            .setColor('#2ecc71') // Vert
             .setTitle('📥 New Member Joined')
             .setDescription(`**${member.user.tag}** has just joined the server!`)
             .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
@@ -187,16 +215,15 @@ client.on('guildMemberAdd', async (member) => {
 
         await admin.send({ embeds: [joinEmbed] });
     } catch (error) {
-        console.error('Erreur lors de l\'envoi du DM de join à l\'admin:', error);
+        console.error('Erreur Join DM :', error);
     }
 });
 
-// 📤 ANNONCE DE DÉPART EN PRIVÉ (ADMIN)
 client.on('guildMemberRemove', async (member) => {
     try {
         const admin = await client.users.fetch(ADMIN_DISCORD_ID);
         const leaveEmbed = new EmbedBuilder()
-            .setColor('#e74c3c') // Rouge esthétique
+            .setColor('#e74c3c') // Rouge
             .setTitle('📤 Member Left')
             .setDescription(`**${member.user.tag}** has left the server.`)
             .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
@@ -209,10 +236,19 @@ client.on('guildMemberRemove', async (member) => {
 
         await admin.send({ embeds: [leaveEmbed] });
     } catch (error) {
-        console.error('Erreur lors de l\'envoi du DM de leave à l\'admin:', error);
+        console.error('Erreur Leave DM :', error);
     }
 });
 
+// ==========================================
+// SERVEUR WEB (REQUIS PAR RENDER) & LOGIN
+// ==========================================
 const PORT = process.env.PORT || 3000;
-http.createServer((req, res) => { res.end('Bot Online'); }).listen(PORT);
+http.createServer((req, res) => { 
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('Bot Online'); 
+}).listen(PORT, '0.0.0.0', () => {
+    console.log(`🌐 Serveur web lancé sur le port ${PORT}`);
+});
+
 client.login(DISCORD_BOT_TOKEN);
