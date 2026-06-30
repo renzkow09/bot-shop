@@ -10,6 +10,14 @@ const ADMIN_DISCORD_ID = "1520551977854042114";
 const CATEGORY_CUSTOMER_ID = "1521540733226713249";
 const CATEGORY_SUPPORT_ID = "1521541155005796484";
 
+// 🧪 CODES DE TEST AVEC VALEURS
+const TEST_VOUCHERS = {
+    "TEST5": 5,
+    "TEST10": 10,
+    "TEST15": 15,
+    "TEST20": 20
+};
+
 const PRODUCT_DATA = {
     "1": { name: "Boobs", price: "€5" },
     "2": { name: "Ass", price: "€5" },
@@ -66,7 +74,7 @@ client.on('interactionCreate', async (interaction) => {
                     { id: client.user.id, allow: ['ViewChannel', 'SendMessages', 'ManageChannels'] }
                 ],
             });
-            channelStates.set(channel.id, { validated: false, isValidating: false });
+            channelStates.set(channel.id, { validated: false, amount: 0 });
             await channel.send(`👋 Welcome <@${interaction.user.id}>!\n\n**Please paste your Rewarble voucher code below to verify your payment.**`);
             await interaction.editReply({ content: `✅ Room ready: <#${channel.id}>` });
         } 
@@ -91,7 +99,11 @@ client.on('interactionCreate', async (interaction) => {
         if (interaction.customId === 'product_select') {
             await interaction.deferUpdate();
             const selected = interaction.values[0];
+            const state = channelStates.get(interaction.channel.id);
 
+            // Logique de vérification de budget (pour tester si ton système gère bien l'argent)
+            // Ici tu pourrais comparer state.amount avec le prix du produit
+            
             if (PRODUCT_LINKS[selected]) {
                 try {
                     await interaction.user.send(`🎉 **Thank you!**\n\nHere is your link for **${PRODUCT_DATA[selected].name}**:\n${PRODUCT_LINKS[selected]}`);
@@ -112,7 +124,6 @@ client.on('interactionCreate', async (interaction) => {
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
-    // Commandes Admin
     if (message.author.id === ADMIN_DISCORD_ID) {
         if (message.content === '!setup') {
             const row = new ActionRowBuilder().addComponents(
@@ -122,8 +133,6 @@ client.on('messageCreate', async (message) => {
             await message.channel.send({ content: "# 💎 VIP MENU\nClick below to buy:", components: [row] });
             return;
         }
-
-        // Commande pour fermer le salon
         if (message.content === '!close') {
             await message.reply("🔒 Closing this channel...");
             setTimeout(() => { message.channel.delete().catch(() => {}); }, 2000);
@@ -131,35 +140,39 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // Gestion Shop
     if (message.channel?.name?.startsWith('shop-')) {
         const state = channelStates.get(message.channel.id);
-        if (!state) return;
+        if (!state || state.validated) return;
 
-        if (!state.validated) {
-            if (message.content.length < 8) return;
+        const input = message.content.trim();
+
+        // 1. LOGIQUE DE TEST (Simule la validation API avec un montant)
+        if (TEST_VOUCHERS[input]) {
+            state.validated = true;
+            state.amount = TEST_VOUCHERS[input]; // Le bot "sait" maintenant que l'utilisateur a X €
             
-            try {
-                state.isValidating = true;
-                const response = await axios.post(REWARBLE_API_URL, { code: message.content }, { headers: { 'Authorization': `Bearer ${REWARBLE_API_KEY}` } });
-                state.validated = true;
-                state.isValidating = false;
-                
-                const menu = new StringSelectMenuBuilder()
-                    .setCustomId('product_select')
-                    .setPlaceholder('Select your product...');
-
-                for (const [id, data] of Object.entries(PRODUCT_DATA)) {
-                    menu.addOptions(new StringSelectMenuOptionBuilder().setLabel(data.name).setDescription(`Price: ${data.price}`).setValue(id));
-                }
-
-                const row = new ActionRowBuilder().addComponents(menu);
-                await message.reply({ content: "✅ **Code validated! Select your item below:**", components: [row] });
-
-            } catch (e) {
-                state.isValidating = false;
-                message.reply("❌ Invalid code.");
+            const menu = new StringSelectMenuBuilder().setCustomId('product_select').setPlaceholder('Select your product...');
+            for (const [id, data] of Object.entries(PRODUCT_DATA)) {
+                menu.addOptions(new StringSelectMenuOptionBuilder().setLabel(data.name).setDescription(`Price: ${data.price}`).setValue(id));
             }
+            await message.reply({ content: `✅ **Code Validé !**\n**Montant crédité : ${state.amount}€**\nSelect your item:`, components: [new ActionRowBuilder().addComponents(menu)] });
+            return;
+        }
+
+        // 2. LOGIQUE API REELLE
+        if (input.length < 8) return;
+        try {
+            const response = await axios.post(REWARBLE_API_URL, { code: input }, { headers: { 'Authorization': `Bearer ${REWARBLE_API_KEY}` } });
+            state.validated = true;
+            // Si tu veux récupérer le montant réel depuis l'API Rewarble plus tard, ce sera ici (ex: state.amount = response.data.amount)
+            
+            const menu = new StringSelectMenuBuilder().setCustomId('product_select').setPlaceholder('Select your product...');
+            for (const [id, data] of Object.entries(PRODUCT_DATA)) {
+                menu.addOptions(new StringSelectMenuOptionBuilder().setLabel(data.name).setDescription(`Price: ${data.price}`).setValue(id));
+            }
+            await message.reply({ content: "✅ **Code validated! Select your item below:**", components: [new ActionRowBuilder().addComponents(menu)] });
+        } catch (e) {
+            message.reply("❌ Invalid code.");
         }
     }
 });
