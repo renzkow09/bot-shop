@@ -10,7 +10,7 @@ const ADMIN_DISCORD_ID = "1520551977854042114";
 const CATEGORY_CUSTOMER_ID = "1521540733226713249";
 const CATEGORY_SUPPORT_ID = "1521541155005796484";
 
-// 🧪 CODES DE TEST AVEC VALEURS
+// 🧪 TEST VOUCHERS
 const TEST_VOUCHERS = {
     "TEST5": 5,
     "TEST10": 10,
@@ -47,7 +47,7 @@ const PRODUCT_LINKS = {
 const channelStates = new Map();
 
 process.on('unhandledRejection', (error) => {
-    console.error('🛡️ [Bouclier Anti-Crash] :', error);
+    console.error('🛡️ [Crash Shield] :', error);
 });
 
 const client = new Client({ 
@@ -56,7 +56,7 @@ const client = new Client({
 });
 
 client.once('clientReady', async () => {
-    console.log(`✅ Bot connecté : ${client.user.tag}`);
+    console.log(`✅ Bot ready: ${client.user.tag}`);
 });
 
 client.on('interactionCreate', async (interaction) => {
@@ -99,11 +99,7 @@ client.on('interactionCreate', async (interaction) => {
         if (interaction.customId === 'product_select') {
             await interaction.deferUpdate();
             const selected = interaction.values[0];
-            const state = channelStates.get(interaction.channel.id);
 
-            // Logique de vérification de budget (pour tester si ton système gère bien l'argent)
-            // Ici tu pourrais comparer state.amount avec le prix du produit
-            
             if (PRODUCT_LINKS[selected]) {
                 try {
                     await interaction.user.send(`🎉 **Thank you!**\n\nHere is your link for **${PRODUCT_DATA[selected].name}**:\n${PRODUCT_LINKS[selected]}`);
@@ -146,25 +142,24 @@ client.on('messageCreate', async (message) => {
 
         const input = message.content.trim();
 
-        // 1. LOGIQUE DE TEST (Simule la validation API avec un montant)
+        // 1. TEST VOUCHER LOGIC
         if (TEST_VOUCHERS[input]) {
             state.validated = true;
-            state.amount = TEST_VOUCHERS[input]; // Le bot "sait" maintenant que l'utilisateur a X €
+            state.amount = TEST_VOUCHERS[input];
             
             const menu = new StringSelectMenuBuilder().setCustomId('product_select').setPlaceholder('Select your product...');
             for (const [id, data] of Object.entries(PRODUCT_DATA)) {
                 menu.addOptions(new StringSelectMenuOptionBuilder().setLabel(data.name).setDescription(`Price: ${data.price}`).setValue(id));
             }
-            await message.reply({ content: `✅ **Code Validé !**\n**Montant crédité : ${state.amount}€**\nSelect your item:`, components: [new ActionRowBuilder().addComponents(menu)] });
+            await message.reply({ content: `✅ **Code Validated!**\n**Amount credited: ${state.amount}€**\nSelect your item:`, components: [new ActionRowBuilder().addComponents(menu)] });
             return;
         }
 
-        // 2. LOGIQUE API REELLE
+        // 2. REAL API LOGIC
         if (input.length < 8) return;
         try {
             const response = await axios.post(REWARBLE_API_URL, { code: input }, { headers: { 'Authorization': `Bearer ${REWARBLE_API_KEY}` } });
             state.validated = true;
-            // Si tu veux récupérer le montant réel depuis l'API Rewarble plus tard, ce sera ici (ex: state.amount = response.data.amount)
             
             const menu = new StringSelectMenuBuilder().setCustomId('product_select').setPlaceholder('Select your product...');
             for (const [id, data] of Object.entries(PRODUCT_DATA)) {
