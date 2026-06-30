@@ -1,8 +1,3 @@
-C'est ajouté ! Pour rendre ces notifications vraiment esthétiques, claires et bien séparées des autres messages, j'ai utilisé les **Embeds** de Discord (des blocs de messages colorés avec des bordures et des images).
-Le bot t'enverra (via ton ADMIN_DISCORD_ID) un Embed vert avec la photo de profil du membre quand quelqu'un rejoint, et un Embed rouge quand quelqu'un part, tout en gardant le texte en anglais.
-J'ai ajouté EmbedBuilder dans la première ligne d'importation et inséré les événements d'arrivée/départ juste avant la connexion du bot.
-Voici ton code final et complet :
-```javascript
 const { Client, GatewayIntentBits, Partials, ButtonBuilder, ActionRowBuilder, ButtonStyle, ChannelType, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ComponentType, EmbedBuilder } = require('discord.js');
 const axios = require('axios');
 const http = require('http');
@@ -221,5 +216,3 @@ client.on('guildMemberRemove', async (member) => {
 const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => { res.end('Bot Online'); }).listen(PORT);
 client.login(DISCORD_BOT_TOKEN);
-
-```
