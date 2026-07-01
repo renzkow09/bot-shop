@@ -104,7 +104,6 @@ client.on('interactionCreate', async (interaction) => {
             await interaction.deferUpdate();
             const selected = interaction.values[0];
 
-            // Embed Esthétique de Livraison
             const successEmbed = new EmbedBuilder()
                 .setColor('#FFD700')
                 .setTitle('✨ Purchase Successful!')
@@ -138,7 +137,10 @@ client.on('interactionCreate', async (interaction) => {
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
+    // --- COMMANDES ADMIN ---
     if (message.author.id === ADMIN_DISCORD_ID) {
+        
+        // Commande : !setup
         if (message.content === '!setup') {
             const row = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId('open_shop_channel').setLabel('📩 Redeem Code').setStyle(ButtonStyle.Primary),
@@ -146,15 +148,31 @@ client.on('messageCreate', async (message) => {
             );
             await message.channel.send({ content: "# 💎 VIP MENU\nClick below to buy:", components: [row] });
         }
+        
+        // Commande : !say (parle directement dans le salon actuel)
         if (message.content.startsWith('!say ')) {
-            const args = message.content.split(' ');
-            const targetId = args[1];
-            const textToSend = args.slice(2).join(' ');
-            if (targetId && textToSend) {
-                const targetChannel = await client.channels.fetch(targetId);
-                await targetChannel.send(textToSend);
-                message.react('✅');
+            const textToSend = message.content.substring(5); // Récupère tout ce qui est après "!say "
+            if (textToSend) {
+                await message.channel.send(textToSend);
+                await message.delete().catch(() => {}); // Supprime la commande de l'admin pour faire propre
             }
+        }
+
+        // Commande : !close (ferme le salon actuel)
+        if (message.content === '!close') {
+            await message.channel.delete().catch(() => {});
+        }
+
+        // Commande : !warning (avertit que le salon ferme dans 15 min)
+        if (message.content === '!warning') {
+            const warningEmbed = new EmbedBuilder()
+                .setColor('#E67E22') // Orange
+                .setTitle('⏳ Channel Closing Soon')
+                .setDescription('⚠️ **This channel will be deleted in 15 minutes.**\nPlease make sure to save any links or information you need!')
+                .setTimestamp();
+            
+            await message.channel.send({ embeds: [warningEmbed] });
+            await message.delete().catch(() => {}); // Supprime la commande de l'admin
         }
     }
 
