@@ -53,10 +53,10 @@ const channelStates = new Map();
 const STATS_FILE = path.join(__dirname, 'stats.json');
 
 // --- FONCTION D'ENREGISTREMENT DES STATISTIQUES ---
-function logStat(type, value = 1) {
-    let stats = { joins: {}, leaves: {}, revenue: {}, total_revenue: 0 };
+function logStat(type, value = 1, extraData = null) {
+    let stats = { joins: {}, leaves: {}, revenue: {}, total_revenue: 0, transactions: {}, total_transactions: 0, product_sales: {}, recent_joins: [], total_leaves: 0 };
     if (fs.existsSync(STATS_FILE)) {
-        try { stats = JSON.parse(fs.readFileSync(STATS_FILE, 'utf8')); } catch (e) {}
+        try { stats = { ...stats, ...JSON.parse(fs.readFileSync(STATS_FILE, 'utf8')) }; } catch (e) {}
     }
     const today = new Date().toISOString().split('T')[0];
     
@@ -65,8 +65,23 @@ function logStat(type, value = 1) {
     if (type === 'revenue') {
         stats.revenue[today] = (stats.revenue[today] || 0) + value;
         stats.total_revenue = (stats.total_revenue || 0) + value;
-    } else {
-        stats[type][today] = (stats[type][today] || 0) + value;
+        stats.transactions[today] = (stats.transactions[today] || 0) + 1;
+        stats.total_transactions = (stats.total_transactions || 0) + 1;
+        
+        // Enregistrer quel produit a été vendu
+        if (extraData && extraData.productId) {
+            stats.product_sales[extraData.productId] = (stats.product_sales[extraData.productId] || 0) + 1;
+        }
+    } else if (type === 'joins') {
+        stats.joins[today] = (stats.joins[today] || 0) + value;
+        // Enregistrer les 5 derniers membres
+        if (extraData && extraData.username) {
+            stats.recent_joins.unshift({ username: extraData.username, date: new Date().toLocaleString('fr-FR') });
+            if (stats.recent_joins.length > 5) stats.recent_joins.pop(); // Garder seulement les 5 derniers
+        }
+    } else if (type === 'leaves') {
+        stats.leaves[today] = (stats.leaves[today] || 0) + value;
+        stats.total_leaves = (stats.total_leaves || 0) + 1;
     }
     
     fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2));
@@ -126,10 +141,10 @@ client.on('interactionCreate', async (interaction) => {
             const selected = interaction.values[0];
             const product = PRODUCT_DATA[selected];
 
-            // --- ANALYTICS : ENREGISTRER L'ARGENT ---
-            const priceMatch = product.price.match(/\d+/); // Extrait le chiffre du prix (ex: "€5" -> 5)
+            // --- ANALYTICS : ENREGISTRER L'ARGENT & LE PRODUIT ---
+            const priceMatch = product.price.match(/\d+/);
             if (priceMatch) {
-                logStat('revenue', parseInt(priceMatch[0]));
+                logStat('revenue', parseInt(priceMatch[0]), { productId: selected });
             }
 
             const successEmbed = new EmbedBuilder()
@@ -223,7 +238,7 @@ client.on('messageCreate', async (message) => {
 // NOTIFICATIONS D'ARRIVEE ET DEPART (ADMIN)
 // ==========================================
 client.on('guildMemberAdd', async (member) => {
-    logStat('joins'); // --- ANALYTICS ---
+    logStat('joins', 1, { username: member.user.username }); // --- ANALYTICS ---
     try {
         const admin = await client.users.fetch(ADMIN_DISCORD_ID);
         const joinEmbed = new EmbedBuilder()
@@ -267,14 +282,44 @@ client.on('guildMemberRemove', async (member) => {
 });
 
 // ==========================================
-// SERVEUR WEB (DASHBOARD & STATS)
+// SERVEUR WEB (DASHBOARD & STATS PRO)
 // ==========================================
-http.createServer((req, res) => {
+http.createServer(async (req, res) => {
     if (req.url === '/dashboard') {
-        let stats = { joins: {}, leaves: {}, revenue: {}, total_revenue: 0 };
+        let stats = { joins: {}, leaves: {}, revenue: {}, total_revenue: 0, transactions: {}, total_transactions: 0, product_sales: {}, recent_joins: [], total_leaves: 0 };
         if (fs.existsSync(STATS_FILE)) { 
-            try { stats = JSON.parse(fs.readFileSync(STATS_FILE, 'utf8')); } catch(e){} 
+            try { stats = { ...stats, ...JSON.parse(fs.readFileSync(STATS_FILE, 'utf8')) }; } catch(e){} 
         }
+
+        // Récupérer les données Discord en direct (Membres en ligne) sans avoir besoin d'intentions spéciales
+        let memberCount = "N/A";
+        let onlineCount = "N/A";
+        const guild = client.guilds.cache.first();
+        if (guild) {
+            try {
+                // Technique secrète via l'API REST pour avoir les membres en ligne
+                const response = await axios.get(`https://discord.com/api/v10/guilds/${guild.id}?with_counts=true`, {
+                    headers: { Authorization: `Bot ${DISCORD_BOT_TOKEN}` }
+                });
+                memberCount = response.data.approximate_member_count;
+                onlineCount = response.data.approximate_presence_count;
+            } catch (err) {
+                memberCount = guild.memberCount;
+            }
+        }
+
+        // Calcul du panier moyen et taux de rétention
+        const panierMoyen = stats.total_transactions > 0 ? (stats.total_revenue / stats.total_transactions).toFixed(2) : 0;
+        const totalHistorique = memberCount !== "N/A" ? (memberCount + (stats.total_leaves || 0)) : 1;
+        const retentionRate = memberCount !== "N/A" ? ((memberCount / totalHistorique) * 100).toFixed(1) : "N/A";
+
+        // Formater les derniers membres
+        const tableRows = stats.recent_joins.map(user => `
+            <tr>
+                <td>${user.username}</td>
+                <td>${user.date}</td>
+            </tr>
+        `).join('') || `<tr><td colspan="2" style="text-align:center;">Aucun membre récent</td></tr>`;
 
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         res.end(`
@@ -283,86 +328,119 @@ http.createServer((req, res) => {
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Shop Analytics</title>
+            <title>Pro Shop Analytics</title>
             <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
             <style>
-                body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0f172a; color: #f8fafc; margin: 0; padding: 40px; }
-                .container { max-width: 1000px; margin: 0 auto; }
-                .header { text-align: center; margin-bottom: 40px; }
-                .header h1 { color: #38bdf8; font-size: 2.5em; margin: 0 0 10px 0; }
+                body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0f172a; color: #f8fafc; margin: 0; padding: 20px; }
+                .container { max-width: 1200px; margin: 0 auto; }
+                .header { text-align: center; margin-bottom: 30px; }
+                .header h1 { color: #38bdf8; font-size: 2.5em; margin: 0 0 5px 0; }
                 
-                .stats-cards { display: flex; gap: 20px; justify-content: center; margin-bottom: 40px; }
-                .card { background: #1e293b; padding: 30px; border-radius: 15px; text-align: center; flex: 1; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); border: 1px solid #334155; }
-                .card h3 { margin: 0; color: #94a3b8; font-size: 1.1em; text-transform: uppercase; letter-spacing: 1px; }
-                .card .value { font-size: 3em; font-weight: bold; margin-top: 10px; }
-                .card.revenue .value { color: #10b981; } /* Vert émeraude */
+                /* Grid pour les Cartes (Chiffres Clés) */
+                .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 30px; }
+                .card { background: #1e293b; padding: 20px; border-radius: 12px; text-align: center; border: 1px solid #334155; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2); }
+                .card h3 { margin: 0; color: #94a3b8; font-size: 0.9em; text-transform: uppercase; letter-spacing: 1px; }
+                .card .value { font-size: 2.2em; font-weight: bold; margin-top: 10px; }
+                .text-green { color: #10b981; } .text-blue { color: #38bdf8; } .text-purple { color: #a855f7; } .text-orange { color: #f97316; } .text-yellow { color: #eab308; }
                 
-                .chart-wrapper { background: #1e293b; padding: 30px; border-radius: 15px; border: 1px solid #334155; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
-                .chart-container { position: relative; height: 400px; width: 100%; }
+                /* Grid pour les Graphiques et Tableaux */
+                .charts-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 30px; }
+                .box { background: #1e293b; padding: 20px; border-radius: 12px; border: 1px solid #334155; }
+                .box h2 { text-align: center; color: #e2e8f0; font-size: 1.2em; margin-top: 0; margin-bottom: 15px; }
+                .chart-container { position: relative; height: 300px; width: 100%; }
+                
+                /* Tableau des derniers membres */
+                table { width: 100%; border-collapse: collapse; }
+                th, td { padding: 12px; text-align: left; border-bottom: 1px solid #334155; }
+                th { color: #94a3b8; text-transform: uppercase; font-size: 0.8em; }
+                td { color: #f8fafc; font-size: 0.9em; }
+                
+                @media (max-width: 768px) { .charts-grid { grid-template-columns: 1fr; } }
             </style>
         </head>
         <body>
             <div class="container">
                 <div class="header">
                     <h1>📊 Discord Shop Analytics</h1>
-                    <p>Live performance dashboard</p>
                 </div>
 
-                <div class="stats-cards">
-                    <div class="card revenue">
-                        <h3>Total Earnings</h3>
-                        <div class="value">€${stats.total_revenue || 0}</div>
+                <div class="stats-grid">
+                    <div class="card"><h3 class="text-green">Total Earnings</h3><div class="value text-green">€${stats.total_revenue}</div></div>
+                    <div class="card"><h3 class="text-blue">Avg Order Value</h3><div class="value text-blue">€${panierMoyen}</div></div>
+                    <div class="card"><h3 class="text-orange">Online Members</h3><div class="value text-orange">${onlineCount}</div></div>
+                    <div class="card"><h3 class="text-yellow">Total Members</h3><div class="value text-yellow">${memberCount}</div></div>
+                    <div class="card"><h3 class="text-purple">Retention Rate</h3><div class="value text-purple">${retentionRate}%</div></div>
+                </div>
+
+                <div class="charts-grid">
+                    <div class="box">
+                        <h2>📈 Sales (Transactions / Day)</h2>
+                        <div class="chart-container"><canvas id="salesChart"></canvas></div>
+                    </div>
+                    <div class="box">
+                        <h2>🏆 Top Products</h2>
+                        <div class="chart-container"><canvas id="productsChart"></canvas></div>
                     </div>
                 </div>
-
-                <div class="chart-wrapper">
-                    <h2 style="text-align: center; color: #e2e8f0; margin-bottom: 20px;">Members: Joins vs Leaves</h2>
-                    <div class="chart-container">
-                        <canvas id="membersChart"></canvas>
+                
+                <div class="charts-grid">
+                    <div class="box">
+                        <h2>👥 Joins vs Leaves</h2>
+                        <div class="chart-container"><canvas id="membersChart"></canvas></div>
+                    </div>
+                    <div class="box">
+                        <h2>🆕 Last 5 Members</h2>
+                        <table>
+                            <thead><tr><th>Username</th><th>Date</th></tr></thead>
+                            <tbody>${tableRows}</tbody>
+                        </table>
                     </div>
                 </div>
             </div>
 
             <script>
                 const statsData = ${JSON.stringify(stats)};
+                const productDataRaw = ${JSON.stringify(PRODUCT_DATA)};
                 
-                // Récupérer toutes les dates uniques (Joins et Leaves) et les trier
-                const allDates = Array.from(new Set([
-                    ...Object.keys(statsData.joins || {}), 
-                    ...Object.keys(statsData.leaves || {})
-                ])).sort();
-                
+                // 1. Chart : Ventes par jour (Transactions)
+                const salesDates = Object.keys(statsData.transactions || {});
+                const salesValues = Object.values(statsData.transactions || {});
+                new Chart(document.getElementById('salesChart'), {
+                    type: 'line',
+                    data: {
+                        labels: salesDates.length ? salesDates : ['No Data'],
+                        datasets: [{ label: 'Number of Sales', data: salesValues.length ? salesValues : [0], borderColor: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.1)', fill: true, tension: 0.4 }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { ticks: { stepSize: 1, color: '#94a3b8' }, grid: { color: '#334155' } }, x: { ticks: { color: '#94a3b8' }, grid: { display: false } } } }
+                });
+
+                // 2. Chart : Top Produits (Pie)
+                const productIds = Object.keys(statsData.product_sales || {});
+                const productLabels = productIds.map(id => productDataRaw[id] ? productDataRaw[id].name : 'Unknown');
+                const productValues = Object.values(statsData.product_sales || {});
+                new Chart(document.getElementById('productsChart'), {
+                    type: 'doughnut',
+                    data: {
+                        labels: productLabels.length ? productLabels : ['No Sales Yet'],
+                        datasets: [{ data: productValues.length ? productValues : [1], backgroundColor: ['#3b82f6', '#8b5cf6', '#ec4899', '#f43f5e', '#f97316', '#10b981', '#06b6d4'], borderWidth: 0 }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: '#f8fafc' } } } }
+                });
+
+                // 3. Chart : Joins vs Leaves
+                const allDates = Array.from(new Set([...Object.keys(statsData.joins || {}), ...Object.keys(statsData.leaves || {})])).sort();
                 const joinsDataset = allDates.map(date => (statsData.joins && statsData.joins[date]) || 0);
                 const leavesDataset = allDates.map(date => (statsData.leaves && statsData.leaves[date]) || 0);
-
                 new Chart(document.getElementById('membersChart'), {
                     type: 'bar',
                     data: {
-                        labels: allDates.length > 0 ? allDates : ['No Data Yet'],
+                        labels: allDates.length ? allDates : ['No Data'],
                         datasets: [
-                            { 
-                                label: 'Joins (Arrivées)', 
-                                data: joinsDataset.length > 0 ? joinsDataset : [0], 
-                                backgroundColor: '#38bdf8',
-                                borderRadius: 5
-                            },
-                            { 
-                                label: 'Leaves (Départs)', 
-                                data: leavesDataset.length > 0 ? leavesDataset : [0], 
-                                backgroundColor: '#ef4444',
-                                borderRadius: 5
-                            }
+                            { label: 'Joins', data: joinsDataset.length ? joinsDataset : [0], backgroundColor: '#10b981', borderRadius: 4 },
+                            { label: 'Leaves', data: leavesDataset.length ? leavesDataset : [0], backgroundColor: '#ef4444', borderRadius: 4 }
                         ]
                     },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: { legend: { labels: { color: '#f8fafc' } } },
-                        scales: {
-                            x: { grid: { color: '#334155', display: false }, ticks: { color: '#94a3b8' } },
-                            y: { grid: { color: '#334155' }, ticks: { color: '#94a3b8', stepSize: 1 } }
-                        }
-                    }
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#f8fafc' } } }, scales: { y: { ticks: { stepSize: 1, color: '#94a3b8' }, grid: { color: '#334155' } }, x: { ticks: { color: '#94a3b8' }, grid: { display: false } } } }
                 });
             </script>
         </body>
