@@ -1,14 +1,14 @@
 const { Client, GatewayIntentBits, Partials, ButtonBuilder, ActionRowBuilder, ButtonStyle, ChannelType, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ComponentType, EmbedBuilder } = require('discord.js');
 const axios = require('axios');
 const http = require('http');
+const fs = require('fs');
+const path = require('path');
 
 // ==========================================
 // CONFIGURATION & VERIFICATION DES CLES
 // ==========================================
 const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
 const REWARBLE_API_KEY = process.env.REWARBLE_API_KEY;
-
-// ID DU SALON REVIEWS AJOUTÉ ICI :
 const REVIEW_CHANNEL_ID = "1521625370929922078"; 
 
 if (!DISCORD_BOT_TOKEN) {
@@ -50,6 +50,27 @@ const PRODUCT_LINKS = {
 };
 
 const channelStates = new Map();
+const STATS_FILE = path.join(__dirname, 'stats.json');
+
+// --- FONCTION D'ENREGISTREMENT DES STATISTIQUES ---
+function logStat(type, value = 1) {
+    let stats = { joins: {}, leaves: {}, revenue: {}, total_revenue: 0 };
+    if (fs.existsSync(STATS_FILE)) {
+        try { stats = JSON.parse(fs.readFileSync(STATS_FILE, 'utf8')); } catch (e) {}
+    }
+    const today = new Date().toISOString().split('T')[0];
+    
+    if (!stats[type]) stats[type] = {};
+    
+    if (type === 'revenue') {
+        stats.revenue[today] = (stats.revenue[today] || 0) + value;
+        stats.total_revenue = (stats.total_revenue || 0) + value;
+    } else {
+        stats[type][today] = (stats[type][today] || 0) + value;
+    }
+    
+    fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2));
+}
 
 // ==========================================
 // INITIALISATION DU BOT
@@ -103,11 +124,18 @@ client.on('interactionCreate', async (interaction) => {
         if (interaction.customId === 'product_select') {
             await interaction.deferUpdate();
             const selected = interaction.values[0];
+            const product = PRODUCT_DATA[selected];
+
+            // --- ANALYTICS : ENREGISTRER L'ARGENT ---
+            const priceMatch = product.price.match(/\d+/); // Extrait le chiffre du prix (ex: "€5" -> 5)
+            if (priceMatch) {
+                logStat('revenue', parseInt(priceMatch[0]));
+            }
 
             const successEmbed = new EmbedBuilder()
                 .setColor('#FFD700')
                 .setTitle('✨ Purchase Successful!')
-                .setDescription(`Thank you for your trust. Here is your link for **${PRODUCT_DATA[selected].name}**:\n\n🔗 ${PRODUCT_LINKS[selected]}`)
+                .setDescription(`Thank you for your trust. Here is your link for **${product.name}**:\n\n🔗 ${PRODUCT_LINKS[selected]}`)
                 .addFields({
                     name: '💖 Happy with your purchase?',
                     value: `Please support us by leaving a review in <#${REVIEW_CHANNEL_ID}>!\n\n*Mention your review on your next order for a discount!*`
@@ -123,9 +151,9 @@ client.on('interactionCreate', async (interaction) => {
                     await interaction.channel.send({ content: `⚠️ **I couldn't DM you!**`, embeds: [successEmbed] });
                 }
             } else if (["10", "11"].includes(selected)) {
-                await interaction.channel.send(`📩 **Custom request (${PRODUCT_DATA[selected].name}) registered!**\nAdmin notified.`);
+                await interaction.channel.send(`📩 **Custom request (${product.name}) registered!**\nAdmin notified.`);
                 const admin = await client.users.fetch(ADMIN_DISCORD_ID);
-                await admin.send(`🔔 **Custom Request** from <@${interaction.user.id}>: ${PRODUCT_DATA[selected].name}`);
+                await admin.send(`🔔 **Custom Request** from <@${interaction.user.id}>: ${product.name}`);
             }
         }
     }
@@ -137,10 +165,7 @@ client.on('interactionCreate', async (interaction) => {
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
-    // --- COMMANDES ADMIN ---
     if (message.author.id === ADMIN_DISCORD_ID) {
-        
-        // Commande : !setup
         if (message.content === '!setup') {
             const row = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId('open_shop_channel').setLabel('📩 Redeem Code').setStyle(ButtonStyle.Primary),
@@ -149,30 +174,27 @@ client.on('messageCreate', async (message) => {
             await message.channel.send({ content: "# 💎 VIP MENU\nClick below to buy:", components: [row] });
         }
         
-        // Commande : !say (parle directement dans le salon actuel)
         if (message.content.startsWith('!say ')) {
-            const textToSend = message.content.substring(5); // Récupère tout ce qui est après "!say "
+            const textToSend = message.content.substring(5);
             if (textToSend) {
                 await message.channel.send(textToSend);
-                await message.delete().catch(() => {}); // Supprime la commande de l'admin pour faire propre
+                await message.delete().catch(() => {}); 
             }
         }
 
-        // Commande : !close (ferme le salon actuel)
         if (message.content === '!close') {
             await message.channel.delete().catch(() => {});
         }
 
-        // Commande : !warning (avertit que le salon ferme dans 15 min)
         if (message.content === '!warning') {
             const warningEmbed = new EmbedBuilder()
-                .setColor('#E67E22') // Orange
+                .setColor('#E67E22') 
                 .setTitle('⏳ Channel Closing Soon')
                 .setDescription('⚠️ **This channel will be deleted in 15 minutes.**\nPlease make sure to save any links or information you need!')
                 .setTimestamp();
             
             await message.channel.send({ embeds: [warningEmbed] });
-            await message.delete().catch(() => {}); // Supprime la commande de l'admin
+            await message.delete().catch(() => {}); 
         }
     }
 
@@ -201,10 +223,11 @@ client.on('messageCreate', async (message) => {
 // NOTIFICATIONS D'ARRIVEE ET DEPART (ADMIN)
 // ==========================================
 client.on('guildMemberAdd', async (member) => {
+    logStat('joins'); // --- ANALYTICS ---
     try {
         const admin = await client.users.fetch(ADMIN_DISCORD_ID);
         const joinEmbed = new EmbedBuilder()
-            .setColor('#2ecc71') // Vert
+            .setColor('#2ecc71') 
             .setTitle('📥 New Member Joined')
             .setDescription(`**${member.user.tag}** has just joined the server!`)
             .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
@@ -222,10 +245,11 @@ client.on('guildMemberAdd', async (member) => {
 });
 
 client.on('guildMemberRemove', async (member) => {
+    logStat('leaves'); // --- ANALYTICS ---
     try {
         const admin = await client.users.fetch(ADMIN_DISCORD_ID);
         const leaveEmbed = new EmbedBuilder()
-            .setColor('#e74c3c') // Rouge
+            .setColor('#e74c3c') 
             .setTitle('📤 Member Left')
             .setDescription(`**${member.user.tag}** has left the server.`)
             .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
@@ -243,7 +267,111 @@ client.on('guildMemberRemove', async (member) => {
 });
 
 // ==========================================
-// SERVEUR WEB (RENDER) & LOGIN
+// SERVEUR WEB (DASHBOARD & STATS)
 // ==========================================
-http.createServer((req, res) => { res.end('Bot Online'); }).listen(process.env.PORT || 3000);
+http.createServer((req, res) => {
+    if (req.url === '/dashboard') {
+        let stats = { joins: {}, leaves: {}, revenue: {}, total_revenue: 0 };
+        if (fs.existsSync(STATS_FILE)) { 
+            try { stats = JSON.parse(fs.readFileSync(STATS_FILE, 'utf8')); } catch(e){} 
+        }
+
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(`
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Shop Analytics</title>
+            <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+            <style>
+                body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0f172a; color: #f8fafc; margin: 0; padding: 40px; }
+                .container { max-width: 1000px; margin: 0 auto; }
+                .header { text-align: center; margin-bottom: 40px; }
+                .header h1 { color: #38bdf8; font-size: 2.5em; margin: 0 0 10px 0; }
+                
+                .stats-cards { display: flex; gap: 20px; justify-content: center; margin-bottom: 40px; }
+                .card { background: #1e293b; padding: 30px; border-radius: 15px; text-align: center; flex: 1; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); border: 1px solid #334155; }
+                .card h3 { margin: 0; color: #94a3b8; font-size: 1.1em; text-transform: uppercase; letter-spacing: 1px; }
+                .card .value { font-size: 3em; font-weight: bold; margin-top: 10px; }
+                .card.revenue .value { color: #10b981; } /* Vert émeraude */
+                
+                .chart-wrapper { background: #1e293b; padding: 30px; border-radius: 15px; border: 1px solid #334155; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+                .chart-container { position: relative; height: 400px; width: 100%; }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>📊 Discord Shop Analytics</h1>
+                    <p>Live performance dashboard</p>
+                </div>
+
+                <div class="stats-cards">
+                    <div class="card revenue">
+                        <h3>Total Earnings</h3>
+                        <div class="value">€${stats.total_revenue || 0}</div>
+                    </div>
+                </div>
+
+                <div class="chart-wrapper">
+                    <h2 style="text-align: center; color: #e2e8f0; margin-bottom: 20px;">Members: Joins vs Leaves</h2>
+                    <div class="chart-container">
+                        <canvas id="membersChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <script>
+                const statsData = ${JSON.stringify(stats)};
+                
+                // Récupérer toutes les dates uniques (Joins et Leaves) et les trier
+                const allDates = Array.from(new Set([
+                    ...Object.keys(statsData.joins || {}), 
+                    ...Object.keys(statsData.leaves || {})
+                ])).sort();
+                
+                const joinsDataset = allDates.map(date => (statsData.joins && statsData.joins[date]) || 0);
+                const leavesDataset = allDates.map(date => (statsData.leaves && statsData.leaves[date]) || 0);
+
+                new Chart(document.getElementById('membersChart'), {
+                    type: 'bar',
+                    data: {
+                        labels: allDates.length > 0 ? allDates : ['No Data Yet'],
+                        datasets: [
+                            { 
+                                label: 'Joins (Arrivées)', 
+                                data: joinsDataset.length > 0 ? joinsDataset : [0], 
+                                backgroundColor: '#38bdf8',
+                                borderRadius: 5
+                            },
+                            { 
+                                label: 'Leaves (Départs)', 
+                                data: leavesDataset.length > 0 ? leavesDataset : [0], 
+                                backgroundColor: '#ef4444',
+                                borderRadius: 5
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { labels: { color: '#f8fafc' } } },
+                        scales: {
+                            x: { grid: { color: '#334155', display: false }, ticks: { color: '#94a3b8' } },
+                            y: { grid: { color: '#334155' }, ticks: { color: '#94a3b8', stepSize: 1 } }
+                        }
+                    }
+                });
+            </script>
+        </body>
+        </html>
+        `);
+    } else {
+        res.writeHead(200, { 'Content-Type': 'text/plain' });
+        res.end('Bot Online. Access dashboard at /dashboard');
+    }
+}).listen(process.env.PORT || 3000);
+
 client.login(DISCORD_BOT_TOKEN);
