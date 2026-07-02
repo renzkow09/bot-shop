@@ -6,7 +6,6 @@ const path = require('path');
 
 // ==========================================
 // 🛡️ BOUCLIER ANTI-CRASH GLOBAL 🛡️
-// Empêche le bot de s'éteindre si une erreur imprévue survient
 // ==========================================
 process.on('unhandledRejection', (reason, p) => {
     console.log(' [ANTI-CRASH] Unhandled Rejection/Catch');
@@ -65,15 +64,18 @@ const PRODUCT_LINKS = {
 const channelStates = new Map();
 const STATS_FILE = path.join(__dirname, 'stats.json');
 
-// --- FONCTION D'ENREGISTREMENT DES STATISTIQUES ---
+// ==========================================
+// MOTEUR DE STATISTIQUES AVANCE
+// ==========================================
 function logStat(type, value = 1, extraData = null) {
-    let stats = { joins: {}, leaves: {}, revenue: {}, total_revenue: 0, transactions: {}, total_transactions: 0, product_sales: {}, recent_joins: [], total_leaves: 0 };
+    let stats = { joins: {}, leaves: {}, revenue: {}, total_revenue: 0, transactions: {}, total_transactions: 0, product_sales: {}, recent_joins: [], total_leaves: 0, recent_transactions: [] };
     if (fs.existsSync(STATS_FILE)) {
         try { stats = { ...stats, ...JSON.parse(fs.readFileSync(STATS_FILE, 'utf8')) }; } catch (e) {}
     }
     const today = new Date().toISOString().split('T')[0];
     
     if (!stats[type]) stats[type] = {};
+    if (!stats.recent_transactions) stats.recent_transactions = [];
     
     if (type === 'revenue') {
         stats.revenue[today] = (stats.revenue[today] || 0) + value;
@@ -83,12 +85,22 @@ function logStat(type, value = 1, extraData = null) {
         
         if (extraData && extraData.productId) {
             stats.product_sales[extraData.productId] = (stats.product_sales[extraData.productId] || 0) + 1;
+            
+            // Enregistrer la transaction détaillée
+            stats.recent_transactions.unshift({
+                username: extraData.username || "Unknown Client",
+                product: extraData.productName || "Unknown Product",
+                price: value,
+                date: new Date().toLocaleString('fr-FR')
+            });
+            // Garder seulement les 10 dernières transactions
+            if (stats.recent_transactions.length > 10) stats.recent_transactions.pop();
         }
     } else if (type === 'joins') {
         stats.joins[today] = (stats.joins[today] || 0) + value;
         if (extraData && extraData.username) {
             stats.recent_joins.unshift({ username: extraData.username, date: new Date().toLocaleString('fr-FR') });
-            if (stats.recent_joins.length > 5) stats.recent_joins.pop();
+            if (stats.recent_joins.length > 6) stats.recent_joins.pop();
         }
     } else if (type === 'leaves') {
         stats.leaves[today] = (stats.leaves[today] || 0) + value;
@@ -132,12 +144,11 @@ client.on('interactionCreate', async (interaction) => {
                 }).catch(() => null);
 
                 if (channel) {
-                    // Ajout d'un verrou "processing" pour éviter le spam de codes
                     channelStates.set(channel.id, { validated: false, processing: false, amount: 0 });
                     await channel.send(`👋 Welcome <@${interaction.user.id}>!\n\n**Please paste your Rewarble voucher code below.**`).catch(() => {});
                     await interaction.editReply({ content: `✅ Room ready: <#${channel.id}>` }).catch(() => {});
                 } else {
-                    await interaction.editReply({ content: `❌ Error creating the room. Please try again or contact support.` }).catch(() => {});
+                    await interaction.editReply({ content: `❌ Error creating the room. Please contact support.` }).catch(() => {});
                 }
                 
             } else if (interaction.customId === 'open_support_ticket') {
@@ -166,9 +177,14 @@ client.on('interactionCreate', async (interaction) => {
                 const selected = interaction.values[0];
                 const product = PRODUCT_DATA[selected];
 
+                // --- ANALYTICS AVANCÉES ---
                 const priceMatch = product.price.match(/\d+/);
                 if (priceMatch) {
-                    logStat('revenue', parseInt(priceMatch[0]), { productId: selected });
+                    logStat('revenue', parseInt(priceMatch[0]), { 
+                        productId: selected, 
+                        productName: product.name,
+                        username: interaction.user.username 
+                    });
                 }
 
                 const successEmbed = new EmbedBuilder()
@@ -249,19 +265,18 @@ client.on('messageCreate', async (message) => {
 
         if (message.channel?.name?.startsWith('shop-')) {
             const state = channelStates.get(message.channel.id);
-            // Vérification de state.processing pour éviter qu'un spam du code fasse crasher l'API Rewarble
             if (!state || state.validated || state.processing) return;
 
             const input = message.content.trim();
             if (TEST_VOUCHERS[input] || input.length >= 8) {
-                state.processing = true; // Verrouille le salon pendant l'analyse
+                state.processing = true; 
                 try {
                     if (!TEST_VOUCHERS[input]) {
                         await axios.post(REWARBLE_API_URL, { code: input }, { headers: { 'Authorization': `Bearer ${REWARBLE_API_KEY}` } });
                     }
                     
                     state.validated = true;
-                    state.processing = false; // Déverrouille
+                    state.processing = false; 
                     
                     const menu = new StringSelectMenuBuilder().setCustomId('product_select').setPlaceholder('Select your product...');
                     for (const [id, data] of Object.entries(PRODUCT_DATA)) {
@@ -270,11 +285,10 @@ client.on('messageCreate', async (message) => {
                     
                     await message.reply({ content: "✅ **Code validated! Select your item below:**", components: [new ActionRowBuilder().addComponents(menu)] })
                         .catch(async () => {
-                            // Securité si le client supprime le message entre temps
                             await message.channel.send({ content: "✅ **Code validated! Select your item below:**", components: [new ActionRowBuilder().addComponents(menu)] }).catch(() => {});
                         });
                 } catch (e) {
-                    state.processing = false; // Déverrouille si erreur (code faux)
+                    state.processing = false; 
                     message.reply("❌ Invalid code.")
                         .catch(async () => {
                             await message.channel.send("❌ Invalid code.").catch(() => {});
@@ -335,11 +349,11 @@ client.on('guildMemberRemove', async (member) => {
 });
 
 // ==========================================
-// SERVEUR WEB (DASHBOARD & STATS PRO)
+// SERVEUR WEB (DASHBOARD ULTRA PREMIUM)
 // ==========================================
 http.createServer(async (req, res) => {
     if (req.url === '/dashboard') {
-        let stats = { joins: {}, leaves: {}, revenue: {}, total_revenue: 0, transactions: {}, total_transactions: 0, product_sales: {}, recent_joins: [], total_leaves: 0 };
+        let stats = { joins: {}, leaves: {}, revenue: {}, total_revenue: 0, transactions: {}, total_transactions: 0, product_sales: {}, recent_joins: [], total_leaves: 0, recent_transactions: [] };
         if (fs.existsSync(STATS_FILE)) { 
             try { stats = { ...stats, ...JSON.parse(fs.readFileSync(STATS_FILE, 'utf8')) }; } catch(e){} 
         }
@@ -362,13 +376,25 @@ http.createServer(async (req, res) => {
         const panierMoyen = stats.total_transactions > 0 ? (stats.total_revenue / stats.total_transactions).toFixed(2) : 0;
         const totalHistorique = memberCount !== "N/A" ? (memberCount + (stats.total_leaves || 0)) : 1;
         const retentionRate = memberCount !== "N/A" ? ((memberCount / totalHistorique) * 100).toFixed(1) : "N/A";
+        const todayStr = new Date().toISOString().split('T')[0];
+        const todayRevenue = stats.revenue[todayStr] || 0;
 
-        const tableRows = stats.recent_joins.map(user => `
+        // Génération HTML des tableaux
+        const tableRowsMembers = stats.recent_joins.length > 0 ? stats.recent_joins.map(user => `
             <tr>
-                <td>${user.username}</td>
-                <td>${user.date}</td>
+                <td><div class="user-badge">${user.username.charAt(0).toUpperCase()}</div> ${user.username}</td>
+                <td class="text-muted">${user.date}</td>
             </tr>
-        `).join('') || `<tr><td colspan="2" style="text-align:center;">Aucun membre récent</td></tr>`;
+        `).join('') : `<tr><td colspan="2" class="text-center text-muted">No recent members</td></tr>`;
+
+        const tableRowsTransactions = stats.recent_transactions && stats.recent_transactions.length > 0 ? stats.recent_transactions.map(tx => `
+            <tr>
+                <td><span class="highlight-text">${tx.username}</span></td>
+                <td>${tx.product}</td>
+                <td class="text-green font-bold">€${tx.price}</td>
+                <td class="text-muted">${tx.date}</td>
+            </tr>
+        `).join('') : `<tr><td colspan="4" class="text-center text-muted">Waiting for new sales...</td></tr>`;
 
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         res.end(`
@@ -377,113 +403,198 @@ http.createServer(async (req, res) => {
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Pro Shop Analytics</title>
+            <title>Premium Shop Analytics</title>
             <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
             <style>
-                body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0f172a; color: #f8fafc; margin: 0; padding: 20px; }
-                .container { max-width: 1200px; margin: 0 auto; }
-                .header { text-align: center; margin-bottom: 30px; }
-                .header h1 { color: #38bdf8; font-size: 2.5em; margin: 0 0 5px 0; }
+                :root {
+                    --bg-main: #0b0f19;
+                    --bg-card: rgba(30, 41, 59, 0.7);
+                    --border-color: rgba(255, 255, 255, 0.1);
+                    --text-main: #f8fafc;
+                    --text-muted: #94a3b8;
+                    --accent-blue: #38bdf8;
+                    --accent-green: #10b981;
+                    --accent-purple: #a855f7;
+                    --accent-orange: #f97316;
+                    --accent-pink: #ec4899;
+                }
                 
-                .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 30px; }
-                .card { background: #1e293b; padding: 20px; border-radius: 12px; text-align: center; border: 1px solid #334155; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2); }
-                .card h3 { margin: 0; color: #94a3b8; font-size: 0.9em; text-transform: uppercase; letter-spacing: 1px; }
-                .card .value { font-size: 2.2em; font-weight: bold; margin-top: 10px; }
-                .text-green { color: #10b981; } .text-blue { color: #38bdf8; } .text-purple { color: #a855f7; } .text-orange { color: #f97316; } .text-yellow { color: #eab308; }
+                * { box-sizing: border-box; }
+                body { font-family: 'Inter', sans-serif; background-color: var(--bg-main); color: var(--text-main); margin: 0; padding: 20px 20px 60px 20px; background-image: radial-gradient(circle at top right, rgba(56, 189, 248, 0.05), transparent 40%), radial-gradient(circle at bottom left, rgba(168, 85, 247, 0.05), transparent 40%); min-height: 100vh; }
                 
-                .charts-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 30px; }
-                .box { background: #1e293b; padding: 20px; border-radius: 12px; border: 1px solid #334155; }
-                .box h2 { text-align: center; color: #e2e8f0; font-size: 1.2em; margin-top: 0; margin-bottom: 15px; }
-                .chart-container { position: relative; height: 300px; width: 100%; }
+                .container { max-width: 1250px; margin: 0 auto; }
                 
-                table { width: 100%; border-collapse: collapse; }
-                th, td { padding: 12px; text-align: left; border-bottom: 1px solid #334155; }
-                th { color: #94a3b8; text-transform: uppercase; font-size: 0.8em; }
-                td { color: #f8fafc; font-size: 0.9em; }
+                /* HEADER */
+                .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 40px; padding-bottom: 20px; border-bottom: 1px solid var(--border-color); }
+                .header h1 { font-size: 2.2em; margin: 0; font-weight: 800; background: linear-gradient(to right, #38bdf8, #a855f7); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+                .live-status { display: flex; align-items: center; gap: 8px; font-size: 0.9em; font-weight: 600; color: var(--accent-green); background: rgba(16, 185, 129, 0.1); padding: 8px 16px; border-radius: 20px; border: 1px solid rgba(16, 185, 129, 0.2); }
+                .pulse { width: 10px; height: 10px; background-color: var(--accent-green); border-radius: 50%; box-shadow: 0 0 10px var(--accent-green); animation: pulse-animation 1.5s infinite; }
+                @keyframes pulse-animation { 0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); } 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); } }
+
+                /* METRIC CARDS */
+                .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; margin-bottom: 40px; }
+                .card { background: var(--bg-card); backdrop-filter: blur(12px); padding: 25px; border-radius: 16px; border: 1px solid var(--border-color); text-align: left; transition: transform 0.2s, box-shadow 0.2s; position: relative; overflow: hidden; }
+                .card:hover { transform: translateY(-5px); box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5); border-color: rgba(255, 255, 255, 0.2); }
+                .card::before { content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%; }
+                .card.green::before { background: var(--accent-green); } .card.blue::before { background: var(--accent-blue); } .card.purple::before { background: var(--accent-purple); } .card.orange::before { background: var(--accent-orange); } .card.pink::before { background: var(--accent-pink); }
+                .card h3 { margin: 0; color: var(--text-muted); font-size: 0.85em; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 600; }
+                .card .value { font-size: 2.5em; font-weight: 800; margin-top: 10px; }
                 
-                @media (max-width: 768px) { .charts-grid { grid-template-columns: 1fr; } }
+                /* TEXT COLORS */
+                .text-green { color: var(--accent-green); } .text-blue { color: var(--accent-blue); } .text-purple { color: var(--accent-purple); } .text-orange { color: var(--accent-orange); } .text-pink { color: var(--accent-pink); }
+                .text-muted { color: var(--text-muted); } .text-center { text-align: center; } .font-bold { font-weight: 600; }
+                
+                /* CHARTS & TABLES GRID */
+                .content-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 25px; margin-bottom: 25px; }
+                .box { background: var(--bg-card); backdrop-filter: blur(12px); padding: 25px; border-radius: 16px; border: 1px solid var(--border-color); }
+                .box h2 { color: var(--text-main); font-size: 1.2em; margin-top: 0; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+                .chart-container { position: relative; height: 320px; width: 100%; }
+                
+                /* TABLES */
+                .table-responsive { overflow-x: auto; }
+                table { width: 100%; border-collapse: separate; border-spacing: 0; }
+                th, td { padding: 15px; text-align: left; border-bottom: 1px solid rgba(255, 255, 255, 0.05); font-size: 0.95em; }
+                th { color: var(--text-muted); text-transform: uppercase; font-size: 0.75em; letter-spacing: 1px; font-weight: 600; padding-top: 0; }
+                tr:last-child td { border-bottom: none; }
+                tr:hover td { background: rgba(255, 255, 255, 0.02); }
+                .user-badge { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; background: var(--accent-blue); color: #fff; font-weight: bold; font-size: 0.8em; margin-right: 10px; }
+                .highlight-text { color: #fff; font-weight: 600; }
+
+                /* REFRESH TIMER */
+                .refresh-note { text-align: center; color: var(--text-muted); font-size: 0.8em; margin-top: 40px; }
+                
+                @media (max-width: 900px) { .content-grid { grid-template-columns: 1fr; } .header { flex-direction: column; gap: 15px; text-align: center; } }
             </style>
         </head>
         <body>
             <div class="container">
                 <div class="header">
-                    <h1>📊 Discord Shop Analytics</h1>
+                    <h1>Nexus Dashboard</h1>
+                    <div class="live-status">
+                        <div class="pulse"></div> Live Tracking Active
+                    </div>
                 </div>
 
                 <div class="stats-grid">
-                    <div class="card"><h3 class="text-green">Total Earnings</h3><div class="value text-green">€${stats.total_revenue}</div></div>
-                    <div class="card"><h3 class="text-blue">Avg Order Value</h3><div class="value text-blue">€${panierMoyen}</div></div>
-                    <div class="card"><h3 class="text-orange">Online Members</h3><div class="value text-orange">${onlineCount}</div></div>
-                    <div class="card"><h3 class="text-yellow">Total Members</h3><div class="value text-yellow">${memberCount}</div></div>
-                    <div class="card"><h3 class="text-purple">Retention Rate</h3><div class="value text-purple">${retentionRate}%</div></div>
+                    <div class="card green"><h3>Today's Earnings</h3><div class="value text-green">€${todayRevenue}</div></div>
+                    <div class="card blue"><h3>Total Earnings</h3><div class="value text-blue">€${stats.total_revenue}</div></div>
+                    <div class="card pink"><h3>Avg Order Value</h3><div class="value text-pink">€${panierMoyen}</div></div>
+                    <div class="card orange"><h3>Online / Total</h3><div class="value text-orange">${onlineCount} <span style="font-size: 0.5em; color: var(--text-muted);">/ ${memberCount}</span></div></div>
+                    <div class="card purple"><h3>Retention Rate</h3><div class="value text-purple">${retentionRate}%</div></div>
                 </div>
 
-                <div class="charts-grid">
+                <div class="content-grid">
                     <div class="box">
-                        <h2>📈 Sales (Transactions / Day)</h2>
-                        <div class="chart-container"><canvas id="salesChart"></canvas></div>
+                        <h2>🛒 Recent Transactions</h2>
+                        <div class="table-responsive">
+                            <table>
+                                <thead><tr><th>Customer</th><th>Product</th><th>Price</th><th>Date</th></tr></thead>
+                                <tbody>${tableRowsTransactions}</tbody>
+                            </table>
+                        </div>
                     </div>
                     <div class="box">
-                        <h2>🏆 Top Products</h2>
-                        <div class="chart-container"><canvas id="productsChart"></canvas></div>
+                        <h2>🏆 Top Sellers</h2>
+                        <div class="chart-container" style="height: 280px;"><canvas id="productsChart"></canvas></div>
                     </div>
                 </div>
                 
-                <div class="charts-grid">
+                <div class="content-grid">
                     <div class="box">
-                        <h2>👥 Joins vs Leaves</h2>
-                        <div class="chart-container"><canvas id="membersChart"></canvas></div>
+                        <h2>📈 Revenue Timeline</h2>
+                        <div class="chart-container"><canvas id="salesChart"></canvas></div>
                     </div>
                     <div class="box">
-                        <h2>🆕 Last 5 Members</h2>
-                        <table>
-                            <thead><tr><th>Username</th><th>Date</th></tr></thead>
-                            <tbody>${tableRows}</tbody>
-                        </table>
+                        <h2>👥 Latest Members</h2>
+                        <div class="table-responsive">
+                            <table>
+                                <thead><tr><th>Username</th><th>Join Date</th></tr></thead>
+                                <tbody>${tableRowsMembers}</tbody>
+                            </table>
+                        </div>
                     </div>
+                </div>
+                
+                <div class="refresh-note">
+                    Auto-refreshing in <span id="timer">60</span> seconds...
                 </div>
             </div>
 
             <script>
+                // Auto Refresh Logic
+                let timeLeft = 60;
+                setInterval(() => {
+                    timeLeft--;
+                    document.getElementById('timer').innerText = timeLeft;
+                    if (timeLeft <= 0) location.reload();
+                }, 1000);
+
+                // Chart Global Defaults
+                Chart.defaults.color = '#94a3b8';
+                Chart.defaults.font.family = "'Inter', sans-serif";
+                
                 const statsData = ${JSON.stringify(stats)};
                 const productDataRaw = ${JSON.stringify(PRODUCT_DATA)};
                 
-                const salesDates = Object.keys(statsData.transactions || {});
-                const salesValues = Object.values(statsData.transactions || {});
-                new Chart(document.getElementById('salesChart'), {
+                // 1. Chart : Revenus
+                const salesDates = Object.keys(statsData.revenue || {});
+                const salesValues = Object.values(statsData.revenue || {});
+                const ctxSales = document.getElementById('salesChart').getContext('2d');
+                let gradientSales = ctxSales.createLinearGradient(0, 0, 0, 400);
+                gradientSales.addColorStop(0, 'rgba(56, 189, 248, 0.4)');
+                gradientSales.addColorStop(1, 'rgba(56, 189, 248, 0.0)');
+
+                new Chart(ctxSales, {
                     type: 'line',
                     data: {
                         labels: salesDates.length ? salesDates : ['No Data'],
-                        datasets: [{ label: 'Number of Sales', data: salesValues.length ? salesValues : [0], borderColor: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.1)', fill: true, tension: 0.4 }]
+                        datasets: [{ 
+                            label: 'Daily Revenue (€)', 
+                            data: salesValues.length ? salesValues : [0], 
+                            borderColor: '#38bdf8', 
+                            backgroundColor: gradientSales, 
+                            borderWidth: 3,
+                            pointBackgroundColor: '#0b0f19',
+                            pointBorderColor: '#38bdf8',
+                            pointBorderWidth: 2,
+                            pointRadius: 4,
+                            pointHoverRadius: 6,
+                            fill: true, 
+                            tension: 0.4 
+                        }]
                     },
-                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { ticks: { stepSize: 1, color: '#94a3b8' }, grid: { color: '#334155' } }, x: { ticks: { color: '#94a3b8' }, grid: { display: false } } } }
+                    options: { 
+                        responsive: true, maintainAspectRatio: false, 
+                        plugins: { legend: { display: false }, tooltip: { backgroundColor: 'rgba(15, 23, 42, 0.9)', titleFont: { size: 13 }, bodyFont: { size: 14, weight: 'bold' }, padding: 12, cornerRadius: 8, displayColors: false } }, 
+                        scales: { 
+                            y: { beginAtZero: true, border: { display: false }, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { callback: function(value) { return '€' + value; } } }, 
+                            x: { border: { display: false }, grid: { display: false } } 
+                        } 
+                    }
                 });
 
+                // 2. Chart : Top Produits (Doughnut)
                 const productIds = Object.keys(statsData.product_sales || {});
                 const productLabels = productIds.map(id => productDataRaw[id] ? productDataRaw[id].name : 'Unknown');
                 const productValues = Object.values(statsData.product_sales || {});
+                
                 new Chart(document.getElementById('productsChart'), {
                     type: 'doughnut',
                     data: {
-                        labels: productLabels.length ? productLabels : ['No Sales Yet'],
-                        datasets: [{ data: productValues.length ? productValues : [1], backgroundColor: ['#3b82f6', '#8b5cf6', '#ec4899', '#f43f5e', '#f97316', '#10b981', '#06b6d4'], borderWidth: 0 }]
+                        labels: productLabels.length ? productLabels : ['No Sales'],
+                        datasets: [{ 
+                            data: productValues.length ? productValues : [1], 
+                            backgroundColor: ['#38bdf8', '#a855f7', '#ec4899', '#f97316', '#10b981', '#fbbf24', '#6366f1'], 
+                            borderWidth: 2,
+                            borderColor: '#0b0f19',
+                            hoverOffset: 10
+                        }]
                     },
-                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: '#f8fafc' } } } }
-                });
-
-                const allDates = Array.from(new Set([...Object.keys(statsData.joins || {}), ...Object.keys(statsData.leaves || {})])).sort();
-                const joinsDataset = allDates.map(date => (statsData.joins && statsData.joins[date]) || 0);
-                const leavesDataset = allDates.map(date => (statsData.leaves && statsData.leaves[date]) || 0);
-                new Chart(document.getElementById('membersChart'), {
-                    type: 'bar',
-                    data: {
-                        labels: allDates.length ? allDates : ['No Data'],
-                        datasets: [
-                            { label: 'Joins', data: joinsDataset.length ? joinsDataset : [0], backgroundColor: '#10b981', borderRadius: 4 },
-                            { label: 'Leaves', data: leavesDataset.length ? leavesDataset : [0], backgroundColor: '#ef4444', borderRadius: 4 }
-                        ]
-                    },
-                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#f8fafc' } } }, scales: { y: { ticks: { stepSize: 1, color: '#94a3b8' }, grid: { color: '#334155' } }, x: { ticks: { color: '#94a3b8' }, grid: { display: false } } } }
+                    options: { 
+                        responsive: true, maintainAspectRatio: false, cutout: '70%',
+                        plugins: { legend: { position: 'bottom', labels: { padding: 20, usePointStyle: true, pointStyle: 'circle' } }, tooltip: { backgroundColor: 'rgba(15, 23, 42, 0.9)', padding: 12, cornerRadius: 8 } } 
+                    }
                 });
             </script>
         </body>
