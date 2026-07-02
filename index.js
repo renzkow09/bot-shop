@@ -1,8 +1,6 @@
 const { Client, GatewayIntentBits, Partials, ButtonBuilder, ActionRowBuilder, ButtonStyle, ChannelType, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, EmbedBuilder } = require('discord.js');
 const axios = require('axios');
 const http = require('http');
-const fs = require('fs');
-const path = require('path');
 
 // ==========================================
 // 🛡️ BOUCLIER ANTI-CRASH GLOBAL 🛡️
@@ -62,21 +60,37 @@ const PRODUCT_LINKS = {
 };
 
 const channelStates = new Map();
-const STATS_FILE = path.join(__dirname, 'stats.json');
 
 // ==========================================
-// MOTEUR DE STATISTIQUES AVANCE
+// MOTEUR DE STATISTIQUES AVANCÉ (CLOUD UPSTASH)
 // ==========================================
-function logStat(type, value = 1, extraData = null) {
-    let stats = { joins: {}, leaves: {}, revenue: {}, total_revenue: 0, transactions: {}, total_transactions: 0, product_sales: {}, recent_joins: [], total_leaves: 0, recent_transactions: [] };
-    if (fs.existsSync(STATS_FILE)) {
-        try { stats = { ...stats, ...JSON.parse(fs.readFileSync(STATS_FILE, 'utf8')) }; } catch (e) {}
+async function logStat(type, value = 1, extraData = null) {
+    const url = process.env.UPSTASH_REDIS_REST_URL;
+    const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+    
+    if (!url || !token) {
+        console.log("⚠️ Variables Upstash manquantes, cloud désactivé.");
+        return;
     }
+
+    let stats = { joins: {}, leaves: {}, revenue: {}, total_revenue: 0, transactions: {}, total_transactions: 0, product_sales: {}, recent_joins: [], total_leaves: 0, recent_transactions: [] };
+    
+    // 1. Lire les stats actuelles depuis le Cloud
+    try {
+        const res = await axios.get(`${url}/get/bot_stats`, { headers: { Authorization: `Bearer ${token}` } });
+        if (res.data && res.data.result) {
+            stats = { ...stats, ...JSON.parse(res.data.result) };
+        }
+    } catch (e) {
+        console.error("❌ Cloud GET Error :", e.message);
+    }
+
     const today = new Date().toISOString().split('T')[0];
     
     if (!stats[type]) stats[type] = {};
     if (!stats.recent_transactions) stats.recent_transactions = [];
     
+    // 2. Mettre à jour les données
     if (type === 'revenue') {
         stats.revenue[today] = (stats.revenue[today] || 0) + value;
         stats.total_revenue = (stats.total_revenue || 0) + value;
@@ -85,15 +99,12 @@ function logStat(type, value = 1, extraData = null) {
         
         if (extraData && extraData.productId) {
             stats.product_sales[extraData.productId] = (stats.product_sales[extraData.productId] || 0) + 1;
-            
-            // Enregistrer la transaction détaillée
             stats.recent_transactions.unshift({
                 username: extraData.username || "Unknown Client",
                 product: extraData.productName || "Unknown Product",
                 price: value,
                 date: new Date().toLocaleString('fr-FR')
             });
-            // Garder seulement les 10 dernières transactions
             if (stats.recent_transactions.length > 10) stats.recent_transactions.pop();
         }
     } else if (type === 'joins') {
@@ -107,10 +118,11 @@ function logStat(type, value = 1, extraData = null) {
         stats.total_leaves = (stats.total_leaves || 0) + 1;
     }
     
+    // 3. Sauvegarder sur le Cloud
     try {
-        fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2));
+        await axios.post(`${url}/set/bot_stats`, JSON.stringify(stats), { headers: { Authorization: `Bearer ${token}` } });
     } catch (err) {
-        console.error("Erreur écriture stats:", err);
+        console.error("❌ Cloud SET Error :", err.message);
     }
 }
 
@@ -349,13 +361,22 @@ client.on('guildMemberRemove', async (member) => {
 });
 
 // ==========================================
-// SERVEUR WEB (DASHBOARD ULTRA PREMIUM)
+// SERVEUR WEB (DASHBOARD ULTRA PREMIUM + CLOUD)
 // ==========================================
 http.createServer(async (req, res) => {
     if (req.url === '/dashboard') {
         let stats = { joins: {}, leaves: {}, revenue: {}, total_revenue: 0, transactions: {}, total_transactions: 0, product_sales: {}, recent_joins: [], total_leaves: 0, recent_transactions: [] };
-        if (fs.existsSync(STATS_FILE)) { 
-            try { stats = { ...stats, ...JSON.parse(fs.readFileSync(STATS_FILE, 'utf8')) }; } catch(e){} 
+        
+        const url = process.env.UPSTASH_REDIS_REST_URL;
+        const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+        
+        if (url && token) {
+            try { 
+                const cloudRes = await axios.get(`${url}/get/bot_stats`, { headers: { Authorization: `Bearer ${token}` } });
+                if (cloudRes.data && cloudRes.data.result) {
+                    stats = { ...stats, ...JSON.parse(cloudRes.data.result) };
+                }
+            } catch(e) { console.error("Cloud Dashboard Error:", e.message); } 
         }
 
         let memberCount = "N/A";
@@ -379,7 +400,6 @@ http.createServer(async (req, res) => {
         const todayStr = new Date().toISOString().split('T')[0];
         const todayRevenue = stats.revenue[todayStr] || 0;
 
-        // Génération HTML des tableaux
         const tableRowsMembers = stats.recent_joins.length > 0 ? stats.recent_joins.map(user => `
             <tr>
                 <td><div class="user-badge">${user.username.charAt(0).toUpperCase()}</div> ${user.username}</td>
