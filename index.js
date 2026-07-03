@@ -270,45 +270,36 @@ client.on('messageCreate', async (message) => {
 
         if (message.author.id === ADMIN_DISCORD_ID) {
             if (message.content === '!setup') {
-                // LIGNE 1 : Boutons pour ACHETER LES CODES
+                // LIGNE 1 : Boutons pour ACHETER LES CODES SUR ENEBA
                 const rowBuy = new ActionRowBuilder().addComponents(
-                    new ButtonBuilder().setLabel('💳 Buy €5').setStyle(ButtonStyle.Link).setURL('https://www.eneba.com/rewarble-rewarble-revolut-5-gbp-voucher-global'),
-                    new ButtonBuilder().setLabel('💳 Buy €10').setStyle(ButtonStyle.Link).setURL('https://www.eneba.com/rewarble-rewarble-revolut-10-gbp-voucher-global'),
-                    new ButtonBuilder().setLabel('💳 Buy €15').setStyle(ButtonStyle.Link).setURL('https://www.eneba.com/rewarble-rewarble-revolut-15-gbp-voucher-global'),
-                    new ButtonBuilder().setLabel('💳 Buy €20').setStyle(ButtonStyle.Link).setURL('https://www.eneba.com/rewarble-rewarble-revolut-20-gbp-voucher-global')
+                    new ButtonBuilder().setLabel('💳 Acheter €5').setStyle(ButtonStyle.Link).setURL('https://www.eneba.com/rewarble-rewarble-revolut-5-gbp-voucher-global'),
+                    new ButtonBuilder().setLabel('💳 Acheter €10').setStyle(ButtonStyle.Link).setURL('https://www.eneba.com/rewarble-rewarble-revolut-10-gbp-voucher-global'),
+                    new ButtonBuilder().setLabel('💳 Acheter €15').setStyle(ButtonStyle.Link).setURL('https://www.eneba.com/rewarble-rewarble-revolut-15-gbp-voucher-global'),
+                    new ButtonBuilder().setLabel('💳 Acheter €20').setStyle(ButtonStyle.Link).setURL('https://www.eneba.com/rewarble-rewarble-revolut-20-gbp-voucher-global')
                 );
 
-                // LIGNE 2 : Boutons d'ACTIONS
+                // LIGNE 2 : Boutons d'ACTIONS SUR LE BOT
                 const rowActions = new ActionRowBuilder().addComponents(
                     new ButtonBuilder().setCustomId('open_shop_channel').setLabel('📩 Redeem Code').setStyle(ButtonStyle.Success),
                     new ButtonBuilder().setCustomId('open_support_ticket').setLabel('🎧 Need Support?').setStyle(ButtonStyle.Secondary)
                 );
                 
-                const menuText = `# 💎 VIP MENU & PRICES 💎
-> *Instant automatic delivery in your DMs! 🚀*
+                // EMBED PREMIUM ET ESTHÉTIQUE
+                const shopEmbed = new EmbedBuilder()
+                    .setColor('#FF1493') // Rose Néon esthétique
+                    .setTitle('💎 VIP EXCLUSIVE MENU & PRICES 💎')
+                    .setDescription('> *Instant automatic delivery directly in your DMs!* 🚀\n\n━━━━━━━━━━━━━━━━━━━━━━')
+                    .addFields(
+                        { name: '✨ PHOTOS (€5)', value: '> 🎀 **1.** Boobs\n> 🍑 **2.** Ass\n> 📸 **3.** Full Body\n> 👙 **4.** Lingerie Try-On\n> 🪞 **5.** Mirror Pic', inline: true },
+                        { name: '🔥 VIDEOS (€10)', value: '> 🎥 **6.** 5-Min Video\n> 🛁 **7.** Shower / Bath\n\u200B', inline: true },
+                        { name: '\u200B', value: '\u200B' }, // Séparateur invisible
+                        { name: '💦 SPECIAL (€15)', value: '> 👯‍♀️ **8.** Friends Nude\n> 🎁 **9.** Surprise Pack', inline: true },
+                        { name: '💌 PERSONALIZED', value: '> 💬 **10.** Sexting (On Req)\n> 🪄 **11.** Custom Request', inline: true },
+                        { name: '━━━━━━━━━━━━━━━━━━━━━━\n💳 HOW TO BUY ?', value: '**STEP 1:** Click an **Eneba** button below to get your voucher.\n**STEP 2:** Click the green **📩 Redeem Code** button.\n**STEP 3:** Paste your code, choose your item, and check your DMs! 🎉' }
+                    )
+                    .setFooter({ text: 'Powered by Nexus Premium • Secure & Automatic 🔒' });
 
-### ✨ PHOTOS (€5)
-**1.** Boobs   |   **2.** Ass   |   **3.** Full Body
-**4.** Lingerie Try-On   |   **5.** Mirror Pic
-
-### 🔥 VIDEOS (€10)
-**6.** 5-Min Video   |   **7.** Shower / Bath
-
-### 💦 SPECIAL (€15)
-**8.** Friends Nude   |   **9.** Surprise Pack (3-5 items)
-
-### 💌 PERSONALIZED (On Request)
-**10.** Sexting   |   **11.** Custom
-
-━━━━━━━━━━━━━━━━━━━━━━
-# 💳 HOW TO BUY ?
-**STEP 1:** Click a button below to get your Rewarble Gift Card on Eneba.
-**STEP 2:** Click the **📩 Redeem Code** button.
-**STEP 3:** Paste your code, type the item number, and check your DMs! 🎉
-
-*Need help or have a question? Click "🎧 Need Support?" below!*`;
-
-                await message.channel.send({ content: menuText, components: [rowBuy, rowActions] }).catch(() => {});
+                await message.channel.send({ embeds: [shopEmbed], components: [rowBuy, rowActions] }).catch(() => {});
             }
             if (message.content.startsWith('!say ')) {
                 const textToSend = message.content.substring(5);
