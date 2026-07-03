@@ -13,6 +13,8 @@ const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
 const REWARBLE_API_KEY = process.env.REWARBLE_API_KEY;
 const REVIEW_CHANNEL_ID = "1521625370929922078"; 
 const SHOP_CHANNEL_ID = "1520803761130311970"; 
+// 👑 NOUVEAU: ID du Rôle VIP à attribuer (À CHANGER AVEC TON VRAI ID)
+const VIP_ROLE_ID = "REMPLACE_AVEC_ID_ROLE_VIP"; 
 
 if (!DISCORD_BOT_TOKEN) {
     console.error("❌ CRITICAL ERROR: DISCORD_BOT_TOKEN is missing!");
@@ -41,6 +43,7 @@ let memoryStats = {
     promo_codes: {}, analytics: { tickets_opened: 0, hourly_sales: Array(24).fill(0) },
     referrals: {}, settings: { invite_reward_threshold: 10 },
     products: {},
+    subscriptions: {}, // 👑 NOUVEAU: Base de données des abonnements VIP
     last_update: Date.now() 
 };
 
@@ -55,7 +58,8 @@ const INITIAL_PRODUCTS = {
     "8": { name: "Friends Nude", price: "15", link: "https://drive.google.com/ton_lien_friends", category: "💦 SPECIAL" },
     "9": { name: "Surprise Pack", price: "15", link: "https://drive.google.com/ton_lien_surprisepack", category: "💦 SPECIAL" }, 
     "10": { name: "Sexting", price: "Custom", link: "", category: "💌 PERSONALIZED" },
-    "11": { name: "Custom Request", price: "Custom", link: "", category: "💌 PERSONALIZED" }
+    "11": { name: "Custom Request", price: "Custom", link: "", category: "💌 PERSONALIZED" },
+    "VIP": { name: "👑 VIP Pass 30 Jours", price: "20", link: "Welcome to VIP!", category: "👑 ABONNEMENT" } // 👑 NOUVEAU PRODUIT
 };
 
 // === [ANCHOR: CLOUD_SYNC_FUNCTIONS] ===
@@ -74,6 +78,7 @@ async function loadCloudStats() {
             if (!memoryStats.promo_codes) memoryStats.promo_codes = {};
             if (!memoryStats.user_notes) memoryStats.user_notes = {};
             if (!memoryStats.referrals) memoryStats.referrals = {};
+            if (!memoryStats.subscriptions) memoryStats.subscriptions = {}; // 👑 Init VIP DB
             if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10 };
             if (!memoryStats.analytics) memoryStats.analytics = { tickets_opened: 0, hourly_sales: Array(24).fill(0) };
             if (!memoryStats.analytics.hourly_sales) memoryStats.analytics.hourly_sales = Array(24).fill(0);
@@ -94,6 +99,39 @@ async function syncCloud() {
             headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } 
         });
     } catch (err) { console.error("❌ Cloud Sync Error :", err.message); }
+}
+
+// 👑 NOUVELLE FONCTION : Vérification cyclique des abonnements
+async function checkSubscriptions() {
+    const now = Date.now();
+    const guild = client.guilds.cache.first();
+    if (!guild) return;
+
+    for (const [userId, subData] of Object.entries(memoryStats.subscriptions)) {
+        // Expiration Check
+        if (now > subData.expiresAt) {
+            try {
+                const member = await guild.members.fetch(userId).catch(() => null);
+                if (member) {
+                    await member.roles.remove(VIP_ROLE_ID).catch(() => {});
+                    await member.send("🛑 **Your VIP Pass has expired.** You no longer have access to exclusive content and discounts. Renew your pass in the shop!").catch(() => {});
+                }
+            } catch(e) {}
+            delete memoryStats.subscriptions[userId];
+            syncCloud();
+        } 
+        // Warning 3 Days before expiration
+        else if (subData.expiresAt - now < 3 * 24 * 60 * 60 * 1000 && !subData.notified) {
+            try {
+                const member = await guild.members.fetch(userId).catch(() => null);
+                if (member) {
+                    await member.send("⏳ **Your VIP Pass expires in 3 days!** Don't forget to renew it to keep your perks.").catch(() => {});
+                }
+            } catch(e) {}
+            memoryStats.subscriptions[userId].notified = true;
+            syncCloud();
+        }
+    }
 }
 
 // === [ANCHOR: BOT_STATISTICS_LOGGER] ===
@@ -195,6 +233,9 @@ client.once('ready', () => {
             guildInvites.set(guild.id, new Map(firstInvites.map(invite => [invite.code, invite.uses])));
         } catch (err) {}
     });
+    
+    // 👑 NOUVEAU: Lance la boucle de check VIP toutes les heures
+    setInterval(checkSubscriptions, 60 * 60 * 1000); 
 });
 
 client.on('inviteCreate', invite => { try { guildInvites.get(invite.guild.id)?.set(invite.code, invite.uses); } catch (e) {} });
@@ -287,15 +328,57 @@ client.on('interactionCreate', async (interaction) => {
                 } catch (err) {}
             } else {
                 let finalPrice = parseInt(product.price);
-                if (promo) {
-                    finalPrice = Math.max(0, finalPrice - (finalPrice * promo.discount / 100));
+                // 👑 VIP DISCOUNT CHECK (Prends le dessus sur le code promo normal si l'item n'est pas déjà l'abonnement VIP)
+                let isVIPPurchase = selected === "VIP" || (product.category && product.category.includes("ABONNEMENT"));
+                let appliedDiscount = 0;
+
+                if (!isVIPPurchase && memoryStats.subscriptions[interaction.user.id]) {
+                    appliedDiscount = 20; // 20% OFF pour les VIP
+                } else if (promo) {
+                    appliedDiscount = promo.discount;
                     if (memoryStats.promo_codes && memoryStats.promo_codes[promo.name]) {
                         memoryStats.promo_codes[promo.name].used++;
                         syncCloud();
                     }
                 }
 
+                if (appliedDiscount > 0) {
+                    finalPrice = Math.max(0, finalPrice - (finalPrice * appliedDiscount / 100));
+                }
+
                 logStat('revenue', finalPrice, { productId: selected, productName: product.name, username: interaction.user.username });
+                
+                // 👑 VIP ACTIVATION LOGIC
+                if (isVIPPurchase) {
+                    const now = Date.now();
+                    const thirtyDays = 30 * 24 * 60 * 60 * 1000;
+                    if (!memoryStats.subscriptions) memoryStats.subscriptions = {};
+                    
+                    if (memoryStats.subscriptions[interaction.user.id]) {
+                        memoryStats.subscriptions[interaction.user.id].expiresAt += thirtyDays;
+                        memoryStats.subscriptions[interaction.user.id].notified = false;
+                    } else {
+                        memoryStats.subscriptions[interaction.user.id] = {
+                            username: interaction.user.username,
+                            expiresAt: now + thirtyDays,
+                            notified: false
+                        };
+                    }
+                    syncCloud();
+
+                    try {
+                        const member = await interaction.guild.members.fetch(interaction.user.id);
+                        await member.roles.add(VIP_ROLE_ID).catch(()=>{});
+                        await interaction.user.send("👑 **WELCOME TO VIP!** Your 30-Day pass is now active. Enjoy your exclusive content and 20% off all future purchases in the shop!").catch(()=>{});
+                    } catch(e) {}
+                    
+                    if (interaction.channel) {
+                        await interaction.channel.send("✅ **VIP Pass Activated successfully!** You can close this ticket.").catch(()=>{});
+                        setTimeout(() => { channelStates.delete(interaction.channel.id); interaction.channel.delete().catch(()=>{}); }, 15000);
+                    }
+                    return;
+                }
+
                 const successEmbed = new EmbedBuilder().setColor('#FFD700').setTitle('✨ Purchase Successful!').setDescription(`🔗 ${product.link || 'Link not configured.'}`);
                 try {
                     await interaction.user.send({ embeds: [successEmbed] });
@@ -345,18 +428,35 @@ client.on('messageCreate', async (message) => {
                     state.validated = true; state.processing = false; state.promo = promoApplied; 
                     
                     const menu = new StringSelectMenuBuilder().setCustomId('product_select').setPlaceholder('Select your product...');
+                    const isUserVIP = memoryStats.subscriptions && memoryStats.subscriptions[message.author.id]; // 👑 Check VIP Status
+
                     for (const [id, prod] of Object.entries(memoryStats.products)) { 
                         let finalPriceStr = "€" + prod.price;
                         if (prod.price === "Custom") finalPriceStr = "Custom";
-                        else if (promoApplied) {
-                            const originalPrice = parseInt(prod.price);
-                            const newPrice = Math.max(0, originalPrice - (originalPrice * promoApplied.discount / 100));
-                            finalPriceStr = `€${newPrice.toFixed(2)} (-${promoApplied.discount}%)`;
+                        else {
+                            let originalPrice = parseInt(prod.price);
+                            let discountToApply = 0;
+                            let isVIPItem = id === "VIP" || (prod.category && prod.category.includes("ABONNEMENT"));
+
+                            // Apply Promo OR VIP Discount
+                            if (!isVIPItem && isUserVIP) {
+                                discountToApply = 20; // 20% VIP
+                            } else if (promoApplied) {
+                                discountToApply = promoApplied.discount;
+                            }
+
+                            if (discountToApply > 0) {
+                                const newPrice = Math.max(0, originalPrice - (originalPrice * discountToApply / 100));
+                                finalPriceStr = `€${newPrice.toFixed(2)} (-${discountToApply}%)`;
+                            }
                         }
                         menu.addOptions(new StringSelectMenuOptionBuilder().setLabel(prod.name).setDescription(`Price: ${finalPriceStr}`).setValue(id)); 
                     }
                     
-                    const replyMsg = promoApplied ? `✅ **Promo Code Accepted (-${promoApplied.discount}%)! Select your item below:**` : "✅ **Code validated! Select your item below:**";
+                    let replyMsg = "✅ **Code validated! Select your item below:**";
+                    if (promoApplied) replyMsg = `✅ **Promo Code Accepted (-${promoApplied.discount}%)! Select your item below:**`;
+                    else if (isUserVIP) replyMsg = `👑 **VIP Status Active! (-20% on all items). Select your item below:**`;
+
                     await message.reply({ content: replyMsg, components: [new ActionRowBuilder().addComponents(menu)] });
                 } catch (e) { 
                     state.processing = false; 
@@ -683,7 +783,6 @@ http.createServer(async (req, res) => {
                         if(c.name.startsWith('shop-') || c.name.startsWith('support-')) { channelStates.delete(c.id); c.delete().catch(()=>{}); }
                     });
                 }
-                // NOUVELLE LOGIQUE PROMO SECURISEE
                 else if (data.action === 'create_promo') {
                     if (!memoryStats.promo_codes) memoryStats.promo_codes = {};
                     const codeName = (data.name || "").trim().toUpperCase();
@@ -706,6 +805,39 @@ http.createServer(async (req, res) => {
                 else if (data.action === 'send_dm') {
                     const targetUser = await client.users.fetch(data.userId).catch(() => null);
                     if (targetUser) await targetUser.send(`📩 **Message from Admin :**\n\n${data.message}`);
+                }
+                // 👑 ACTION : GESTION MANUELLE DES ABONNEMENTS VIP (AJOUT/SUPPRESSION)
+                else if (data.action === 'add_vip_days') {
+                    if (!memoryStats.subscriptions) memoryStats.subscriptions = {};
+                    const days = parseInt(data.days) || 0;
+                    if (days > 0) {
+                        const now = Date.now();
+                        if (memoryStats.subscriptions[data.userId]) {
+                            memoryStats.subscriptions[data.userId].expiresAt += (days * 24 * 60 * 60 * 1000);
+                        } else {
+                            const user = await client.users.fetch(data.userId).catch(()=>null);
+                            memoryStats.subscriptions[data.userId] = {
+                                username: user ? user.username : 'Unknown',
+                                expiresAt: now + (days * 24 * 60 * 60 * 1000),
+                                notified: false
+                            };
+                            try {
+                                const member = await guild.members.fetch(data.userId);
+                                await member.roles.add(VIP_ROLE_ID);
+                            } catch(e) {}
+                        }
+                        syncCloud();
+                    }
+                }
+                else if (data.action === 'revoke_vip') {
+                    if (memoryStats.subscriptions && memoryStats.subscriptions[data.userId]) {
+                        delete memoryStats.subscriptions[data.userId];
+                        try {
+                            const member = await guild.members.fetch(data.userId);
+                            await member.roles.remove(VIP_ROLE_ID);
+                        } catch(e) {}
+                        syncCloud();
+                    }
                 }
                 res.writeHead(200).end('OK');
             } catch(e) { res.writeHead(500).end(e.message); }
@@ -773,6 +905,9 @@ http.createServer(async (req, res) => {
             ".chat-input-area { display: flex; padding: 15px; background: rgba(0,0,0,0.5); border-top: 1px solid var(--border-color); gap: 10px; align-items: center; }",
             ".chat-input-area input { flex: 1; margin: 0; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); font-size: 1em; padding: 12px 15px; }",
             ".chat-input-area input:focus { border-color: var(--accent-blue); }",
+            "/* PROGRESS BAR POUR LES ABONNEMENTS */",
+            ".progress-bg { width:100%; background:rgba(255,255,255,0.1); border-radius:4px; height:8px; margin-top:5px; overflow:hidden; }",
+            ".progress-fill { height:100%; background:var(--accent-purple); }",
             "</style></head><body>",
             "<!-- [ANCHOR: DASHBOARD_MODALS_TOASTS] -->",
             "<div id='toast' style='position:fixed; bottom:-100px; right:20px; background:var(--accent-green); color:white; padding:15px 25px; border-radius:10px; font-weight:bold; transition:all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55); z-index:1000; box-shadow: 0 5px 20px rgba(0,0,0,0.5);'>🎉 Notification!</div>",
@@ -780,9 +915,13 @@ http.createServer(async (req, res) => {
             "<div class='modal' id='syncModal'><div class='modal-content'><h2>📦 Catalog Saved!</h2><p class='text-muted' style='margin-bottom:20px;'>Apply these changes to your Discord shop channel right now?</p><button class='admin-btn' style='background:var(--accent-purple); width:100%; margin-bottom:10px;' onclick='window.triggerShopRefresh(); document.getElementById(\"syncModal\").style.display=\"none\";'>🔄 Setup & Clear Old Menu</button><button class='admin-btn' style='background:transparent; border:1px solid rgba(255,255,255,0.2); width:100%; color:var(--text-muted);' onclick='document.getElementById(\"syncModal\").style.display=\"none\";'>Skip for now</button></div></div>",
             "<!-- [ANCHOR: DASHBOARD_NAVBAR] -->",
             "<div class='container' id='dashboard-container' style='display:none;'><div class='header'><h1>Nexus Dashboard</h1><div class='controls'><button class='btn-icon' onclick='window.toggleStealth()' id='stealthBtn'>👁️ Stealth</button><div class='live-status btn-icon' style='background:var(--accent-blue); border:none; font-weight:bold;'><span id='live-tickets-count'>0</span> Live Tickets</div></div></div>",
-            "<div class='nav-menu'><button class='nav-btn active' onclick='window.switchTab(\"overview\", this)'>📊 Overview</button><button class='nav-btn' onclick='window.switchTab(\"livechat\", this)'>💬 Live Chat</button><button class='nav-btn' onclick='window.switchTab(\"analytics\", this)'>📈 Analytics</button><button class='nav-btn' onclick='window.switchTab(\"transactions\", this)'>💳 Transactions</button><button class='nav-btn' onclick='window.switchTab(\"products\", this)'>📦 Products</button><button class='nav-btn' onclick='window.switchTab(\"audience\", this)'>👥 Audience</button><button class='nav-btn' onclick='window.switchTab(\"referrals\", this)'>🔗 Referrals</button><button class='nav-btn' onclick='window.switchTab(\"moderation\", this)'>🛡️ Moderation</button><button class='nav-btn' onclick='window.switchTab(\"monitoring\", this)'>📡 Monitoring</button><button class='nav-btn' onclick='window.switchTab(\"admin\", this)'>⚙️ Admin Config</button></div>",
+            "<div class='nav-menu'><button class='nav-btn active' onclick='window.switchTab(\"overview\", this)'>📊 Overview</button><button class='nav-btn' onclick='window.switchTab(\"vip\", this)'>👑 VIP Pass</button><button class='nav-btn' onclick='window.switchTab(\"livechat\", this)'>💬 Live Chat</button><button class='nav-btn' onclick='window.switchTab(\"analytics\", this)'>📈 Analytics</button><button class='nav-btn' onclick='window.switchTab(\"transactions\", this)'>💳 Transactions</button><button class='nav-btn' onclick='window.switchTab(\"products\", this)'>📦 Products</button><button class='nav-btn' onclick='window.switchTab(\"audience\", this)'>👥 Audience</button><button class='nav-btn' onclick='window.switchTab(\"referrals\", this)'>🔗 Referrals</button><button class='nav-btn' onclick='window.switchTab(\"moderation\", this)'>🛡️ Moderation</button><button class='nav-btn' onclick='window.switchTab(\"monitoring\", this)'>📡 Monitoring</button><button class='nav-btn' onclick='window.switchTab(\"admin\", this)'>⚙️ Admin Config</button></div>",
             "<!-- [ANCHOR: DASHBOARD_TABS_CONTENT] -->",
             "<div id='overview' class='tab-content active'><div class='stats-grid'><div class='card green'><h3>Today's Earnings</h3><div class='value money text-green' id='ui-today-rev'>€0</div></div><div class='card blue'><h3>Total Earnings</h3><div class='value money text-blue' id='ui-total-rev'>€0</div></div><div class='card pink'><h3>Conversion Rate</h3><div class='value text-pink' id='ui-conv-rate'>0%</div></div><div class='card orange'><h3>Online / Total</h3><div class='value text-orange' id='ui-online-total'>0</div></div><div class='card purple'><h3>Retention Rate</h3><div class='value text-purple' id='ui-retention'>0%</div></div></div><div class='stats-grid'><div class='card purple'><h3>Tickets Opened</h3><div class='value' id='ui-tickets-opened'>0</div></div><div class='card red'><h3>Drop-off Rate</h3><div class='value text-red' id='ui-dropoff'>0%</div></div><div class='card orange'><h3>Peak Sales Hour</h3><div class='value' id='ui-peak-hour'>N/A</div></div></div><div class='box'><div style='display:flex; justify-content:space-between;'><h2>📈 Revenue Timeline</h2><div class='filter-group'><button class='admin-btn' style='margin:0; padding:5px 10px;' onclick='window.updateSalesChart(7)'>7D</button><button class='admin-btn' style='margin:0; padding:5px 10px; background:rgba(0,0,0,0.5);' onclick='window.updateSalesChart(30)'>30D</button></div></div><div style='height:250px; margin-top:15px;'><canvas id='salesChart'></canvas></div></div></div>",
+            
+            // 👑 NOUVEL ONGLET VIP
+            "<div id='vip' class='tab-content'><div class='box' style='background:rgba(168, 85, 247, 0.1); border-color:var(--accent-purple);'><h2>👑 VIP Subscriptions</h2><p class='text-muted'>Active subscriptions. VIPs get a 20% discount on all shop items automatically.</p><div style='overflow-x:auto; margin-top:15px;'><table><thead><tr><th>Username</th><th>Expires On</th><th>Time Left</th><th>Actions</th></tr></thead><tbody id='target-vips'></tbody></table></div></div></div>",
+
             "<div id='livechat' class='tab-content'><div class='box'><h2>💬 Live Chat Console</h2><p class='text-muted' style='margin-bottom:15px;'>Read and reply to Shop and Support tickets without opening Discord.</p><div class='chat-container'><div class='ticket-list' id='chat-ticket-list'><p class='text-muted text-center' style='margin-top:20px;'>Loading tickets...</p></div><div class='chat-window'><div class='chat-messages' id='chat-messages-area'><div style='margin:auto; color:var(--text-muted); text-align:center;'><h2 style='font-size:3em; margin:0;'>👈</h2><p>Select a ticket to view</p></div></div><div style='display:flex; gap:10px; padding: 10px 15px; background: rgba(0,0,0,0.2); border-top: 1px solid var(--border-color); flex-wrap: wrap;'><button class='admin-btn' style='margin:0; padding:6px 12px; font-size:0.85em; background: rgba(255,255,255,0.05);' onclick='window.sendQuickResponse(\"welcome\")'>👋 Welcome</button><button class='admin-btn' style='margin:0; padding:6px 12px; font-size:0.85em; background: rgba(255,255,255,0.05);' onclick='window.sendQuickResponse(\"wait\")'>⏳ Wait</button><button class='admin-btn' style='margin:0; padding:6px 12px; font-size:0.85em; background: rgba(255,255,255,0.05);' onclick='window.sendQuickResponse(\"resolved\")'>✅ Resolved?</button><button class='admin-btn' style='margin:0; padding:6px 12px; font-size:0.85em; background: var(--accent-red);' onclick='window.sendQuickResponse(\"close\")'>🔒 Close Ticket</button></div><div class='chat-input-area'><input type='text' id='chat-input-text' placeholder='Type your reply here...' onkeypress='if(event.key===\"Enter\") window.sendChatMessage()'><button class='admin-btn' style='margin:0; padding:12px 25px;' onclick='window.sendChatMessage()'>Send 🚀</button></div></div></div></div></div>",
             "<div id='analytics' class='tab-content'><div class='box'><h2>🕒 Peak Hours (Sales per Hour)</h2><div style='height:250px; margin-top:15px;'><canvas id='hourlyChart'></canvas></div></div><div style='display:grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap:20px;'><div class='box'><h2>🏆 Top Selling Products</h2><div style='height:300px; margin-top:15px;'><canvas id='topProductsBarChart'></canvas></div></div><div class='box'><h2>🏷️ Revenue by Category</h2><div style='height:300px; margin-top:15px;'><canvas id='categoryRevenueChart'></canvas></div></div></div></div>",
             "<div id='transactions' class='tab-content'><div class='box'><h2>🛒 Recent Transactions</h2><div style='overflow-x:auto;'><table><thead><tr><th>Customer</th><th>Product</th><th>Price</th><th>Date</th></tr></thead><tbody id='target-tx'></tbody></table></div></div></div>",
@@ -798,7 +937,10 @@ http.createServer(async (req, res) => {
             "let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, userGoal=500, salesChart; let allMembersData = []; let isMembersLoaded = false; let activeChatChannel = null; let chatPollInterval = null;",
             "async function initDashboard(){ try{ const res=await fetch('/api/init-data'); if(!res.ok)throw new Error('Err'); const data=await res.json(); rawStats=data.memoryStats; PRODUCT_DATA=data.PRODUCT_DATA; currentMonthRevenue=data.monthRevenue; PIN=data.PIN; lastTxCount=rawStats.total_transactions||0; document.getElementById('ui-today-rev').innerText='€'+data.todayRevenue; document.getElementById('ui-total-rev').innerText='€'+(rawStats.total_revenue||0); document.getElementById('ui-conv-rate').innerText=data.conversionRate+'%'; document.getElementById('ui-online-total').innerHTML=data.onlineCount+\" <span style='font-size:0.5em;color:var(--text-muted);'>/ \"+data.memberCount+\"</span>\"; document.getElementById('ui-retention').innerText=data.retentionRate+'%'; document.getElementById('ui-tickets-opened').innerText=data.ticketsOpened; document.getElementById('ui-dropoff').innerText=data.dropOffRate+'%'; document.getElementById('ui-peak-hour').innerText=data.peakHourStr; buildStaticTables(); renderAnalyticsCharts(); setTimeout(()=>{ document.getElementById('loading-screen').style.opacity='0'; setTimeout(()=>{ document.getElementById('loading-screen').style.display='none'; document.getElementById('dashboard-container').style.display='block'; }, 500); }, 500); }catch(e){ alert('API Error'); } }",
             "function escapeHTML(str){ return str ? String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') : ''; }",
-            "function buildStaticTables(){ let txHtml=''; if(rawStats.recent_transactions&&rawStats.recent_transactions.length>0){ rawStats.recent_transactions.forEach(tx=>{ txHtml+='<tr><td>'+escapeHTML(tx.username)+'</td><td>'+escapeHTML(tx.product)+'</td><td class=\"text-green font-bold\">€'+tx.price+'</td><td class=\"text-muted\">'+tx.date+'</td></tr>'; }); } document.getElementById('target-tx').innerHTML=txHtml; let prodHtml=''; if(rawStats.products){ Object.entries(rawStats.products).forEach(([id,p])=>{ let icon='📦'; let cat = p.category||''; if(cat.includes('PHOTOS')) icon='📸'; else if(cat.includes('VIDEOS')) icon='🎥'; else if(cat.includes('SPECIAL')) icon='💦'; else if(cat.includes('PERSONALIZED')) icon='💌'; let pPrice = p.price==='Custom'?'Custom':'€'+p.price; let pLink = p.link?'<a href=\"'+escapeHTML(p.link)+'\" target=\"_blank\" style=\"color:var(--accent-blue);text-decoration:none;\">[🔗 Open Delivery Link]</a>':'<span class=\"text-muted\">No Link</span>'; prodHtml+='<div class=\"product-card\"><div style=\"position:absolute; top:15px; right:15px; color:var(--text-muted); font-size:0.8em; font-weight:bold;\">ID: '+id+'</div><div class=\"prod-title\">'+icon+' '+escapeHTML(p.name)+'</div><div class=\"prod-price\">'+pPrice+'</div><div style=\"margin-bottom:10px; font-size:0.9em;\">'+pLink+'</div><div class=\"prod-actions\"><button class=\"admin-btn\" style=\"background:rgba(255,255,255,0.1);\" onclick=\"window.editProduct(\\''+id+'\\')\">✏️ Edit</button><button class=\"admin-btn\" style=\"background:rgba(239, 68, 68, 0.2); color:var(--accent-red);\" onclick=\"window.deleteProduct(\\''+id+'\\')\">🗑️ Delete</button></div></div>'; }); } document.getElementById('target-products').innerHTML=prodHtml; let jHtml=''; if(rawStats.recent_joins){ rawStats.recent_joins.forEach(u=>{ jHtml+='<tr><td>'+escapeHTML(u.username)+'</td><td class=\"text-muted\">'+u.date+'</td></tr>'; }); } document.getElementById('target-joins').innerHTML=jHtml; let promHtml=''; if(rawStats.promo_codes){ for(const code in rawStats.promo_codes){ const info=rawStats.promo_codes[code]; const isExhausted = info.used >= info.limit; const statusColor = isExhausted ? 'var(--accent-red)' : 'var(--accent-green)'; promHtml+='<tr style=\"opacity:'+(isExhausted?'0.5':'1')+'\"><td><strong>'+escapeHTML(code)+'</strong></td><td style=\"color:'+statusColor+'; font-weight:bold;\">-'+info.discount+'%</td><td>'+info.used+' / '+info.limit+'</td><td><button class=\"admin-btn\" style=\"margin:0; padding:5px 10px; background:var(--accent-red);\" onclick=\"window.deletePromo(\\\''+encodeURIComponent(code)+'\\\')\">🗑️</button></td></tr>'; } } document.getElementById('target-promos').innerHTML=promHtml; document.getElementById('ref-threshold').value=rawStats.settings?.invite_reward_threshold||10; let refHtml=''; if(rawStats.referrals){ Object.entries(rawStats.referrals).forEach(([id,r])=>{ let list=r.invited.slice(0,3).map(u=>escapeHTML(u.username)).join(', '); if(r.invited.length>3) list+='...'; refHtml+='<tr><td>'+escapeHTML(r.username||id)+'</td><td class=\"text-green font-bold\">'+r.count+'</td><td>'+r.total_rewards+'</td><td class=\"text-muted\">'+(list||'None')+'</td></tr>'; }); } document.getElementById('target-referrals').innerHTML=refHtml; }",
+            "function buildStaticTables(){ let txHtml=''; if(rawStats.recent_transactions&&rawStats.recent_transactions.length>0){ rawStats.recent_transactions.forEach(tx=>{ txHtml+='<tr><td>'+escapeHTML(tx.username)+'</td><td>'+escapeHTML(tx.product)+'</td><td class=\"text-green font-bold\">€'+tx.price+'</td><td class=\"text-muted\">'+tx.date+'</td></tr>'; }); } document.getElementById('target-tx').innerHTML=txHtml; let prodHtml=''; if(rawStats.products){ Object.entries(rawStats.products).forEach(([id,p])=>{ let icon='📦'; let cat = p.category||''; if(cat.includes('PHOTOS')) icon='📸'; else if(cat.includes('VIDEOS')) icon='🎥'; else if(cat.includes('SPECIAL')) icon='💦'; else if(cat.includes('PERSONALIZED')) icon='💌'; else if(cat.includes('ABONNEMENT')) icon='👑'; let pPrice = p.price==='Custom'?'Custom':'€'+p.price; let pLink = p.link?'<a href=\"'+escapeHTML(p.link)+'\" target=\"_blank\" style=\"color:var(--accent-blue);text-decoration:none;\">[🔗 Open Delivery Link]</a>':'<span class=\"text-muted\">No Link</span>'; prodHtml+='<div class=\"product-card\"><div style=\"position:absolute; top:15px; right:15px; color:var(--text-muted); font-size:0.8em; font-weight:bold;\">ID: '+id+'</div><div class=\"prod-title\">'+icon+' '+escapeHTML(p.name)+'</div><div class=\"prod-price\">'+pPrice+'</div><div style=\"margin-bottom:10px; font-size:0.9em;\">'+pLink+'</div><div class=\"prod-actions\"><button class=\"admin-btn\" style=\"background:rgba(255,255,255,0.1);\" onclick=\"window.editProduct(\\''+id+'\\')\">✏️ Edit</button><button class=\"admin-btn\" style=\"background:rgba(239, 68, 68, 0.2); color:var(--accent-red);\" onclick=\"window.deleteProduct(\\''+id+'\\')\">🗑️ Delete</button></div></div>'; }); } document.getElementById('target-products').innerHTML=prodHtml; let jHtml=''; if(rawStats.recent_joins){ rawStats.recent_joins.forEach(u=>{ jHtml+='<tr><td>'+escapeHTML(u.username)+'</td><td class=\"text-muted\">'+u.date+'</td></tr>'; }); } document.getElementById('target-joins').innerHTML=jHtml; let promHtml=''; if(rawStats.promo_codes){ for(const code in rawStats.promo_codes){ const info=rawStats.promo_codes[code]; const isExhausted = info.used >= info.limit; const statusColor = isExhausted ? 'var(--accent-red)' : 'var(--accent-green)'; promHtml+='<tr style=\"opacity:'+(isExhausted?'0.5':'1')+'\"><td><strong>'+escapeHTML(code)+'</strong></td><td style=\"color:'+statusColor+'; font-weight:bold;\">-'+info.discount+'%</td><td>'+info.used+' / '+info.limit+'</td><td><button class=\"admin-btn\" style=\"margin:0; padding:5px 10px; background:var(--accent-red);\" onclick=\"window.deletePromo(\\\''+encodeURIComponent(code)+'\\\')\">🗑️</button></td></tr>'; } } document.getElementById('target-promos').innerHTML=promHtml; document.getElementById('ref-threshold').value=rawStats.settings?.invite_reward_threshold||10; let refHtml=''; if(rawStats.referrals){ Object.entries(rawStats.referrals).forEach(([id,r])=>{ let list=r.invited.slice(0,3).map(u=>escapeHTML(u.username)).join(', '); if(r.invited.length>3) list+='...'; refHtml+='<tr><td>'+escapeHTML(r.username||id)+'</td><td class=\"text-green font-bold\">'+r.count+'</td><td>'+r.total_rewards+'</td><td class=\"text-muted\">'+(list||'None')+'</td></tr>'; }); } document.getElementById('target-referrals').innerHTML=refHtml; ",
+            "// 👑 POPULATE VIP LIST",
+            "let vipHtml = ''; const now = Date.now(); if(rawStats.subscriptions) { Object.entries(rawStats.subscriptions).forEach(([id, sub]) => { const dEnd = new Date(sub.expiresAt); const diffDays = Math.max(0, Math.ceil((sub.expiresAt - now)/(1000*60*60*24))); const pct = Math.min(100, Math.max(0, (diffDays/30)*100)); vipHtml += '<tr><td><strong>' + escapeHTML(sub.username) + '</strong><br><span class=\"text-muted\" style=\"font-size:0.8em;\">' + id + '</span></td><td>' + dEnd.toLocaleDateString('en-US') + '</td><td><div style=\"font-weight:bold;\">' + diffDays + ' Days Left</div><div class=\"progress-bg\"><div class=\"progress-fill\" style=\"width:' + pct + '%\"></div></div></td><td><button class=\"admin-btn\" style=\"padding:5px 10px; margin-right:5px; background:var(--accent-blue);\" onclick=\"window.manageVip(\\'' + id + '\\', \\'add\\')\">🎁 +7D</button><button class=\"admin-btn\" style=\"padding:5px 10px; background:var(--accent-red);\" onclick=\"window.manageVip(\\'' + id + '\\', \\'revoke\\')\">🛑 Revoke</button></td></tr>'; }); } document.getElementById('target-vips').innerHTML = vipHtml || '<tr><td colspan=\"4\" class=\"text-muted text-center\">No active VIP subscriptions.</td></tr>'; }",
+            
             "window.editProduct = function(id) { const p = rawStats.products[id]; if(!p) return; document.getElementById('editProdId').value = id; document.getElementById('newProdName').value = p.name; document.getElementById('newProdPrice').value = p.price; document.getElementById('newProdLink').value = p.link; document.getElementById('saveProdBtn').innerText = '💾 Update'; document.getElementById('cancelEditBtn').style.display = 'block'; window.scrollTo({top:0, behavior:'smooth'}); };",
             "window.cancelEdit = function() { document.getElementById('editProdId').value = ''; document.getElementById('newProdName').value = ''; document.getElementById('newProdPrice').value = ''; document.getElementById('newProdLink').value = ''; document.getElementById('saveProdBtn').innerText = '➕ Add'; document.getElementById('cancelEditBtn').style.display = 'none'; };",
             "window.saveProduct = async function() { const id = document.getElementById('editProdId').value; const n = document.getElementById('newProdName').value; const p = document.getElementById('newProdPrice').value; const l = document.getElementById('newProdLink').value; if(!n||!p) return alert('Name & Price required'); if(id) { await window.executeAction({action:'edit_product', id:id, name:n, price:p, link:l}, true); } else { await window.executeAction({action:'add_product', name:n, price:p, link:l}, true); } };",
@@ -829,6 +971,8 @@ http.createServer(async (req, res) => {
             "window.updateRefThreshold = async function() { const val = document.getElementById('ref-threshold').value; if(val) await window.executeAction({action:'update_ref_threshold', threshold: val}); };",
             "window.openDirectContact = async function(id) { const msg = prompt('Enter the DM message:'); if(msg) await window.executeAction({action:'send_dm', userId: id, message: msg}); };",
             "window.saveUserNote = async function(id) { const note = document.getElementById('note-'+id).value; fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'save_note', userId: id, note: note, pin: PIN }) }).then(r => { if(r.ok) showToast('Note saved!'); }); };",
+            "// 👑 ACTION: MANAGE VIP",
+            "window.manageVip = async function(userId, action) { if(action === 'add') { await window.executeAction({action: 'add_vip_days', userId: userId, days: 7}); } else if(action === 'revoke') { if(confirm('Are you sure you want to revoke VIP access for this user?')) { await window.executeAction({action: 'revoke_vip', userId: userId}); } } };",
 
             "// [ANCHOR: DASHBOARD_CHARTS_LOGIC]",
             "Chart.defaults.color = '#94a3b8'; Chart.defaults.font.family = 'Inter, sans-serif';",
