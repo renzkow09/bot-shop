@@ -27,7 +27,7 @@ const ADMIN_DISCORD_ID = "1520551977854042114";
 const CATEGORY_CUSTOMER_ID = "1521540733226713249";
 const CATEGORY_SUPPORT_ID = "1521541155005796484";
 const DASHBOARD_PIN = "1206"; // Ton mot de passe sécurisé
-const MONTHLY_GOAL = 500; // Objectif de revenus mensuel
+const MONTHLY_GOAL = 500; // Objectif par défaut (modifiable sur le site)
 
 const TEST_VOUCHERS = { "GOYAVE5": 5 };
 
@@ -104,7 +104,6 @@ function logStat(type, value = 1, extraData = null) {
             memoryStats.user_spending[extraData.username] = (memoryStats.user_spending[extraData.username] || 0) + value;
             memoryStats.product_sales[extraData.productId] = (memoryStats.product_sales[extraData.productId] || 0) + 1;
             
-            // Suivi historique détaillé du client
             if (!memoryStats.user_history[extraData.username]) memoryStats.user_history[extraData.username] = [];
             memoryStats.user_history[extraData.username].unshift({
                 product: extraData.productName, price: value, date: new Date().toLocaleString('fr-FR')
@@ -163,7 +162,6 @@ client.on('interactionCreate', async (interaction) => {
         if (interaction.isButton()) {
             await interaction.deferReply({ flags: 64 }).catch(() => {});
 
-            // VÉRIFICATION BLACKLIST
             if (memoryStats.blacklist && memoryStats.blacklist.includes(interaction.user.id)) {
                 return await interaction.editReply({ content: "❌ You have been blacklisted from using the shop and support system." }).catch(()=>{});
             }
@@ -178,6 +176,7 @@ client.on('interactionCreate', async (interaction) => {
                         { id: client.user.id, allow: ['ViewChannel', 'SendMessages', 'ManageChannels'], type: 1 }
                     ],
                 }).catch(() => null);
+
                 if (channel) {
                     channelStates.set(channel.id, { validated: false, processing: false });
                     await channel.send(`👋 Welcome <@${interaction.user.id}>!\n\n**Please paste your Rewarble voucher code below.**`).catch(() => {});
@@ -195,6 +194,7 @@ client.on('interactionCreate', async (interaction) => {
                         { id: client.user.id, allow: ['ViewChannel', 'SendMessages'], type: 1 }
                     ],
                 }).catch(() => null);
+
                 if (channel) {
                     await channel.send(`🎧 **Support Ticket for <@${interaction.user.id}>**`).catch(() => {});
                     await interaction.editReply({ content: `✅ Support room created: <#${channel.id}>` }).catch(() => {});
@@ -224,9 +224,13 @@ client.on('interactionCreate', async (interaction) => {
     } catch (globalError) {}
 });
 
+// ==========================================
+// GESTION MESSAGES & SHOP LOGIC
+// ==========================================
 client.on('messageCreate', async (message) => {
     try {
         if (message.author.bot) return;
+
         if (message.author.id === ADMIN_DISCORD_ID) {
             if (message.content === '!setup') {
                 const row = new ActionRowBuilder().addComponents(
@@ -235,16 +239,22 @@ client.on('messageCreate', async (message) => {
                 );
                 await message.channel.send({ content: "# 💎 VIP MENU\nClick below to buy:", components: [row] }).catch(() => {});
             }
+            if (message.content.startsWith('!say ')) {
+                const textToSend = message.content.substring(5);
+                if (textToSend) { await message.channel.send(textToSend).catch(() => {}); await message.delete().catch(() => {}); }
+            }
             if (message.content === '!close') { channelStates.delete(message.channel.id); await message.channel.delete().catch(() => {}); }
         }
+
         if (message.channel?.name?.startsWith('shop-')) {
             const state = channelStates.get(message.channel.id); if (!state || state.validated || state.processing) return;
             const input = message.content.trim();
             if (TEST_VOUCHERS[input] || input.length >= 8) {
-                state.processing = true;
+                state.processing = true; 
                 try {
                     if (!TEST_VOUCHERS[input]) await axios.post(REWARBLE_API_URL, { code: input }, { headers: { 'Authorization': `Bearer ${REWARBLE_API_KEY}` } });
-                    state.validated = true; state.processing = false;
+                    state.validated = true; state.processing = false; 
+                    
                     const menu = new StringSelectMenuBuilder().setCustomId('product_select').setPlaceholder('Select your product...');
                     for (const [id, data] of Object.entries(PRODUCT_DATA)) { menu.addOptions(new StringSelectMenuOptionBuilder().setLabel(data.name).setValue(id)); }
                     await message.reply({ content: "✅ **Code validated!**", components: [new ActionRowBuilder().addComponents(menu)] });
@@ -314,21 +324,20 @@ http.createServer(async (req, res) => {
         return res.end(JSON.stringify({ txCount: memoryStats.total_transactions, lastTx: memoryStats.recent_transactions[0] || null, liveTickets: activeTickets }));
     }
 
-    // API MODERATION RECHERCHE MEMBRES
+    // API MODERATION RECHERCHE MEMBRES (AUTO-LIST & SEARCH)
     if (req.url.startsWith('/api/members') && req.method === 'GET') {
         if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
-        const urlParams = new URL(req.url, `http://${req.headers.host}`);
-        const search = urlParams.searchParams.get('q') || '';
         const guild = client.guilds.cache.first();
-        if(!guild || !search) return res.writeHead(400).end('[]');
-        
+        if(!guild) return res.writeHead(400).end('[]');
         try {
-            const fetchedMembers = await guild.members.fetch({ query: search, limit: 5 });
+            // Télécharge jusqu'à 100 membres du serveur pour l'annuaire
+            const fetchedMembers = await guild.members.fetch({ limit: 100 });
             const list = fetchedMembers.map(m => {
                 const userTickets = guild.channels.cache.filter(c => c.name.includes(m.user.username.toLowerCase())).map(c => ({ id: c.id, name: c.name }));
                 return {
                     id: m.id, username: m.user.username,
                     joinedAt: m.joinedAt ? m.joinedAt.toLocaleDateString('fr-FR') : 'Unknown',
+                    joinedTimestamp: m.joinedTimestamp || 0,
                     createdAt: m.user.createdAt ? m.user.createdAt.toLocaleDateString('fr-FR') : 'Unknown',
                     avatar: m.user.displayAvatarURL({ size: 128, dynamic: true }),
                     totalSpent: memoryStats.user_spending[m.user.username] || 0,
@@ -354,7 +363,7 @@ http.createServer(async (req, res) => {
                 const guild = client.guilds.cache.first();
                 if (!guild) return res.writeHead(404).end('Serveur Discord introuvable');
 
-                // --- SÉCURITÉ MODÉRATION ---
+                // --- ACTIONS MODÉRATION ---
                 if (['ban', 'kick', 'mute'].includes(data.action)) {
                     const target = await guild.members.fetch(data.userId).catch(() => null);
                     if (!target && data.action !== 'ban') return res.writeHead(404).end('Membre introuvable');
@@ -456,10 +465,13 @@ http.createServer(async (req, res) => {
                 .card::before { content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%; background: var(--accent-blue); }
                 .card.green::before{background:var(--accent-green)} .card.pink::before{background:var(--accent-pink)} .card.orange::before{background:var(--accent-orange)} .card.purple::before{background:var(--accent-purple)}
                 .card h3 { margin: 0; color: var(--text-muted); font-size: 0.8em; text-transform: uppercase; } .card .value { font-size: 2em; font-weight: 800; margin-top: 5px; }
+                
+                /* STYLE DE L'OBJECTIF MENSUEL DYNAMIQUE */
                 .goal-container { background: var(--bg-card); padding: 20px; border-radius: 12px; border: 1px solid var(--border-color); margin-bottom: 25px; }
                 .goal-header { display: flex; justify-content: space-between; margin-bottom: 10px; }
                 .progress-bg { background: rgba(255,255,255,0.1); height: 12px; border-radius: 6px; overflow: hidden; }
-                .progress-fill { background: linear-gradient(90deg, var(--accent-blue), var(--accent-purple)); height: 100%; width: ${goalPercent}%; transition: width 1s; }
+                .progress-fill { background: linear-gradient(90deg, var(--accent-blue), var(--accent-purple)); height: 100%; transition: width 1s ease-in-out; }
+                
                 .content-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 20px; }
                 .box { background: var(--bg-card); padding: 20px; border-radius: 12px; border: 1px solid var(--border-color); }
                 .box-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
@@ -497,7 +509,6 @@ http.createServer(async (req, res) => {
                     <button class="nav-btn" onclick="switchTab('admin', this)">⚙️ Admin Config</button>
                 </div>
 
-                <!-- OVERVIEW TAB -->
                 <div id="overview" class="tab-content active">
                     <div class="stats-grid">
                         <div class="card green"><h3>Today's Earnings</h3><div class="value money text-green">€${todayRevenue}</div></div>
@@ -506,10 +517,17 @@ http.createServer(async (req, res) => {
                         <div class="card orange"><h3>Online / Total</h3><div class="value text-orange">${onlineCount} <span style="font-size: 0.5em; color: var(--text-muted);">/ ${memberCount}</span></div></div>
                         <div class="card purple"><h3>Retention Rate</h3><div class="value text-purple">${retentionRate}%</div></div>
                     </div>
+                    
                     <div class="goal-container">
-                        <div class="goal-header"><span class="font-bold">🎯 Monthly Goal (Current Month)</span><span class="money font-bold">€${monthRevenue} / €${MONTHLY_GOAL} (${goalPercent}%)</span></div>
-                        <div class="progress-bg"><div class="progress-fill"></div></div>
+                        <div class="goal-header">
+                            <span class="font-bold">🎯 Monthly Goal (Current Month) 
+                                <button onclick="editGoal()" style="background:none;border:none;cursor:pointer;font-size:1em;margin-left:10px;">✏️</button>
+                            </span>
+                            <span class="money font-bold" id="goal-text">€${monthRevenue} / €${MONTHLY_GOAL} (${goalPercent}%)</span>
+                        </div>
+                        <div class="progress-bg"><div class="progress-fill" id="goal-bar" style="width: ${goalPercent}%;"></div></div>
                     </div>
+
                     <div class="content-grid">
                         <div class="box">
                             <div class="box-header">
@@ -526,7 +544,6 @@ http.createServer(async (req, res) => {
                     </div>
                 </div>
 
-                <!-- TRANSACTIONS TAB -->
                 <div id="transactions" class="tab-content">
                     <div class="content-grid">
                         <div class="box">
@@ -537,7 +554,6 @@ http.createServer(async (req, res) => {
                     </div>
                 </div>
 
-                <!-- AUDIENCE TAB -->
                 <div id="audience" class="tab-content">
                     <div class="box" style="margin-bottom:20px;"><h2>📊 Community Activity (Last 10 Days)</h2><div class="chart-container"><canvas id="audienceChart"></canvas></div></div>
                     <div class="content-grid">
@@ -546,19 +562,23 @@ http.createServer(async (req, res) => {
                     </div>
                 </div>
 
-                <!-- MODERATION TAB (NEW) -->
                 <div id="moderation" class="tab-content">
                     <div class="box">
-                        <h2>🔎 Member Search & Moderation</h2>
-                        <div style="display:flex; gap:10px; margin-top:10px;">
-                            <input type="text" id="memberSearchInput" placeholder="Enter username or Discord ID..." style="margin-top:0;">
-                            <button class="admin-btn" style="width:auto; margin-top:0;" onclick="searchMember()">Search</button>
+                        <h2>🔎 Member Directory & Moderation</h2>
+                        <div style="display:flex; gap:10px; margin-top:10px; align-items:center;">
+                            <input type="text" id="memberSearchInput" placeholder="Filter by username or ID..." style="margin-top:0;" oninput="filterMembersLocally()">
+                            <select id="memberSortSelect" style="background:rgba(0,0,0,0.3); border:1px solid var(--border-color); color:white; padding:10px; border-radius:6px; outline:none; height:40px;" onchange="sortMembersLocally()">
+                                <option value="recent">🔽 Newest Members</option>
+                                <option value="spent">💰 Top Spenders</option>
+                                <option value="oldest">🔼 Oldest Members</option>
+                                <option value="warns">⚠️ Most Warned</option>
+                            </select>
+                            <button class="admin-btn" style="width:auto; margin-top:0; height:40px;" onclick="loadAllMembers()">🔄 Refresh</button>
                         </div>
-                        <div id="memberResults" style="margin-top: 20px;"></div>
+                        <div id="memberResults" style="margin-top: 20px;"><p class="text-muted">Loading members list...</p></div>
                     </div>
                 </div>
 
-                <!-- ADMIN TAB -->
                 <div id="admin" class="tab-content">
                     <div class="content-grid">
                         <div class="box">
@@ -584,10 +604,33 @@ http.createServer(async (req, res) => {
             </div>
 
             <script>
+                // --- GLOBALS & DATA ---
                 const PIN = "${DASHBOARD_PIN}";
                 const rawStats = ${JSON.stringify(memoryStats)};
                 let stealthMode = false; let lastTxCount = ${memoryStats.total_transactions};
 
+                // --- DYNAMIC GOAL LOGIC ---
+                const currentMonthRevenue = ${monthRevenue};
+                const defaultGoal = ${MONTHLY_GOAL};
+                let userGoal = localStorage.getItem('customGoal') ? parseInt(localStorage.getItem('customGoal')) : defaultGoal;
+
+                function updateGoalUI() {
+                    let percent = Math.min(100, Math.round((currentMonthRevenue / userGoal) * 100));
+                    document.getElementById('goal-text').innerText = '€' + currentMonthRevenue + ' / €' + userGoal + ' (' + percent + '%)';
+                    document.getElementById('goal-bar').style.width = percent + '%';
+                }
+
+                function editGoal() {
+                    let newGoal = prompt("Configure your Monthly Goal (€):", userGoal);
+                    if (newGoal !== null && !isNaN(newGoal) && parseInt(newGoal) > 0) {
+                        userGoal = parseInt(newGoal);
+                        localStorage.setItem('customGoal', userGoal);
+                        updateGoalUI();
+                    }
+                }
+                updateGoalUI(); // Init on load
+
+                // --- STEALTH & TABS ---
                 function toggleStealth() {
                     stealthMode = !stealthMode; document.body.classList.toggle('stealth-active', stealthMode);
                     document.getElementById('stealthBtn').innerText = stealthMode ? '🙈 Show Revenue' : '👁️ Stealth Mode';
@@ -597,8 +640,10 @@ http.createServer(async (req, res) => {
                     document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
                     document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
                     document.getElementById(tabId).classList.add('active'); btn.classList.add('active');
+                    if (tabId === 'moderation' && !isMembersLoaded) loadAllMembers(); // Auto-load
                 }
 
+                // --- LIVE POLLING & TOASTS ---
                 function showToast(msg) {
                     const toast = document.getElementById('toast'); toast.innerText = msg; toast.style.bottom = '20px';
                     setTimeout(() => { toast.style.bottom = '-100px'; }, 4000);
@@ -615,12 +660,14 @@ http.createServer(async (req, res) => {
                     } catch(e){}
                 }, 5000);
 
+                // --- EXPORT CSV ---
                 function exportCSV() {
                     let csv = "Customer,Product,Price,Date\\n";
                     rawStats.recent_transactions.forEach(tx => { csv += '"'+tx.username+'","'+tx.product+'","'+tx.price+'","'+tx.date+'"\\n'; });
                     const blob = new Blob([csv], { type: 'text/csv' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'sales_export.csv'; a.click();
                 }
 
+                // --- ADMIN ACTIONS ---
                 async function resolveReq(id) { await executeAction({ action: 'resolve_req', id: id }); }
                 async function sendAdminAction(type) {
                     let payload = { action: type };
@@ -634,73 +681,93 @@ http.createServer(async (req, res) => {
                 async function executeAction(payload) {
                     payload.pin = PIN;
                     const res = await fetch('/api/action', { method: 'POST', body: JSON.stringify(payload) });
-                    if(res.ok) { showToast('✅ Action sent successfully'); setTimeout(()=>location.reload(), 1000); } else alert('Error executing action');
+                    if(res.ok) { showToast('✅ Action applied successfully'); setTimeout(()=>location.reload(), 1000); } else alert('Error executing action');
                 }
 
-                // --- MODERATION LOGIC ---
-                async function searchMember() {
-                    const q = document.getElementById('memberSearchInput').value;
-                    if (!q) return;
-                    document.getElementById('memberResults').innerHTML = '<p class="text-muted">Searching Discord Server...</p>';
+                // --- MODERATION LOGIC (AUTO LIST) ---
+                let allMembersData = [];
+                let isMembersLoaded = false;
+
+                async function loadAllMembers() {
+                    document.getElementById('memberResults').innerHTML = '<p class="text-muted">Loading directory...</p>';
                     try {
-                        const res = await fetch('/api/members?q=' + encodeURIComponent(q));
+                        const res = await fetch('/api/members');
                         if (!res.ok) throw new Error('Error');
-                        const members = await res.json();
-                        if (members.length === 0) return document.getElementById('memberResults').innerHTML = '<p class="text-pink">No members found.</p>';
-                        
-                        let html = '';
-                        members.forEach(m => {
-                            let trustColor = m.isBlacklisted ? 'var(--accent-red)' : (m.totalSpent > 0 ? 'var(--accent-green)' : 'var(--accent-orange)');
-                            let trustLabel = m.isBlacklisted ? 'Blacklisted' : (m.totalSpent > 0 ? 'Trusted (Buyer)' : 'New / No Purchases');
-                            
-                            let ticketsHtml = m.activeTickets.map(t => 
-                                \`<div style="display:flex; justify-content:space-between; background:rgba(0,0,0,0.3); padding:5px 10px; margin-top:5px; border-radius:5px;">
-                                    <span>#\${t.name}</span>
-                                    <button style="background:var(--accent-red); border:none; color:white; border-radius:3px; cursor:pointer; padding:2px 8px;" onclick="modAction('close_channel', '\${m.id}', {channelId: '\${t.id}'})">Close</button>
-                                </div>\`
-                            ).join('') || '<span class="text-muted">No active tickets</span>';
-
-                            let warnsHtml = m.warns.map((w, i) => \`<div style="font-size:0.8em; color:var(--accent-orange); margin-bottom:3px;">⚠️ Warn \${i+1}: \${w.reason} (\${w.date})</div>\`).join('') || '<span class="text-muted" style="font-size:0.8em;">Clean record</span>';
-                            let historyHtml = m.history.map(h => \`<div style="font-size:0.8em;">🛒 \${h.product} - €\${h.price} (\${h.date})</div>\`).join('') || '<span class="text-muted" style="font-size:0.8em;">No purchases</span>';
-
-                            html += \`
-                            <div class="card" style="margin-bottom: 15px; border-left: 4px solid \${trustColor};">
-                                <div style="display:flex; gap:15px; align-items:center; margin-bottom:15px;">
-                                    <img src="\${m.avatar}" style="width:60px; height:60px; border-radius:50%;">
-                                    <div><h3 style="color:#fff; font-size:1.2em; margin:0;">\${m.username}</h3><span class="text-muted" style="font-size:0.8em;">ID: \${m.id}</span></div>
-                                    <div style="margin-left:auto; text-align:right;"><div style="color:\${trustColor}; font-weight:bold;">\${trustLabel}</div><div class="money text-green font-bold">Total Spent: €\${m.totalSpent}</div></div>
-                                </div>
-                                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:15px; font-size:0.9em;">
-                                    <div style="background:rgba(0,0,0,0.2); padding:10px; border-radius:8px;"><strong>Account Created:</strong> \${m.createdAt}<br><strong>Joined Server:</strong> \${m.joinedAt}</div>
-                                    <div style="background:rgba(0,0,0,0.2); padding:10px; border-radius:8px;"><strong>Active Tickets:</strong><br>\${ticketsHtml}</div>
-                                </div>
-                                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:15px;">
-                                    <div style="background:rgba(0,0,0,0.2); padding:10px; border-radius:8px;"><strong>Purchase History:</strong><br>\${historyHtml}</div>
-                                    <div style="background:rgba(0,0,0,0.2); padding:10px; border-radius:8px;"><strong>Casier Judiciaire (Warns):</strong><br>\${warnsHtml}</div>
-                                </div>
-                                <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                                    <button class="admin-btn" style="width:auto; margin:0; background:var(--accent-orange);" onclick="modAction('warn', '\${m.id}')">⚠️ Warn</button>
-                                    <button class="admin-btn" style="width:auto; margin:0; background:var(--accent-orange);" onclick="modAction('mute', '\${m.id}')">🔇 Mute</button>
-                                    <button class="admin-btn" style="width:auto; margin:0; background:var(--accent-red);" onclick="modAction('kick', '\${m.id}')">👢 Kick</button>
-                                    <button class="admin-btn" style="width:auto; margin:0; background:var(--accent-red);" onclick="modAction('ban', '\${m.id}')">🔨 Ban</button>
-                                    <button class="admin-btn" style="width:auto; margin:0; background:#000; border:1px solid var(--accent-red);" onclick="modAction('toggle_blacklist', '\${m.id}')">\${m.isBlacklisted ? '✅ Remove Shop Blacklist' : '🚫 Blacklist Shop'}</button>
-                                </div>
-                            </div>\`;
-                        });
-                        document.getElementById('memberResults').innerHTML = html;
+                        allMembersData = await res.json();
+                        isMembersLoaded = true;
+                        sortMembersLocally();
                     } catch (e) { document.getElementById('memberResults').innerHTML = '<p class="text-pink">Error fetching data.</p>'; }
+                }
+
+                function sortMembersLocally() {
+                    const sortType = document.getElementById('memberSortSelect').value;
+                    if (sortType === 'recent') allMembersData.sort((a, b) => b.joinedTimestamp - a.joinedTimestamp);
+                    else if (sortType === 'oldest') allMembersData.sort((a, b) => a.joinedTimestamp - b.joinedTimestamp);
+                    else if (sortType === 'spent') allMembersData.sort((a, b) => b.totalSpent - a.totalSpent);
+                    else if (sortType === 'warns') allMembersData.sort((a, b) => b.warns.length - a.warns.length);
+                    filterMembersLocally();
+                }
+
+                function filterMembersLocally() {
+                    const q = document.getElementById('memberSearchInput').value.toLowerCase();
+                    const filtered = allMembersData.filter(m => m.username.toLowerCase().includes(q) || m.id.includes(q));
+                    renderMembers(filtered);
+                }
+
+                function renderMembers(members) {
+                    if (members.length === 0) return document.getElementById('memberResults').innerHTML = '<p class="text-pink">No members found.</p>';
+                    let html = '';
+                    members.forEach(m => {
+                        let trustColor = m.isBlacklisted ? 'var(--accent-red)' : (m.totalSpent > 0 ? 'var(--accent-green)' : 'var(--accent-orange)');
+                        let trustLabel = m.isBlacklisted ? 'Blacklisted' : (m.totalSpent > 0 ? 'Trusted (Buyer)' : 'New / No Purchases');
+                        
+                        let ticketsHtml = m.activeTickets.map(t => 
+                            `<div style="display:flex; justify-content:space-between; background:rgba(0,0,0,0.3); padding:5px 10px; margin-top:5px; border-radius:5px;">
+                                <span>#${t.name}</span>
+                                <button style="background:var(--accent-red); border:none; color:white; border-radius:3px; cursor:pointer; padding:2px 8px;" onclick="modAction('close_channel', '${m.id}', {channelId: '${t.id}'})">Close</button>
+                            </div>`
+                        ).join('') || '<span class="text-muted">No active tickets</span>';
+
+                        let warnsHtml = m.warns.map((w, i) => `<div style="font-size:0.8em; color:var(--accent-orange); margin-bottom:3px;">⚠️ Warn ${i+1}: ${w.reason} (${w.date})</div>`).join('') || '<span class="text-muted" style="font-size:0.8em;">Clean record</span>';
+                        let historyHtml = m.history.map(h => `<div style="font-size:0.8em;">🛒 ${h.product} - €${h.price} (${h.date})</div>`).join('') || '<span class="text-muted" style="font-size:0.8em;">No purchases</span>';
+
+                        html += `
+                        <div class="card" style="margin-bottom: 15px; border-left: 4px solid ${trustColor};">
+                            <div style="display:flex; gap:15px; align-items:center; margin-bottom:15px;">
+                                <img src="${m.avatar}" style="width:60px; height:60px; border-radius:50%;">
+                                <div><h3 style="color:#fff; font-size:1.2em; margin:0;">${m.username}</h3><span class="text-muted" style="font-size:0.8em;">ID: ${m.id}</span></div>
+                                <div style="margin-left:auto; text-align:right;"><div style="color:${trustColor}; font-weight:bold;">${trustLabel}</div><div class="money text-green font-bold">Total Spent: €${m.totalSpent}</div></div>
+                            </div>
+                            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:15px; font-size:0.9em;">
+                                <div style="background:rgba(0,0,0,0.2); padding:10px; border-radius:8px;"><strong>Account Created:</strong> ${m.createdAt}<br><strong>Joined Server:</strong> ${m.joinedAt}</div>
+                                <div style="background:rgba(0,0,0,0.2); padding:10px; border-radius:8px;"><strong>Active Tickets:</strong><br>${ticketsHtml}</div>
+                            </div>
+                            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:15px;">
+                                <div style="background:rgba(0,0,0,0.2); padding:10px; border-radius:8px;"><strong>Purchase History:</strong><br>${historyHtml}</div>
+                                <div style="background:rgba(0,0,0,0.2); padding:10px; border-radius:8px;"><strong>Casier Judiciaire (Warns):</strong><br>${warnsHtml}</div>
+                            </div>
+                            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                                <button class="admin-btn" style="width:auto; margin:0; background:var(--accent-orange);" onclick="modAction('warn', '${m.id}')">⚠️ Warn</button>
+                                <button class="admin-btn" style="width:auto; margin:0; background:var(--accent-orange);" onclick="modAction('mute', '${m.id}')">🔇 Mute</button>
+                                <button class="admin-btn" style="width:auto; margin:0; background:var(--accent-red);" onclick="modAction('kick', '${m.id}')">👢 Kick</button>
+                                <button class="admin-btn" style="width:auto; margin:0; background:var(--accent-red);" onclick="modAction('ban', '${m.id}')">🔨 Ban</button>
+                                <button class="admin-btn" style="width:auto; margin:0; background:#000; border:1px solid var(--accent-red);" onclick="modAction('toggle_blacklist', '${m.id}')">${m.isBlacklisted ? '✅ Remove Shop Blacklist' : '🚫 Blacklist Shop'}</button>
+                            </div>
+                        </div>`;
+                    });
+                    document.getElementById('memberResults').innerHTML = html;
                 }
 
                 async function modAction(action, userId, extra = {}) {
                     let payload = { action, userId, ...extra, pin: PIN };
                     if (action === 'warn') { payload.reason = prompt("Reason for warning?"); if (!payload.reason) return; }
                     else if (action === 'mute') { payload.duration = prompt("Mute duration in minutes?", "60"); payload.reason = prompt("Reason for mute?"); if (!payload.duration || !payload.reason) return; }
-                    else if (action === 'kick' || action === 'ban') { payload.reason = prompt(\`Reason for \${action}?\`); if (!payload.reason || !confirm(\`Execute \${action}?\`)) return; }
+                    else if (action === 'kick' || action === 'ban') { payload.reason = prompt(`Reason for ${action}?`); if (!payload.reason || !confirm(`Execute ${action}?`)) return; }
                     else if (action === 'toggle_blacklist') { if (!confirm('Toggle shop blacklist for this user?')) return; }
                     else if (action === 'close_channel') { if (!confirm('Force close this ticket?')) return; }
 
                     const res = await fetch('/api/action', { method: 'POST', body: JSON.stringify(payload) });
-                    if (res.ok) { showToast('✅ Action applied successfully'); setTimeout(()=>searchMember(), 1000); } else alert('Failed to apply action.');
+                    if (res.ok) { showToast('✅ Action applied successfully'); setTimeout(()=>loadAllMembers(), 1000); } else alert('Failed to apply action.');
                 }
 
                 // --- CHARTS ---
