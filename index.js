@@ -1,12 +1,20 @@
 const { Client, GatewayIntentBits, Partials, ButtonBuilder, ActionRowBuilder, ButtonStyle, ChannelType, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, EmbedBuilder } = require('discord.js');
 const axios = require('axios');
 const http = require('http');
+const fs = require('fs');
+const path = require('path');
 
 // ==========================================
 // 🛡️ BOUCLIER ANTI-CRASH GLOBAL 🛡️
 // ==========================================
-process.on('unhandledRejection', (reason, p) => { console.log(' [ANTI-CRASH] Unhandled Rejection/Catch', reason); });
-process.on('uncaughtException', (err, origin) => { console.log(' [ANTI-CRASH] Uncaught Exception/Catch', err); });
+process.on('unhandledRejection', (reason, p) => {
+    console.log(' [ANTI-CRASH] Unhandled Rejection/Catch');
+    console.log(reason, p);
+});
+process.on('uncaughtException', (err, origin) => {
+    console.log(' [ANTI-CRASH] Uncaught Exception/Catch');
+    console.log(err, origin);
+});
 
 // ==========================================
 // CONFIGURATION & VERIFICATION DES CLES
@@ -358,6 +366,10 @@ http.createServer(async (req, res) => {
         const totalJoins = memoryStats.total_joins || 1; 
         const conversionRate = ((memoryStats.total_transactions / totalJoins) * 100).toFixed(1);
         
+        // --- CORRECTION EXACTE AJOUTÉE ICI ---
+        const totalHistorique = memberCount !== "N/A" ? (memberCount + (memoryStats.total_leaves || 0)) : 1;
+        const retentionRate = memberCount !== "N/A" ? ((memberCount / totalHistorique) * 100).toFixed(1) : "N/A";
+        
         const todayStr = new Date().toISOString().split('T')[0];
         const todayRevenue = memoryStats.revenue[todayStr] || 0;
         
@@ -648,7 +660,6 @@ http.createServer(async (req, res) => {
                             if (data.txCount > lastTxCount && data.lastTx) {
                                 lastTxCount = data.txCount;
                                 showToast('💰 New Sale! ' + data.lastTx.username + ' bought ' + data.lastTx.product);
-                                // Refresh to get new UI HTML safely after 2 seconds
                                 setTimeout(() => location.reload(), 2000); 
                             }
                         } catch(e){}
