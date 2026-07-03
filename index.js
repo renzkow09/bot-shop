@@ -272,10 +272,10 @@ client.on('messageCreate', async (message) => {
             if (message.content === '!setup') {
                 // LIGNE 1 : Boutons pour ACHETER LES CODES SUR ENEBA
                 const rowBuy = new ActionRowBuilder().addComponents(
-                    new ButtonBuilder().setLabel('💳 Acheter €5').setStyle(ButtonStyle.Link).setURL('https://www.eneba.com/rewarble-rewarble-revolut-5-gbp-voucher-global'),
-                    new ButtonBuilder().setLabel('💳 Acheter €10').setStyle(ButtonStyle.Link).setURL('https://www.eneba.com/rewarble-rewarble-revolut-10-gbp-voucher-global'),
-                    new ButtonBuilder().setLabel('💳 Acheter €15').setStyle(ButtonStyle.Link).setURL('https://www.eneba.com/rewarble-rewarble-revolut-15-gbp-voucher-global'),
-                    new ButtonBuilder().setLabel('💳 Acheter €20').setStyle(ButtonStyle.Link).setURL('https://www.eneba.com/rewarble-rewarble-revolut-20-gbp-voucher-global')
+                    new ButtonBuilder().setLabel('💳 BUY €5').setStyle(ButtonStyle.Link).setURL('https://www.eneba.com/rewarble-rewarble-revolut-5-gbp-voucher-global'),
+                    new ButtonBuilder().setLabel('💳 BUY €10').setStyle(ButtonStyle.Link).setURL('https://www.eneba.com/rewarble-rewarble-revolut-10-gbp-voucher-global'),
+                    new ButtonBuilder().setLabel('💳 BUY €15').setStyle(ButtonStyle.Link).setURL('https://www.eneba.com/rewarble-rewarble-revolut-15-gbp-voucher-global'),
+                    new ButtonBuilder().setLabel('💳 BUY €20').setStyle(ButtonStyle.Link).setURL('https://www.eneba.com/rewarble-rewarble-revolut-20-gbp-voucher-global')
                 );
 
                 // LIGNE 2 : Boutons d'ACTIONS SUR LE BOT
