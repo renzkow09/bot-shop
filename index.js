@@ -324,13 +324,12 @@ http.createServer(async (req, res) => {
         return res.end(JSON.stringify({ txCount: memoryStats.total_transactions, lastTx: memoryStats.recent_transactions[0] || null, liveTickets: activeTickets }));
     }
 
-    // API MODERATION RECHERCHE MEMBRES (AUTO-LIST & SEARCH)
+    // API MODERATION RECHERCHE MEMBRES (AUTO-LIST)
     if (req.url.startsWith('/api/members') && req.method === 'GET') {
         if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         const guild = client.guilds.cache.first();
         if(!guild) return res.writeHead(400).end('[]');
         try {
-            // Télécharge jusqu'à 100 membres du serveur pour l'annuaire
             const fetchedMembers = await guild.members.fetch({ limit: 100 });
             const list = fetchedMembers.map(m => {
                 const userTickets = guild.channels.cache.filter(c => c.name.includes(m.user.username.toLowerCase())).map(c => ({ id: c.id, name: c.name }));
@@ -363,7 +362,7 @@ http.createServer(async (req, res) => {
                 const guild = client.guilds.cache.first();
                 if (!guild) return res.writeHead(404).end('Serveur Discord introuvable');
 
-                // --- ACTIONS MODÉRATION ---
+                // ACTIONS MODÉRATION
                 if (['ban', 'kick', 'mute'].includes(data.action)) {
                     const target = await guild.members.fetch(data.userId).catch(() => null);
                     if (!target && data.action !== 'ban') return res.writeHead(404).end('Membre introuvable');
@@ -429,12 +428,12 @@ http.createServer(async (req, res) => {
         const goalPercent = Math.min(100, Math.round((monthRevenue / MONTHLY_GOAL) * 100));
 
         const sortedSpenders = Object.entries(memoryStats.user_spending).sort((a,b) => b[1] - a[1]).slice(0, 10);
-        const topSpendersHTML = sortedSpenders.length > 0 ? sortedSpenders.map((user, i) => `<tr><td><div class="user-badge" style="background:${i<3?'#FFD700':'var(--accent-blue)'};">${i+1}</div> ${user[0]}</td><td class="text-green font-bold">€${user[1]}</td></tr>`).join('') : `<tr><td colspan="2" class="text-muted text-center">No data</td></tr>`;
+        const topSpendersHTML = sortedSpenders.length > 0 ? sortedSpenders.map((user, i) => '<tr><td><div class="user-badge" style="background:' + (i<3?'#FFD700':'var(--accent-blue)') + ';">' + (i+1) + '</div> ' + user[0] + '</td><td class="text-green font-bold">€' + user[1] + '</td></tr>').join('') : '<tr><td colspan="2" class="text-muted text-center">No data</td></tr>';
 
-        const tableRowsMembers = memoryStats.recent_joins.length > 0 ? memoryStats.recent_joins.map(u => `<tr><td><div class="user-badge">${u.username.charAt(0).toUpperCase()}</div> ${u.username}</td><td class="text-muted">${u.date}</td></tr>`).join('') : `<tr><td colspan="2" class="text-muted text-center">Empty</td></tr>`;
-        const tableRowsLeaves = memoryStats.recent_leaves.length > 0 ? memoryStats.recent_leaves.map(u => `<tr><td><div class="user-badge leave">${u.username.charAt(0).toUpperCase()}</div> ${u.username}</td><td class="text-muted">${u.date}</td></tr>`).join('') : `<tr><td colspan="2" class="text-muted text-center">Empty</td></tr>`;
-        const tableRowsTransactions = memoryStats.recent_transactions.length > 0 ? memoryStats.recent_transactions.map(tx => `<tr><td><span class="highlight-text">${tx.username}</span></td><td>${tx.product}</td><td class="money text-green font-bold">€${tx.price}</td><td class="text-muted">${tx.date}</td></tr>`).join('') : `<tr><td colspan="4" class="text-muted text-center">Empty</td></tr>`;
-        const customReqsHTML = memoryStats.custom_requests.length > 0 ? memoryStats.custom_requests.map(req => `<tr style="opacity: ${req.status==='done'?'0.5':'1'};"><td>${req.username}</td><td><span class="highlight-text">${req.product}</span></td><td>${req.date}</td><td>${req.status==='pending' ? `<button onclick="resolveReq('${req.id}')" style="background:var(--accent-green);border:none;padding:5px 10px;border-radius:5px;cursor:pointer;color:white;">✔ Done</button>` : 'Resolved'}</td></tr>`).join('') : `<tr><td colspan="4" class="text-muted text-center">No pending requests</td></tr>`;
+        const tableRowsMembers = memoryStats.recent_joins.length > 0 ? memoryStats.recent_joins.map(u => '<tr><td><div class="user-badge">' + u.username.charAt(0).toUpperCase() + '</div> ' + u.username + '</td><td class="text-muted">' + u.date + '</td></tr>').join('') : '<tr><td colspan="2" class="text-muted text-center">Empty</td></tr>';
+        const tableRowsLeaves = memoryStats.recent_leaves.length > 0 ? memoryStats.recent_leaves.map(u => '<tr><td><div class="user-badge leave">' + u.username.charAt(0).toUpperCase() + '</div> ' + u.username + '</td><td class="text-muted">' + u.date + '</td></tr>').join('') : '<tr><td colspan="2" class="text-muted text-center">Empty</td></tr>';
+        const tableRowsTransactions = memoryStats.recent_transactions.length > 0 ? memoryStats.recent_transactions.map(tx => '<tr><td><span class="highlight-text">' + tx.username + '</span></td><td>' + tx.product + '</td><td class="money text-green font-bold">€' + tx.price + '</td><td class="text-muted">' + tx.date + '</td></tr>').join('') : '<tr><td colspan="4" class="text-muted text-center">Empty</td></tr>';
+        const customReqsHTML = memoryStats.custom_requests.length > 0 ? memoryStats.custom_requests.map(req => '<tr style="opacity: ' + (req.status==='done'?'0.5':'1') + ';"><td>' + req.username + '</td><td><span class="highlight-text">' + req.product + '</span></td><td>' + req.date + '</td><td>' + (req.status==='pending' ? '<button onclick="resolveReq(\'' + req.id + '\')" style="background:var(--accent-green);border:none;padding:5px 10px;border-radius:5px;cursor:pointer;color:white;">✔ Done</button>' : 'Resolved') + '</td></tr>').join('') : '<tr><td colspan="4" class="text-muted text-center">No pending requests</td></tr>';
 
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         res.end(`
@@ -465,13 +464,10 @@ http.createServer(async (req, res) => {
                 .card::before { content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%; background: var(--accent-blue); }
                 .card.green::before{background:var(--accent-green)} .card.pink::before{background:var(--accent-pink)} .card.orange::before{background:var(--accent-orange)} .card.purple::before{background:var(--accent-purple)}
                 .card h3 { margin: 0; color: var(--text-muted); font-size: 0.8em; text-transform: uppercase; } .card .value { font-size: 2em; font-weight: 800; margin-top: 5px; }
-                
-                /* STYLE DE L'OBJECTIF MENSUEL DYNAMIQUE */
                 .goal-container { background: var(--bg-card); padding: 20px; border-radius: 12px; border: 1px solid var(--border-color); margin-bottom: 25px; }
                 .goal-header { display: flex; justify-content: space-between; margin-bottom: 10px; }
                 .progress-bg { background: rgba(255,255,255,0.1); height: 12px; border-radius: 6px; overflow: hidden; }
                 .progress-fill { background: linear-gradient(90deg, var(--accent-blue), var(--accent-purple)); height: 100%; transition: width 1s ease-in-out; }
-                
                 .content-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 20px; }
                 .box { background: var(--bg-card); padding: 20px; border-radius: 12px; border: 1px solid var(--border-color); }
                 .box-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
@@ -604,12 +600,11 @@ http.createServer(async (req, res) => {
             </div>
 
             <script>
-                // --- GLOBALS & DATA ---
+                // SECURITE: Aucune utilisation de backticks dans ce code pour eviter le crash Node.js
                 const PIN = "${DASHBOARD_PIN}";
                 const rawStats = ${JSON.stringify(memoryStats)};
                 let stealthMode = false; let lastTxCount = ${memoryStats.total_transactions};
 
-                // --- DYNAMIC GOAL LOGIC ---
                 const currentMonthRevenue = ${monthRevenue};
                 const defaultGoal = ${MONTHLY_GOAL};
                 let userGoal = localStorage.getItem('customGoal') ? parseInt(localStorage.getItem('customGoal')) : defaultGoal;
@@ -628,46 +623,45 @@ http.createServer(async (req, res) => {
                         updateGoalUI();
                     }
                 }
-                updateGoalUI(); // Init on load
+                updateGoalUI(); 
 
-                // --- STEALTH & TABS ---
                 function toggleStealth() {
                     stealthMode = !stealthMode; document.body.classList.toggle('stealth-active', stealthMode);
                     document.getElementById('stealthBtn').innerText = stealthMode ? '🙈 Show Revenue' : '👁️ Stealth Mode';
                 }
 
                 function switchTab(tabId, btn) {
-                    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-                    document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
+                    document.querySelectorAll('.tab-content').forEach(function(el) { el.classList.remove('active'); });
+                    document.querySelectorAll('.nav-btn').forEach(function(el) { el.classList.remove('active'); });
                     document.getElementById(tabId).classList.add('active'); btn.classList.add('active');
-                    if (tabId === 'moderation' && !isMembersLoaded) loadAllMembers(); // Auto-load
+                    if (tabId === 'moderation' && !isMembersLoaded) loadAllMembers();
                 }
 
-                // --- LIVE POLLING & TOASTS ---
                 function showToast(msg) {
                     const toast = document.getElementById('toast'); toast.innerText = msg; toast.style.bottom = '20px';
-                    setTimeout(() => { toast.style.bottom = '-100px'; }, 4000);
+                    setTimeout(function() { toast.style.bottom = '-100px'; }, 4000);
                 }
 
-                setInterval(async () => {
+                setInterval(async function() {
                     try {
                         const res = await fetch('/api/live'); const data = await res.json();
                         document.getElementById('live-tickets-count').innerText = data.liveTickets;
                         if (data.txCount > lastTxCount && data.lastTx) {
                             lastTxCount = data.txCount; showToast('💰 New Sale! ' + data.lastTx.username + ' bought ' + data.lastTx.product);
-                            setTimeout(() => location.reload(), 2000); 
+                            setTimeout(function() { location.reload(); }, 2000); 
                         }
                     } catch(e){}
                 }, 5000);
 
-                // --- EXPORT CSV ---
                 function exportCSV() {
-                    let csv = "Customer,Product,Price,Date\\n";
-                    rawStats.recent_transactions.forEach(tx => { csv += '"'+tx.username+'","'+tx.product+'","'+tx.price+'","'+tx.date+'"\\n'; });
-                    const blob = new Blob([csv], { type: 'text/csv' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'sales_export.csv'; a.click();
+                    let csvRows = ["Customer,Product,Price,Date"];
+                    rawStats.recent_transactions.forEach(function(tx) { 
+                        csvRows.push('"' + tx.username + '","' + tx.product + '","' + tx.price + '","' + tx.date + '"'); 
+                    });
+                    const blob = new Blob([csvRows.join("\\n")], { type: 'text/csv' }); 
+                    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'sales_export.csv'; a.click();
                 }
 
-                // --- ADMIN ACTIONS ---
                 async function resolveReq(id) { await executeAction({ action: 'resolve_req', id: id }); }
                 async function sendAdminAction(type) {
                     let payload = { action: type };
@@ -681,10 +675,9 @@ http.createServer(async (req, res) => {
                 async function executeAction(payload) {
                     payload.pin = PIN;
                     const res = await fetch('/api/action', { method: 'POST', body: JSON.stringify(payload) });
-                    if(res.ok) { showToast('✅ Action applied successfully'); setTimeout(()=>location.reload(), 1000); } else alert('Error executing action');
+                    if(res.ok) { showToast('✅ Action applied successfully'); setTimeout(function(){ location.reload(); }, 1000); } else alert('Error executing action');
                 }
 
-                // --- MODERATION LOGIC (AUTO LIST) ---
                 let allMembersData = [];
                 let isMembersLoaded = false;
 
@@ -701,80 +694,89 @@ http.createServer(async (req, res) => {
 
                 function sortMembersLocally() {
                     const sortType = document.getElementById('memberSortSelect').value;
-                    if (sortType === 'recent') allMembersData.sort((a, b) => b.joinedTimestamp - a.joinedTimestamp);
-                    else if (sortType === 'oldest') allMembersData.sort((a, b) => a.joinedTimestamp - b.joinedTimestamp);
-                    else if (sortType === 'spent') allMembersData.sort((a, b) => b.totalSpent - a.totalSpent);
-                    else if (sortType === 'warns') allMembersData.sort((a, b) => b.warns.length - a.warns.length);
+                    if (sortType === 'recent') allMembersData.sort(function(a, b) { return b.joinedTimestamp - a.joinedTimestamp; });
+                    else if (sortType === 'oldest') allMembersData.sort(function(a, b) { return a.joinedTimestamp - b.joinedTimestamp; });
+                    else if (sortType === 'spent') allMembersData.sort(function(a, b) { return b.totalSpent - a.totalSpent; });
+                    else if (sortType === 'warns') allMembersData.sort(function(a, b) { return b.warns.length - a.warns.length; });
                     filterMembersLocally();
                 }
 
                 function filterMembersLocally() {
                     const q = document.getElementById('memberSearchInput').value.toLowerCase();
-                    const filtered = allMembersData.filter(m => m.username.toLowerCase().includes(q) || m.id.includes(q));
+                    const filtered = allMembersData.filter(function(m) { return m.username.toLowerCase().includes(q) || m.id.includes(q); });
                     renderMembers(filtered);
                 }
 
                 function renderMembers(members) {
-                    if (members.length === 0) return document.getElementById('memberResults').innerHTML = '<p class="text-pink">No members found.</p>';
+                    if (members.length === 0) {
+                        document.getElementById('memberResults').innerHTML = '<p class="text-pink">No members found.</p>';
+                        return;
+                    }
                     let html = '';
-                    members.forEach(m => {
+                    members.forEach(function(m) {
                         let trustColor = m.isBlacklisted ? 'var(--accent-red)' : (m.totalSpent > 0 ? 'var(--accent-green)' : 'var(--accent-orange)');
                         let trustLabel = m.isBlacklisted ? 'Blacklisted' : (m.totalSpent > 0 ? 'Trusted (Buyer)' : 'New / No Purchases');
                         
-                        let ticketsHtml = m.activeTickets.map(t => 
-                            `<div style="display:flex; justify-content:space-between; background:rgba(0,0,0,0.3); padding:5px 10px; margin-top:5px; border-radius:5px;">
-                                <span>#${t.name}</span>
-                                <button style="background:var(--accent-red); border:none; color:white; border-radius:3px; cursor:pointer; padding:2px 8px;" onclick="modAction('close_channel', '${m.id}', {channelId: '${t.id}'})">Close</button>
-                            </div>`
-                        ).join('') || '<span class="text-muted">No active tickets</span>';
+                        let ticketsHtml = m.activeTickets.map(function(t) {
+                            return '<div style="display:flex; justify-content:space-between; background:rgba(0,0,0,0.3); padding:5px 10px; margin-top:5px; border-radius:5px;">' +
+                                '<span>#' + t.name + '</span>' +
+                                '<button style="background:var(--accent-red); border:none; color:white; border-radius:3px; cursor:pointer; padding:2px 8px;" onclick="modAction(\\'close_channel\\', \\'' + m.id + '\\', {channelId: \\'' + t.id + '\\'})">Close</button>' +
+                            '</div>';
+                        }).join('') || '<span class="text-muted">No active tickets</span>';
 
-                        let warnsHtml = m.warns.map((w, i) => `<div style="font-size:0.8em; color:var(--accent-orange); margin-bottom:3px;">⚠️ Warn ${i+1}: ${w.reason} (${w.date})</div>`).join('') || '<span class="text-muted" style="font-size:0.8em;">Clean record</span>';
-                        let historyHtml = m.history.map(h => `<div style="font-size:0.8em;">🛒 ${h.product} - €${h.price} (${h.date})</div>`).join('') || '<span class="text-muted" style="font-size:0.8em;">No purchases</span>';
+                        let warnsHtml = m.warns.map(function(w, i) {
+                            return '<div style="font-size:0.8em; color:var(--accent-orange); margin-bottom:3px;">⚠️ Warn ' + (i+1) + ': ' + w.reason + ' (' + w.date + ')</div>';
+                        }).join('') || '<span class="text-muted" style="font-size:0.8em;">Clean record</span>';
+                        
+                        let historyHtml = m.history.map(function(h) {
+                            return '<div style="font-size:0.8em;">🛒 ' + h.product + ' - €' + h.price + ' (' + h.date + ')</div>';
+                        }).join('') || '<span class="text-muted" style="font-size:0.8em;">No purchases</span>';
 
-                        html += `
-                        <div class="card" style="margin-bottom: 15px; border-left: 4px solid ${trustColor};">
-                            <div style="display:flex; gap:15px; align-items:center; margin-bottom:15px;">
-                                <img src="${m.avatar}" style="width:60px; height:60px; border-radius:50%;">
-                                <div><h3 style="color:#fff; font-size:1.2em; margin:0;">${m.username}</h3><span class="text-muted" style="font-size:0.8em;">ID: ${m.id}</span></div>
-                                <div style="margin-left:auto; text-align:right;"><div style="color:${trustColor}; font-weight:bold;">${trustLabel}</div><div class="money text-green font-bold">Total Spent: €${m.totalSpent}</div></div>
-                            </div>
-                            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:15px; font-size:0.9em;">
-                                <div style="background:rgba(0,0,0,0.2); padding:10px; border-radius:8px;"><strong>Account Created:</strong> ${m.createdAt}<br><strong>Joined Server:</strong> ${m.joinedAt}</div>
-                                <div style="background:rgba(0,0,0,0.2); padding:10px; border-radius:8px;"><strong>Active Tickets:</strong><br>${ticketsHtml}</div>
-                            </div>
-                            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:15px;">
-                                <div style="background:rgba(0,0,0,0.2); padding:10px; border-radius:8px;"><strong>Purchase History:</strong><br>${historyHtml}</div>
-                                <div style="background:rgba(0,0,0,0.2); padding:10px; border-radius:8px;"><strong>Casier Judiciaire (Warns):</strong><br>${warnsHtml}</div>
-                            </div>
-                            <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                                <button class="admin-btn" style="width:auto; margin:0; background:var(--accent-orange);" onclick="modAction('warn', '${m.id}')">⚠️ Warn</button>
-                                <button class="admin-btn" style="width:auto; margin:0; background:var(--accent-orange);" onclick="modAction('mute', '${m.id}')">🔇 Mute</button>
-                                <button class="admin-btn" style="width:auto; margin:0; background:var(--accent-red);" onclick="modAction('kick', '${m.id}')">👢 Kick</button>
-                                <button class="admin-btn" style="width:auto; margin:0; background:var(--accent-red);" onclick="modAction('ban', '${m.id}')">🔨 Ban</button>
-                                <button class="admin-btn" style="width:auto; margin:0; background:#000; border:1px solid var(--accent-red);" onclick="modAction('toggle_blacklist', '${m.id}')">${m.isBlacklisted ? '✅ Remove Shop Blacklist' : '🚫 Blacklist Shop'}</button>
-                            </div>
-                        </div>`;
+                        html += '<div class="card" style="margin-bottom: 15px; border-left: 4px solid ' + trustColor + ';">' +
+                            '<div style="display:flex; gap:15px; align-items:center; margin-bottom:15px;">' +
+                                '<img src="' + m.avatar + '" style="width:60px; height:60px; border-radius:50%;">' +
+                                '<div><h3 style="color:#fff; font-size:1.2em; margin:0;">' + m.username + '</h3><span class="text-muted" style="font-size:0.8em;">ID: ' + m.id + '</span></div>' +
+                                '<div style="margin-left:auto; text-align:right;"><div style="color:' + trustColor + '; font-weight:bold;">' + trustLabel + '</div><div class="money text-green font-bold">Total Spent: €' + m.totalSpent + '</div></div>' +
+                            '</div>' +
+                            '<div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:15px; font-size:0.9em;">' +
+                                '<div style="background:rgba(0,0,0,0.2); padding:10px; border-radius:8px;"><strong>Account Created:</strong> ' + m.createdAt + '<br><strong>Joined Server:</strong> ' + m.joinedAt + '</div>' +
+                                '<div style="background:rgba(0,0,0,0.2); padding:10px; border-radius:8px;"><strong>Active Tickets:</strong><br>' + ticketsHtml + '</div>' +
+                            '</div>' +
+                            '<div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:15px;">' +
+                                '<div style="background:rgba(0,0,0,0.2); padding:10px; border-radius:8px;"><strong>Purchase History:</strong><br>' + historyHtml + '</div>' +
+                                '<div style="background:rgba(0,0,0,0.2); padding:10px; border-radius:8px;"><strong>Casier Judiciaire (Warns):</strong><br>' + warnsHtml + '</div>' +
+                            '</div>' +
+                            '<div style="display:flex; gap:10px; flex-wrap:wrap;">' +
+                                '<button class="admin-btn" style="width:auto; margin:0; background:var(--accent-orange);" onclick="modAction(\\'warn\\', \\'' + m.id + '\\')">⚠️ Warn</button>' +
+                                '<button class="admin-btn" style="width:auto; margin:0; background:var(--accent-orange);" onclick="modAction(\\'mute\\', \\'' + m.id + '\\')">🔇 Mute</button>' +
+                                '<button class="admin-btn" style="width:auto; margin:0; background:var(--accent-red);" onclick="modAction(\\'kick\\', \\'' + m.id + '\\')">👢 Kick</button>' +
+                                '<button class="admin-btn" style="width:auto; margin:0; background:var(--accent-red);" onclick="modAction(\\'ban\\', \\'' + m.id + '\\')">🔨 Ban</button>' +
+                                '<button class="admin-btn" style="width:auto; margin:0; background:#000; border:1px solid var(--accent-red);" onclick="modAction(\\'toggle_blacklist\\', \\'' + m.id + '\\')">' + (m.isBlacklisted ? '✅ Remove Shop Blacklist' : '🚫 Blacklist Shop') + '</button>' +
+                            '</div>' +
+                        '</div>';
                     });
                     document.getElementById('memberResults').innerHTML = html;
                 }
 
                 async function modAction(action, userId, extra = {}) {
-                    let payload = { action, userId, ...extra, pin: PIN };
+                    let payload = { action: action, userId: userId, pin: PIN };
+                    if (extra.channelId) payload.channelId = extra.channelId;
+
                     if (action === 'warn') { payload.reason = prompt("Reason for warning?"); if (!payload.reason) return; }
                     else if (action === 'mute') { payload.duration = prompt("Mute duration in minutes?", "60"); payload.reason = prompt("Reason for mute?"); if (!payload.duration || !payload.reason) return; }
-                    else if (action === 'kick' || action === 'ban') { payload.reason = prompt(`Reason for ${action}?`); if (!payload.reason || !confirm(`Execute ${action}?`)) return; }
+                    else if (action === 'kick' || action === 'ban') { payload.reason = prompt('Reason for ' + action + '?'); if (!payload.reason || !confirm('Execute ' + action + '?')) return; }
                     else if (action === 'toggle_blacklist') { if (!confirm('Toggle shop blacklist for this user?')) return; }
                     else if (action === 'close_channel') { if (!confirm('Force close this ticket?')) return; }
 
                     const res = await fetch('/api/action', { method: 'POST', body: JSON.stringify(payload) });
-                    if (res.ok) { showToast('✅ Action applied successfully'); setTimeout(()=>loadAllMembers(), 1000); } else alert('Failed to apply action.');
+                    if (res.ok) { showToast('✅ Action applied successfully'); setTimeout(function() { loadAllMembers(); }, 1000); } else alert('Failed to apply action.');
                 }
 
-                // --- CHARTS ---
                 Chart.defaults.color = '#94a3b8'; Chart.defaults.font.family = "'Inter', sans-serif";
                 let salesChart;
                 window.renderSalesChart = function(days) {
-                    let dates = Object.keys(rawStats.revenue || {}).sort(); let values = dates.map(d => rawStats.revenue[d]);
+                    let dates = Object.keys(rawStats.revenue || {}).sort(); 
+                    let values = dates.map(function(d) { return rawStats.revenue[d]; });
                     if (days > 0 && dates.length > days) { dates = dates.slice(-days); values = values.slice(-days); }
                     const ctxSales = document.getElementById('salesChart').getContext('2d');
                     let grad = ctxSales.createLinearGradient(0,0,0,400); grad.addColorStop(0, 'rgba(56, 189, 248, 0.4)'); grad.addColorStop(1, 'transparent');
@@ -785,17 +787,17 @@ http.createServer(async (req, res) => {
                     });
                 }
                 renderSalesChart(7);
-                window.updateChartFilter = function(days, btn) { document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); renderSalesChart(days); }
+                window.updateChartFilter = function(days, btn) { document.querySelectorAll('.filter-btn').forEach(function(b) { b.classList.remove('active'); }); btn.classList.add('active'); renderSalesChart(days); }
 
                 const prodDataRaw = ${JSON.stringify(PRODUCT_DATA)}; const prodIds = Object.keys(rawStats.product_sales || {});
                 new Chart(document.getElementById('productsChart'), {
-                    type: 'doughnut', data: { labels: prodIds.map(id => prodDataRaw[id]?prodDataRaw[id].name:'Unknown'), datasets: [{ data: Object.values(rawStats.product_sales||{}), backgroundColor: ['#38bdf8', '#a855f7', '#ec4899', '#f97316', '#10b981'], borderColor: '#0b0f19' }] },
+                    type: 'doughnut', data: { labels: prodIds.map(function(id) { return prodDataRaw[id]?prodDataRaw[id].name:'Unknown'; }), datasets: [{ data: Object.values(rawStats.product_sales||{}), backgroundColor: ['#38bdf8', '#a855f7', '#ec4899', '#f97316', '#10b981'], borderColor: '#0b0f19' }] },
                     options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { position: 'right', labels: { color: '#f8fafc' } } } }
                 });
 
                 const audienceDates = Array.from(new Set([...Object.keys(rawStats.joins), ...Object.keys(rawStats.leaves)])).sort().slice(-10);
                 new Chart(document.getElementById('audienceChart'), {
-                    type: 'bar', data: { labels: audienceDates.length ? audienceDates : ['No Data'], datasets: [{ label: 'Joins', data: audienceDates.map(d => rawStats.joins[d]||0), backgroundColor: '#10b981' }, { label: 'Leaves', data: audienceDates.map(d => rawStats.leaves[d]||0), backgroundColor: '#ef4444' }] },
+                    type: 'bar', data: { labels: audienceDates.length ? audienceDates : ['No Data'], datasets: [{ label: 'Joins', data: audienceDates.map(function(d) { return rawStats.joins[d]||0; }), backgroundColor: '#10b981' }, { label: 'Leaves', data: audienceDates.map(function(d) { return rawStats.leaves[d]||0; }), backgroundColor: '#ef4444' }] },
                     options: { responsive: true, maintainAspectRatio: false, scales: { x: { grid: { display: false } }, y: { grid: { color: 'rgba(255,255,255,0.05)'} } } }
                 });
             </script>
