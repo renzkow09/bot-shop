@@ -1,8 +1,6 @@
 const { Client, GatewayIntentBits, Partials, ButtonBuilder, ActionRowBuilder, ButtonStyle, ChannelType, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, EmbedBuilder } = require('discord.js');
 const axios = require('axios');
 const http = require('http');
-const fs = require('fs');
-const path = require('path');
 
 // ==========================================
 // 🛡️ BOUCLIER ANTI-CRASH GLOBAL 🛡️
@@ -32,6 +30,7 @@ const REWARBLE_API_URL = "https://api.rewarble.com/client/1.00/redeem";
 const ADMIN_DISCORD_ID = "1520551977854042114";
 const CATEGORY_CUSTOMER_ID = "1521540733226713249";
 const CATEGORY_SUPPORT_ID = "1521541155005796484";
+const DASHBOARD_PIN = "1206"; // Ton mot de passe
 
 const TEST_VOUCHERS = { "GOYAVE5": 5 };
 
@@ -62,20 +61,36 @@ const PRODUCT_LINKS = {
 };
 
 const channelStates = new Map();
-const STATS_FILE = path.join(__dirname, 'stats.json');
 
 // ==========================================
-// MOTEUR DE STATISTIQUES AVANCE
+// MOTEUR DE STATISTIQUES AVANCÉ (CLOUD UPSTASH)
 // ==========================================
-function logStat(type, value = 1, extraData = null) {
-    let stats = { joins: {}, leaves: {}, revenue: {}, total_revenue: 0, transactions: {}, total_transactions: 0, product_sales: {}, recent_joins: [], total_leaves: 0, recent_transactions: [] };
-    if (fs.existsSync(STATS_FILE)) {
-        try { stats = { ...stats, ...JSON.parse(fs.readFileSync(STATS_FILE, 'utf8')) }; } catch (e) {}
+async function logStat(type, value = 1, extraData = null) {
+    const url = process.env.UPSTASH_REDIS_REST_URL;
+    const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+    
+    if (!url || !token) {
+        console.log("⚠️ Variables Upstash manquantes, cloud désactivé.");
+        return;
     }
+
+    const cleanUrl = url.endsWith('/') ? url.slice(0, -1) : url;
+    let stats = { joins: {}, leaves: {}, revenue: {}, total_revenue: 0, transactions: {}, total_transactions: 0, product_sales: {}, recent_joins: [], recent_leaves: [], total_leaves: 0, recent_transactions: [] };
+    
+    try {
+        const res = await axios.get(`${cleanUrl}/get/bot_stats`, { headers: { Authorization: `Bearer ${token}` } });
+        if (res.data && res.data.result) {
+            stats = { ...stats, ...JSON.parse(res.data.result) };
+        }
+    } catch (e) {
+        console.error("❌ Cloud GET Error :", e.message);
+    }
+
     const today = new Date().toISOString().split('T')[0];
     
     if (!stats[type]) stats[type] = {};
     if (!stats.recent_transactions) stats.recent_transactions = [];
+    if (!stats.recent_leaves) stats.recent_leaves = [];
     
     if (type === 'revenue') {
         stats.revenue[today] = (stats.revenue[today] || 0) + value;
@@ -85,31 +100,34 @@ function logStat(type, value = 1, extraData = null) {
         
         if (extraData && extraData.productId) {
             stats.product_sales[extraData.productId] = (stats.product_sales[extraData.productId] || 0) + 1;
-            
             stats.recent_transactions.unshift({
                 username: extraData.username || "Unknown Client",
                 product: extraData.productName || "Unknown Product",
                 price: value,
                 date: new Date().toLocaleString('fr-FR')
             });
-            if (stats.recent_transactions.length > 10) stats.recent_transactions.pop();
+            if (stats.recent_transactions.length > 20) stats.recent_transactions.pop();
         }
     } else if (type === 'joins') {
         stats.joins[today] = (stats.joins[today] || 0) + value;
         if (extraData && extraData.username) {
             stats.recent_joins.unshift({ username: extraData.username, date: new Date().toLocaleString('fr-FR') });
-            if (stats.recent_joins.length > 6) stats.recent_joins.pop();
+            if (stats.recent_joins.length > 10) stats.recent_joins.pop();
         }
     } else if (type === 'leaves') {
         stats.leaves[today] = (stats.leaves[today] || 0) + value;
         stats.total_leaves = (stats.total_leaves || 0) + 1;
+        if (extraData && extraData.username) {
+            stats.recent_leaves.unshift({ username: extraData.username, date: new Date().toLocaleString('fr-FR') });
+            if (stats.recent_leaves.length > 10) stats.recent_leaves.pop();
+        }
     }
     
     try {
-        fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2));
-    } catch (err) {
-        console.error("Erreur écriture stats:", err);
-    }
+        await axios.post(cleanUrl, ["SET", "bot_stats", JSON.stringify(stats)], { 
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } 
+        });
+    } catch (err) {}
 }
 
 // ==========================================
@@ -199,7 +217,12 @@ client.on('interactionCreate', async (interaction) => {
                         await interaction.user.send({ embeds: [successEmbed] });
                         if (interaction.channel) {
                             await interaction.channel.send(`📬 **Sent to your DMs!**`).catch(() => {});
-                            setTimeout(() => { if (interaction.channel) interaction.channel.delete().catch(() => {}); }, 45000);
+                            setTimeout(() => { 
+                                if (interaction.channel) {
+                                    channelStates.delete(interaction.channel.id); 
+                                    interaction.channel.delete().catch(() => {}); 
+                                }
+                            }, 45000);
                         }
                     } catch (e) {
                         if (interaction.channel) {
@@ -245,6 +268,7 @@ client.on('messageCreate', async (message) => {
             }
 
             if (message.content === '!close') {
+                channelStates.delete(message.channel.id);
                 await message.channel.delete().catch(() => {});
             }
 
@@ -302,7 +326,7 @@ client.on('messageCreate', async (message) => {
 // NOTIFICATIONS D'ARRIVEE ET DEPART (ADMIN)
 // ==========================================
 client.on('guildMemberAdd', async (member) => {
-    logStat('joins', 1, { username: member.user.username });
+    await logStat('joins', 1, { username: member.user.username });
     try {
         const admin = await client.users.fetch(ADMIN_DISCORD_ID).catch(() => null);
         if (!admin) return;
@@ -324,7 +348,7 @@ client.on('guildMemberAdd', async (member) => {
 });
 
 client.on('guildMemberRemove', async (member) => {
-    logStat('leaves');
+    await logStat('leaves', 1, { username: member.user.username });
     try {
         const admin = await client.users.fetch(ADMIN_DISCORD_ID).catch(() => null);
         if (!admin) return;
@@ -346,13 +370,23 @@ client.on('guildMemberRemove', async (member) => {
 });
 
 // ==========================================
-// SERVEUR WEB (DASHBOARD ULTRA PREMIUM + ANIMATIONS)
+// SERVEUR WEB (DASHBOARD ULTRA PREMIUM + CLOUD)
 // ==========================================
 http.createServer(async (req, res) => {
     if (req.url === '/dashboard') {
-        let stats = { joins: {}, leaves: {}, revenue: {}, total_revenue: 0, transactions: {}, total_transactions: 0, product_sales: {}, recent_joins: [], total_leaves: 0, recent_transactions: [] };
-        if (fs.existsSync(STATS_FILE)) { 
-            try { stats = { ...stats, ...JSON.parse(fs.readFileSync(STATS_FILE, 'utf8')) }; } catch(e){} 
+        let stats = { joins: {}, leaves: {}, revenue: {}, total_revenue: 0, transactions: {}, total_transactions: 0, product_sales: {}, recent_joins: [], recent_leaves: [], total_leaves: 0, recent_transactions: [] };
+        
+        const url = process.env.UPSTASH_REDIS_REST_URL;
+        const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+        
+        if (url && token) {
+            try { 
+                const cleanUrl = url.endsWith('/') ? url.slice(0, -1) : url;
+                const cloudRes = await axios.get(`${cleanUrl}/get/bot_stats`, { headers: { Authorization: `Bearer ${token}` } });
+                if (cloudRes.data && cloudRes.data.result) {
+                    stats = { ...stats, ...JSON.parse(cloudRes.data.result) };
+                }
+            } catch(e) { console.error("Cloud Dashboard Error:", e.message); } 
         }
 
         let memberCount = "N/A";
@@ -376,14 +410,21 @@ http.createServer(async (req, res) => {
         const todayStr = new Date().toISOString().split('T')[0];
         const todayRevenue = stats.revenue[todayStr] || 0;
 
-        const tableRowsMembers = stats.recent_joins.length > 0 ? stats.recent_joins.map(user => `
+        const tableRowsMembers = (stats.recent_joins && stats.recent_joins.length > 0) ? stats.recent_joins.map(user => `
             <tr>
                 <td><div class="user-badge">${user.username.charAt(0).toUpperCase()}</div> ${user.username}</td>
                 <td class="text-muted">${user.date}</td>
             </tr>
         `).join('') : `<tr><td colspan="2" class="text-center text-muted">No recent members</td></tr>`;
 
-        const tableRowsTransactions = stats.recent_transactions && stats.recent_transactions.length > 0 ? stats.recent_transactions.map(tx => `
+        const tableRowsLeaves = (stats.recent_leaves && stats.recent_leaves.length > 0) ? stats.recent_leaves.map(user => `
+            <tr>
+                <td><div class="user-badge leave">${user.username.charAt(0).toUpperCase()}</div> ${user.username}</td>
+                <td class="text-muted">${user.date}</td>
+            </tr>
+        `).join('') : `<tr><td colspan="2" class="text-center text-muted">No recent leaves</td></tr>`;
+
+        const tableRowsTransactions = (stats.recent_transactions && stats.recent_transactions.length > 0) ? stats.recent_transactions.map(tx => `
             <tr>
                 <td><span class="highlight-text">${tx.username}</span></td>
                 <td>${tx.product}</td>
@@ -414,12 +455,22 @@ http.createServer(async (req, res) => {
                     --accent-purple: #a855f7;
                     --accent-orange: #f97316;
                     --accent-pink: #ec4899;
+                    --accent-red: #ef4444;
                 }
                 
                 * { box-sizing: border-box; }
-                body { font-family: 'Inter', sans-serif; background-color: var(--bg-main); color: var(--text-main); margin: 0; padding: 20px 20px 60px 20px; background-image: radial-gradient(circle at top right, rgba(56, 189, 248, 0.05), transparent 40%), radial-gradient(circle at bottom left, rgba(168, 85, 247, 0.05), transparent 40%); min-height: 100vh; overflow-x: hidden; }
+                body { font-family: 'Inter', sans-serif; background-color: var(--bg-main); color: var(--text-main); margin: 0; padding: 20px; background-image: radial-gradient(circle at top right, rgba(56, 189, 248, 0.05), transparent 40%), radial-gradient(circle at bottom left, rgba(168, 85, 247, 0.05), transparent 40%); min-height: 100vh; overflow-x: hidden; }
                 
-                .container { max-width: 1250px; margin: 0 auto; }
+                .container { max-width: 1250px; margin: 0 auto; display: none; }
+                
+                /* LOGIN SCREEN */
+                #login-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 80vh; animation: fadeIn 0.5s; }
+                .login-box { background: var(--bg-card); backdrop-filter: blur(12px); padding: 40px; border-radius: 16px; border: 1px solid var(--border-color); text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+                .login-box h2 { margin-top: 0; color: var(--accent-blue); }
+                .pin-input { background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); color: white; padding: 12px; border-radius: 8px; font-size: 1.5em; text-align: center; letter-spacing: 5px; width: 150px; margin: 20px 0; font-family: monospace; outline: none; }
+                .pin-input:focus { border-color: var(--accent-blue); box-shadow: 0 0 10px rgba(56, 189, 248, 0.3); }
+                .login-btn { background: var(--accent-blue); color: white; border: none; padding: 10px 30px; font-size: 1.1em; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+                .login-btn:hover { background: #0284c7; }
                 
                 /* HEADER */
                 .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid var(--border-color); animation: fadeInDown 0.6s ease-out; }
@@ -434,7 +485,7 @@ http.createServer(async (req, res) => {
                 .nav-btn:hover { color: var(--text-main); background: rgba(255, 255, 255, 0.05); }
                 .nav-btn.active { color: #fff; background: var(--accent-blue); box-shadow: 0 4px 15px rgba(56, 189, 248, 0.4); }
 
-                /* ANIMATION POUR LES ONGLETS */
+                /* ANIMATION */
                 .tab-content { display: none; }
                 .tab-content.active { display: block; animation: fadeUp 0.5s ease-out forwards; }
                 @keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
@@ -455,29 +506,47 @@ http.createServer(async (req, res) => {
                 .text-muted { color: var(--text-muted); } .text-center { text-align: center; } .font-bold { font-weight: 600; }
                 
                 /* CHARTS & TABLES GRID */
-                .content-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 25px; margin-bottom: 25px; }
+                .content-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 25px; margin-bottom: 25px; }
                 .box { background: var(--bg-card); backdrop-filter: blur(12px); padding: 25px; border-radius: 16px; border: 1px solid var(--border-color); }
-                .box h2 { color: var(--text-main); font-size: 1.2em; margin-top: 0; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+                .box-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+                .box h2 { color: var(--text-main); font-size: 1.2em; margin: 0; }
                 .chart-container { position: relative; height: 320px; width: 100%; }
                 
+                /* FILTER BUTTONS */
+                .filter-group { display: flex; gap: 5px; background: rgba(0,0,0,0.2); padding: 4px; border-radius: 6px; }
+                .filter-btn { background: transparent; border: none; color: var(--text-muted); font-size: 0.8em; padding: 4px 10px; border-radius: 4px; cursor: pointer; transition: 0.2s; }
+                .filter-btn:hover { color: #fff; }
+                .filter-btn.active { background: var(--accent-blue); color: #fff; }
+
                 /* TABLES */
-                .table-responsive { overflow-x: auto; }
+                .table-responsive { overflow-x: auto; max-height: 400px; }
                 table { width: 100%; border-collapse: separate; border-spacing: 0; }
                 th, td { padding: 15px; text-align: left; border-bottom: 1px solid rgba(255, 255, 255, 0.05); font-size: 0.95em; }
-                th { color: var(--text-muted); text-transform: uppercase; font-size: 0.75em; letter-spacing: 1px; font-weight: 600; padding-top: 0; }
+                th { color: var(--text-muted); text-transform: uppercase; font-size: 0.75em; letter-spacing: 1px; font-weight: 600; padding-top: 0; position: sticky; top: 0; background: var(--bg-card); }
                 tr:last-child td { border-bottom: none; }
                 tr:hover td { background: rgba(255, 255, 255, 0.02); }
                 .user-badge { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; background: var(--accent-blue); color: #fff; font-weight: bold; font-size: 0.8em; margin-right: 10px; }
+                .user-badge.leave { background: var(--accent-red); }
                 .highlight-text { color: #fff; font-weight: 600; }
 
-                /* REFRESH TIMER */
                 .refresh-note { text-align: center; color: var(--text-muted); font-size: 0.8em; margin-top: 40px; }
                 
                 @media (max-width: 900px) { .content-grid { grid-template-columns: 1fr; } .header { flex-direction: column; gap: 15px; text-align: center; } }
             </style>
         </head>
         <body>
-            <div class="container">
+            <div id="login-screen">
+                <div class="login-box">
+                    <h2>🔒 Access Restricted</h2>
+                    <p class="text-muted">Please enter your PIN to access the dashboard.</p>
+                    <input type="password" id="pin-input" class="pin-input" maxlength="4" placeholder="••••">
+                    <br>
+                    <button class="login-btn" onclick="checkPin()">Unlock</button>
+                    <p id="login-error" class="text-pink" style="display:none; margin-top:10px;">Incorrect PIN</p>
+                </div>
+            </div>
+
+            <div class="container" id="dashboard-container">
                 <div class="header">
                     <h1>Nexus Dashboard</h1>
                     <div class="live-status">
@@ -485,14 +554,12 @@ http.createServer(async (req, res) => {
                     </div>
                 </div>
 
-                <!-- NAVIGATION MENUS -->
                 <div class="nav-menu">
                     <button class="nav-btn active" onclick="switchTab('overview', this)">📊 Overview</button>
                     <button class="nav-btn" onclick="switchTab('transactions', this)">💳 Transactions</button>
                     <button class="nav-btn" onclick="switchTab('audience', this)">👥 Audience</button>
                 </div>
 
-                <!-- TAB 1: OVERVIEW -->
                 <div id="overview" class="tab-content active">
                     <div class="stats-grid">
                         <div class="card green"><h3>Today's Earnings</h3><div class="value text-green">€${todayRevenue}</div></div>
@@ -501,9 +568,16 @@ http.createServer(async (req, res) => {
                         <div class="card orange"><h3>Online / Total</h3><div class="value text-orange">${onlineCount} <span style="font-size: 0.5em; color: var(--text-muted);">/ ${memberCount}</span></div></div>
                         <div class="card purple"><h3>Retention Rate</h3><div class="value text-purple">${retentionRate}%</div></div>
                     </div>
-                    <div class="content-grid">
+                    <div class="content-grid" style="grid-template-columns: 2fr 1fr;">
                         <div class="box">
-                            <h2>📈 Revenue Timeline</h2>
+                            <div class="box-header">
+                                <h2>📈 Revenue Timeline</h2>
+                                <div class="filter-group">
+                                    <button class="filter-btn active" onclick="updateChartFilter(7, this)">7D</button>
+                                    <button class="filter-btn" onclick="updateChartFilter(30, this)">30D</button>
+                                    <button class="filter-btn" onclick="updateChartFilter(0, this)">All</button>
+                                </div>
+                            </div>
                             <div class="chart-container"><canvas id="salesChart"></canvas></div>
                         </div>
                         <div class="box">
@@ -513,9 +587,8 @@ http.createServer(async (req, res) => {
                     </div>
                 </div>
 
-                <!-- TAB 2: TRANSACTIONS -->
                 <div id="transactions" class="tab-content">
-                    <div class="box" style="margin-bottom: 25px;">
+                    <div class="box">
                         <h2>🛒 Recent Transactions</h2>
                         <div class="table-responsive">
                             <table>
@@ -526,94 +599,143 @@ http.createServer(async (req, res) => {
                     </div>
                 </div>
 
-                <!-- TAB 3: AUDIENCE -->
                 <div id="audience" class="tab-content">
-                    <div class="box">
-                        <h2>👥 Latest Members</h2>
-                        <div class="table-responsive">
-                            <table>
-                                <thead><tr><th>Username</th><th>Join Date</th></tr></thead>
-                                <tbody>${tableRowsMembers}</tbody>
-                            </table>
+                    <div class="content-grid">
+                        <div class="box">
+                            <h2>📥 Latest Joins</h2>
+                            <div class="table-responsive">
+                                <table>
+                                    <thead><tr><th>Username</th><th>Join Date</th></tr></thead>
+                                    <tbody>${tableRowsMembers}</tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="box">
+                            <h2>📤 Latest Leaves</h2>
+                            <div class="table-responsive">
+                                <table>
+                                    <thead><tr><th>Username</th><th>Leave Date</th></tr></thead>
+                                    <tbody>${tableRowsLeaves}</tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 </div>
                 
-                <div class="refresh-note">
-                    Auto-refreshing in <span id="timer">60</span> seconds...
-                </div>
+                <div class="refresh-note">Auto-refreshing in <span id="timer">60</span> seconds...</div>
             </div>
 
             <script>
-                // Logique pour changer d'onglet
+                // --- SECURITY (PIN LOGIC) ---
+                const PIN = "${DASHBOARD_PIN}";
+                
+                function checkPin() {
+                    const input = document.getElementById('pin-input').value;
+                    if(input === PIN) {
+                        localStorage.setItem('dashboard_auth', 'true');
+                        document.getElementById('login-screen').style.display = 'none';
+                        document.getElementById('dashboard-container').style.display = 'block';
+                    } else {
+                        document.getElementById('login-error').style.display = 'block';
+                        document.getElementById('pin-input').value = '';
+                    }
+                }
+
+                // Check auth on load
+                if(localStorage.getItem('dashboard_auth') === 'true') {
+                    document.getElementById('login-screen').style.display = 'none';
+                    document.getElementById('dashboard-container').style.display = 'block';
+                }
+
+                // Allow Enter key to submit PIN
+                document.getElementById('pin-input').addEventListener('keypress', function (e) {
+                    if (e.key === 'Enter') checkPin();
+                });
+
+                // --- TAB LOGIC ---
                 function switchTab(tabId, btnElement) {
-                    // Cacher tous les contenus
-                    document.querySelectorAll('.tab-content').forEach(el => {
-                        el.classList.remove('active');
-                    });
-                    // Désactiver tous les boutons
-                    document.querySelectorAll('.nav-btn').forEach(el => {
-                        el.classList.remove('active');
-                    });
-                    
-                    // Activer le bon contenu et le bon bouton
+                    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+                    document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
                     document.getElementById(tabId).classList.add('active');
                     btnElement.classList.add('active');
                 }
 
-                // Auto Refresh Logic
+                // --- REFRESH LOGIC ---
                 let timeLeft = 60;
                 setInterval(() => {
-                    timeLeft--;
-                    document.getElementById('timer').innerText = timeLeft;
-                    if (timeLeft <= 0) location.reload();
+                    if(document.getElementById('dashboard-container').style.display === 'block') {
+                        timeLeft--;
+                        document.getElementById('timer').innerText = timeLeft;
+                        if (timeLeft <= 0) location.reload();
+                    }
                 }, 1000);
 
-                // Chart Global Defaults
+                // --- CHART LOGIC ---
                 Chart.defaults.color = '#94a3b8';
                 Chart.defaults.font.family = "'Inter', sans-serif";
                 
                 const statsData = ${JSON.stringify(stats)};
                 const productDataRaw = ${JSON.stringify(PRODUCT_DATA)};
                 
-                // 1. Chart : Revenus
-                const salesDates = Object.keys(statsData.revenue || {});
-                const salesValues = Object.values(statsData.revenue || {});
-                const ctxSales = document.getElementById('salesChart').getContext('2d');
-                let gradientSales = ctxSales.createLinearGradient(0, 0, 0, 400);
-                gradientSales.addColorStop(0, 'rgba(56, 189, 248, 0.4)');
-                gradientSales.addColorStop(1, 'rgba(56, 189, 248, 0.0)');
-
-                new Chart(ctxSales, {
-                    type: 'line',
-                    data: {
-                        labels: salesDates.length ? salesDates : ['No Data'],
-                        datasets: [{ 
-                            label: 'Daily Revenue (€)', 
-                            data: salesValues.length ? salesValues : [0], 
-                            borderColor: '#38bdf8', 
-                            backgroundColor: gradientSales, 
-                            borderWidth: 3,
-                            pointBackgroundColor: '#0b0f19',
-                            pointBorderColor: '#38bdf8',
-                            pointBorderWidth: 2,
-                            pointRadius: 4,
-                            pointHoverRadius: 6,
-                            fill: true, 
-                            tension: 0.4 
-                        }]
-                    },
-                    options: { 
-                        responsive: true, maintainAspectRatio: false, 
-                        plugins: { legend: { display: false }, tooltip: { backgroundColor: 'rgba(15, 23, 42, 0.9)', titleFont: { size: 13 }, bodyFont: { size: 14, weight: 'bold' }, padding: 12, cornerRadius: 8, displayColors: false } }, 
-                        scales: { 
-                            y: { beginAtZero: true, border: { display: false }, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { callback: function(value) { return '€' + value; } } }, 
-                            x: { border: { display: false }, grid: { display: false } } 
-                        } 
+                // Raw Data for Line Chart
+                const allSalesDates = Object.keys(statsData.revenue || {}).sort();
+                const allSalesValues = allSalesDates.map(date => statsData.revenue[date]);
+                
+                let salesChart; // Store chart instance to update it later
+                
+                function renderSalesChart(days) {
+                    let dates = allSalesDates;
+                    let values = allSalesValues;
+                    
+                    // Filter logic
+                    if(days > 0 && dates.length > days) {
+                        dates = dates.slice(-days);
+                        values = values.slice(-days);
                     }
-                });
 
-                // 2. Chart : Top Produits (Doughnut)
+                    const ctxSales = document.getElementById('salesChart').getContext('2d');
+                    let gradientSales = ctxSales.createLinearGradient(0, 0, 0, 400);
+                    gradientSales.addColorStop(0, 'rgba(56, 189, 248, 0.4)');
+                    gradientSales.addColorStop(1, 'rgba(56, 189, 248, 0.0)');
+
+                    if(salesChart) salesChart.destroy(); // Destroy previous chart before creating new one
+
+                    salesChart = new Chart(ctxSales, {
+                        type: 'line',
+                        data: {
+                            labels: dates.length ? dates : ['No Data'],
+                            datasets: [{ 
+                                label: 'Daily Revenue (€)', 
+                                data: values.length ? values : [0], 
+                                borderColor: '#38bdf8', 
+                                backgroundColor: gradientSales, 
+                                borderWidth: 3,
+                                pointBackgroundColor: '#0b0f19', pointBorderColor: '#38bdf8', pointBorderWidth: 2, pointRadius: 4, pointHoverRadius: 6,
+                                fill: true, tension: 0.4 
+                            }]
+                        },
+                        options: { 
+                            responsive: true, maintainAspectRatio: false, 
+                            plugins: { legend: { display: false }, tooltip: { backgroundColor: 'rgba(15, 23, 42, 0.9)', titleFont: { size: 13 }, bodyFont: { size: 14, weight: 'bold' }, padding: 12, cornerRadius: 8, displayColors: false } }, 
+                            scales: { 
+                                y: { beginAtZero: true, border: { display: false }, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { callback: function(value) { return '€' + value; } } }, 
+                                x: { border: { display: false }, grid: { display: false } } 
+                            } 
+                        }
+                    });
+                }
+
+                // Initial render (7 Days default)
+                renderSalesChart(7);
+
+                // Update Chart Filter Function
+                function updateChartFilter(days, btnElement) {
+                    document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+                    btnElement.classList.add('active');
+                    renderSalesChart(days);
+                }
+
+                // Doughnut Chart
                 const productIds = Object.keys(statsData.product_sales || {});
                 const productLabels = productIds.map(id => productDataRaw[id] ? productDataRaw[id].name : 'Unknown');
                 const productValues = Object.values(statsData.product_sales || {});
@@ -625,17 +747,12 @@ http.createServer(async (req, res) => {
                         datasets: [{ 
                             data: productValues.length ? productValues : [1], 
                             backgroundColor: ['#38bdf8', '#a855f7', '#ec4899', '#f97316', '#10b981', '#fbbf24', '#6366f1'], 
-                            borderWidth: 2,
-                            borderColor: '#0b0f19',
-                            hoverOffset: 10
+                            borderWidth: 2, borderColor: '#0b0f19', hoverOffset: 10
                         }]
                     },
                     options: { 
                         responsive: true, maintainAspectRatio: false, cutout: '70%',
-                        plugins: { 
-                            legend: { position: 'bottom', labels: { padding: 20, usePointStyle: true, pointStyle: 'circle', color: '#f8fafc' } }, 
-                            tooltip: { backgroundColor: 'rgba(15, 23, 42, 0.9)', padding: 12, cornerRadius: 8 } 
-                        } 
+                        plugins: { legend: { position: 'bottom', labels: { padding: 20, usePointStyle: true, pointStyle: 'circle', color: '#f8fafc' } }, tooltip: { backgroundColor: 'rgba(15, 23, 42, 0.9)', padding: 12, cornerRadius: 8 } } 
                     }
                 });
             </script>
