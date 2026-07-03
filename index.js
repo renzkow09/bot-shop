@@ -44,7 +44,7 @@ let memoryStats = {
     referrals: {}, settings: { invite_reward_threshold: 10 },
     products: {},
     subscriptions: {},
-    buy_links: {}, // 🔗 NOUVEAU: Base de données des boutons d'achat
+    buy_links: {},
     last_update: Date.now() 
 };
 
@@ -64,7 +64,6 @@ const INITIAL_PRODUCTS = {
     "VIP": { name: "👑 VIP Pass 30 Jours", price: "20", link: "Welcome to VIP!", category: "👑 ABONNEMENT", stock: "∞" }
 };
 
-// 🔗 NOUVEAU: Liens d'achat Eneba par défaut
 const INITIAL_BUY_LINKS = {
     "1": { label: "💳 Buy €5", url: "https://www.eneba.com/rewarble-rewarble-revolut-5-gbp-voucher-global" },
     "2": { label: "💳 Buy €10", url: "https://www.eneba.com/rewarble-rewarble-revolut-10-gbp-voucher-global" },
@@ -90,7 +89,7 @@ async function loadCloudStats() {
             if (!memoryStats.referrals) memoryStats.referrals = {};
             if (!memoryStats.subscriptions) memoryStats.subscriptions = {};
             if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10 };
-            if (!memoryStats.buy_links || Object.keys(memoryStats.buy_links).length === 0) memoryStats.buy_links = INITIAL_BUY_LINKS; // 🔗 Inject defaults
+            if (!memoryStats.buy_links || Object.keys(memoryStats.buy_links).length === 0) memoryStats.buy_links = INITIAL_BUY_LINKS; 
             if (!memoryStats.analytics) memoryStats.analytics = { tickets_opened: 0, hourly_sales: Array(24).fill(0) };
             if (!memoryStats.analytics.hourly_sales) memoryStats.analytics.hourly_sales = Array(24).fill(0);
             if (!memoryStats.products || Object.keys(memoryStats.products).length === 0) memoryStats.products = INITIAL_PRODUCTS;
@@ -112,7 +111,6 @@ async function syncCloud() {
     } catch (err) { console.error("❌ Cloud Sync Error :", err.message); }
 }
 
-// 🧲 RÉTENTION VIP & EXPIRATION
 async function checkSubscriptions() {
     const now = Date.now();
     const guild = client.guilds.cache.first();
@@ -191,8 +189,6 @@ function logStat(type, value = 1, extraData = null) {
 
 // === [ANCHOR: DISCORD_SHOP_EMBED_GENERATOR] ===
 async function sendShopSetup(channel) {
-    
-    // 🔗 GÉNÉRATION DYNAMIQUE DES BOUTONS D'ACHAT
     let buyRows = [];
     let currentComponents = [];
     
@@ -203,13 +199,12 @@ async function sendShopSetup(channel) {
                 buyRows.push(new ActionRowBuilder().addComponents(currentComponents));
                 currentComponents = [];
             }
-        } catch(e) {} // Ignore les URLs invalides pour éviter un crash
+        } catch(e) {}
     }
     if (currentComponents.length > 0) {
         buyRows.push(new ActionRowBuilder().addComponents(currentComponents));
     }
     
-    // Discord max components limit safety (max 5 rows of 5 per message. We reserve 1 for actions)
     buyRows = buyRows.slice(0, 4);
 
     const rowActions = new ActionRowBuilder().addComponents(
@@ -583,7 +578,7 @@ http.createServer(async (req, res) => {
 
     if ((req.url === '/dashboard' || req.url === '/') && !isAuthenticated) {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        return res.end("<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Nexus Login</title><style>body{font-family:'Inter',sans-serif;background:#0b0f19;color:#f8fafc;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;}.login-box{background:rgba(15, 23, 42, 0.6);backdrop-filter:blur(16px);padding:40px;border-radius:16px;border:1px solid rgba(56,189,248,0.2);text-align:center;box-shadow:0 10px 40px rgba(0,0,0,0.5);}input{background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.1);color:white;padding:15px;border-radius:8px;font-size:1.5em;text-align:center;letter-spacing:10px;width:180px;margin:20px 0;outline:none;transition:0.3s;}input:focus{border-color:#38bdf8;box-shadow:0 0 15px rgba(56,189,248,0.3);}button{background:#38bdf8;color:white;border:none;padding:12px 30px;font-size:1.1em;border-radius:8px;cursor:pointer;font-weight:bold;width:100%;transition:0.2s;}button:hover{filter:brightness(1.2);}</style></head><body><div class='login-box'><h2>🔒 Restricted Area</h2><input type='password' id='pin' maxlength='4' placeholder='••••'><br><button onclick='login()'>Unlock Dashboard</button><p id='err' style='color:#ec4899;display:none;margin-top:10px;'>Invalid PIN</p></div><script>async function login(){const res=await fetch('/api/login',{method:'POST',body:JSON.stringify({pin:document.getElementById('pin').value})});if(res.ok)location.reload();else document.getElementById('err').style.display='block';} document.getElementById('pin').addEventListener('keypress', e=>{if(e.key==='Enter')login();});</script></body></html>");
+        return res.end("<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no'><meta name='apple-mobile-web-app-capable' content='yes'><title>Nexus Login</title><style>body{font-family:'Inter',sans-serif;background:#0b0f19;color:#f8fafc;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;}.login-box{background:rgba(15, 23, 42, 0.6);backdrop-filter:blur(16px);padding:40px;border-radius:16px;border:1px solid rgba(56,189,248,0.2);text-align:center;box-shadow:0 10px 40px rgba(0,0,0,0.5);width:90%;max-width:400px;box-sizing:border-box;}input{background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.1);color:white;padding:15px;border-radius:8px;font-size:16px!important;text-align:center;letter-spacing:10px;width:100%;max-width:200px;margin:20px auto;outline:none;transition:0.3s;display:block;}input:focus{border-color:#38bdf8;box-shadow:0 0 15px rgba(56,189,248,0.3);}button{background:#38bdf8;color:white;border:none;padding:12px 30px;font-size:1.1em;border-radius:8px;cursor:pointer;font-weight:bold;width:100%;transition:0.2s;}button:hover{filter:brightness(1.2);}</style></head><body><div class='login-box'><h2>🔒 Restricted Area</h2><input type='password' id='pin' maxlength='4' placeholder='••••'><button onclick='login()'>Unlock Dashboard</button><p id='err' style='color:#ec4899;display:none;margin-top:10px;'>Invalid PIN</p></div><script>async function login(){const res=await fetch('/api/login',{method:'POST',body:JSON.stringify({pin:document.getElementById('pin').value})});if(res.ok)location.reload();else document.getElementById('err').style.display='block';} document.getElementById('pin').addEventListener('keypress', e=>{if(e.key==='Enter')login();});</script></body></html>");
     }
 
     // === [ANCHOR: API_ROUTES_GET] ===
@@ -764,7 +759,6 @@ http.createServer(async (req, res) => {
                         if (msgToReact) await msgToReact.react(data.emoji).catch(()=>{});
                     }
                 }
-                // 🔗 ACTIONS: BUY LINKS
                 else if (data.action === 'add_buy_link') {
                     if (!memoryStats.buy_links) memoryStats.buy_links = {};
                     const newId = (Object.keys(memoryStats.buy_links).length + 1).toString() + Date.now();
@@ -956,7 +950,7 @@ http.createServer(async (req, res) => {
     if (req.url === '/dashboard' || req.url === '/') {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         const dashboardHTML = [
-            "<!DOCTYPE html><html lang='en'><head><meta charset='UTF-8'><title>Nexus Premium Dashboard</title><script src='https://cdn.jsdelivr.net/npm/chart.js'></script><link href='https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap' rel='stylesheet'>",
+            "<!DOCTYPE html><html lang='en'><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no'><meta name='apple-mobile-web-app-capable' content='yes'><meta name='apple-mobile-web-app-status-bar-style' content='black-translucent'><title>Nexus Premium Dashboard</title><script src='https://cdn.jsdelivr.net/npm/chart.js'></script><link href='https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap' rel='stylesheet'>",
             "<!-- [ANCHOR: DASHBOARD_CSS] -->",
             "<style>",
             ":root { --bg-main: #070b14; --bg-card: rgba(15, 23, 42, 0.6); --border-color: rgba(56, 189, 248, 0.15); --text-main: #f8fafc; --text-muted: #94a3b8; --accent-blue: #38bdf8; --accent-green: #10b981; --accent-purple: #a855f7; --accent-orange: #f97316; --accent-pink: #ec4899; --accent-red: #ef4444; }",
@@ -974,6 +968,7 @@ http.createServer(async (req, res) => {
             ".btn-icon { background: var(--bg-card); border: 1px solid var(--border-color); color: white; padding: 8px 15px; border-radius: 8px; cursor: pointer; transition: all 0.3s ease; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);}",
             ".btn-icon:hover { background: rgba(255,255,255,0.1); transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.3); }",
             ".nav-menu { display: flex; gap: 10px; margin-bottom: 30px; background: var(--bg-card); padding: 10px; border-radius: 12px; border: 1px solid var(--border-color); overflow-x: auto; scrollbar-width: none; animation: slideDownMenu 0.5s ease-out forwards; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);}",
+            ".nav-menu::-webkit-scrollbar { display: none; }",
             ".nav-btn { background: transparent; border: none; color: var(--text-muted); font-size: 1em; font-weight: 600; padding: 10px 20px; border-radius: 8px; cursor: pointer; transition: all 0.3s ease; }",
             ".nav-btn:hover { color: #fff; background: rgba(255,255,255,0.05); transform: scale(1.03); }",
             ".nav-btn.active { color: #fff; background: var(--accent-blue); box-shadow: 0 4px 15px rgba(56, 189, 248, 0.4); transform: scale(1.05); }",
@@ -1032,6 +1027,26 @@ http.createServer(async (req, res) => {
             "/* PROGRESS BAR POUR LES ABONNEMENTS */",
             ".progress-bg { width:100%; background:rgba(255,255,255,0.1); border-radius:4px; height:8px; margin-top:5px; overflow:hidden; }",
             ".progress-fill { height:100%; background:var(--accent-purple); }",
+            "/* 📱 RESPONSIVE MOBILE IPHONE */",
+            "@media screen and (max-width: 768px) {",
+            "  body { padding: env(safe-area-inset-top) 10px env(safe-area-inset-bottom) 10px; }",
+            "  .header { flex-direction: column; align-items: center; text-align: center; gap: 15px; }",
+            "  .header h1 { font-size: 1.8em; }",
+            "  .controls { width: 100%; justify-content: center; flex-wrap: wrap; gap: 10px; }",
+            "  .stats-grid { grid-template-columns: 1fr; gap: 10px; }",
+            "  .chat-container { flex-direction: column; height: 80vh; }",
+            "  .ticket-list { flex: 0 0 130px; border-radius: 12px; margin-bottom: 10px; }",
+            "  .chat-window { flex: 1; border-radius: 12px; }",
+            "  .product-grid { grid-template-columns: 1fr; }",
+            "  input, select, textarea { font-size: 16px !important; box-sizing: border-box; }",
+            "  .box { padding: 15px; margin-bottom: 15px; border-radius: 12px; }",
+            "  .chat-input-area { padding: 10px; flex-wrap: wrap; }",
+            "  .chat-input-area input[type='text'] { flex: 1 1 100%; margin: 0 0 10px 0; }",
+            "  .chat-input-area .chat-attachment-wrapper { flex: 0 0 auto; }",
+            "  .chat-input-area button:last-child { flex: 1; }",
+            "  table { display: block; overflow-x: auto; white-space: nowrap; }",
+            "  .modal-content { width: 90%; padding: 20px; box-sizing: border-box; }",
+            "}",
             "</style></head><body>",
             "<!-- [ANCHOR: DASHBOARD_MODALS_TOASTS] -->",
             "<div id='toast' style='position:fixed; bottom:-100px; right:20px; background:var(--accent-green); color:white; padding:15px 25px; border-radius:10px; font-weight:bold; transition:all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55); z-index:1000; box-shadow: 0 5px 20px rgba(0,0,0,0.5);'>🎉 Notification!</div>",
