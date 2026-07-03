@@ -1,18 +1,14 @@
+// === [ANCHOR: IMPORTS_AND_CRASH_HANDLER] ===
 const { Client, GatewayIntentBits, Partials, ButtonBuilder, ActionRowBuilder, ButtonStyle, ChannelType, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, EmbedBuilder } = require('discord.js');
 const axios = require('axios');
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
-// ==========================================
-// 🛡️ BOUCLIER ANTI-CRASH GLOBAL 🛡️
-// ==========================================
 process.on('unhandledRejection', (reason, p) => { console.log(' [ANTI-CRASH] Unhandled Rejection/Catch', reason); });
 process.on('uncaughtException', (err, origin) => { console.log(' [ANTI-CRASH] Uncaught Exception/Catch', err); });
 
-// ==========================================
-// CONFIGURATION & VERIFICATION DES CLES
-// ==========================================
+// === [ANCHOR: CONFIG_AND_CONSTANTS] ===
 const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
 const REWARBLE_API_KEY = process.env.REWARBLE_API_KEY;
 const REVIEW_CHANNEL_ID = "1521625370929922078"; 
@@ -36,9 +32,7 @@ const channelStates = new Map();
 const STATS_FILE = path.join(__dirname, 'stats.json');
 const guildInvites = new Map(); 
 
-// ==========================================
-// 🗄️ MEMORY CACHE & CLOUD SYNC
-// ==========================================
+// === [ANCHOR: MEMORY_CACHE_AND_DB] ===
 let memoryStats = { 
     joins: {}, leaves: {}, revenue: {}, total_revenue: 0, transactions: {}, 
     total_transactions: 0, product_sales: {}, recent_joins: [], recent_leaves: [], 
@@ -64,6 +58,7 @@ const INITIAL_PRODUCTS = {
     "11": { name: "Custom Request", price: "Custom", link: "", category: "💌 PERSONALIZED" }
 };
 
+// === [ANCHOR: CLOUD_SYNC_FUNCTIONS] ===
 async function loadCloudStats() {
     if (fs.existsSync(STATS_FILE)) {
         try { memoryStats = { ...memoryStats, ...JSON.parse(fs.readFileSync(STATS_FILE, 'utf8')) }; } catch (e) {}
@@ -101,6 +96,7 @@ async function syncCloud() {
     } catch (err) { console.error("❌ Cloud Sync Error :", err.message); }
 }
 
+// === [ANCHOR: BOT_STATISTICS_LOGGER] ===
 function logStat(type, value = 1, extraData = null) {
     const today = new Date().toISOString().split('T')[0];
     if (type === 'revenue') {
@@ -144,6 +140,7 @@ function logStat(type, value = 1, extraData = null) {
     syncCloud(); 
 }
 
+// === [ANCHOR: DISCORD_SHOP_EMBED_GENERATOR] ===
 async function sendShopSetup(channel) {
     const rowBuy = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setLabel('💳 Acheter €5').setStyle(ButtonStyle.Link).setURL('https://www.eneba.com/rewarble-rewarble-revolut-5-gbp-voucher-global'),
@@ -183,9 +180,7 @@ async function sendShopSetup(channel) {
     await channel.send({ embeds: [shopEmbed], components: [rowBuy, rowActions] }).catch(() => {});
 }
 
-// ==========================================
-// INITIALISATION DU BOT
-// ==========================================
+// === [ANCHOR: DISCORD_BOT_CLIENT_INIT] ===
 const client = new Client({ 
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildPresences, GatewayIntentBits.GuildInvites],
     partials: [Partials.GuildMember, Partials.User, Partials.Message]
@@ -205,9 +200,7 @@ client.once('ready', () => {
 client.on('inviteCreate', invite => { try { guildInvites.get(invite.guild.id)?.set(invite.code, invite.uses); } catch (e) {} });
 client.on('inviteDelete', invite => { try { guildInvites.get(invite.guild.id)?.delete(invite.code); } catch (e) {} });
 
-// ==========================================
-// GESTION DES INTERACTIONS
-// ==========================================
+// === [ANCHOR: DISCORD_INTERACTION_HANDLER] ===
 client.on('interactionCreate', async (interaction) => {
     try {
         if (interaction.isButton()) {
@@ -313,6 +306,7 @@ client.on('interactionCreate', async (interaction) => {
     } catch (globalError) {}
 });
 
+// === [ANCHOR: DISCORD_MESSAGE_HANDLER] ===
 client.on('messageCreate', async (message) => {
     try {
         if (message.author.bot) return;
@@ -377,6 +371,7 @@ client.on('messageCreate', async (message) => {
     } catch (globalError) {}
 });
 
+// === [ANCHOR: DISCORD_GUILD_MEMBER_EVENTS] ===
 client.on('guildMemberAdd', async (member) => { 
     logStat('joins', 1, { username: member.user.username }); 
     try {
@@ -412,6 +407,7 @@ client.on('guildMemberRemove', async (member) => { logStat('leaves', 1, { userna
 // ==========================================
 // SERVEUR WEB API & DASHBOARD HTML
 // ==========================================
+// === [ANCHOR: HTTP_SERVER_AND_AUTH] ===
 const rateLimits = new Map();
 const bruteForceLocks = new Map();
 
@@ -450,6 +446,7 @@ http.createServer(async (req, res) => {
         return res.end("<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Nexus Login</title><style>body{font-family:'Inter',sans-serif;background:#0b0f19;color:#f8fafc;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;}.login-box{background:rgba(15, 23, 42, 0.6);backdrop-filter:blur(16px);padding:40px;border-radius:16px;border:1px solid rgba(56,189,248,0.2);text-align:center;box-shadow:0 10px 40px rgba(0,0,0,0.5);}input{background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.1);color:white;padding:15px;border-radius:8px;font-size:1.5em;text-align:center;letter-spacing:10px;width:180px;margin:20px 0;outline:none;transition:0.3s;}input:focus{border-color:#38bdf8;box-shadow:0 0 15px rgba(56,189,248,0.3);}button{background:#38bdf8;color:white;border:none;padding:12px 30px;font-size:1.1em;border-radius:8px;cursor:pointer;font-weight:bold;width:100%;transition:0.2s;}button:hover{filter:brightness(1.2);}</style></head><body><div class='login-box'><h2>🔒 Restricted Area</h2><input type='password' id='pin' maxlength='4' placeholder='••••'><br><button onclick='login()'>Unlock Dashboard</button><p id='err' style='color:#ec4899;display:none;margin-top:10px;'>Invalid PIN</p></div><script>async function login(){const res=await fetch('/api/login',{method:'POST',body:JSON.stringify({pin:document.getElementById('pin').value})});if(res.ok)location.reload();else document.getElementById('err').style.display='block';} document.getElementById('pin').addEventListener('keypress', e=>{if(e.key==='Enter')login();});</script></body></html>");
     }
 
+    // === [ANCHOR: API_ROUTES_GET] ===
     if (req.url === '/api/init-data' && req.method === 'GET') {
         if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         let memberCount = "N/A"; let onlineCount = "N/A";
@@ -540,6 +537,7 @@ http.createServer(async (req, res) => {
         return;
     }
 
+    // === [ANCHOR: API_ROUTES_POST_ACTIONS] ===
     if (req.url === '/api/action' && req.method === 'POST') {
         if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         let body = ''; req.on('data', chunk => body += chunk.toString());
@@ -661,10 +659,13 @@ http.createServer(async (req, res) => {
         }); return;
     }
 
+    // === [ANCHOR: DASHBOARD_HTML_INJECTION] ===
     if (req.url === '/dashboard' || req.url === '/') {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         const dashboardHTML = [
-            "<!DOCTYPE html><html lang='en'><head><meta charset='UTF-8'><title>Nexus Premium Dashboard</title><script src='https://cdn.jsdelivr.net/npm/chart.js'></script><link href='https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap' rel='stylesheet'><style>",
+            "<!DOCTYPE html><html lang='en'><head><meta charset='UTF-8'><title>Nexus Premium Dashboard</title><script src='https://cdn.jsdelivr.net/npm/chart.js'></script><link href='https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap' rel='stylesheet'>",
+            "<!-- [ANCHOR: DASHBOARD_CSS] -->",
+            "<style>",
             ":root { --bg-main: #070b14; --bg-card: rgba(15, 23, 42, 0.6); --border-color: rgba(56, 189, 248, 0.15); --text-main: #f8fafc; --text-muted: #94a3b8; --accent-blue: #38bdf8; --accent-green: #10b981; --accent-purple: #a855f7; --accent-orange: #f97316; --accent-pink: #ec4899; --accent-red: #ef4444; }",
             "* { box-sizing: border-box; } body { font-family: 'Inter', sans-serif; background-color: var(--bg-main); background-image: radial-gradient(circle at 15% 50%, rgba(56, 189, 248, 0.05), transparent 25%), radial-gradient(circle at 85% 30%, rgba(255, 20, 147, 0.05), transparent 25%); color: var(--text-main); margin: 0; padding: 20px; min-height: 100vh; overflow-x: hidden; }",
             "@keyframes fadeInSmooth { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }",
@@ -706,11 +707,14 @@ http.createServer(async (req, res) => {
             ".modal-content { background:var(--bg-main); padding:35px; border-radius:16px; border:1px solid var(--accent-purple); text-align:center; max-width:400px; box-shadow: 0 10px 50px rgba(168,85,247,0.3); animation: zoomIn 0.3s forwards; }",
             "@keyframes zoomIn { from { transform: scale(0.9); opacity:0; } to { transform: scale(1); opacity:1; } }",
             "</style></head><body>",
+            "<!-- [ANCHOR: DASHBOARD_MODALS_TOASTS] -->",
             "<div id='toast' style='position:fixed; bottom:-100px; right:20px; background:var(--accent-green); color:white; padding:15px 25px; border-radius:10px; font-weight:bold; transition:all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55); z-index:1000; box-shadow: 0 5px 20px rgba(0,0,0,0.5);'>🎉 Notification!</div>",
             "<div id='loading-screen' style='position:fixed; top:0; left:0; width:100%; height:100%; background:var(--bg-main); z-index:9999; display:flex; justify-content:center; align-items:center; flex-direction:column; transition: opacity 0.5s ease;'><div style='width: 50px; height: 50px; border: 4px solid rgba(56, 189, 248, 0.2); border-top: 4px solid var(--accent-blue); border-radius: 50%; animation: spin 1s linear infinite;'></div><h2 style='color:var(--accent-blue); margin-top:20px; font-weight:300;'>Loading Workspace...</h2></div>",
             "<div class='modal' id='syncModal'><div class='modal-content'><h2>📦 Catalog Saved!</h2><p class='text-muted' style='margin-bottom:20px;'>Apply these changes to your Discord shop channel right now?</p><button class='admin-btn' style='background:var(--accent-purple); width:100%; margin-bottom:10px;' onclick='window.triggerShopRefresh(); document.getElementById(\"syncModal\").style.display=\"none\";'>🔄 Setup & Clear Old Menu</button><button class='admin-btn' style='background:transparent; border:1px solid rgba(255,255,255,0.2); width:100%; color:var(--text-muted);' onclick='document.getElementById(\"syncModal\").style.display=\"none\";'>Skip for now</button></div></div>",
+            "<!-- [ANCHOR: DASHBOARD_NAVBAR] -->",
             "<div class='container' id='dashboard-container' style='display:none;'><div class='header'><h1>Nexus Dashboard</h1><div class='controls'><button class='btn-icon' onclick='window.toggleStealth()' id='stealthBtn'>👁️ Stealth</button><div class='live-status btn-icon' style='background:var(--accent-blue); border:none; font-weight:bold;'><span id='live-tickets-count'>0</span> Live Tickets</div></div></div>",
             "<div class='nav-menu'><button class='nav-btn active' onclick='window.switchTab(\"overview\", this)'>📊 Overview</button><button class='nav-btn' onclick='window.switchTab(\"analytics\", this)'>📈 Analytiques</button><button class='nav-btn' onclick='window.switchTab(\"transactions\", this)'>💳 Transactions</button><button class='nav-btn' onclick='window.switchTab(\"products\", this)'>📦 Products</button><button class='nav-btn' onclick='window.switchTab(\"audience\", this)'>👥 Audience</button><button class='nav-btn' onclick='window.switchTab(\"referrals\", this)'>🔗 Referrals</button><button class='nav-btn' onclick='window.switchTab(\"moderation\", this)'>🛡️ Moderation</button><button class='nav-btn' onclick='window.switchTab(\"monitoring\", this)'>📡 Monitoring</button><button class='nav-btn' onclick='window.switchTab(\"admin\", this)'>⚙️ Admin Config</button></div>",
+            "<!-- [ANCHOR: DASHBOARD_TABS_CONTENT] -->",
             "<div id='overview' class='tab-content active'><div class='stats-grid'><div class='card green'><h3>Today's Earnings</h3><div class='value money text-green' id='ui-today-rev'>€0</div></div><div class='card blue'><h3>Total Earnings</h3><div class='value money text-blue' id='ui-total-rev'>€0</div></div><div class='card pink'><h3>Conversion Rate</h3><div class='value text-pink' id='ui-conv-rate'>0%</div></div><div class='card orange'><h3>Online / Total</h3><div class='value text-orange' id='ui-online-total'>0</div></div><div class='card purple'><h3>Retention Rate</h3><div class='value text-purple' id='ui-retention'>0%</div></div></div><div class='stats-grid'><div class='card purple'><h3>Tickets Opened</h3><div class='value' id='ui-tickets-opened'>0</div></div><div class='card red'><h3>Drop-off Rate</h3><div class='value text-red' id='ui-dropoff'>0%</div></div><div class='card orange'><h3>Peak Sales Hour</h3><div class='value' id='ui-peak-hour'>N/A</div></div></div><div class='box'><div style='display:flex; justify-content:space-between;'><h2>📈 Revenue Timeline</h2><div class='filter-group'><button class='admin-btn' style='margin:0; padding:5px 10px;' onclick='window.updateSalesChart(7)'>7D</button><button class='admin-btn' style='margin:0; padding:5px 10px; background:rgba(0,0,0,0.5);' onclick='window.updateSalesChart(30)'>30D</button></div></div><div style='height:250px; margin-top:15px;'><canvas id='salesChart'></canvas></div></div></div>",
             "<div id='analytics' class='tab-content'><div class='box'><h2>🕒 Heures d\\'Affluence (Ventes par Heure)</h2><div style='height:250px; margin-top:15px;'><canvas id='hourlyChart'></canvas></div></div><div style='display:grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap:20px;'><div class='box'><h2>🏆 Top Produits Vendus</h2><div style='height:300px; margin-top:15px;'><canvas id='topProductsBarChart'></canvas></div></div><div class='box'><h2>🏷️ Revenus par Catégorie</h2><div style='height:300px; margin-top:15px;'><canvas id='categoryRevenueChart'></canvas></div></div></div></div>",
             "<div id='transactions' class='tab-content'><div class='box'><h2>🛒 Recent Transactions</h2><div style='overflow-x:auto;'><table><thead><tr><th>Customer</th><th>Product</th><th>Price</th><th>Date</th></tr></thead><tbody id='target-tx'></tbody></table></div></div></div>",
@@ -720,7 +724,9 @@ http.createServer(async (req, res) => {
             "<div id='moderation' class='tab-content'><div class='box'><h2>🔎 Member Directory</h2><p class='text-muted'>Search and manage users (Mute, Ban, Warn, Blacklist).</p><div style='display:flex; flex-wrap:wrap; gap:10px; margin-top:10px; align-items:center;'><input type='text' id='memberSearchInput' placeholder='Filter by username or ID...' style='margin-top:0; flex:1; min-width:200px;' oninput='window.sortMembersLocally()'><select id='memberStatusSelect' style='margin-top:0; width:auto;' onchange='window.sortMembersLocally()'><option value='all'>🌍 All Status</option><option value='online'>🟢 Online Only</option></select><select id='memberSortSelect' style='margin-top:0; width:auto;' onchange='window.sortMembersLocally()'><option value='recent'>🔽 Newest (Join)</option><option value='oldest'>🔼 Oldest (Join)</option><option value='spent_desc'>💰 Top Spenders</option><option value='spent_asc'>💸 Least Spenders</option><option value='warns'>⚠️ Most Warns</option></select><button class='admin-btn' style='margin-top:0; height:42px;' onclick='window.loadAllMembers()'>🔄 Load Database</button></div><div id='memberResults' style='margin-top:20px;'></div></div></div>",
             "<div id='monitoring' class='tab-content'><div class='box'><h2>📡 System Diagnostics & Latency</h2><p class='text-muted'>Vérifiez l'état des API externes et testez la vitesse de communication entre le Dashboard et le serveur Discord.</p><button class='admin-btn' onclick='window.runDiagnostics()'>🔄 Lancer le diagnostic API</button><div class='stats-grid' style='margin-top:20px;'><div class='card' id='card-upstash'><h3>Upstash Database</h3><div class='value' id='ui-upstash-status' style='font-size:1.5em;'>⚪ En attente</div><p class='text-muted' id='ui-upstash-ping'>Latence: -- ms</p></div><div class='card' id='card-rewarble'><h3>Rewarble API</h3><div class='value' id='ui-rewarble-status' style='font-size:1.5em;'>⚪ En attente</div><p class='text-muted' id='ui-rewarble-ping'>Latence: -- ms</p></div><div class='card' id='card-discord'><h3>Discord WebSocket</h3><div class='value text-blue' id='ui-discord-ws' style='font-size:1.5em;'>-- ms</div><p class='text-muted'>Ping passerelle globale</p></div></div><div style='margin-top:30px; background:rgba(0,0,0,0.3); padding:20px; border-radius:16px; border:1px solid var(--border-color);'><h3>⚡ Test de Réactivité Dashboard ➔ Discord</h3><p class='text-muted' style='font-size:0.9em;'>Calcule le temps chronométré exact entre votre clic ici, le traitement par le serveur, la création d'un message fantôme sur Discord, sa suppression et l'affichage final sur cet écran.</p><div style='display:flex; align-items:center; gap:20px; margin-top:15px;'><button class='admin-btn' style='margin:0; background:var(--accent-orange);' onclick='window.testActionLatency()'>⚡ Tester la vitesse d'action</button><div id='latency-result' style='font-size:1.5em; font-weight:bold; color:var(--text-muted);'>-- ms</div></div></div></div></div>",
             "<div id='admin' class='tab-content'><div class='box'><h2>⚡ 1-Click Shop Setup</h2><p class='text-muted'>Clear the old menu and instantly post the new aesthetic setup in your Discord shop channel.</p><button class='admin-btn' style='background:var(--accent-purple); width:100%; padding:15px;' onclick='window.triggerShopRefresh()'>🔄 Setup and clear old menu</button></div><div class='box'><h2>🎟️ Promo Codes</h2><div style='display:flex; gap:10px; flex-wrap:wrap;'><input type='text' id='promoName' placeholder='CODE' style='flex:1; min-width:150px;'><input type='number' id='promoDiscount' placeholder='% Off' style='width:100px;'><input type='number' id='promoLimit' placeholder='Uses' style='width:100px;'><button class='admin-btn' style='margin:0;' onclick='window.createPromo()'>➕ Create</button></div><div style='overflow-x:auto; margin-top:20px;'><table><thead><tr><th>Code</th><th>Discount</th><th>Usage</th><th>Action</th></tr></thead><tbody id='target-promos'></tbody></table></div></div><div class='box'><h2>🌟 Post Customer Review</h2><div style='display:flex; gap:10px; margin-bottom:10px;'><input type='text' id='rev-author' placeholder='Author Name' style='flex:1;'><select id='rev-rating' style='flex:1;'><option value='5'>5/5 ⭐ - Excellent</option><option value='4'>4/5 ⭐ - Very Good</option><option value='3'>3/5 ⭐ - Good</option><option value='2'>2/5 ⭐ - Fair</option><option value='1'>1/5 ⭐ - Poor</option></select></div><textarea id='rev-msg' placeholder='Type the review here...' style='margin-bottom:10px; min-height:80px;'></textarea><button class='admin-btn' style='background:var(--accent-green); width:100%;' onclick='window.sendReview()'>📤 Publish Review to Discord</button></div></div>",
-            "</div><script>",
+            "</div>",
+            "<!-- [ANCHOR: DASHBOARD_JS_LOGIC] -->",
+            "<script>",
             "let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, userGoal=500, salesChart; let allMembersData = []; let isMembersLoaded = false;",
             "async function initDashboard(){ try{ const res=await fetch('/api/init-data'); if(!res.ok)throw new Error('Err'); const data=await res.json(); rawStats=data.memoryStats; PRODUCT_DATA=data.PRODUCT_DATA; currentMonthRevenue=data.monthRevenue; PIN=data.PIN; lastTxCount=rawStats.total_transactions||0; document.getElementById('ui-today-rev').innerText='€'+data.todayRevenue; document.getElementById('ui-total-rev').innerText='€'+(rawStats.total_revenue||0); document.getElementById('ui-conv-rate').innerText=data.conversionRate+'%'; document.getElementById('ui-online-total').innerHTML=data.onlineCount+\" <span style='font-size:0.5em;color:var(--text-muted);'>/ \"+data.memberCount+\"</span>\"; document.getElementById('ui-retention').innerText=data.retentionRate+'%'; document.getElementById('ui-tickets-opened').innerText=data.ticketsOpened; document.getElementById('ui-dropoff').innerText=data.dropOffRate+'%'; document.getElementById('ui-peak-hour').innerText=data.peakHourStr; buildStaticTables(); renderAnalyticsCharts(); setTimeout(()=>{ document.getElementById('loading-screen').style.opacity='0'; setTimeout(()=>{ document.getElementById('loading-screen').style.display='none'; document.getElementById('dashboard-container').style.display='block'; }, 500); }, 500); }catch(e){ alert('API Error'); } }",
             "function escapeHTML(str){ return str ? String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') : ''; }",
@@ -742,6 +748,7 @@ http.createServer(async (req, res) => {
             "window.runDiagnostics = async function() { document.getElementById('ui-upstash-status').innerText = '⏳ Check...'; document.getElementById('ui-upstash-status').className = 'value text-muted'; document.getElementById('ui-rewarble-status').innerText = '⏳ Check...'; document.getElementById('ui-rewarble-status').className = 'value text-muted'; document.getElementById('ui-discord-ws').innerText = '-- ms'; try { const res = await fetch('/api/monitoring'); const data = await res.json(); const upstashCard = document.getElementById('card-upstash'); const rewarbleCard = document.getElementById('card-rewarble'); if (data.upstash.status === 'online') { document.getElementById('ui-upstash-status').innerHTML = '🟢 Connecté'; document.getElementById('ui-upstash-status').className = 'value text-green'; upstashCard.style.borderLeft = '4px solid var(--accent-green)'; } else { document.getElementById('ui-upstash-status').innerHTML = '🔴 Hors Ligne'; document.getElementById('ui-upstash-status').className = 'value text-red'; upstashCard.style.borderLeft = '4px solid var(--accent-red)'; } document.getElementById('ui-upstash-ping').innerText = `Latence: ${data.upstash.latency} ms`; if (data.rewarble.status === 'online') { document.getElementById('ui-rewarble-status').innerHTML = '🟢 Connecté'; document.getElementById('ui-rewarble-status').className = 'value text-green'; rewarbleCard.style.borderLeft = '4px solid var(--accent-green)'; } else { document.getElementById('ui-rewarble-status').innerHTML = '🔴 Erreur/Hors Ligne'; document.getElementById('ui-rewarble-status').className = 'value text-red'; rewarbleCard.style.borderLeft = '4px solid var(--accent-red)'; } document.getElementById('ui-rewarble-ping').innerText = `Latence: ${data.rewarble.latency} ms`; document.getElementById('ui-discord-ws').innerText = `${data.discord.ws_ping} ms`; } catch(e) { showToast('❌ Échec du diagnostic'); } };",
             "window.testActionLatency = async function() { const resultDiv = document.getElementById('latency-result'); resultDiv.innerText = 'Test en cours...'; resultDiv.style.color = 'var(--text-muted)'; const startTime = Date.now(); try { const res = await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'ping_test', pin: PIN }) }); if (res.ok) { const totalTime = Date.now() - startTime; resultDiv.innerText = `${totalTime} ms`; if (totalTime < 500) resultDiv.style.color = 'var(--accent-green)'; else if (totalTime < 1500) resultDiv.style.color = 'var(--accent-orange)'; else resultDiv.style.color = 'var(--accent-red)'; } else { resultDiv.innerText = 'Erreur HTTP'; resultDiv.style.color = 'var(--accent-red)'; } } catch(e) { resultDiv.innerText = 'Erreur Réseau'; resultDiv.style.color = 'var(--accent-red)'; } };",
             "Chart.defaults.color = '#94a3b8'; Chart.defaults.font.family = 'Inter, sans-serif';",
+            "// [ANCHOR: DASHBOARD_CHARTS_LOGIC]",
             "window.renderSalesChart = function(days) { let dates = Object.keys(rawStats.revenue || {}).sort(); let values = dates.map(d => rawStats.revenue[d]); if (days > 0 && dates.length > days) { dates = dates.slice(-days); values = values.slice(-days); } const ctxSales = document.getElementById('salesChart').getContext('2d'); let grad = ctxSales.createLinearGradient(0,0,0,400); grad.addColorStop(0, 'rgba(56, 189, 248, 0.4)'); grad.addColorStop(1, 'transparent'); if(salesChart) salesChart.destroy(); salesChart = new Chart(ctxSales, { type: 'line', data: { labels: dates.length?dates:['No Data'], datasets: [{ data: values.length?values:[0], borderColor: '#38bdf8', backgroundColor: grad, fill: true, tension: 0.4 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { grid: { color: 'rgba(255,255,255,0.05)'} } } } }); };",
             "window.updateSalesChart = function(days) { window.renderSalesChart(days); };",
             "function renderAnalyticsCharts() { ",
