@@ -76,7 +76,6 @@ async function loadCloudStats() {
         if (res.data && res.data.result) {
             memoryStats = { ...memoryStats, ...JSON.parse(res.data.result) };
             
-            // Patch de sécurité si d'anciennes données sont chargées sans les nouvelles structures
             if (!memoryStats.promo_codes) memoryStats.promo_codes = {};
             if (!memoryStats.analytics) memoryStats.analytics = { tickets_opened: 0, hourly_sales: Array(24).fill(0) };
             if (!memoryStats.analytics.hourly_sales) memoryStats.analytics.hourly_sales = Array(24).fill(0);
@@ -108,7 +107,6 @@ function logStat(type, value = 1, extraData = null) {
         memoryStats.transactions[today] = (memoryStats.transactions[today] || 0) + 1;
         memoryStats.total_transactions += 1;
         
-        // Track Peak Hours
         if (!memoryStats.analytics) memoryStats.analytics = { tickets_opened: 0, hourly_sales: Array(24).fill(0) };
         if (!memoryStats.analytics.hourly_sales) memoryStats.analytics.hourly_sales = Array(24).fill(0);
         const currentHour = new Date().getHours();
@@ -181,7 +179,6 @@ client.on('interactionCreate', async (interaction) => {
             }
             
             if (interaction.customId === 'open_shop_channel') {
-                // Tracking Drop-off Rate (Tickets Opened)
                 if (!memoryStats.analytics) memoryStats.analytics = { tickets_opened: 0, hourly_sales: Array(24).fill(0) };
                 memoryStats.analytics.tickets_opened = (memoryStats.analytics.tickets_opened || 0) + 1;
                 syncCloud();
@@ -238,7 +235,6 @@ client.on('interactionCreate', async (interaction) => {
             } else if (priceMatch) {
                 let finalPrice = parseInt(priceMatch[0]);
                 
-                // Application de la réduction si code promo utilisé
                 if (promo) {
                     finalPrice = Math.max(0, finalPrice - (finalPrice * promo.discount / 100));
                     if (memoryStats.promo_codes && memoryStats.promo_codes[promo.name]) {
@@ -282,12 +278,11 @@ client.on('messageCreate', async (message) => {
 
         if (message.channel?.name?.startsWith('shop-')) {
             const state = channelStates.get(message.channel.id); if (!state || state.validated || state.processing) return;
-            const input = message.content.trim().toUpperCase(); // Sécurité Majuscules & Espaces
+            const input = message.content.trim().toUpperCase();
 
             state.processing = true; 
             let promoApplied = null;
 
-            // Vérification si c'est un Promo Code Custom
             if (memoryStats.promo_codes && memoryStats.promo_codes[input]) {
                 const promo = memoryStats.promo_codes[input];
                 if (promo.used < promo.limit) {
@@ -300,14 +295,13 @@ client.on('messageCreate', async (message) => {
 
             if (promoApplied || TEST_VOUCHERS[input] || input.length >= 8) {
                 try {
-                    // Si ce n'est pas un code promo ou TEST, on interroge Rewarble
                     if (!promoApplied && !TEST_VOUCHERS[input]) {
                         await axios.post(REWARBLE_API_URL, { code: input }, { headers: { 'Authorization': `Bearer ${REWARBLE_API_KEY}` } });
                     }
                     
                     state.validated = true; 
                     state.processing = false; 
-                    state.promo = promoApplied; // Sauvegarde la promo active pour le paiement
+                    state.promo = promoApplied; 
                     
                     const menu = new StringSelectMenuBuilder().setCustomId('product_select').setPlaceholder('Select your product...');
                     for (const [id, data] of Object.entries(PRODUCT_DATA)) { 
@@ -370,7 +364,6 @@ http.createServer(async (req, res) => {
         }); return;
     }
 
-    // REDIRECTION SI NON AUTHENTIFIÉ
     if ((req.url === '/dashboard' || req.url === '/') && !isAuthenticated) {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         return res.end(`
@@ -381,7 +374,6 @@ http.createServer(async (req, res) => {
         <script>async function login(){const res=await fetch('/api/login',{method:'POST',body:JSON.stringify({pin:document.getElementById('pin').value})});if(res.ok)location.reload();else{document.getElementById('err').style.display='block';}} document.getElementById('pin').addEventListener('keypress', e => { if (e.key === 'Enter') login(); });</script></body></html>`);
     }
 
-    // API LIVE REFRESHT
     if (req.url === '/api/live' && req.method === 'GET') {
         if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         const guild = client.guilds.cache.first(); let activeTickets = 0;
@@ -390,7 +382,6 @@ http.createServer(async (req, res) => {
         return res.end(JSON.stringify({ txCount: memoryStats.total_transactions, lastTx: memoryStats.recent_transactions[0] || null, liveTickets: activeTickets }));
     }
 
-    // API MODERATION RECHERCHE MEMBRES (AUTO-LIST)
     if (req.url.startsWith('/api/members') && req.method === 'GET') {
         if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         const guild = client.guilds.cache.first();
@@ -418,7 +409,6 @@ http.createServer(async (req, res) => {
         return;
     }
 
-    // API ACTIONS ADMINISTRATEUR & ACTIONS DE MODERATION
     if (req.url === '/api/action' && req.method === 'POST') {
         if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         let body = ''; req.on('data', chunk => body += chunk.toString());
@@ -428,7 +418,6 @@ http.createServer(async (req, res) => {
                 const guild = client.guilds.cache.first();
                 if (!guild) return res.writeHead(404).end('Serveur Discord introuvable');
 
-                // MODERATION ACTIONS
                 if (['ban', 'kick', 'mute'].includes(data.action)) {
                     const target = await guild.members.fetch(data.userId).catch(() => null);
                     if (!target && data.action !== 'ban') return res.writeHead(404).end('Membre introuvable');
@@ -466,7 +455,6 @@ http.createServer(async (req, res) => {
                         if(c.name.startsWith('shop-') || c.name.startsWith('support-')) { channelStates.delete(c.id); c.delete().catch(()=>{}); }
                     });
                 }
-                // PROMO CODE ACTIONS
                 else if (data.action === 'create_promo') {
                     if (!memoryStats.promo_codes) memoryStats.promo_codes = {};
                     const codeName = (data.name || "").trim().toUpperCase();
@@ -488,7 +476,6 @@ http.createServer(async (req, res) => {
         }); return;
     }
 
-    // 3. ENVOI DU PANEL HTML PRINCIPAL
     if (req.url === '/dashboard' || req.url === '/') {
         let memberCount = "N/A"; let onlineCount = "N/A";
         const guild = client.guilds.cache.first();
@@ -510,7 +497,6 @@ http.createServer(async (req, res) => {
         Object.keys(memoryStats.revenue).forEach(date => { if(date.startsWith(currentMonth)) monthRevenue += memoryStats.revenue[date]; });
         const goalPercent = Math.min(100, Math.round((monthRevenue / MONTHLY_GOAL) * 100));
 
-        // ANALYTICS CALCULATIONS
         const ticketsOpened = memoryStats.analytics?.tickets_opened || 0;
         const ticketsPurchased = memoryStats.total_transactions || 0;
         const dropOffRate = ticketsOpened > 0 ? (100 - (ticketsPurchased / ticketsOpened) * 100).toFixed(1) : 0;
@@ -520,7 +506,6 @@ http.createServer(async (req, res) => {
         for(let i=0; i<24; i++) { if(hourly[i] > maxSales) { maxSales = hourly[i]; peakHourIdx = i; } }
         const peakHourStr = maxSales > 0 ? peakHourIdx + "h00 - " + (peakHourIdx+1) + "h00" : "N/A";
 
-        // HTML RENDERERS
         const sortedSpenders = Object.entries(memoryStats.user_spending).sort((a,b) => b[1] - a[1]).slice(0, 10);
         const topSpendersHTML = sortedSpenders.length > 0 ? sortedSpenders.map((user, i) => '<tr><td><div class="user-badge" style="background:' + (i<3?'#FFD700':'var(--accent-blue)') + ';">' + (i+1) + '</div> ' + user[0] + '</td><td class="text-green font-bold">€' + user[1] + '</td></tr>').join('') : '<tr><td colspan="2" class="text-muted text-center">No data</td></tr>';
 
@@ -532,7 +517,7 @@ http.createServer(async (req, res) => {
         let promoCodesHTML = '';
         if (memoryStats.promo_codes) {
             for (const [code, info] of Object.entries(memoryStats.promo_codes)) {
-                promoCodesHTML += '<tr><td><strong>' + code + '</strong></td><td class="text-green">-' + info.discount + '%</td><td>' + info.used + ' / ' + info.limit + '</td><td><button onclick="deletePromo(\\'' + code + '\\')" style="background:var(--accent-red);border:none;padding:4px 8px;border-radius:4px;cursor:pointer;color:white;">🗑️ Remove</button></td></tr>';
+                promoCodesHTML += '<tr><td><strong>' + code + '</strong></td><td class="text-green">-' + info.discount + '%</td><td>' + info.used + ' / ' + info.limit + '</td><td><button onclick="deletePromo(\'' + code + '\')" style="background:var(--accent-red);border:none;padding:4px 8px;border-radius:4px;cursor:pointer;color:white;">🗑️ Remove</button></td></tr>';
             }
         }
         if (!promoCodesHTML) promoCodesHTML = '<tr><td colspan="4" class="text-muted text-center">No active promo codes</td></tr>';
@@ -705,13 +690,13 @@ http.createServer(async (req, res) => {
                                 '<label class="text-muted">Channel ID</label>' +
                                 '<input type="text" id="announce-channel" placeholder="e.g. 123456789012345678">' +
                                 '<textarea id="announce-msg" rows="3" placeholder="Type your announcement here..."></textarea>' +
-                                '<button class="admin-btn" onclick="sendAdminAction(\\'announce\\')">📢 Send</button>' +
+                                '<button class="admin-btn" onclick="sendAdminAction(\'announce\')">📢 Send</button>' +
                             '</div>' +
                         '</div>' +
                         '<div class="box">' +
                             '<h2>🚨 Emergency Controls</h2>' +
                             '<p class="text-muted" style="font-size:0.8em;">Instantly delete all active shop and support channels.</p>' +
-                            '<button class="admin-btn" style="background:var(--accent-red); width:100%; margin-top:10px;" onclick="sendAdminAction(\\'close_all\\')">🗑️ Close All Open Tickets</button>' +
+                            '<button class="admin-btn" style="background:var(--accent-red); width:100%; margin-top:10px;" onclick="sendAdminAction(\'close_all\')">🗑️ Close All Open Tickets</button>' +
                         '</div>' +
                     '</div>' +
                 '</div>' +
