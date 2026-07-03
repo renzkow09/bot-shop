@@ -7,14 +7,8 @@ const path = require('path');
 // ==========================================
 // 🛡️ BOUCLIER ANTI-CRASH GLOBAL 🛡️
 // ==========================================
-process.on('unhandledRejection', (reason, p) => {
-    console.log(' [ANTI-CRASH] Unhandled Rejection/Catch');
-    console.log(reason, p);
-});
-process.on('uncaughtException', (err, origin) => {
-    console.log(' [ANTI-CRASH] Uncaught Exception/Catch');
-    console.log(err, origin);
-});
+process.on('unhandledRejection', (reason, p) => { console.log(' [ANTI-CRASH] Unhandled Rejection/Catch', reason); });
+process.on('uncaughtException', (err, origin) => { console.log(' [ANTI-CRASH] Uncaught Exception/Catch', err); });
 
 // ==========================================
 // CONFIGURATION & VERIFICATION DES CLES
@@ -55,9 +49,10 @@ const PRODUCT_LINKS = {
 };
 
 const channelStates = new Map();
+const STATS_FILE = path.join(__dirname, 'stats.json');
 
 // ==========================================
-// 🗄️ MEMORY CACHE & CLOUD SYNC
+// 🗄️ MEMORY CACHE & CLOUD SYNC (AVEC DOUBLE SAUVEGARDE)
 // ==========================================
 let memoryStats = { 
     joins: {}, leaves: {}, revenue: {}, total_revenue: 0, transactions: {}, 
@@ -67,6 +62,12 @@ let memoryStats = {
 };
 
 async function loadCloudStats() {
+    // 1. Tente de charger depuis le fichier local en priorité (Fallback)
+    if (fs.existsSync(STATS_FILE)) {
+        try { memoryStats = { ...memoryStats, ...JSON.parse(fs.readFileSync(STATS_FILE, 'utf8')) }; } catch (e) {}
+    }
+
+    // 2. Écrase avec le Cloud si disponible
     const url = process.env.UPSTASH_REDIS_REST_URL;
     const token = process.env.UPSTASH_REDIS_REST_TOKEN;
     if (!url || !token) return console.log("⚠️ Variables Upstash manquantes.");
@@ -82,6 +83,9 @@ async function loadCloudStats() {
 }
 
 async function syncCloud() {
+    // Double sauvegarde : Enregistre d'abord en local (Sécurité Anti-Crash)
+    try { fs.writeFileSync(STATS_FILE, JSON.stringify(memoryStats)); } catch (e) {}
+
     const url = process.env.UPSTASH_REDIS_REST_URL;
     const token = process.env.UPSTASH_REDIS_REST_TOKEN;
     if (!url || !token) return;
@@ -90,7 +94,7 @@ async function syncCloud() {
         await axios.post(cleanUrl, ["SET", "bot_stats", JSON.stringify(memoryStats)], { 
             headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } 
         });
-    } catch (err) { console.error("❌ Cloud Sync Error :", err.message); }
+    } catch (err) { console.error("❌ Cloud Sync Error (Using Local Fallback) :", err.message); }
 }
 
 function logStat(type, value = 1, extraData = null) {
@@ -110,7 +114,7 @@ function logStat(type, value = 1, extraData = null) {
                 username: extraData.username, product: extraData.productName,
                 price: value, date: new Date().toLocaleString('fr-FR')
             });
-            if (memoryStats.recent_transactions.length > 30) memoryStats.recent_transactions.pop();
+            if (memoryStats.recent_transactions.length > 50) memoryStats.recent_transactions.pop();
         }
     } else if (type === 'joins') {
         memoryStats.joins[today] = (memoryStats.joins[today] || 0) + value;
@@ -134,7 +138,7 @@ function logStat(type, value = 1, extraData = null) {
     }
     
     memoryStats.last_update = Date.now();
-    syncCloud(); // Synchro en arrière-plan sans bloquer le bot
+    syncCloud(); 
 }
 
 // ==========================================
@@ -207,7 +211,6 @@ client.on('interactionCreate', async (interaction) => {
                 const priceMatch = product.price.match(/\d+/);
                 
                 if (["10", "11"].includes(selected)) {
-                    // C'est une requête personnalisée
                     logStat('custom_request', 0, { username: interaction.user.username, productName: product.name });
                     if (interaction.channel) await interaction.channel.send(`📩 **Custom request (${product.name}) registered!**\nAdmin notified.`).catch(() => {});
                     try {
@@ -215,7 +218,6 @@ client.on('interactionCreate', async (interaction) => {
                         if (admin) await admin.send(`🔔 **Custom Request** from <@${interaction.user.id}>: ${product.name}`).catch(() => {});
                     } catch (err) {}
                 } else if (priceMatch) {
-                    // C'est un produit standard
                     logStat('revenue', parseInt(priceMatch[0]), { 
                         productId: selected, productName: product.name, username: interaction.user.username 
                     });
@@ -276,6 +278,7 @@ client.on('messageCreate', async (message) => {
             if (TEST_VOUCHERS[input] || input.length >= 8) {
                 state.processing = true; 
                 try {
+                    // SECURITE TRY/CATCH EXTERNE : Protège le bot si Rewarble plante
                     if (!TEST_VOUCHERS[input]) await axios.post(REWARBLE_API_URL, { code: input }, { headers: { 'Authorization': `Bearer ${REWARBLE_API_KEY}` } });
                     
                     state.validated = true; state.processing = false; 
@@ -300,32 +303,95 @@ client.on('guildMemberAdd', async (member) => { logStat('joins', 1, { username: 
 client.on('guildMemberRemove', async (member) => { logStat('leaves', 1, { username: member.user.username }); });
 
 // ==========================================
-// SERVEUR WEB API & DASHBOARD
+// SERVEUR WEB API & DASHBOARD (AVEC SECURITÉS DDOS & AUTH)
 // ==========================================
+const rateLimits = new Map();
+const bruteForceLocks = new Map();
+
 http.createServer(async (req, res) => {
-    // 1. API POUR LE DYNAMISME DU DASHBOARD
+    // 🛡️ SÉCURITÉ 1 : Rate Limiting (Anti-Spam / Anti-DDoS)
+    const clientIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '127.0.0.1';
+    const now = Date.now();
+    let rl = rateLimits.get(clientIp) || { count: 0, resetTime: now + 60000 };
+    if (now > rl.resetTime) rl = { count: 0, resetTime: now + 60000 };
+    rl.count++;
+    rateLimits.set(clientIp, rl);
+    if (rl.count > 150) return res.writeHead(429).end('Too Many Requests');
+
+    // 🛡️ SÉCURITÉ 2 : Vérification du Cookie d'Authentification
+    const cookie = req.headers.cookie || '';
+    const isAuthenticated = cookie.includes(`auth=${DASHBOARD_PIN}`);
+
+    // API: LOGIN & ANTI-BRUTE FORCE
+    if (req.url === '/api/login' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', () => {
+            let lock = bruteForceLocks.get(clientIp) || { attempts: 0, lockout: 0 };
+            if (now < lock.lockout) return res.writeHead(429).end('Locked out. Try again later.');
+
+            try {
+                const data = JSON.parse(body);
+                if (data.pin === DASHBOARD_PIN) {
+                    bruteForceLocks.delete(clientIp);
+                    res.writeHead(200, { 'Set-Cookie': `auth=${DASHBOARD_PIN}; Max-Age=2592000; HttpOnly; Path=/`, 'Content-Type': 'application/json' });
+                    return res.end(JSON.stringify({ success: true }));
+                } else {
+                    lock.attempts++;
+                    if (lock.attempts >= 5) lock.lockout = now + 15 * 60 * 1000; // Bloqué 15 min après 5 erreurs
+                    bruteForceLocks.set(clientIp, lock);
+                    res.writeHead(401).end(JSON.stringify({ success: false }));
+                }
+            } catch(e) { res.writeHead(400).end('Bad Request'); }
+        });
+        return;
+    }
+
+    // REDIRECTION SI NON CONNECTÉ
+    if ((req.url === '/dashboard' || req.url === '/') && !isAuthenticated) {
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        return res.end(`
+        <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Nexus Login</title>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+        <style>
+            body { font-family: 'Inter', sans-serif; background: #0b0f19; color: #f8fafc; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+            .login-box { background: rgba(30, 41, 59, 0.7); padding: 40px; border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.1); text-align: center; }
+            input { background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: white; padding: 15px; border-radius: 8px; font-size: 1.5em; text-align: center; letter-spacing: 10px; width: 180px; margin: 20px 0; outline: none; }
+            button { background: #38bdf8; color: white; border: none; padding: 12px 30px; font-size: 1.1em; border-radius: 8px; cursor: pointer; font-weight: bold; width:100%;}
+        </style>
+        </head><body>
+            <div class="login-box"><h2>🔒 Restricted Area</h2>
+            <input type="password" id="pin" maxlength="4" placeholder="••••"><br>
+            <button onclick="login()">Unlock</button><p id="err" style="color:#ec4899;display:none;"></p></div>
+            <script>
+                async function login() {
+                    const res = await fetch('/api/login', { method: 'POST', body: JSON.stringify({ pin: document.getElementById('pin').value }) });
+                    if(res.ok) location.reload(); else { document.getElementById('err').innerText = 'Invalid PIN or Locked'; document.getElementById('err').style.display='block'; }
+                }
+                document.getElementById('pin').addEventListener('keypress', e => { if (e.key === 'Enter') login(); });
+            </script>
+        </body></html>`);
+    }
+
+    // API POUR LE DYNAMISME DU DASHBOARD
     if (req.url === '/api/live' && req.method === 'GET') {
+        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         const guild = client.guilds.cache.first();
         let activeTickets = 0;
         if(guild) activeTickets = guild.channels.cache.filter(c => c.name.startsWith('shop-') || c.name.startsWith('support-')).size;
         
-        res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-        return res.end(JSON.stringify({ 
-            txCount: memoryStats.total_transactions, 
-            lastTx: memoryStats.recent_transactions[0] || null,
-            liveTickets: activeTickets 
-        }));
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ txCount: memoryStats.total_transactions, lastTx: memoryStats.recent_transactions[0] || null, liveTickets: activeTickets }));
     }
 
-    // 2. API POUR LES ACTIONS ADMIN
+    // API POUR LES ACTIONS ADMIN
     if (req.url === '/api/action' && req.method === 'POST') {
+        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         let body = '';
         req.on('data', chunk => body += chunk.toString());
         req.on('end', async () => {
             try {
                 const data = JSON.parse(body);
-                if (data.pin !== DASHBOARD_PIN) return res.writeHead(401).end('Unauthorized');
-                
                 if (data.action === 'resolve_req') {
                     const reqItem = memoryStats.custom_requests.find(r => r.id === data.id);
                     if(reqItem) { reqItem.status = 'done'; syncCloud(); }
@@ -341,7 +407,7 @@ http.createServer(async (req, res) => {
                     const guild = client.guilds.cache.first();
                     if(guild) {
                         guild.channels.cache.forEach(c => {
-                            if(c.name.startsWith('shop-') || c.name.startsWith('support-')) c.delete().catch(()=>{});
+                            if(c.name.startsWith('shop-') || c.name.startsWith('support-')) { channelStates.delete(c.id); c.delete().catch(()=>{}); }
                         });
                     }
                 }
@@ -351,7 +417,7 @@ http.createServer(async (req, res) => {
         return;
     }
 
-    // 3. AFFICHAGE DU DASHBOARD HTML
+    // AFFICHAGE DU DASHBOARD COMPLET (SEULEMENT SI AUTHENTIFIÉ)
     if (req.url === '/dashboard' || req.url === '/') {
         let memberCount = "N/A"; let onlineCount = "N/A";
         const guild = client.guilds.cache.first();
@@ -366,40 +432,25 @@ http.createServer(async (req, res) => {
         const totalJoins = memoryStats.total_joins || 1; 
         const conversionRate = ((memoryStats.total_transactions / totalJoins) * 100).toFixed(1);
         
-        // --- CORRECTION EXACTE AJOUTÉE ICI ---
         const totalHistorique = memberCount !== "N/A" ? (memberCount + (memoryStats.total_leaves || 0)) : 1;
         const retentionRate = memberCount !== "N/A" ? ((memberCount / totalHistorique) * 100).toFixed(1) : "N/A";
         
         const todayStr = new Date().toISOString().split('T')[0];
         const todayRevenue = memoryStats.revenue[todayStr] || 0;
         
-        // Progression Objectif Mensuel
-        const currentMonth = todayStr.substring(0, 7); // ex: 2023-10
+        const currentMonth = todayStr.substring(0, 7);
         let monthRevenue = 0;
         Object.keys(memoryStats.revenue).forEach(date => { if(date.startsWith(currentMonth)) monthRevenue += memoryStats.revenue[date]; });
         const goalPercent = Math.min(100, Math.round((monthRevenue / MONTHLY_GOAL) * 100));
 
-        // VIP / Top Spenders
         const sortedSpenders = Object.entries(memoryStats.user_spending).sort((a,b) => b[1] - a[1]).slice(0, 10);
-        const topSpendersHTML = sortedSpenders.length > 0 ? sortedSpenders.map((user, i) => `
-            <tr>
-                <td><div class="user-badge" style="background:${i<3?'#FFD700':'var(--accent-blue)'};">${i+1}</div> ${user[0]}</td>
-                <td class="text-green font-bold">€${user[1]}</td>
-            </tr>
-        `).join('') : `<tr><td colspan="2" class="text-muted text-center">No data</td></tr>`;
+        const topSpendersHTML = sortedSpenders.length > 0 ? sortedSpenders.map((user, i) => `<tr><td><div class="user-badge" style="background:${i<3?'#FFD700':'var(--accent-blue)'};">${i+1}</div> ${user[0]}</td><td class="text-green font-bold">€${user[1]}</td></tr>`).join('') : `<tr><td colspan="2" class="text-muted text-center">No data</td></tr>`;
 
-        // Generateurs de tables standards
         const tableRowsMembers = memoryStats.recent_joins.length > 0 ? memoryStats.recent_joins.map(u => `<tr><td><div class="user-badge">${u.username.charAt(0).toUpperCase()}</div> ${u.username}</td><td class="text-muted">${u.date}</td></tr>`).join('') : `<tr><td colspan="2" class="text-muted text-center">Empty</td></tr>`;
         const tableRowsLeaves = memoryStats.recent_leaves.length > 0 ? memoryStats.recent_leaves.map(u => `<tr><td><div class="user-badge leave">${u.username.charAt(0).toUpperCase()}</div> ${u.username}</td><td class="text-muted">${u.date}</td></tr>`).join('') : `<tr><td colspan="2" class="text-muted text-center">Empty</td></tr>`;
         const tableRowsTransactions = memoryStats.recent_transactions.length > 0 ? memoryStats.recent_transactions.map(tx => `<tr><td><span class="highlight-text">${tx.username}</span></td><td>${tx.product}</td><td class="money text-green font-bold">€${tx.price}</td><td class="text-muted">${tx.date}</td></tr>`).join('') : `<tr><td colspan="4" class="text-muted text-center">Empty</td></tr>`;
         
-        // Custom Requests Table
-        const customReqsHTML = memoryStats.custom_requests.length > 0 ? memoryStats.custom_requests.map(req => `
-            <tr style="opacity: ${req.status==='done'?'0.5':'1'};">
-                <td>${req.username}</td><td><span class="highlight-text">${req.product}</span></td><td>${req.date}</td>
-                <td>${req.status==='pending' ? `<button onclick="resolveReq('${req.id}')" style="background:var(--accent-green);border:none;padding:5px 10px;border-radius:5px;cursor:pointer;color:white;">✔ Done</button>` : 'Resolved'}</td>
-            </tr>
-        `).join('') : `<tr><td colspan="4" class="text-muted text-center">No pending requests</td></tr>`;
+        const customReqsHTML = memoryStats.custom_requests.length > 0 ? memoryStats.custom_requests.map(req => `<tr style="opacity: ${req.status==='done'?'0.5':'1'};"><td>${req.username}</td><td><span class="highlight-text">${req.product}</span></td><td>${req.date}</td><td>${req.status==='pending' ? `<button onclick="resolveReq('${req.id}')" style="background:var(--accent-green);border:none;padding:5px 10px;border-radius:5px;cursor:pointer;color:white;">✔ Done</button>` : 'Resolved'}</td></tr>`).join('') : `<tr><td colspan="4" class="text-muted text-center">No pending requests</td></tr>`;
 
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         res.end(`
@@ -415,13 +466,7 @@ http.createServer(async (req, res) => {
                 :root { --bg-main: #0b0f19; --bg-card: rgba(30, 41, 59, 0.7); --border-color: rgba(255, 255, 255, 0.1); --text-main: #f8fafc; --text-muted: #94a3b8; --accent-blue: #38bdf8; --accent-green: #10b981; --accent-purple: #a855f7; --accent-orange: #f97316; --accent-pink: #ec4899; --accent-red: #ef4444; }
                 * { box-sizing: border-box; }
                 body { font-family: 'Inter', sans-serif; background-color: var(--bg-main); color: var(--text-main); margin: 0; padding: 20px; min-height: 100vh; overflow-x: hidden; }
-                .container { max-width: 1300px; margin: 0 auto; display: none; }
-                
-                /* LOGIN */
-                #login-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 80vh; }
-                .login-box { background: var(--bg-card); padding: 40px; border-radius: 16px; border: 1px solid var(--border-color); text-align: center; }
-                .pin-input { background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); color: white; padding: 15px; border-radius: 8px; font-size: 1.5em; text-align: center; letter-spacing: 10px; width: 180px; margin: 20px 0; outline: none; }
-                .login-btn { background: var(--accent-blue); color: white; border: none; padding: 12px 30px; font-size: 1.1em; border-radius: 8px; cursor: pointer; font-weight: bold; }
+                .container { max-width: 1300px; margin: 0 auto; animation: fadeIn 0.5s; }
                 
                 /* HEADER & NAV */
                 .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid var(--border-color); }
@@ -456,12 +501,16 @@ http.createServer(async (req, res) => {
                 .progress-bg { background: rgba(255,255,255,0.1); height: 12px; border-radius: 6px; overflow: hidden; }
                 .progress-fill { background: linear-gradient(90deg, var(--accent-blue), var(--accent-purple)); height: 100%; width: ${goalPercent}%; transition: width 1s ease-in-out; }
                 
-                /* CONTENT BOXES */
+                /* CONTENT BOXES & FILTERS */
                 .content-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 20px; }
                 .box { background: var(--bg-card); padding: 20px; border-radius: 12px; border: 1px solid var(--border-color); }
                 .box-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
                 .box h2 { font-size: 1.1em; margin: 0; }
                 .chart-container { position: relative; height: 250px; width: 100%; }
+                .filter-group { display: flex; gap: 5px; background: rgba(0,0,0,0.2); padding: 4px; border-radius: 6px; }
+                .filter-btn { background: transparent; border: none; color: var(--text-muted); font-size: 0.8em; padding: 4px 10px; border-radius: 4px; cursor: pointer; transition: 0.2s; }
+                .filter-btn:hover { color: #fff; }
+                .filter-btn.active { background: var(--accent-blue); color: #fff; }
                 
                 /* TABLES & FORMS */
                 table { width: 100%; border-collapse: collapse; }
@@ -477,21 +526,9 @@ http.createServer(async (req, res) => {
             </style>
         </head>
         <body>
-            <!-- TOAST NOTIFICATION -->
             <div id="toast">🎉 Sale Notification!</div>
 
-            <!-- LOGIN -->
-            <div id="login-screen">
-                <div class="login-box">
-                    <h2>🔒 Access Restricted</h2>
-                    <input type="password" id="pin-input" class="pin-input" maxlength="4" placeholder="••••">
-                    <br><button class="login-btn" onclick="checkPin()">Unlock Dashboard</button>
-                    <p id="login-error" style="color:var(--accent-pink); display:none;">Incorrect PIN</p>
-                </div>
-            </div>
-
-            <!-- DASHBOARD -->
-            <div class="container" id="dashboard-container">
+            <div class="container">
                 <div class="header">
                     <h1>Nexus Dashboard</h1>
                     <div class="controls">
@@ -527,7 +564,14 @@ http.createServer(async (req, res) => {
 
                     <div class="content-grid">
                         <div class="box">
-                            <div class="box-header"><h2>📈 Revenue Timeline</h2></div>
+                            <div class="box-header">
+                                <h2>📈 Revenue Timeline</h2>
+                                <div class="filter-group">
+                                    <button class="filter-btn active" onclick="updateChartFilter(7, this)">7D</button>
+                                    <button class="filter-btn" onclick="updateChartFilter(30, this)">30D</button>
+                                    <button class="filter-btn" onclick="updateChartFilter(0, this)">All</button>
+                                </div>
+                            </div>
                             <div class="chart-container"><canvas id="salesChart"></canvas></div>
                         </div>
                         <div class="box">
@@ -598,7 +642,6 @@ http.createServer(async (req, res) => {
                             <div>
                                 <label class="text-muted">Emergency Controls</label>
                                 <button class="admin-btn" onclick="sendAdminAction('close_all')">🗑️ Close All Open Tickets</button>
-                                <p class="text-muted" style="font-size:0.7em; margin-top:5px;">Warning: This instantly deletes all channels starting with 'shop-' or 'support-'.</p>
                             </div>
                         </div>
                     </div>
@@ -606,27 +649,9 @@ http.createServer(async (req, res) => {
             </div>
 
             <script>
-                // --- GLOBALS & DATA ---
-                const PIN = "${DASHBOARD_PIN}";
                 const rawStats = ${JSON.stringify(memoryStats)};
                 let stealthMode = false;
                 let lastTxCount = ${memoryStats.total_transactions};
-
-                // --- LOGIN & STEALTH ---
-                function checkPin() {
-                    if(document.getElementById('pin-input').value === PIN) {
-                        localStorage.setItem('auth', 'true');
-                        document.getElementById('login-screen').style.display = 'none';
-                        document.getElementById('dashboard-container').style.display = 'block';
-                        startLivePolling();
-                    } else { document.getElementById('login-error').style.display = 'block'; }
-                }
-                if(localStorage.getItem('auth') === 'true') {
-                    document.getElementById('login-screen').style.display = 'none';
-                    document.getElementById('dashboard-container').style.display = 'block';
-                    startLivePolling();
-                }
-                document.getElementById('pin-input').addEventListener('keypress', e => { if (e.key === 'Enter') checkPin(); });
 
                 function toggleStealth() {
                     stealthMode = !stealthMode;
@@ -634,7 +659,6 @@ http.createServer(async (req, res) => {
                     document.getElementById('stealthBtn').innerText = stealthMode ? '🙈 Show Revenue' : '👁️ Stealth Mode';
                 }
 
-                // --- TAB NAVIGATION ---
                 function switchTab(tabId, btn) {
                     document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
                     document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
@@ -642,7 +666,6 @@ http.createServer(async (req, res) => {
                     btn.classList.add('active');
                 }
 
-                // --- LIVE POLLING & TOASTS ---
                 function showToast(msg) {
                     const toast = document.getElementById('toast');
                     toast.innerText = msg;
@@ -650,36 +673,26 @@ http.createServer(async (req, res) => {
                     setTimeout(() => { toast.style.bottom = '-100px'; }, 4000);
                 }
 
-                function startLivePolling() {
-                    setInterval(async () => {
-                        try {
-                            const res = await fetch('/api/live');
-                            const data = await res.json();
-                            document.getElementById('live-tickets-count').innerText = data.liveTickets;
-                            
-                            if (data.txCount > lastTxCount && data.lastTx) {
-                                lastTxCount = data.txCount;
-                                showToast('💰 New Sale! ' + data.lastTx.username + ' bought ' + data.lastTx.product);
-                                setTimeout(() => location.reload(), 2000); 
-                            }
-                        } catch(e){}
-                    }, 5000);
-                }
+                setInterval(async () => {
+                    try {
+                        const res = await fetch('/api/live');
+                        const data = await res.json();
+                        document.getElementById('live-tickets-count').innerText = data.liveTickets;
+                        if (data.txCount > lastTxCount && data.lastTx) {
+                            lastTxCount = data.txCount;
+                            showToast('💰 New Sale! ' + data.lastTx.username + ' bought ' + data.lastTx.product);
+                            setTimeout(() => location.reload(), 2000); 
+                        }
+                    } catch(e){}
+                }, 5000);
 
-                // --- EXPORT CSV ---
                 function exportCSV() {
                     let csv = "Customer,Product,Price,Date\\n";
-                    rawStats.recent_transactions.forEach(tx => {
-                        csv += '"'+tx.username+'","'+tx.product+'","'+tx.price+'","'+tx.date+'"\\n';
-                    });
+                    rawStats.recent_transactions.forEach(tx => { csv += '"'+tx.username+'","'+tx.product+'","'+tx.price+'","'+tx.date+'"\\n'; });
                     const blob = new Blob([csv], { type: 'text/csv' });
-                    const a = document.createElement('a');
-                    a.href = URL.createObjectURL(blob);
-                    a.download = 'sales_export.csv';
-                    a.click();
+                    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'sales_export.csv'; a.click();
                 }
 
-                // --- ADMIN ACTIONS API ---
                 async function resolveReq(id) { await executeAction({ action: 'resolve_req', id: id }); }
                 async function sendAdminAction(type) {
                     let payload = { action: type };
@@ -692,7 +705,6 @@ http.createServer(async (req, res) => {
                     await executeAction(payload);
                 }
                 async function executeAction(payload) {
-                    payload.pin = PIN;
                     const res = await fetch('/api/action', { method: 'POST', body: JSON.stringify(payload) });
                     if(res.ok) location.reload(); else alert('Error executing action');
                 }
@@ -700,18 +712,30 @@ http.createServer(async (req, res) => {
                 // --- CHARTS ---
                 Chart.defaults.color = '#94a3b8'; Chart.defaults.font.family = "'Inter', sans-serif";
                 
-                // 1. Revenue Chart
-                const salesDates = Object.keys(rawStats.revenue || {}).sort().slice(-14);
-                const salesVals = salesDates.map(d => rawStats.revenue[d]);
-                const ctxSales = document.getElementById('salesChart').getContext('2d');
-                let grad = ctxSales.createLinearGradient(0,0,0,400); grad.addColorStop(0, 'rgba(56, 189, 248, 0.4)'); grad.addColorStop(1, 'transparent');
-                new Chart(ctxSales, {
-                    type: 'line',
-                    data: { labels: salesDates.length?salesDates:['No Data'], datasets: [{ data: salesVals.length?salesVals:[0], borderColor: '#38bdf8', backgroundColor: grad, fill: true, tension: 0.4 }] },
-                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { grid: { color: 'rgba(255,255,255,0.05)'} } } }
-                });
+                let salesChart;
+                window.renderSalesChart = function(days) {
+                    let dates = Object.keys(rawStats.revenue || {}).sort();
+                    let values = dates.map(d => rawStats.revenue[d]);
+                    if (days > 0 && dates.length > days) { dates = dates.slice(-days); values = values.slice(-days); }
 
-                // 2. Products Doughnut
+                    const ctxSales = document.getElementById('salesChart').getContext('2d');
+                    let grad = ctxSales.createLinearGradient(0,0,0,400); grad.addColorStop(0, 'rgba(56, 189, 248, 0.4)'); grad.addColorStop(1, 'transparent');
+                    if(salesChart) salesChart.destroy();
+                    
+                    salesChart = new Chart(ctxSales, {
+                        type: 'line',
+                        data: { labels: dates.length?dates:['No Data'], datasets: [{ data: values.length?values:[0], borderColor: '#38bdf8', backgroundColor: grad, fill: true, tension: 0.4 }] },
+                        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { grid: { color: 'rgba(255,255,255,0.05)'} } } }
+                    });
+                }
+                renderSalesChart(7); // Filtre 7 jours par défaut
+
+                window.updateChartFilter = function(days, btn) {
+                    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    renderSalesChart(days);
+                }
+
                 const prodDataRaw = ${JSON.stringify(PRODUCT_DATA)};
                 const prodIds = Object.keys(rawStats.product_sales || {});
                 new Chart(document.getElementById('productsChart'), {
@@ -720,17 +744,10 @@ http.createServer(async (req, res) => {
                     options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { position: 'right', labels: { color: '#f8fafc' } } } }
                 });
 
-                // 3. Audience Bar Chart
                 const audienceDates = Array.from(new Set([...Object.keys(rawStats.joins), ...Object.keys(rawStats.leaves)])).sort().slice(-10);
                 new Chart(document.getElementById('audienceChart'), {
                     type: 'bar',
-                    data: {
-                        labels: audienceDates.length ? audienceDates : ['No Data'],
-                        datasets: [
-                            { label: 'Joins', data: audienceDates.map(d => rawStats.joins[d]||0), backgroundColor: '#10b981' },
-                            { label: 'Leaves', data: audienceDates.map(d => rawStats.leaves[d]||0), backgroundColor: '#ef4444' }
-                        ]
-                    },
+                    data: { labels: audienceDates.length ? audienceDates : ['No Data'], datasets: [{ label: 'Joins', data: audienceDates.map(d => rawStats.joins[d]||0), backgroundColor: '#10b981' }, { label: 'Leaves', data: audienceDates.map(d => rawStats.leaves[d]||0), backgroundColor: '#ef4444' }] },
                     options: { responsive: true, maintainAspectRatio: false, scales: { x: { grid: { display: false } }, y: { grid: { color: 'rgba(255,255,255,0.05)'} } } }
                 });
             </script>
