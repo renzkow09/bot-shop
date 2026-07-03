@@ -26,8 +26,8 @@ const REWARBLE_API_URL = "https://api.rewarble.com/client/1.00/redeem";
 const ADMIN_DISCORD_ID = "1520551977854042114";
 const CATEGORY_CUSTOMER_ID = "1521540733226713249";
 const CATEGORY_SUPPORT_ID = "1521541155005796484";
-const DASHBOARD_PIN = "1206"; // Ton mot de passe sécurisé
-const MONTHLY_GOAL = 500; // Objectif par défaut (modifiable sur le site)
+const DASHBOARD_PIN = "1206"; 
+const MONTHLY_GOAL = 500; 
 
 const TEST_VOUCHERS = { "GOYAVE5": 5 };
 
@@ -382,6 +382,27 @@ http.createServer(async (req, res) => {
         return res.end(JSON.stringify({ txCount: memoryStats.total_transactions, lastTx: memoryStats.recent_transactions[0] || null, liveTickets: activeTickets }));
     }
 
+    if (req.url === '/api/balance' && req.method === 'GET') {
+        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
+        try {
+            const response = await axios.get("https://api.rewarble.com/client/1.00/balance", {
+                headers: { 'Authorization': `Bearer ${REWARBLE_API_KEY}` }
+            });
+            let bal = "N/A";
+            if (response.data) {
+                if (response.data.balance !== undefined) bal = response.data.balance;
+                else if (response.data.amount !== undefined) bal = response.data.amount;
+                else if (typeof response.data === 'number') bal = response.data;
+                else bal = "API OK (See Logs)"; 
+            }
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({ balance: bal }));
+        } catch(e) {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({ balance: "API Error" }));
+        }
+    }
+
     if (req.url.startsWith('/api/members') && req.method === 'GET') {
         if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         const guild = client.guilds.cache.first();
@@ -520,64 +541,9 @@ http.createServer(async (req, res) => {
         for(let i=0; i<24; i++) { if(hourly[i] > maxSales) { maxSales = hourly[i]; peakHourIdx = i; } }
         const peakHourStr = maxSales > 0 ? peakHourIdx + "h00 - " + (peakHourIdx+1) + "h00" : "N/A";
 
-        let topSpendersHTML = '';
-        const sortedSpenders = Object.entries(memoryStats.user_spending).sort((a,b) => b[1] - a[1]).slice(0, 10);
-        if(sortedSpenders.length > 0) {
-            sortedSpenders.forEach((user, i) => {
-                let badgeColor = i < 3 ? '#FFD700' : 'var(--accent-blue)';
-                topSpendersHTML += `<tr><td><div class="user-badge" style="background:${badgeColor};">${i+1}</div> ${user[0].replace(/</g,'&lt;')}</td><td class="text-green font-bold">€${user[1]}</td></tr>`;
-            });
-        } else {
-            topSpendersHTML = '<tr><td colspan="2" class="text-muted text-center">No data</td></tr>';
-        }
-
-        let tableRowsTransactions = '';
-        if(memoryStats.recent_transactions.length > 0) {
-            memoryStats.recent_transactions.forEach(tx => {
-                tableRowsTransactions += `<tr><td><span class="highlight-text">${tx.username.replace(/</g,'&lt;')}</span></td><td>${tx.product.replace(/</g,'&lt;')}</td><td class="money text-green font-bold">€${tx.price}</td><td class="text-muted">${tx.date}</td></tr>`;
-            });
-        } else {
-            tableRowsTransactions = '<tr><td colspan="4" class="text-muted text-center">Empty</td></tr>';
-        }
-
-        let tableRowsMembers = '';
-        if(memoryStats.recent_joins.length > 0) {
-            memoryStats.recent_joins.forEach(u => {
-                tableRowsMembers += `<tr><td><div class="user-badge">${u.username.charAt(0).toUpperCase().replace(/</g,'&lt;')}</div> ${u.username.replace(/</g,'&lt;')}</td><td class="text-muted">${u.date}</td></tr>`;
-            });
-        } else {
-            tableRowsMembers = '<tr><td colspan="2" class="text-muted text-center">Empty</td></tr>';
-        }
-
-        let tableRowsLeaves = '';
-        if(memoryStats.recent_leaves.length > 0) {
-            memoryStats.recent_leaves.forEach(u => {
-                tableRowsLeaves += `<tr><td><div class="user-badge leave">${u.username.charAt(0).toUpperCase().replace(/</g,'&lt;')}</div> ${u.username.replace(/</g,'&lt;')}</td><td class="text-muted">${u.date}</td></tr>`;
-            });
-        } else {
-            tableRowsLeaves = '<tr><td colspan="2" class="text-muted text-center">Empty</td></tr>';
-        }
-
-        let customReqsHTML = '';
-        if(memoryStats.custom_requests.length > 0) {
-            memoryStats.custom_requests.forEach(req => {
-                let btn = req.status === 'pending' ? `<button onclick="resolveReq('${req.id}')" style="background:var(--accent-green);border:none;padding:5px 10px;border-radius:5px;cursor:pointer;color:white;">✔ Done</button>` : 'Resolved';
-                customReqsHTML += `<tr style="opacity: ${req.status==='done'?'0.5':'1'};"><td>${req.username.replace(/</g,'&lt;')}</td><td><span class="highlight-text">${req.product.replace(/</g,'&lt;')}</span></td><td>${req.date}</td><td>${btn}</td></tr>`;
-            });
-        } else {
-            customReqsHTML = '<tr><td colspan="4" class="text-muted text-center">No pending requests</td></tr>';
-        }
-        
-        let promoCodesHTML = '';
-        if (memoryStats.promo_codes && Object.keys(memoryStats.promo_codes).length > 0) {
-            for (const [code, info] of Object.entries(memoryStats.promo_codes)) {
-                promoCodesHTML += `<tr><td><strong>${code.replace(/</g,'&lt;')}</strong></td><td class="text-green">-${info.discount}%</td><td>${info.used} / ${info.limit}</td><td><button onclick="deletePromo(&quot;${code.replace(/"/g,'&quot;')}&quot;)" style="background:var(--accent-red);border:none;padding:4px 8px;border-radius:4px;cursor:pointer;color:white;">🗑️ Remove</button></td></tr>`;
-            }
-        } else {
-            promoCodesHTML = '<tr><td colspan="4" class="text-muted text-center">No active promo codes</td></tr>';
-        }
-
-        const safeStatsString = JSON.stringify(memoryStats).replace(/</g, '\\u003c');
+        // ENCODAGE BASE64 POUR LA SECURITE DU SCRIPT
+        const safeStatsBase64 = Buffer.from(JSON.stringify(memoryStats)).toString('base64');
+        const safeProductDataBase64 = Buffer.from(JSON.stringify(PRODUCT_DATA)).toString('base64');
 
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         res.end(`
@@ -618,7 +584,7 @@ http.createServer(async (req, res) => {
                 .card { background: var(--bg-card); backdrop-filter: blur(10px); padding: 20px; border-radius: 12px; border: 1px solid var(--border-color); position: relative; overflow: hidden; transition: transform 0.2s; }
                 .card:hover { transform: translateY(-2px); }
                 .card::before { content: ""; position: absolute; top: 0; left: 0; width: 4px; height: 100%; background: var(--accent-blue); }
-                .card.green::before{background:var(--accent-green)} .card.pink::before{background:var(--accent-pink)} .card.orange::before{background:var(--accent-orange)} .card.purple::before{background:var(--accent-purple)} .card.red::before{background:var(--accent-red)}
+                .card.green::before{background:var(--accent-green)} .card.pink::before{background:var(--accent-pink)} .card.orange::before{background:var(--accent-orange)} .card.purple::before{background:var(--accent-purple)} .card.red::before{background:var(--accent-red)} .card.yellow::before{background:#f1c40f;}
                 .card h3 { margin: 0; color: var(--text-muted); font-size: 0.8em; text-transform: uppercase; } 
                 .card .value { font-size: 2em; font-weight: 800; margin-top: 5px; word-wrap: break-word; }
                 
@@ -692,6 +658,7 @@ http.createServer(async (req, res) => {
                         <div class="card pink"><h3>Conversion Rate</h3><div class="value text-pink">${conversionRate}%</div></div>
                         <div class="card orange"><h3>Online / Total</h3><div class="value text-orange">${onlineCount} <span style="font-size: 0.5em; color: var(--text-muted);">/ ${memberCount}</span></div></div>
                         <div class="card purple"><h3>Retention Rate</h3><div class="value text-purple">${retentionRate}%</div></div>
+                        <div class="card yellow"><h3>💳 Rewarble Balance</h3><div class="value money" style="color:#f1c40f;" id="rewarble-balance">Loading...</div><button onclick="fetchBalance()" style="background:rgba(255,255,255,0.1); border:none; color:white; padding:4px 8px; border-radius:4px; font-size:0.7em; margin-top:8px; cursor:pointer;">🔄 Refresh</button></div>
                     </div>
                     
                     <div class="stats-grid" style="margin-top: 15px; margin-bottom: 25px;">
@@ -730,17 +697,17 @@ http.createServer(async (req, res) => {
                     <div class="content-grid">
                         <div class="box">
                             <div class="box-header"><h2>🛒 Recent Transactions</h2><button class="btn-icon" style="background:var(--accent-green);font-size:0.8em;" onclick="exportCSV()">📥 Export CSV</button></div>
-                            <div style="overflow-x:auto; max-height: 400px;"><table><thead><tr><th>Customer</th><th>Product</th><th>Price</th><th>Date</th></tr></thead><tbody>${tableRowsTransactions}</tbody></table></div>
+                            <div style="overflow-x:auto; max-height: 400px;"><table><thead><tr><th>Customer</th><th>Product</th><th>Price</th><th>Date</th></tr></thead><tbody><span id="target-tx"></span></tbody></table></div>
                         </div>
-                        <div class="box"><h2>💎 Top Spenders (VIPs)</h2><table><thead><tr><th>Customer</th><th>Total Spent</th></tr></thead><tbody>${topSpendersHTML}</tbody></table></div>
+                        <div class="box"><h2>💎 Top Spenders (VIPs)</h2><table><thead><tr><th>Customer</th><th>Total Spent</th></tr></thead><tbody><span id="target-spenders"></span></tbody></table></div>
                     </div>
                 </div>
 
                 <div id="audience" class="tab-content">
                     <div class="box" style="margin-bottom:20px;"><h2>📊 Community Activity (Last 10 Days)</h2><div class="chart-container"><canvas id="audienceChart"></canvas></div></div>
                     <div class="content-grid">
-                        <div class="box"><h2>📥 Latest Joins</h2><div style="overflow-x:auto; max-height:300px;"><table><thead><tr><th>Username</th><th>Date</th></tr></thead><tbody>${tableRowsMembers}</tbody></table></div></div>
-                        <div class="box"><h2>📤 Latest Leaves</h2><div style="overflow-x:auto; max-height:300px;"><table><thead><tr><th>Username</th><th>Date</th></tr></thead><tbody>${tableRowsLeaves}</tbody></table></div></div>
+                        <div class="box"><h2>📥 Latest Joins</h2><div style="overflow-x:auto; max-height:300px;"><table><thead><tr><th>Username</th><th>Date</th></tr></thead><tbody><span id="target-joins"></span></tbody></table></div></div>
+                        <div class="box"><h2>📤 Latest Leaves</h2><div style="overflow-x:auto; max-height:300px;"><table><thead><tr><th>Username</th><th>Date</th></tr></thead><tbody><span id="target-leaves"></span></tbody></table></div></div>
                     </div>
                 </div>
 
@@ -766,7 +733,7 @@ http.createServer(async (req, res) => {
                         <div class="box">
                             <h2>📋 Custom Requests Manager</h2>
                             <p class="text-muted" style="font-size:0.8em;">Manage custom orders (Products 10 & 11) from your clients.</p>
-                            <div style="overflow-x:auto; max-height: 300px;"><table><thead><tr><th>Customer</th><th>Request</th><th>Date</th><th>Action</th></tr></thead><tbody>${customReqsHTML}</tbody></table></div>
+                            <div style="overflow-x:auto; max-height: 300px;"><table><thead><tr><th>Customer</th><th>Request</th><th>Date</th><th>Action</th></tr></thead><tbody><span id="target-reqs"></span></tbody></table></div>
                         </div>
                         <div class="box">
                             <h2>🎟️ Promo Codes Generator</h2>
@@ -777,7 +744,7 @@ http.createServer(async (req, res) => {
                                 <input type="number" id="promoLimit" placeholder="Max Uses" style="width:110px;">
                                 <button class="admin-btn" style="margin-top:0;" onclick="createPromo()">➕ Create</button>
                             </div>
-                            <div style="overflow-x:auto; max-height: 200px;"><table><thead><tr><th>Code</th><th>Discount</th><th>Usage</th><th>Action</th></tr></thead><tbody>${promoCodesHTML}</tbody></table></div>
+                            <div style="overflow-x:auto; max-height: 200px;"><table><thead><tr><th>Code</th><th>Discount</th><th>Usage</th><th>Action</th></tr></thead><tbody><span id="target-promos"></span></tbody></table></div>
                         </div>
                     </div>
                     <div class="content-grid">
@@ -801,13 +768,68 @@ http.createServer(async (req, res) => {
 
             <script>
                 const PIN = "${DASHBOARD_PIN}";
-                const rawStats = ${safeStatsString};
+                const b64_stats = "${safeStatsBase64}";
+                const b64_prods = "${safeProductDataBase64}";
+                const rawStats = JSON.parse(decodeURIComponent(escape(atob(b64_stats))));
+                const PRODUCT_DATA = JSON.parse(decodeURIComponent(escape(atob(b64_prods))));
+                
                 let stealthMode = false; 
-                let lastTxCount = ${memoryStats.total_transactions};
+                let lastTxCount = rawStats.total_transactions;
 
                 const currentMonthRevenue = ${monthRevenue};
                 const defaultGoal = ${MONTHLY_GOAL};
                 let userGoal = localStorage.getItem("customGoal") ? parseInt(localStorage.getItem("customGoal")) : defaultGoal;
+
+                // --- RENDERING STATIC HTML ON LOAD TO AVOID QUOTES CRASH ---
+                function buildStaticTables() {
+                    let txHtml = '';
+                    if(rawStats.recent_transactions && rawStats.recent_transactions.length > 0) {
+                        rawStats.recent_transactions.forEach(tx => {
+                            txHtml += "<tr><td><span class='highlight-text'>" + tx.username.replace(/</g,'&lt;') + "</span></td><td>" + tx.product.replace(/</g,'&lt;') + "</td><td class='money text-green font-bold'>€" + tx.price + "</td><td class='text-muted'>" + tx.date + "</td></tr>";
+                        });
+                    } else txHtml = "<tr><td colspan='4' class='text-muted text-center'>Empty</td></tr>";
+                    document.getElementById('target-tx').outerHTML = txHtml;
+
+                    let spHtml = '';
+                    const sortedSpenders = Object.entries(rawStats.user_spending || {}).sort((a,b) => b[1] - a[1]).slice(0, 10);
+                    if(sortedSpenders.length > 0) {
+                        sortedSpenders.forEach((user, i) => {
+                            let badgeColor = i < 3 ? '#FFD700' : 'var(--accent-blue)';
+                            spHtml += "<tr><td><div class='user-badge' style='background:" + badgeColor + ";'>" + (i+1) + "</div> " + user[0].replace(/</g,'&lt;') + "</td><td class='text-green font-bold'>€" + user[1] + "</td></tr>";
+                        });
+                    } else spHtml = "<tr><td colspan='2' class='text-muted text-center'>No data</td></tr>";
+                    document.getElementById('target-spenders').outerHTML = spHtml;
+
+                    let jHtml = '';
+                    if(rawStats.recent_joins && rawStats.recent_joins.length > 0) {
+                        rawStats.recent_joins.forEach(u => { jHtml += "<tr><td><div class='user-badge'>" + u.username.charAt(0).toUpperCase().replace(/</g,'&lt;') + "</div> " + u.username.replace(/</g,'&lt;') + "</td><td class='text-muted'>" + u.date + "</td></tr>"; });
+                    } else jHtml = "<tr><td colspan='2' class='text-muted text-center'>Empty</td></tr>";
+                    document.getElementById('target-joins').outerHTML = jHtml;
+
+                    let lHtml = '';
+                    if(rawStats.recent_leaves && rawStats.recent_leaves.length > 0) {
+                        rawStats.recent_leaves.forEach(u => { lHtml += "<tr><td><div class='user-badge leave'>" + u.username.charAt(0).toUpperCase().replace(/</g,'&lt;') + "</div> " + u.username.replace(/</g,'&lt;') + "</td><td class='text-muted'>" + u.date + "</td></tr>"; });
+                    } else lHtml = "<tr><td colspan='2' class='text-muted text-center'>Empty</td></tr>";
+                    document.getElementById('target-leaves').outerHTML = lHtml;
+
+                    let reqHtml = '';
+                    if(rawStats.custom_requests && rawStats.custom_requests.length > 0) {
+                        rawStats.custom_requests.forEach(req => {
+                            let btn = req.status === 'pending' ? "<button onclick='resolveReq(\"" + req.id + "\")' style='background:var(--accent-green);border:none;padding:5px 10px;border-radius:5px;cursor:pointer;color:white;'>✔ Done</button>" : "Resolved";
+                            reqHtml += "<tr style='opacity: " + (req.status==='done'?'0.5':'1') + ";'><td>" + req.username.replace(/</g,'&lt;') + "</td><td><span class='highlight-text'>" + req.product.replace(/</g,'&lt;') + "</span></td><td>" + req.date + "</td><td>" + btn + "</td></tr>";
+                        });
+                    } else reqHtml = "<tr><td colspan='4' class='text-muted text-center'>No pending requests</td></tr>";
+                    document.getElementById('target-reqs').outerHTML = reqHtml;
+
+                    let promHtml = '';
+                    if(rawStats.promo_codes && Object.keys(rawStats.promo_codes).length > 0) {
+                        for (const [code, info] of Object.entries(rawStats.promo_codes)) {
+                            promHtml += "<tr><td><strong>" + code.replace(/</g,'&lt;') + "</strong></td><td class='text-green'>-" + info.discount + "%</td><td>" + info.used + " / " + info.limit + "</td><td><button onclick='deletePromo(\"" + code.replace(/"/g,'&quot;') + "\")' style='background:var(--accent-red);border:none;padding:4px 8px;border-radius:4px;cursor:pointer;color:white;'>🗑️ Remove</button></td></tr>";
+                        }
+                    } else promHtml = "<tr><td colspan='4' class='text-muted text-center'>No active promo codes</td></tr>";
+                    document.getElementById('target-promos').outerHTML = promHtml;
+                }
+                buildStaticTables();
 
                 function updateGoalUI() {
                     let percent = Math.min(100, Math.round((currentMonthRevenue / userGoal) * 100));
@@ -861,6 +883,25 @@ http.createServer(async (req, res) => {
                         text.innerText = "Sync Error (Offline)";
                     }
                 }
+
+                async function fetchBalance() {
+                    const el = document.getElementById("rewarble-balance");
+                    el.innerText = "Loading...";
+                    try {
+                        const res = await fetch("/api/balance");
+                        const data = await res.json();
+                        if (data.balance !== "N/A" && data.balance !== "API Error" && typeof data.balance === "number") {
+                            el.innerText = "€" + data.balance.toFixed(2);
+                        } else if (data.balance) {
+                            el.innerText = data.balance;
+                        } else {
+                            el.innerText = "Error";
+                        }
+                    } catch(e) {
+                        el.innerText = "Error";
+                    }
+                }
+                fetchBalance();
 
                 setInterval(async function() {
                     try {
@@ -990,7 +1031,7 @@ http.createServer(async (req, res) => {
                             let safeTName = t.name.replace(/</g, "&lt;").replace(/>/g, "&gt;");
                             return "<div style='display:flex; justify-content:space-between; background:rgba(0,0,0,0.3); padding:5px 10px; margin-top:5px; border-radius:5px;'>" +
                                 "<span>#" + safeTName + "</span>" +
-                                "<button style='background:var(--accent-red); border:none; color:white; border-radius:3px; cursor:pointer; padding:2px 8px;' onclick='modAction(&quot;close_channel&quot;, &quot;" + m.id + "&quot;, {channelId: &quot;" + t.id + "&quot;})'>Close</button>" +
+                                "<button style='background:var(--accent-red); border:none; color:white; border-radius:3px; cursor:pointer; padding:2px 8px;' onclick='modAction(\\"close_channel\\", \\"" + m.id + "\\", {channelId: \\"" + t.id + "\\"})'>Close</button>" +
                             "</div>";
                         }).join("") || "<span class='text-muted'>No active tickets</span>";
 
@@ -1020,20 +1061,20 @@ http.createServer(async (req, res) => {
                             "</div>" +
                             "<div style='margin-bottom:15px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.05);'>" +
                                 "<label style='font-size:0.8rem; color:var(--text-muted); display:block; margin-bottom:5px;'>📝 Private Notes (Admin Only) :</label>" +
-                                "<textarea id='note-" + m.id + "' placeholder='Add private remarks about this client...' style='min-height:50px;' onblur='saveUserNote(&quot;" + m.id + "&quot;)'>" + safeNote + "</textarea>" +
+                                "<textarea id='note-" + m.id + "' placeholder='Add private remarks about this client...' style='min-height:50px;' onblur='saveUserNote(\"" + m.id + "\")'>" + safeNote + "</textarea>" +
                             "</div>" +
                             "<div style='border-top:1px solid rgba(255,255,255,0.05); padding-top:10px;'>" +
                                 "<span style='font-size:0.8rem; color:var(--text-muted); display:block; margin-bottom:8px;'>⚡ Action Controls :</span>" +
                                 "<div style='display:flex; gap:8px; flex-wrap:wrap;'>" +
-                                    "<button class='admin-btn' style='margin:0; background:#3498db;' onclick='openDirectContact(&quot;" + m.id + "&quot;, &quot;" + safeUsername + "&quot;)'>💬 DM</button>" +
-                                    "<button class='admin-btn' style='margin:0; background:#e67e22;' onclick='modAction(&quot;mute&quot;, &quot;" + m.id + "&quot;, {duration: 15})'>🔇 15m</button>" +
-                                    "<button class='admin-btn' style='margin:0; background:#d35400;' onclick='modAction(&quot;mute&quot;, &quot;" + m.id + "&quot;, {duration: 60})'>🔇 1h</button>" +
-                                    "<button class='admin-btn' style='margin:0; background:#c0392b;' onclick='modAction(&quot;mute&quot;, &quot;" + m.id + "&quot;, {duration: 1440})'>🔇 1d</button>" +
-                                    "<button class='admin-btn' style='margin:0; background:#962d22;' onclick='modAction(&quot;mute&quot;, &quot;" + m.id + "&quot;, {duration: 10080})'>🔇 1w</button>" +
-                                    "<button class='admin-btn' style='margin:0; background:var(--accent-orange);' onclick='modAction(&quot;warn&quot;, &quot;" + m.id + "&quot;)'>⚠️ Warn</button>" +
-                                    "<button class='admin-btn' style='margin:0; background:var(--accent-red);' onclick='modAction(&quot;kick&quot;, &quot;" + m.id + "&quot;)'>👢 Kick</button>" +
-                                    "<button class='admin-btn' style='margin:0; background:var(--accent-red);' onclick='modAction(&quot;ban&quot;, &quot;" + m.id + "&quot;)'>🔨 Ban</button>" +
-                                    "<button class='admin-btn' style='width:auto; margin:0; background:#000; border:1px solid var(--accent-red);' onclick='modAction(&quot;toggle_blacklist&quot;, &quot;" + m.id + "&quot;)'>" + (m.isBlacklisted ? "✅ Un-Blacklist" : "🚫 Blacklist") + "</button>" +
+                                    "<button class='admin-btn' style='margin:0; background:#3498db;' onclick='openDirectContact(\"" + m.id + "\", \"" + safeUsername + "\")'>💬 DM</button>" +
+                                    "<button class='admin-btn' style='margin:0; background:#e67e22;' onclick='modAction(\\"mute\\", \\"" + m.id + "\\", {duration: 15})'>🔇 15m</button>" +
+                                    "<button class='admin-btn' style='margin:0; background:#d35400;' onclick='modAction(\\"mute\\", \\"" + m.id + "\\", {duration: 60})'>🔇 1h</button>" +
+                                    "<button class='admin-btn' style='margin:0; background:#c0392b;' onclick='modAction(\\"mute\\", \\"" + m.id + "\\", {duration: 1440})'>🔇 1d</button>" +
+                                    "<button class='admin-btn' style='margin:0; background:#962d22;' onclick='modAction(\\"mute\\", \\"" + m.id + "\\", {duration: 10080})'>🔇 1w</button>" +
+                                    "<button class='admin-btn' style='margin:0; background:var(--accent-orange);' onclick='modAction(\\"warn\\", \\"" + m.id + "\\")'>⚠️ Warn</button>" +
+                                    "<button class='admin-btn' style='margin:0; background:var(--accent-red);' onclick='modAction(\\"kick\\", \\"" + m.id + "\\")'>👢 Kick</button>" +
+                                    "<button class='admin-btn' style='margin:0; background:var(--accent-red);' onclick='modAction(\\"ban\\", \\"" + m.id + "\\")'>🔨 Ban</button>" +
+                                    "<button class='admin-btn' style='width:auto; margin:0; background:#000; border:1px solid var(--accent-red);' onclick='modAction(\\"toggle_blacklist\\", \\"" + m.id + "\\")'>" + (m.isBlacklisted ? "✅ Un-Blacklist" : "🚫 Blacklist") + "</button>" +
                                 "</div>" +
                             "</div>" +
                         "</div>";
@@ -1099,7 +1140,7 @@ http.createServer(async (req, res) => {
                     renderSalesChart(days); 
                 }
 
-                const prodDataRaw = ${JSON.stringify(PRODUCT_DATA)}; 
+                const prodDataRaw = PRODUCT_DATA; 
                 const prodIds = Object.keys(rawStats.product_sales || {});
                 new Chart(document.getElementById("productsChart"), {
                     type: "doughnut", 
@@ -1110,7 +1151,7 @@ http.createServer(async (req, res) => {
                     options: { responsive: true, maintainAspectRatio: false, cutout: "70%", plugins: { legend: { position: "right", labels: { color: "#f8fafc" } } } }
                 });
 
-                const audienceDates = Array.from(new Set([...Object.keys(rawStats.joins), ...Object.keys(rawStats.leaves)])).sort().slice(-10);
+                const audienceDates = Array.from(new Set([...Object.keys(rawStats.joins || {}), ...Object.keys(rawStats.leaves || {})])).sort().slice(-10);
                 new Chart(document.getElementById("audienceChart"), {
                     type: "bar", 
                     data: { 
