@@ -345,6 +345,7 @@ http.createServer(async (req, res) => {
     const cookie = req.headers.cookie || '';
     const isAuthenticated = cookie.includes(`auth=${DASHBOARD_PIN}`);
 
+    // --- API DE CONNEXION ---
     if (req.url === '/api/login' && req.method === 'POST') {
         let body = ''; req.on('data', chunk => body += chunk);
         req.on('end', () => {
@@ -366,15 +367,17 @@ http.createServer(async (req, res) => {
 
     if ((req.url === '/dashboard' || req.url === '/') && !isAuthenticated) {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        return res.end(`
-        <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Nexus Login</title>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
-        <style>body{font-family:'Inter',sans-serif;background:#0b0f19;color:#f8fafc;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;}.login-box{background:rgba(30,41,59,0.7);backdrop-filter:blur(10px);padding:40px;border-radius:16px;border:1px solid rgba(255,255,255,0.1);text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.5);}input{background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);color:white;padding:15px;border-radius:8px;font-size:1.5em;text-align:center;letter-spacing:10px;width:180px;margin:20px 0;outline:none;transition:0.3s;}input:focus{border-color:#38bdf8;box-shadow:0 0 10px rgba(56,189,248,0.3);}button{background:#38bdf8;color:white;border:none;padding:12px 30px;font-size:1.1em;border-radius:8px;cursor:pointer;font-weight:bold;width:100%;transition:0.2s;}button:hover{background:#0284c7;}</style>
-        </head><body><div class="login-box"><h2 style="margin-top:0;color:#38bdf8;">🔒 Restricted Area</h2><p style="color:#94a3b8;font-size:0.9em;">Please enter your PIN.</p><input type="password" id="pin" maxlength="4" placeholder="••••"><br><button onclick="login()">Unlock Dashboard</button><p id="err" style="color:#ec4899;display:none;margin-top:10px;">Invalid PIN or Blocked</p></div>
-        <script>async function login(){const res=await fetch('/api/login',{method:'POST',body:JSON.stringify({pin:document.getElementById('pin').value})});if(res.ok)location.reload();else{document.getElementById('err').style.display='block';}} document.getElementById('pin').addEventListener('keypress', e => { if (e.key === 'Enter') login(); });</script></body></html>`);
+        const html = [
+            "<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'><title>Nexus Login</title>",
+            "<link href='https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap' rel='stylesheet'>",
+            "<style>body{font-family:'Inter',sans-serif;background:#0b0f19;color:#f8fafc;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;}.login-box{background:rgba(30,41,59,0.7);backdrop-filter:blur(10px);padding:40px;border-radius:16px;border:1px solid rgba(255,255,255,0.1);text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.5);}input{background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);color:white;padding:15px;border-radius:8px;font-size:1.5em;text-align:center;letter-spacing:10px;width:180px;margin:20px 0;outline:none;transition:0.3s;}input:focus{border-color:#38bdf8;box-shadow:0 0 10px rgba(56,189,248,0.3);}button{background:#38bdf8;color:white;border:none;padding:12px 30px;font-size:1.1em;border-radius:8px;cursor:pointer;font-weight:bold;width:100%;transition:0.2s;}button:hover{background:#0284c7;}</style>",
+            "</head><body><div class='login-box'><h2 style='margin-top:0;color:#38bdf8;'>🔒 Restricted Area</h2><p style='color:#94a3b8;font-size:0.9em;'>Please enter your PIN.</p><input type='password' id='pin' maxlength='4' placeholder='••••'><br><button onclick='login()'>Unlock Dashboard</button><p id='err' style='color:#ec4899;display:none;margin-top:10px;'>Invalid PIN or Blocked</p></div>",
+            "<script>async function login(){const res=await fetch('/api/login',{method:'POST',body:JSON.stringify({pin:document.getElementById('pin').value})});if(res.ok)location.reload();else{document.getElementById('err').style.display='block';}} document.getElementById('pin').addEventListener('keypress', e => { if (e.key === 'Enter') login(); });</script></body></html>"
+        ].join('\n');
+        return res.end(html);
     }
 
-    // NOUVELLE ROUTE API : INIT DATA (Pour éviter d'injecter JSON dans HTML)
+    // --- API INITIALISATION DE DONNEES (Sécurisé) ---
     if (req.url === '/api/init-data' && req.method === 'GET') {
         if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         
@@ -383,6 +386,7 @@ http.createServer(async (req, res) => {
         if (guild) {
             try {
                 memberCount = guild.memberCount;
+                onlineCount = guild.presences?.cache?.size || "N/A";
             } catch (err) { }
         }
 
@@ -391,8 +395,10 @@ http.createServer(async (req, res) => {
         const totalHistorique = memberCount !== "N/A" ? (memberCount + (memoryStats.total_leaves || 0)) : 1;
         const retentionRate = memberCount !== "N/A" ? ((memberCount / totalHistorique) * 100).toFixed(1) : "N/A";
         
-        const todayStr = new Date().toISOString().split('T')[0]; const todayRevenue = memoryStats.revenue[todayStr] || 0;
-        const currentMonth = todayStr.substring(0, 7); let monthRevenue = 0;
+        const todayStr = new Date().toISOString().split('T')[0]; 
+        const todayRevenue = memoryStats.revenue[todayStr] || 0;
+        const currentMonth = todayStr.substring(0, 7); 
+        let monthRevenue = 0;
         Object.keys(memoryStats.revenue).forEach(date => { if(date.startsWith(currentMonth)) monthRevenue += memoryStats.revenue[date]; });
 
         const ticketsOpened = memoryStats.analytics?.tickets_opened || 0;
@@ -406,18 +412,19 @@ http.createServer(async (req, res) => {
 
         res.writeHead(200, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({
-            memoryStats,
-            PRODUCT_DATA,
-            todayRevenue,
-            monthRevenue,
-            ticketsOpened,
-            dropOffRate,
-            peakHourStr,
-            conversionRate,
-            retentionRate,
-            onlineCount,
-            memberCount,
-            MONTHLY_GOAL
+            memoryStats: memoryStats,
+            PRODUCT_DATA: PRODUCT_DATA,
+            todayRevenue: todayRevenue,
+            monthRevenue: monthRevenue,
+            ticketsOpened: ticketsOpened,
+            dropOffRate: dropOffRate,
+            peakHourStr: peakHourStr,
+            conversionRate: conversionRate,
+            retentionRate: retentionRate,
+            onlineCount: onlineCount,
+            memberCount: memberCount,
+            MONTHLY_GOAL: MONTHLY_GOAL,
+            PIN: DASHBOARD_PIN
         }));
     }
 
@@ -558,678 +565,628 @@ http.createServer(async (req, res) => {
         }); return;
     }
 
-    // ROUTE PRINCIPALE DASHBOARD : 100% STATIQUE = 0% CRASH
+    // --- LE DASHBOARD STATIQUE PARFAIT ---
     if (req.url === '/dashboard' || req.url === '/') {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        res.end(`
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Nexus Premium Dashboard</title>
-            <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
-            <style>
-                :root { --bg-main: #0b0f19; --bg-card: rgba(30, 41, 59, 0.7); --border-color: rgba(255, 255, 255, 0.1); --text-main: #f8fafc; --text-muted: #94a3b8; --accent-blue: #38bdf8; --accent-green: #10b981; --accent-purple: #a855f7; --accent-orange: #f97316; --accent-pink: #ec4899; --accent-red: #ef4444; }
-                * { box-sizing: border-box; }
-                body { font-family: "Inter", sans-serif; background-color: var(--bg-main); color: var(--text-main); margin: 0; padding: 20px; min-height: 100vh; overflow-x: hidden; }
-                
-                .container { max-width: 1300px; margin: 0 auto; animation: fadeIn 0.5s; }
-                .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid var(--border-color); flex-wrap: wrap; gap: 15px; }
-                .header h1 { font-size: 2em; margin: 0; background: linear-gradient(to right, #38bdf8, #a855f7); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-                .controls { display: flex; gap: 15px; align-items: center; flex-wrap: wrap; }
-                .btn-icon { background: var(--bg-card); backdrop-filter: blur(10px); border: 1px solid var(--border-color); color: white; padding: 8px 15px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 5px; transition: 0.2s; }
-                .btn-icon:hover { background: rgba(255,255,255,0.1); }
-                
-                .status-badge { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--text-muted); background: var(--bg-card); padding: 8px 12px; border-radius: 20px; border: 1px solid var(--border-color); backdrop-filter: blur(10px); }
-                .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #2ecc71; box-shadow: 0 0 8px #2ecc71; transition: 0.3s; }
-                
-                .nav-menu { display: flex; gap: 10px; margin-bottom: 30px; background: var(--bg-card); backdrop-filter: blur(10px); padding: 10px; border-radius: 12px; border: 1px solid var(--border-color); overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
-                .nav-menu::-webkit-scrollbar { display: none; }
-                .nav-btn { background: transparent; border: none; color: var(--text-muted); font-size: 1em; font-weight: 600; padding: 10px 20px; border-radius: 8px; cursor: pointer; transition: 0.3s; }
-                .nav-btn:hover { color: #fff; background: rgba(255,255,255,0.05); }
-                .nav-btn.active { color: #fff; background: var(--accent-blue); box-shadow: 0 4px 15px rgba(56, 189, 248, 0.3); }
-                
-                .stealth-active .money { filter: blur(6px); transition: 0.3s; opacity: 0.8; }
-                #toast { position: fixed; bottom: -100px; right: 20px; background: var(--accent-green); color: white; padding: 15px 25px; border-radius: 10px; font-weight: bold; box-shadow: 0 5px 15px rgba(0,0,0,0.5); transition: 0.5s; z-index: 1000; }
-                
-                .tab-content { display: none; animation: fadeIn 0.4s; } .tab-content.active { display: block; }
-                @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-                
-                .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 25px; }
-                .card { background: var(--bg-card); backdrop-filter: blur(10px); padding: 20px; border-radius: 12px; border: 1px solid var(--border-color); position: relative; overflow: hidden; transition: transform 0.2s; }
-                .card:hover { transform: translateY(-2px); }
-                .card::before { content: ""; position: absolute; top: 0; left: 0; width: 4px; height: 100%; background: var(--accent-blue); }
-                .card.green::before{background:var(--accent-green)} .card.pink::before{background:var(--accent-pink)} .card.orange::before{background:var(--accent-orange)} .card.purple::before{background:var(--accent-purple)} .card.red::before{background:var(--accent-red)} .card.yellow::before{background:#f1c40f;}
-                .card h3 { margin: 0; color: var(--text-muted); font-size: 0.8em; text-transform: uppercase; } 
-                .card .value { font-size: 2em; font-weight: 800; margin-top: 5px; word-wrap: break-word; }
-                
-                .goal-container { background: var(--bg-card); backdrop-filter: blur(10px); padding: 20px; border-radius: 12px; border: 1px solid var(--border-color); margin-bottom: 25px; }
-                .goal-header { display: flex; justify-content: space-between; margin-bottom: 10px; flex-wrap: wrap; gap: 10px; }
-                .progress-bg { background: rgba(255,255,255,0.1); height: 12px; border-radius: 6px; overflow: hidden; }
-                .progress-fill { background: linear-gradient(90deg, var(--accent-blue), var(--accent-purple)); height: 100%; transition: width 1s ease-in-out; }
-                
-                .content-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 20px; }
-                .box { background: var(--bg-card); backdrop-filter: blur(10px); padding: 20px; border-radius: 12px; border: 1px solid var(--border-color); overflow-x: auto; }
-                .box-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px; }
-                .box h2 { font-size: 1.1em; margin: 0; } 
-                .chart-container { position: relative; height: 250px; width: 100%; min-width: 250px; }
-                
-                .filter-group { display: flex; gap: 5px; background: rgba(0,0,0,0.2); padding: 4px; border-radius: 6px; }
-                .filter-btn { background: transparent; border: none; color: var(--text-muted); font-size: 0.8em; padding: 4px 10px; border-radius: 4px; cursor: pointer; transition: 0.2s; }
-                .filter-btn:hover { background: rgba(255,255,255,0.1); }
-                .filter-btn.active { background: var(--accent-blue); color: #fff; }
-                
-                table { width: 100%; border-collapse: collapse; min-width: 400px; } 
-                th, td { padding: 12px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.9em; }
-                th { color: var(--text-muted); text-transform: uppercase; font-size: 0.75em; }
-                
-                .user-badge { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; background: var(--accent-blue); color: #fff; font-size: 0.7em; margin-right: 8px; font-weight: bold;}
-                .user-badge.leave { background: var(--accent-red); }
-                
-                input, textarea, select { width: 100%; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); color: white; padding: 10px; border-radius: 6px; font-family: "Inter", sans-serif; transition: border-color 0.2s; }
-                input:focus, textarea:focus, select:focus { border-color: var(--accent-blue); outline: none; }
-                
-                .admin-btn { background: var(--accent-blue); color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; margin-top: 10px; transition: 0.2s; display: inline-flex; align-items: center; justify-content: center; gap: 5px; }
-                .admin-btn:hover { filter: brightness(1.2); transform: translateY(-1px); }
-                
-                .text-green { color: var(--accent-green); } .text-blue { color: var(--accent-blue); } .font-bold { font-weight: 600; } .text-muted { color: var(--text-muted); } .text-red { color: var(--accent-red); }
+        
+        // Assemblage 100% propre du fichier HTML sans aucune variable Node.js pour éviter les corruptions de chaînes
+        const htmlPage = [
+            "<!DOCTYPE html>",
+            "<html lang='en'>",
+            "<head>",
+            "    <meta charset='UTF-8'>",
+            "    <meta name='viewport' content='width=device-width, initial-scale=1.0'>",
+            "    <title>Nexus Premium Dashboard</title>",
+            "    <script src='https://cdn.jsdelivr.net/npm/chart.js'></script>",
+            "    <link href='https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap' rel='stylesheet'>",
+            "    <style>",
+            "        :root { --bg-main: #0b0f19; --bg-card: rgba(30, 41, 59, 0.7); --border-color: rgba(255, 255, 255, 0.1); --text-main: #f8fafc; --text-muted: #94a3b8; --accent-blue: #38bdf8; --accent-green: #10b981; --accent-purple: #a855f7; --accent-orange: #f97316; --accent-pink: #ec4899; --accent-red: #ef4444; }",
+            "        * { box-sizing: border-box; }",
+            "        body { font-family: 'Inter', sans-serif; background-color: var(--bg-main); color: var(--text-main); margin: 0; padding: 20px; min-height: 100vh; overflow-x: hidden; }",
+            "        .container { max-width: 1300px; margin: 0 auto; animation: fadeIn 0.5s; }",
+            "        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid var(--border-color); flex-wrap: wrap; gap: 15px; }",
+            "        .header h1 { font-size: 2em; margin: 0; background: linear-gradient(to right, #38bdf8, #a855f7); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }",
+            "        .controls { display: flex; gap: 15px; align-items: center; flex-wrap: wrap; }",
+            "        .btn-icon { background: var(--bg-card); backdrop-filter: blur(10px); border: 1px solid var(--border-color); color: white; padding: 8px 15px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 5px; transition: 0.2s; }",
+            "        .btn-icon:hover { background: rgba(255,255,255,0.1); }",
+            "        .status-badge { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--text-muted); background: var(--bg-card); padding: 8px 12px; border-radius: 20px; border: 1px solid var(--border-color); backdrop-filter: blur(10px); }",
+            "        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #2ecc71; box-shadow: 0 0 8px #2ecc71; transition: 0.3s; }",
+            "        .nav-menu { display: flex; gap: 10px; margin-bottom: 30px; background: var(--bg-card); backdrop-filter: blur(10px); padding: 10px; border-radius: 12px; border: 1px solid var(--border-color); overflow-x: auto; white-space: nowrap; scrollbar-width: none; }",
+            "        .nav-menu::-webkit-scrollbar { display: none; }",
+            "        .nav-btn { background: transparent; border: none; color: var(--text-muted); font-size: 1em; font-weight: 600; padding: 10px 20px; border-radius: 8px; cursor: pointer; transition: 0.3s; }",
+            "        .nav-btn:hover { color: #fff; background: rgba(255,255,255,0.05); }",
+            "        .nav-btn.active { color: #fff; background: var(--accent-blue); box-shadow: 0 4px 15px rgba(56, 189, 248, 0.3); }",
+            "        .stealth-active .money { filter: blur(6px); transition: 0.3s; opacity: 0.8; }",
+            "        #toast { position: fixed; bottom: -100px; right: 20px; background: var(--accent-green); color: white; padding: 15px 25px; border-radius: 10px; font-weight: bold; box-shadow: 0 5px 15px rgba(0,0,0,0.5); transition: 0.5s; z-index: 1000; }",
+            "        .tab-content { display: none; animation: fadeIn 0.4s; } .tab-content.active { display: block; }",
+            "        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }",
+            "        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 25px; }",
+            "        .card { background: var(--bg-card); backdrop-filter: blur(10px); padding: 20px; border-radius: 12px; border: 1px solid var(--border-color); position: relative; overflow: hidden; transition: transform 0.2s; }",
+            "        .card:hover { transform: translateY(-2px); }",
+            "        .card::before { content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%; background: var(--accent-blue); }",
+            "        .card.green::before{background:var(--accent-green)} .card.pink::before{background:var(--accent-pink)} .card.orange::before{background:var(--accent-orange)} .card.purple::before{background:var(--accent-purple)} .card.red::before{background:var(--accent-red)} .card.yellow::before{background:#f1c40f;}",
+            "        .card h3 { margin: 0; color: var(--text-muted); font-size: 0.8em; text-transform: uppercase; } ",
+            "        .card .value { font-size: 2em; font-weight: 800; margin-top: 5px; word-wrap: break-word; }",
+            "        .goal-container { background: var(--bg-card); backdrop-filter: blur(10px); padding: 20px; border-radius: 12px; border: 1px solid var(--border-color); margin-bottom: 25px; }",
+            "        .goal-header { display: flex; justify-content: space-between; margin-bottom: 10px; flex-wrap: wrap; gap: 10px; }",
+            "        .progress-bg { background: rgba(255,255,255,0.1); height: 12px; border-radius: 6px; overflow: hidden; }",
+            "        .progress-fill { background: linear-gradient(90deg, var(--accent-blue), var(--accent-purple)); height: 100%; transition: width 1s ease-in-out; }",
+            "        .content-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 20px; }",
+            "        .box { background: var(--bg-card); backdrop-filter: blur(10px); padding: 20px; border-radius: 12px; border: 1px solid var(--border-color); overflow-x: auto; }",
+            "        .box-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px; }",
+            "        .box h2 { font-size: 1.1em; margin: 0; } ",
+            "        .chart-container { position: relative; height: 250px; width: 100%; min-width: 250px; }",
+            "        .filter-group { display: flex; gap: 5px; background: rgba(0,0,0,0.2); padding: 4px; border-radius: 6px; }",
+            "        .filter-btn { background: transparent; border: none; color: var(--text-muted); font-size: 0.8em; padding: 4px 10px; border-radius: 4px; cursor: pointer; transition: 0.2s; }",
+            "        .filter-btn:hover { background: rgba(255,255,255,0.1); }",
+            "        .filter-btn.active { background: var(--accent-blue); color: #fff; }",
+            "        table { width: 100%; border-collapse: collapse; min-width: 400px; } ",
+            "        th, td { padding: 12px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.9em; }",
+            "        th { color: var(--text-muted); text-transform: uppercase; font-size: 0.75em; }",
+            "        .user-badge { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; background: var(--accent-blue); color: #fff; font-size: 0.7em; margin-right: 8px; font-weight: bold;}",
+            "        .user-badge.leave { background: var(--accent-red); }",
+            "        input, textarea, select { width: 100%; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); color: white; padding: 10px; border-radius: 6px; font-family: 'Inter', sans-serif; transition: border-color 0.2s; }",
+            "        input:focus, textarea:focus, select:focus { border-color: var(--accent-blue); outline: none; }",
+            "        .admin-btn { background: var(--accent-blue); color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; margin-top: 10px; transition: 0.2s; display: inline-flex; align-items: center; justify-content: center; gap: 5px; }",
+            "        .admin-btn:hover { filter: brightness(1.2); transform: translateY(-1px); }",
+            "        .text-green { color: var(--accent-green); } .text-blue { color: var(--accent-blue); } .font-bold { font-weight: 600; } .text-muted { color: var(--text-muted); } .text-red { color: var(--accent-red); }",
+            "        @media (max-width: 768px) {",
+            "            .content-grid { grid-template-columns: 1fr; }",
+            "            .stats-grid { grid-template-columns: 1fr 1fr; }",
+            "            .header { flex-direction: column; align-items: flex-start; }",
+            "        }",
+            "        @media (max-width: 480px) {",
+            "            .stats-grid { grid-template-columns: 1fr; }",
+            "            .box-header { flex-direction: column; align-items: flex-start; }",
+            "        }",
+            "        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }",
+            "    </style>",
+            "</head>",
+            "<body>",
+            "    <div id='toast'>🎉 Notification!</div>",
+            "    <div id='loading-screen' style='position:fixed; top:0; left:0; width:100%; height:100%; background:var(--bg-main); z-index:9999; display:flex; justify-content:center; align-items:center; flex-direction:column;'>",
+            "        <div style='width: 40px; height: 40px; border: 4px solid rgba(56, 189, 248, 0.3); border-top: 4px solid var(--accent-blue); border-radius: 50%; animation: spin 1s linear infinite;'></div>",
+            "        <h2 style='color:var(--accent-blue); margin-top:20px;'>Fetching Secured Data...</h2>",
+            "    </div>",
+            "    <div class='container' id='dashboard-container' style='display:none;'>",
+            "        <div class='header'>",
+            "            <h1>Nexus Dashboard</h1>",
+            "            <div class='controls'>",
+            "                <div id='upstash-status' class='status-badge'><span class='status-dot' id='status-dot'></span><span id='status-text'>Cloud Sync</span></div>",
+            "                <button class='btn-icon' onclick='window.toggleStealth()' id='stealthBtn'>👁️ Stealth</button>",
+            "                <div class='live-status btn-icon' style='background:var(--accent-blue); border:none;'><div class='pulse' style='width:8px; height:8px; background:white; border-radius:50%; box-shadow:0 0 10px white;'></div> <span id='live-tickets-count'>0</span> Live</div>",
+            "            </div>",
+            "        </div>",
+            "        <div class='nav-menu'>",
+            "            <button class='nav-btn active' onclick='window.switchTab(\"overview\", this)'>📊 Overview</button>",
+            "            <button class='nav-btn' onclick='window.switchTab(\"transactions\", this)'>💳 Transactions</button>",
+            "            <button class='nav-btn' onclick='window.switchTab(\"audience\", this)'>👥 Audience</button>",
+            "            <button class='nav-btn' onclick='window.switchTab(\"moderation\", this)'>🛡️ Moderation</button>",
+            "            <button class='nav-btn' onclick='window.switchTab(\"admin\", this)'>⚙️ Admin Config</button>",
+            "        </div>",
+            "        <div id='overview' class='tab-content active'>",
+            "            <div class='stats-grid'>",
+            "                <div class='card green'><h3>Today's Earnings</h3><div class='value money text-green' id='ui-today-rev'>€0</div></div>",
+            "                <div class='card blue'><h3>Total Earnings</h3><div class='value money text-blue' id='ui-total-rev'>€0</div></div>",
+            "                <div class='card pink'><h3>Conversion Rate</h3><div class='value text-pink' id='ui-conv-rate'>0%</div></div>",
+            "                <div class='card orange'><h3>Online / Total</h3><div class='value text-orange' id='ui-online-total'>0</div></div>",
+            "                <div class='card purple'><h3>Retention Rate</h3><div class='value text-purple' id='ui-retention'>0%</div></div>",
+            "                <div class='card yellow'><h3>💳 Rewarble Balance</h3><div class='value money' style='color:#f1c40f;' id='rewarble-balance'>Loading...</div><button onclick='window.fetchBalance()' style='background:rgba(255,255,255,0.1); border:none; color:white; padding:4px 8px; border-radius:4px; font-size:0.7em; margin-top:8px; cursor:pointer;'>🔄 Refresh</button></div>",
+            "            </div>",
+            "            <div class='stats-grid' style='margin-top: 15px; margin-bottom: 25px;'>",
+            "                <div class='card purple'><h3>Tickets Opened</h3><div class='value' id='ui-tickets-opened'>0</div></div>",
+            "                <div class='card red'><h3>Drop-off Rate</h3><div class='value text-red' id='ui-dropoff'>0%</div></div>",
+            "                <div class='card orange'><h3>Peak Sales Hour</h3><div class='value' style='font-size:1.5em; margin-top:10px;' id='ui-peak-hour'>N/A</div></div>",
+            "            </div>",
+            "            <div class='goal-container'>",
+            "                <div class='goal-header'>",
+            "                    <span class='font-bold'>🎯 Monthly Goal (Current Month) <button onclick='window.editGoal()' style='background:none;border:none;cursor:pointer;font-size:1em;margin-left:10px;'>✏️</button></span>",
+            "                    <span class='money font-bold' id='goal-text'>€0 / €0 (0%)</span>",
+            "                </div>",
+            "                <div class='progress-bg'><div class='progress-fill' id='goal-bar' style='width: 0%;'></div></div>",
+            "            </div>",
+            "            <div class='content-grid'>",
+            "                <div class='box'>",
+            "                    <div class='box-header'>",
+            "                        <h2>📈 Revenue Timeline</h2>",
+            "                        <div class='filter-group'>",
+            "                            <button class='filter-btn active' onclick='window.updateChartFilter(7, this)'>7D</button>",
+            "                            <button class='filter-btn' onclick='window.updateChartFilter(30, this)'>30D</button>",
+            "                            <button class='filter-btn' onclick='window.updateChartFilter(0, this)'>All</button>",
+            "                        </div>",
+            "                    </div>",
+            "                    <div class='chart-container'><canvas id='salesChart'></canvas></div>",
+            "                </div>",
+            "                <div class='box'><div class='box-header'><h2>🏆 Top Sellers</h2></div><div class='chart-container'><canvas id='productsChart'></canvas></div></div>",
+            "            </div>",
+            "        </div>",
+            "        <div id='transactions' class='tab-content'>",
+            "            <div class='content-grid'>",
+            "                <div class='box'>",
+            "                    <div class='box-header'><h2>🛒 Recent Transactions</h2><button class='btn-icon' style='background:var(--accent-green);font-size:0.8em;' onclick='window.exportCSV()'>📥 Export CSV</button></div>",
+            "                    <div style='overflow-x:auto; max-height: 400px;'><table><thead><tr><th>Customer</th><th>Product</th><th>Price</th><th>Date</th></tr></thead><tbody id='target-tx'></tbody></table></div>",
+            "                </div>",
+            "                <div class='box'><h2>💎 Top Spenders (VIPs)</h2><table><thead><tr><th>Customer</th><th>Total Spent</th></tr></thead><tbody id='target-spenders'></tbody></table></div>",
+            "            </div>",
+            "        </div>",
+            "        <div id='audience' class='tab-content'>",
+            "            <div class='box' style='margin-bottom:20px;'><h2>📊 Community Activity (Last 10 Days)</h2><div class='chart-container'><canvas id='audienceChart'></canvas></div></div>",
+            "            <div class='content-grid'>",
+            "                <div class='box'><h2>📥 Latest Joins</h2><div style='overflow-x:auto; max-height:300px;'><table><thead><tr><th>Username</th><th>Date</th></tr></thead><tbody id='target-joins'></tbody></table></div></div>",
+            "                <div class='box'><h2>📤 Latest Leaves</h2><div style='overflow-x:auto; max-height:300px;'><table><thead><tr><th>Username</th><th>Date</th></tr></thead><tbody id='target-leaves'></tbody></table></div></div>",
+            "            </div>",
+            "        </div>",
+            "        <div id='moderation' class='tab-content'>",
+            "            <div class='box'>",
+            "                <h2>🔎 Member Directory & Moderation</h2>",
+            "                <div style='display:flex; flex-wrap:wrap; gap:10px; margin-top:10px; align-items:center;'>",
+            "                    <input type='text' id='memberSearchInput' placeholder='Filter by username or ID...' style='margin-top:0; flex:1; min-width:200px;' oninput='window.filterMembersLocally()'>",
+            "                    <select id='memberSortSelect' style='margin-top:0; width:auto;' onchange='window.sortMembersLocally()'>",
+            "                        <option value='recent'>🔽 Newest</option>",
+            "                        <option value='spent'>💰 Top Spenders</option>",
+            "                        <option value='oldest'>🔼 Oldest</option>",
+            "                        <option value='warns'>⚠️ Warns</option>",
+            "                    </select>",
+            "                    <button class='admin-btn' style='margin-top:0; height:42px;' onclick='window.loadAllMembers()'>🔄 Refresh</button>",
+            "                </div>",
+            "                <div id='memberResults' style='margin-top: 20px;'><p class='text-muted'>Loading members list...</p></div>",
+            "            </div>",
+            "        </div>",
+            "        <div id='admin' class='tab-content'>",
+            "            <div class='content-grid'>",
+            "                <div class='box'>",
+            "                    <h2>📋 Custom Requests Manager</h2>",
+            "                    <div style='overflow-x:auto; max-height: 300px;'><table><thead><tr><th>Customer</th><th>Request</th><th>Date</th><th>Action</th></tr></thead><tbody id='target-reqs'></tbody></table></div>",
+            "                </div>",
+            "                <div class='box'>",
+            "                    <h2>🎟️ Promo Codes Generator</h2>",
+            "                    <div style='display:flex; gap:10px; margin-bottom:15px; flex-wrap:wrap;'>",
+            "                        <input type='text' id='promoName' placeholder='Code (e.g. VIP20)' style='flex:1; min-width:120px;'>",
+            "                        <input type='number' id='promoDiscount' placeholder='% Off (e.g. 20)' style='width:110px;'>",
+            "                        <input type='number' id='promoLimit' placeholder='Max Uses' style='width:110px;'>",
+            "                        <button class='admin-btn' style='margin-top:0;' onclick='window.createPromo()'>➕ Create</button>",
+            "                    </div>",
+            "                    <div style='overflow-x:auto; max-height: 200px;'><table><thead><tr><th>Code</th><th>Discount</th><th>Usage</th><th>Action</th></tr></thead><tbody id='target-promos'></tbody></table></div>",
+            "                </div>",
+            "            </div>",
+            "            <div class='content-grid'>",
+            "                <div class='box'>",
+            "                    <h2>🎛️ Global Announcement</h2>",
+            "                    <div style='margin-bottom: 20px;'>",
+            "                        <label class='text-muted' style='font-size:0.85rem; margin-bottom:5px; display:block;'>Channel ID</label>",
+            "                        <input type='text' id='announce-channel' placeholder='e.g. 123456789012345678' style='margin-bottom:10px;'>",
+            "                        <textarea id='announce-msg' rows='3' placeholder='Type your announcement here...'></textarea>",
+            "                        <button class='admin-btn' onclick='window.sendAdminAction(\"announce\")'>📢 Send Message</button>",
+            "                    </div>",
+            "                </div>",
+            "                <div class='box'>",
+            "                    <h2>🚨 Emergency Controls</h2>",
+            "                    <button class='admin-btn' style='background:var(--accent-red); width:100%; margin-top:10px;' onclick='window.sendAdminAction(\"close_all\")'>🗑️ Close All Open Tickets</button>",
+            "                </div>",
+            "            </div>",
+            "        </div>",
+            "    </div>",
+            "    <script>",
+            "        let PIN = '';",
+            "        let rawStats = {};",
+            "        let PRODUCT_DATA = {};",
+            "        let stealthMode = false;",
+            "        let lastTxCount = 0;",
+            "        let currentMonthRevenue = 0;",
+            "        let defaultGoal = 500;",
+            "        let userGoal = localStorage.getItem('customGoal') ? parseInt(localStorage.getItem('customGoal')) : defaultGoal;",
+            "        let salesChart;",
+            "        let allMembersData = [];",
+            "        let isMembersLoaded = false;",
 
-                @media (max-width: 768px) {
-                    .content-grid { grid-template-columns: 1fr; }
-                    .stats-grid { grid-template-columns: 1fr 1fr; }
-                    .header { flex-direction: column; align-items: flex-start; }
-                }
-                @media (max-width: 480px) {
-                    .stats-grid { grid-template-columns: 1fr; }
-                    .box-header { flex-direction: column; align-items: flex-start; }
-                }
-            </style>
-        </head>
-        <body>
-            <div id="toast">🎉 Notification!</div>
+            "        async function initDashboard() {",
+            "            try {",
+            "                const res = await fetch('/api/init-data');",
+            "                if (!res.ok) throw new Error('Fetch failed');",
+            "                const data = await res.json();",
+            "                rawStats = data.memoryStats;",
+            "                PRODUCT_DATA = data.PRODUCT_DATA;",
+            "                currentMonthRevenue = data.monthRevenue;",
+            "                defaultGoal = data.MONTHLY_GOAL;",
+            "                PIN = data.PIN;",
+            "                lastTxCount = rawStats.total_transactions || 0;",
+            "                ",
+            "                document.getElementById('ui-today-rev').innerText = '€' + data.todayRevenue;",
+            "                document.getElementById('ui-total-rev').innerText = '€' + (rawStats.total_revenue || 0);",
+            "                document.getElementById('ui-conv-rate').innerText = data.conversionRate + '%';",
+            "                document.getElementById('ui-online-total').innerHTML = data.onlineCount + \" <span style='font-size: 0.5em; color: var(--text-muted);'>/ \" + data.memberCount + \"</span>\";",
+            "                document.getElementById('ui-retention').innerText = data.retentionRate + '%';",
+            "                document.getElementById('ui-tickets-opened').innerText = data.ticketsOpened;",
+            "                document.getElementById('ui-dropoff').innerText = data.dropOffRate + '%';",
+            "                document.getElementById('ui-peak-hour').innerText = data.peakHourStr;",
 
-            <!-- ECRAN DE CHARGEMENT POUR EVITER LES ERREURS -->
-            <div id="loading-screen" style="position:fixed; top:0; left:0; width:100%; height:100%; background:var(--bg-main); z-index:9999; display:flex; justify-content:center; align-items:center; flex-direction:column;">
-                <div style="width: 40px; height: 40px; border: 4px solid rgba(56, 189, 248, 0.3); border-top: 4px solid var(--accent-blue); border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                <h2 style="color:var(--accent-blue); margin-top:20px;">Fetching Secured Data...</h2>
-                <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
-            </div>
+            "                buildStaticTables();",
+            "                updateGoalUI();",
+            "                renderSalesChart(7);",
+            "                renderDoughnutChart();",
+            "                renderBarChart();",
+            "                window.fetchBalance();",
 
-            <div class="container" id="dashboard-container" style="display:none;">
-                <div class="header">
-                    <h1>Nexus Dashboard</h1>
-                    <div class="controls">
-                        <div id="upstash-status" class="status-badge"><span class="status-dot" id="status-dot"></span><span id="status-text">Cloud Sync Active</span></div>
-                        <button class="btn-icon" onclick="toggleStealth()" id="stealthBtn">👁️ Stealth</button>
-                        <div class="live-status btn-icon" style="background:var(--accent-blue); border:none;"><div class="pulse" style="width:8px; height:8px; background:white; border-radius:50%; box-shadow:0 0 10px white;"></div> <span id="live-tickets-count">0</span> Live</div>
-                    </div>
-                </div>
+            "                document.getElementById('loading-screen').style.display = 'none';",
+            "                document.getElementById('dashboard-container').style.display = 'block';",
+            "            } catch (e) {",
+            "                alert('Erreur de connexion a l API. Impossible de charger le dashboard.');",
+            "            }",
+            "        }",
 
-                <div class="nav-menu">
-                    <button class="nav-btn active" onclick="switchTab('overview', this)">📊 Overview</button>
-                    <button class="nav-btn" onclick="switchTab('transactions', this)">💳 Transactions</button>
-                    <button class="nav-btn" onclick="switchTab('audience', this)">👥 Audience</button>
-                    <button class="nav-btn" onclick="switchTab('moderation', this)">🛡️ Moderation</button>
-                    <button class="nav-btn" onclick="switchTab('admin', this)">⚙️ Admin Config</button>
-                </div>
+            "        function escapeHTML(str) {",
+            "            if (!str) return '';",
+            "            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;').replace(/'/g, '&#39;');",
+            "        }",
 
-                <div id="overview" class="tab-content active">
-                    <div class="stats-grid">
-                        <div class="card green"><h3>Today's Earnings</h3><div class="value money text-green" id="ui-today-rev">€0</div></div>
-                        <div class="card blue"><h3>Total Earnings</h3><div class="value money text-blue" id="ui-total-rev">€0</div></div>
-                        <div class="card pink"><h3>Conversion Rate</h3><div class="value text-pink" id="ui-conv-rate">0%</div></div>
-                        <div class="card orange"><h3>Online / Total</h3><div class="value text-orange" id="ui-online-total">0</div></div>
-                        <div class="card purple"><h3>Retention Rate</h3><div class="value text-purple" id="ui-retention">0%</div></div>
-                        <div class="card yellow"><h3>💳 Rewarble Balance</h3><div class="value money" style="color:#f1c40f;" id="rewarble-balance">Loading...</div><button onclick="fetchBalance()" style="background:rgba(255,255,255,0.1); border:none; color:white; padding:4px 8px; border-radius:4px; font-size:0.7em; margin-top:8px; cursor:pointer;">🔄 Refresh</button></div>
-                    </div>
-                    
-                    <div class="stats-grid" style="margin-top: 15px; margin-bottom: 25px;">
-                        <div class="card purple"><h3>Tickets Opened</h3><div class="value" id="ui-tickets-opened">0</div></div>
-                        <div class="card red"><h3>Drop-off Rate</h3><div class="value text-red" id="ui-dropoff">0%</div></div>
-                        <div class="card orange"><h3>Peak Sales Hour</h3><div class="value" style="font-size:1.5em; margin-top:10px;" id="ui-peak-hour">N/A</div></div>
-                    </div>
-                    
-                    <div class="goal-container">
-                        <div class="goal-header">
-                            <span class="font-bold">🎯 Monthly Goal (Current Month) 
-                                <button onclick="editGoal()" style="background:none;border:none;cursor:pointer;font-size:1em;margin-left:10px; transition:0.2s;">✏️</button>
-                            </span>
-                            <span class="money font-bold" id="goal-text">€0 / €0 (0%)</span>
-                        </div>
-                        <div class="progress-bg"><div class="progress-fill" id="goal-bar" style="width: 0%;"></div></div>
-                    </div>
+            "        function buildStaticTables() {",
+            "            let txHtml = '';",
+            "            if(rawStats.recent_transactions && rawStats.recent_transactions.length > 0) {",
+            "                rawStats.recent_transactions.forEach(function(tx) {",
+            "                    txHtml += '<tr><td><span class=\"highlight-text\">' + escapeHTML(tx.username) + '</span></td><td>' + escapeHTML(tx.product) + '</td><td class=\"money text-green font-bold\">€' + tx.price + '</td><td class=\"text-muted\">' + tx.date + '</td></tr>';",
+            "                });",
+            "            } else txHtml = '<tr><td colspan=\"4\" class=\"text-muted text-center\">Empty</td></tr>';",
+            "            document.getElementById('target-tx').innerHTML = txHtml;",
 
-                    <div class="content-grid">
-                        <div class="box">
-                            <div class="box-header">
-                                <h2>📈 Revenue Timeline</h2>
-                                <div class="filter-group">
-                                    <button class="filter-btn active" onclick="updateChartFilter(7, this)">7D</button>
-                                    <button class="filter-btn" onclick="updateChartFilter(30, this)">30D</button>
-                                    <button class="filter-btn" onclick="updateChartFilter(0, this)">All</button>
-                                </div>
-                            </div>
-                            <div class="chart-container"><canvas id="salesChart"></canvas></div>
-                        </div>
-                        <div class="box"><div class="box-header"><h2>🏆 Top Sellers</h2></div><div class="chart-container"><canvas id="productsChart"></canvas></div></div>
-                    </div>
-                </div>
+            "            let spHtml = '';",
+            "            const sortedSpenders = Object.entries(rawStats.user_spending || {}).sort(function(a,b) { return b[1] - a[1]; }).slice(0, 10);",
+            "            if(sortedSpenders.length > 0) {",
+            "                sortedSpenders.forEach(function(user, i) {",
+            "                    let badgeColor = i < 3 ? '#FFD700' : 'var(--accent-blue)';",
+            "                    spHtml += '<tr><td><div class=\"user-badge\" style=\"background:' + badgeColor + ';\">' + (i+1) + '</div> ' + escapeHTML(user[0]) + '</td><td class=\"text-green font-bold\">€' + user[1] + '</td></tr>';",
+            "                });",
+            "            } else spHtml = '<tr><td colspan=\"2\" class=\"text-muted text-center\">No data</td></tr>';",
+            "            document.getElementById('target-spenders').innerHTML = spHtml;",
 
-                <div id="transactions" class="tab-content">
-                    <div class="content-grid">
-                        <div class="box">
-                            <div class="box-header"><h2>🛒 Recent Transactions</h2><button class="btn-icon" style="background:var(--accent-green);font-size:0.8em;" onclick="exportCSV()">📥 Export CSV</button></div>
-                            <div style="overflow-x:auto; max-height: 400px;"><table><thead><tr><th>Customer</th><th>Product</th><th>Price</th><th>Date</th></tr></thead><tbody id="target-tx"></tbody></table></div>
-                        </div>
-                        <div class="box"><h2>💎 Top Spenders (VIPs)</h2><table><thead><tr><th>Customer</th><th>Total Spent</th></tr></thead><tbody id="target-spenders"></tbody></table></div>
-                    </div>
-                </div>
+            "            let jHtml = '';",
+            "            if(rawStats.recent_joins && rawStats.recent_joins.length > 0) {",
+            "                rawStats.recent_joins.forEach(function(u) { jHtml += '<tr><td><div class=\"user-badge\">' + escapeHTML(u.username.charAt(0).toUpperCase()) + '</div> ' + escapeHTML(u.username) + '</td><td class=\"text-muted\">' + u.date + '</td></tr>'; });",
+            "            } else jHtml = '<tr><td colspan=\"2\" class=\"text-muted text-center\">Empty</td></tr>';",
+            "            document.getElementById('target-joins').innerHTML = jHtml;",
 
-                <div id="audience" class="tab-content">
-                    <div class="box" style="margin-bottom:20px;"><h2>📊 Community Activity (Last 10 Days)</h2><div class="chart-container"><canvas id="audienceChart"></canvas></div></div>
-                    <div class="content-grid">
-                        <div class="box"><h2>📥 Latest Joins</h2><div style="overflow-x:auto; max-height:300px;"><table><thead><tr><th>Username</th><th>Date</th></tr></thead><tbody id="target-joins"></tbody></table></div></div>
-                        <div class="box"><h2>📤 Latest Leaves</h2><div style="overflow-x:auto; max-height:300px;"><table><thead><tr><th>Username</th><th>Date</th></tr></thead><tbody id="target-leaves"></tbody></table></div></div>
-                    </div>
-                </div>
+            "            let lHtml = '';",
+            "            if(rawStats.recent_leaves && rawStats.recent_leaves.length > 0) {",
+            "                rawStats.recent_leaves.forEach(function(u) { lHtml += '<tr><td><div class=\"user-badge leave\">' + escapeHTML(u.username.charAt(0).toUpperCase()) + '</div> ' + escapeHTML(u.username) + '</td><td class=\"text-muted\">' + u.date + '</td></tr>'; });",
+            "            } else lHtml = '<tr><td colspan=\"2\" class=\"text-muted text-center\">Empty</td></tr>';",
+            "            document.getElementById('target-leaves').innerHTML = lHtml;",
 
-                <div id="moderation" class="tab-content">
-                    <div class="box">
-                        <h2>🔎 Member Directory & Moderation</h2>
-                        <div style="display:flex; flex-wrap:wrap; gap:10px; margin-top:10px; align-items:center;">
-                            <input type="text" id="memberSearchInput" placeholder="Filter by username or ID..." style="margin-top:0; flex:1; min-width:200px;" oninput="filterMembersLocally()">
-                            <select id="memberSortSelect" style="margin-top:0; width:auto;" onchange="sortMembersLocally()">
-                                <option value="recent">🔽 Newest</option>
-                                <option value="spent">💰 Top Spenders</option>
-                                <option value="oldest">🔼 Oldest</option>
-                                <option value="warns">⚠️ Warns</option>
-                            </select>
-                            <button class="admin-btn" style="margin-top:0; height:42px;" onclick="loadAllMembers()">🔄 Refresh</button>
-                        </div>
-                        <div id="memberResults" style="margin-top: 20px;"><p class="text-muted">Loading members list...</p></div>
-                    </div>
-                </div>
+            "            let reqHtml = '';",
+            "            if(rawStats.custom_requests && rawStats.custom_requests.length > 0) {",
+            "                rawStats.custom_requests.forEach(function(req) {",
+            "                    let btn = req.status === 'pending' ? '<button onclick=\"window.resolveReq(\\\'' + escapeHTML(req.id) + '\\\')\" style=\"background:var(--accent-green);border:none;padding:5px 10px;border-radius:5px;cursor:pointer;color:white;\">✔ Done</button>' : 'Resolved';",
+            "                    reqHtml += '<tr style=\"opacity: ' + (req.status==='done'?'0.5':'1') + ';\"><td>' + escapeHTML(req.username) + '</td><td><span class=\"highlight-text\">' + escapeHTML(req.product) + '</span></td><td>' + req.date + '</td><td>' + btn + '</td></tr>';",
+            "                });",
+            "            } else reqHtml = '<tr><td colspan=\"4\" class=\"text-muted text-center\">No pending requests</td></tr>';",
+            "            document.getElementById('target-reqs').innerHTML = reqHtml;",
 
-                <div id="admin" class="tab-content">
-                    <div class="content-grid">
-                        <div class="box">
-                            <h2>📋 Custom Requests Manager</h2>
-                            <p class="text-muted" style="font-size:0.8em;">Manage custom orders (Products 10 & 11) from your clients.</p>
-                            <div style="overflow-x:auto; max-height: 300px;"><table><thead><tr><th>Customer</th><th>Request</th><th>Date</th><th>Action</th></tr></thead><tbody id="target-reqs"></tbody></table></div>
-                        </div>
-                        <div class="box">
-                            <h2>🎟️ Promo Codes Generator</h2>
-                            <p class="text-muted" style="font-size:0.8em;">Create limited usage discount codes.</p>
-                            <div style="display:flex; gap:10px; margin-bottom:15px; flex-wrap:wrap;">
-                                <input type="text" id="promoName" placeholder="Code (e.g. VIP20)" style="flex:1; min-width:120px;">
-                                <input type="number" id="promoDiscount" placeholder="% Off (e.g. 20)" style="width:110px;">
-                                <input type="number" id="promoLimit" placeholder="Max Uses" style="width:110px;">
-                                <button class="admin-btn" style="margin-top:0;" onclick="createPromo()">➕ Create</button>
-                            </div>
-                            <div style="overflow-x:auto; max-height: 200px;"><table><thead><tr><th>Code</th><th>Discount</th><th>Usage</th><th>Action</th></tr></thead><tbody id="target-promos"></tbody></table></div>
-                        </div>
-                    </div>
-                    <div class="content-grid">
-                        <div class="box">
-                            <h2>🎛️ Global Announcement</h2>
-                            <div style="margin-bottom: 20px;">
-                                <label class="text-muted" style="font-size:0.85rem; margin-bottom:5px; display:block;">Channel ID</label>
-                                <input type="text" id="announce-channel" placeholder="e.g. 123456789012345678" style="margin-bottom:10px;">
-                                <textarea id="announce-msg" rows="3" placeholder="Type your announcement here..."></textarea>
-                                <button class="admin-btn" onclick="sendAdminAction('announce')">📢 Send Message</button>
-                            </div>
-                        </div>
-                        <div class="box">
-                            <h2>🚨 Emergency Controls</h2>
-                            <p class="text-muted" style="font-size:0.8em;">Instantly delete all active shop and support channels.</p>
-                            <button class="admin-btn" style="background:var(--accent-red); width:100%; margin-top:10px;" onclick="sendAdminAction('close_all')">🗑️ Close All Open Tickets</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            "            let promHtml = '';",
+            "            if(rawStats.promo_codes && Object.keys(rawStats.promo_codes).length > 0) {",
+            "                for (const code in rawStats.promo_codes) {",
+            "                    const info = rawStats.promo_codes[code];",
+            "                    promHtml += '<tr><td><strong>' + escapeHTML(code) + '</strong></td><td class=\"text-green\">-' + info.discount + '%</td><td>' + info.used + ' / ' + info.limit + '</td><td><button onclick=\"window.deletePromo(\\\'' + escapeHTML(code) + '\\\')\" style=\"background:var(--accent-red);border:none;padding:4px 8px;border-radius:4px;cursor:pointer;color:white;\">🗑️ Remove</button></td></tr>';",
+            "                }",
+            "            } else promHtml = '<tr><td colspan=\"4\" class=\"text-muted text-center\">No active promo codes</td></tr>';",
+            "            document.getElementById('target-promos').innerHTML = promHtml;",
+            "        }",
 
-            <script>
-                // SECURITE MAXIMALE : AUCUNE VARIABLE NODE.JS DYNAMIQUE ICI SAUF LE PIN !
-                // Le navigateur charge tout proprement via l'API.
-                const PIN = "${DASHBOARD_PIN}";
-                
-                let rawStats = {};
-                let PRODUCT_DATA = {};
-                let stealthMode = false; 
-                let lastTxCount = 0;
-                let currentMonthRevenue = 0;
-                let defaultGoal = 500;
-                let userGoal = localStorage.getItem("customGoal") ? parseInt(localStorage.getItem("customGoal")) : defaultGoal;
-                let salesChart;
-                
-                // 1. CHARGEMENT DES DONNÉES SÉCURISÉES DEPUIS L'API
-                async function initDashboard() {
-                    try {
-                        const res = await fetch("/api/init-data");
-                        if (!res.ok) throw new Error("Fetch failed");
-                        const data = await res.json();
-                        
-                        rawStats = data.memoryStats;
-                        PRODUCT_DATA = data.PRODUCT_DATA;
-                        currentMonthRevenue = data.monthRevenue;
-                        defaultGoal = data.MONTHLY_GOAL;
-                        lastTxCount = rawStats.total_transactions || 0;
-                        
-                        // Remplissage des indicateurs
-                        document.getElementById("ui-today-rev").innerText = "€" + data.todayRevenue;
-                        document.getElementById("ui-total-rev").innerText = "€" + rawStats.total_revenue;
-                        document.getElementById("ui-conv-rate").innerText = data.conversionRate + "%";
-                        document.getElementById("ui-online-total").innerHTML = data.onlineCount + " <span style='font-size: 0.5em; color: var(--text-muted);'>/ " + data.memberCount + "</span>";
-                        document.getElementById("ui-retention").innerText = data.retentionRate + "%";
-                        
-                        document.getElementById("ui-tickets-opened").innerText = data.ticketsOpened;
-                        document.getElementById("ui-dropoff").innerText = data.dropOffRate + "%";
-                        document.getElementById("ui-peak-hour").innerText = data.peakHourStr;
+            "        function updateGoalUI() {",
+            "            let percent = Math.min(100, Math.round((currentMonthRevenue / userGoal) * 100));",
+            "            document.getElementById('goal-text').innerText = '€' + currentMonthRevenue + ' / €' + userGoal + ' (' + percent + '%)';",
+            "            document.getElementById('goal-bar').style.width = percent + '%';",
+            "        }",
 
-                        buildStaticTables();
-                        updateGoalUI();
-                        renderSalesChart(7);
-                        renderDoughnutChart();
-                        renderBarChart();
-                        fetchBalance();
+            "        window.editGoal = function() {",
+            "            let newGoal = prompt('Configure your Monthly Goal (€):', userGoal);",
+            "            if (newGoal !== null && !isNaN(newGoal) && parseInt(newGoal) > 0) {",
+            "                userGoal = parseInt(newGoal);",
+            "                localStorage.setItem('customGoal', userGoal);",
+            "                updateGoalUI();",
+            "            }",
+            "        };",
 
-                        // Afficher le site
-                        document.getElementById("loading-screen").style.display = "none";
-                        document.getElementById("dashboard-container").style.display = "block";
-                    } catch (e) {
-                        alert("Erreur de connexion. Veuillez rafraîchir la page.");
-                    }
-                }
+            "        window.toggleStealth = function() {",
+            "            stealthMode = !stealthMode;",
+            "            document.body.classList.toggle('stealth-active', stealthMode);",
+            "            document.getElementById('stealthBtn').innerText = stealthMode ? '🙈 Show Revenue' : '👁️ Stealth Mode';",
+            "        };",
 
-                // ECHAPPEMENT ANTI-HACK
-                function escapeHTML(str) {
-                    if (!str) return "";
-                    return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-                }
+            "        window.switchTab = function(tabId, btn) {",
+            "            document.querySelectorAll('.tab-content').forEach(function(el) { el.classList.remove('active'); });",
+            "            document.querySelectorAll('.nav-btn').forEach(function(el) { el.classList.remove('active'); });",
+            "            document.getElementById(tabId).classList.add('active');",
+            "            btn.classList.add('active');",
+            "            if (tabId === 'moderation' && !isMembersLoaded) window.loadAllMembers();",
+            "        };",
 
-                function buildStaticTables() {
-                    let txHtml = "";
-                    if(rawStats.recent_transactions && rawStats.recent_transactions.length > 0) {
-                        rawStats.recent_transactions.forEach(function(tx) {
-                            txHtml += "<tr><td><span class='highlight-text'>" + escapeHTML(tx.username) + "</span></td><td>" + escapeHTML(tx.product) + "</td><td class='money text-green font-bold'>€" + tx.price + "</td><td class='text-muted'>" + tx.date + "</td></tr>";
-                        });
-                    } else txHtml = "<tr><td colspan='4' class='text-muted text-center'>Empty</td></tr>";
-                    document.getElementById("target-tx").innerHTML = txHtml;
+            "        function showToast(msg, type) {",
+            "            const toast = document.getElementById('toast');",
+            "            toast.innerText = msg;",
+            "            toast.style.background = type === 'error' ? 'var(--accent-red)' : 'var(--accent-green)';",
+            "            toast.style.bottom = '20px';",
+            "            setTimeout(function() { toast.style.bottom = '-100px'; }, 4000);",
+            "        }",
 
-                    let spHtml = "";
-                    const sortedSpenders = Object.entries(rawStats.user_spending || {}).sort(function(a,b) { return b[1] - a[1]; }).slice(0, 10);
-                    if(sortedSpenders.length > 0) {
-                        sortedSpenders.forEach(function(user, i) {
-                            let badgeColor = i < 3 ? "#FFD700" : "var(--accent-blue)";
-                            spHtml += "<tr><td><div class='user-badge' style='background:" + badgeColor + ";'>" + (i+1) + "</div> " + escapeHTML(user[0]) + "</td><td class='text-green font-bold'>€" + user[1] + "</td></tr>";
-                        });
-                    } else spHtml = "<tr><td colspan='2' class='text-muted text-center'>No data</td></tr>";
-                    document.getElementById("target-spenders").innerHTML = spHtml;
+            "        function updateUpstashStatus(isOnline) {",
+            "            const dot = document.getElementById('status-dot');",
+            "            const text = document.getElementById('status-text');",
+            "            if (!dot || !text) return;",
+            "            if (isOnline) {",
+            "                dot.style.backgroundColor = '#2ecc71';",
+            "                dot.style.boxShadow = '0 0 8px #2ecc71';",
+            "                text.innerText = 'Cloud Sync Active';",
+            "            } else {",
+            "                dot.style.backgroundColor = '#e74c3c';",
+            "                dot.style.boxShadow = '0 0 8px #e74c3c';",
+            "                text.innerText = 'Sync Error (Offline)';",
+            "            }",
+            "        }",
 
-                    let jHtml = "";
-                    if(rawStats.recent_joins && rawStats.recent_joins.length > 0) {
-                        rawStats.recent_joins.forEach(function(u) { jHtml += "<tr><td><div class='user-badge'>" + escapeHTML(u.username.charAt(0).toUpperCase()) + "</div> " + escapeHTML(u.username) + "</td><td class='text-muted'>" + u.date + "</td></tr>"; });
-                    } else jHtml = "<tr><td colspan='2' class='text-muted text-center'>Empty</td></tr>";
-                    document.getElementById("target-joins").innerHTML = jHtml;
+            "        window.fetchBalance = async function() {",
+            "            const el = document.getElementById('rewarble-balance');",
+            "            el.innerText = 'Loading...';",
+            "            try {",
+            "                const res = await fetch('/api/balance');",
+            "                const data = await res.json();",
+            "                if (data.balance !== 'N/A' && data.balance !== 'API Error' && typeof data.balance === 'number') {",
+            "                    el.innerText = '€' + data.balance.toFixed(2);",
+            "                } else if (data.balance) {",
+            "                    el.innerText = data.balance;",
+            "                } else {",
+            "                    el.innerText = 'Error';",
+            "                }",
+            "            } catch(e) { el.innerText = 'Error'; }",
+            "        };",
 
-                    let lHtml = "";
-                    if(rawStats.recent_leaves && rawStats.recent_leaves.length > 0) {
-                        rawStats.recent_leaves.forEach(function(u) { lHtml += "<tr><td><div class='user-badge leave'>" + escapeHTML(u.username.charAt(0).toUpperCase()) + "</div> " + escapeHTML(u.username) + "</td><td class='text-muted'>" + u.date + "</td></tr>"; });
-                    } else lHtml = "<tr><td colspan='2' class='text-muted text-center'>Empty</td></tr>";
-                    document.getElementById("target-leaves").innerHTML = lHtml;
+            "        setInterval(async function() {",
+            "            try {",
+            "                const res = await fetch('/api/live');",
+            "                if(res.ok) {",
+            "                    updateUpstashStatus(true);",
+            "                    const data = await res.json();",
+            "                    document.getElementById('live-tickets-count').innerText = data.liveTickets;",
+            "                    if (data.txCount > lastTxCount && data.lastTx) {",
+            "                        lastTxCount = data.txCount;",
+            "                        showToast('💰 New Sale! ' + data.lastTx.username + ' bought ' + data.lastTx.product);",
+            "                        setTimeout(function() { location.reload(); }, 2000);",
+            "                    }",
+            "                } else { updateUpstashStatus(false); }",
+            "            } catch(e){ updateUpstashStatus(false); }",
+            "        }, 5000);",
 
-                    let reqHtml = "";
-                    if(rawStats.custom_requests && rawStats.custom_requests.length > 0) {
-                        rawStats.custom_requests.forEach(function(req) {
-                            let btn = req.status === "pending" ? "<button onclick='resolveReq(&quot;" + req.id + "&quot;)' style='background:var(--accent-green);border:none;padding:5px 10px;border-radius:5px;cursor:pointer;color:white;'>✔ Done</button>" : "Resolved";
-                            reqHtml += "<tr style='opacity: " + (req.status==="done"?"0.5":"1") + ";'><td>" + escapeHTML(req.username) + "</td><td><span class='highlight-text'>" + escapeHTML(req.product) + "</span></td><td>" + req.date + "</td><td>" + btn + "</td></tr>";
-                        });
-                    } else reqHtml = "<tr><td colspan='4' class='text-muted text-center'>No pending requests</td></tr>";
-                    document.getElementById("target-reqs").innerHTML = reqHtml;
+            "        window.exportCSV = function() {",
+            "            let csvRows = ['Customer,Product,Price,Date'];",
+            "            if (rawStats.recent_transactions) {",
+            "                rawStats.recent_transactions.forEach(function(tx) {",
+            "                    csvRows.push('\"' + escapeHTML(tx.username) + '\",\"' + escapeHTML(tx.product) + '\",\"' + tx.price + '\",\"' + tx.date + '\"');",
+            "                });",
+            "            }",
+            "            const blob = new Blob([csvRows.join('\\n')], { type: 'text/csv' });",
+            "            const a = document.createElement('a');",
+            "            a.href = URL.createObjectURL(blob);",
+            "            a.download = 'sales_export.csv';",
+            "            a.click();",
+            "        };",
 
-                    let promHtml = "";
-                    if(rawStats.promo_codes && Object.keys(rawStats.promo_codes).length > 0) {
-                        for (const code in rawStats.promo_codes) {
-                            const info = rawStats.promo_codes[code];
-                            promHtml += "<tr><td><strong>" + escapeHTML(code) + "</strong></td><td class='text-green'>-" + info.discount + "%</td><td>" + info.used + " / " + info.limit + "</td><td><button onclick='deletePromo(&quot;" + escapeHTML(code) + "&quot;)' style='background:var(--accent-red);border:none;padding:4px 8px;border-radius:4px;cursor:pointer;color:white;'>🗑️ Remove</button></td></tr>";
-                        }
-                    } else promHtml = "<tr><td colspan='4' class='text-muted text-center'>No active promo codes</td></tr>";
-                    document.getElementById("target-promos").innerHTML = promHtml;
-                }
+            "        window.resolveReq = async function(id) { await window.executeAction({ action: 'resolve_req', id: id }); };",
+            "        ",
+            "        window.sendAdminAction = async function(type) {",
+            "            let payload = { action: type };",
+            "            if (type === 'announce') {",
+            "                payload.channelId = document.getElementById('announce-channel').value;",
+            "                payload.message = document.getElementById('announce-msg').value;",
+            "                if(!payload.channelId || !payload.message) return alert('Fill both fields!');",
+            "            }",
+            "            if (type === 'close_all' && !confirm('Are you sure you want to delete ALL shop and support channels?')) return;",
+            "            await window.executeAction(payload);",
+            "        };",
+            "        ",
+            "        window.createPromo = async function() {",
+            "            const name = document.getElementById('promoName').value;",
+            "            const discount = document.getElementById('promoDiscount').value;",
+            "            const limit = document.getElementById('promoLimit').value;",
+            "            if(!name || !discount || !limit) return alert('Fill all promo fields!');",
+            "            await window.executeAction({ action: 'create_promo', name: name, discount: discount, limit: limit });",
+            "        };",
+            "        ",
+            "        window.deletePromo = async function(name) {",
+            "            if(!confirm('Delete promo code ' + name + '?')) return;",
+            "            await window.executeAction({ action: 'delete_promo', name: name });",
+            "        };",
 
-                function updateGoalUI() {
-                    let percent = Math.min(100, Math.round((currentMonthRevenue / userGoal) * 100));
-                    document.getElementById("goal-text").innerText = "€" + currentMonthRevenue + " / €" + userGoal + " (" + percent + "%)";
-                    document.getElementById("goal-bar").style.width = percent + "%";
-                }
+            "        window.saveUserNote = async function(userId) {",
+            "            const noteText = document.getElementById('note-' + userId).value;",
+            "            const res = await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'save_note', userId: userId, note: noteText, pin: PIN }) });",
+            "            if (res.ok) showToast('✅ Note saved successfully');",
+            "            else showToast('❌ Error saving note', 'error');",
+            "        };",
 
-                window.editGoal = function() {
-                    let newGoal = prompt("Configure your Monthly Goal (€):", userGoal);
-                    if (newGoal !== null && !isNaN(newGoal) && parseInt(newGoal) > 0) {
-                        userGoal = parseInt(newGoal);
-                        localStorage.setItem("customGoal", userGoal);
-                        updateGoalUI();
-                    }
-                }
+            "        window.openDirectContact = async function(userId) {",
+            "            const user = allMembersData.find(function(u) { return u.id === String(userId); });",
+            "            if (!user) return;",
+            "            const message = prompt('Direct message for ' + user.username + ' (Sent via Bot) :');",
+            "            if (!message || message.trim() === '') return;",
+            "            const res = await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'send_dm', userId: userId, message: message, pin: PIN }) });",
+            "            if (res.ok) showToast('✅ DM sent successfully');",
+            "            else showToast('❌ Failed to send DM (DMs might be disabled)', 'error');",
+            "        };",
 
-                window.toggleStealth = function() {
-                    stealthMode = !stealthMode; 
-                    document.body.classList.toggle("stealth-active", stealthMode);
-                    document.getElementById("stealthBtn").innerText = stealthMode ? "🙈 Show Revenue" : "👁️ Stealth Mode";
-                }
+            "        window.executeAction = async function(payload) {",
+            "            payload.pin = PIN;",
+            "            try {",
+            "                const res = await fetch('/api/action', { method: 'POST', body: JSON.stringify(payload) });",
+            "                if(res.ok) { ",
+            "                    showToast('✅ Action applied successfully');",
+            "                    setTimeout(function(){ location.reload(); }, 1000);",
+            "                } else showToast('❌ Error executing action', 'error');",
+            "            } catch (e) { showToast('❌ Network error', 'error'); }",
+            "        };",
 
-                window.switchTab = function(tabId, btn) {
-                    document.querySelectorAll(".tab-content").forEach(function(el) { el.classList.remove("active"); });
-                    document.querySelectorAll(".nav-btn").forEach(function(el) { el.classList.remove("active"); });
-                    document.getElementById(tabId).classList.add("active"); 
-                    btn.classList.add("active");
-                    if (tabId === "moderation" && !isMembersLoaded) loadAllMembers();
-                }
+            "        window.loadAllMembers = async function() {",
+            "            document.getElementById('memberResults').innerHTML = '<p class=\"text-muted\">Loading directory...</p>';",
+            "            try {",
+            "                const res = await fetch('/api/members');",
+            "                if (!res.ok) throw new Error('Error');",
+            "                allMembersData = await res.json();",
+            "                isMembersLoaded = true;",
+            "                window.sortMembersLocally();",
+            "            } catch (e) { document.getElementById('memberResults').innerHTML = '<p class=\"text-pink\">Error fetching data.</p>'; }",
+            "        };",
 
-                function showToast(msg, type) {
-                    type = type || "success";
-                    const toast = document.getElementById("toast"); 
-                    toast.innerText = msg;
-                    toast.style.background = type === "error" ? "var(--accent-red)" : "var(--accent-green)";
-                    toast.style.bottom = "20px";
-                    setTimeout(function() { toast.style.bottom = "-100px"; }, 4000);
-                }
+            "        window.sortMembersLocally = function() {",
+            "            const sortType = document.getElementById('memberSortSelect').value;",
+            "            if (sortType === 'recent') allMembersData.sort(function(a, b) { return b.joinedTimestamp - a.joinedTimestamp; });",
+            "            else if (sortType === 'oldest') allMembersData.sort(function(a, b) { return a.joinedTimestamp - b.joinedTimestamp; });",
+            "            else if (sortType === 'spent') allMembersData.sort(function(a, b) { return b.totalSpent - a.totalSpent; });",
+            "            else if (sortType === 'warns') allMembersData.sort(function(a, b) { return b.warns.length - a.warns.length; });",
+            "            window.filterMembersLocally();",
+            "        };",
 
-                function updateUpstashStatus(isOnline) {
-                    const dot = document.getElementById("status-dot");
-                    const text = document.getElementById("status-text");
-                    if (!dot || !text) return;
-                    if (isOnline) {
-                        dot.style.backgroundColor = "#2ecc71";
-                        dot.style.boxShadow = "0 0 8px #2ecc71";
-                        text.innerText = "Cloud Sync Active";
-                    } else {
-                        dot.style.backgroundColor = "#e74c3c";
-                        dot.style.boxShadow = "0 0 8px #e74c3c";
-                        text.innerText = "Sync Error (Offline)";
-                    }
-                }
+            "        window.filterMembersLocally = function() {",
+            "            const q = document.getElementById('memberSearchInput').value.toLowerCase();",
+            "            const filtered = allMembersData.filter(function(m) { return m.username.toLowerCase().includes(q) || m.id.includes(q); });",
+            "            renderMembers(filtered);",
+            "        };",
 
-                window.fetchBalance = async function() {
-                    const el = document.getElementById("rewarble-balance");
-                    el.innerText = "Loading...";
-                    try {
-                        const res = await fetch("/api/balance");
-                        const data = await res.json();
-                        if (data.balance !== "N/A" && data.balance !== "API Error" && typeof data.balance === "number") {
-                            el.innerText = "€" + data.balance.toFixed(2);
-                        } else if (data.balance) {
-                            el.innerText = data.balance;
-                        } else {
-                            el.innerText = "Error";
-                        }
-                    } catch(e) { el.innerText = "Error"; }
-                }
+            "        function renderMembers(members) {",
+            "            if (members.length === 0) {",
+            "                document.getElementById('memberResults').innerHTML = '<p class=\"text-pink\">No members found.</p>';",
+            "                return;",
+            "            }",
+            "            let html = '';",
+            "            members.forEach(function(m) {",
+            "                let trustColor = m.isBlacklisted ? 'var(--accent-red)' : (m.totalSpent > 0 ? 'var(--accent-green)' : 'var(--accent-orange)');",
+            "                let trustLabel = m.isBlacklisted ? 'Blacklisted' : (m.totalSpent > 0 ? 'Trusted (Buyer)' : 'New / No Purchases');",
+            "                let safeUsername = escapeHTML(m.username);",
+            "                let safeNote = escapeHTML(m.note);",
+            "                ",
+            "                let ticketsHtml = '';",
+            "                if (m.activeTickets && m.activeTickets.length > 0) {",
+            "                    m.activeTickets.forEach(function(t) {",
+            "                        ticketsHtml += '<div style=\"display:flex; justify-content:space-between; background:rgba(0,0,0,0.3); padding:5px 10px; margin-top:5px; border-radius:5px;\">' +",
+            "                            '<span>#' + escapeHTML(t.name) + '</span>' +",
+            "                            '<button style=\"background:var(--accent-red); border:none; color:white; border-radius:3px; cursor:pointer; padding:2px 8px;\" onclick=\"window.modAction(\\'close_channel\\', \\'' + m.id + '\\', {channelId: \\'' + t.id + '\\'})\">Close</button>' +",
+            "                        '</div>';",
+            "                    });",
+            "                } else ticketsHtml = '<span class=\"text-muted\">No active tickets</span>';",
 
-                setInterval(async function() {
-                    try {
-                        const res = await fetch("/api/live"); 
-                        if(res.ok) {
-                            updateUpstashStatus(true);
-                            const data = await res.json();
-                            document.getElementById("live-tickets-count").innerText = data.liveTickets;
-                            if (data.txCount > lastTxCount && data.lastTx) {
-                                lastTxCount = data.txCount; 
-                                showToast("💰 New Sale! " + data.lastTx.username + " bought " + data.lastTx.product);
-                                setTimeout(function() { location.reload(); }, 2000); 
-                            }
-                        } else { updateUpstashStatus(false); }
-                    } catch(e){ updateUpstashStatus(false); }
-                }, 5000);
+            "                let warnsHtml = '';",
+            "                if (m.warns && m.warns.length > 0) {",
+            "                    m.warns.forEach(function(w, i) {",
+            "                        warnsHtml += '<div style=\"font-size:0.8em; color:var(--accent-orange); margin-bottom:3px;\">⚠️ Warn ' + (i+1) + ': ' + escapeHTML(w.reason) + ' (' + w.date + ')</div>';",
+            "                    });",
+            "                } else warnsHtml = '<span class=\"text-muted\" style=\"font-size:0.8em;\">Clean record</span>';",
+            "                ",
+            "                let historyHtml = '';",
+            "                if (m.history && m.history.length > 0) {",
+            "                    m.history.forEach(function(h) {",
+            "                        historyHtml += '<div style=\"font-size:0.8em;\">🛒 ' + escapeHTML(h.product) + ' - €' + h.price + ' (' + h.date + ')</div>';",
+            "                    });",
+            "                } else historyHtml = '<span class=\"text-muted\" style=\"font-size:0.8em;\">No purchases</span>';",
 
-                window.exportCSV = function() {
-                    let csvRows = ["Customer,Product,Price,Date"];
-                    rawStats.recent_transactions.forEach(function(tx) { 
-                        csvRows.push('"' + escapeHTML(tx.username) + '","' + escapeHTML(tx.product) + '","' + tx.price + '","' + tx.date + '"'); 
-                    });
-                    const blob = new Blob([csvRows.join("\\n")], { type: "text/csv" }); 
-                    const a = document.createElement("a"); 
-                    a.href = URL.createObjectURL(blob); 
-                    a.download = "sales_export.csv"; 
-                    a.click();
-                }
+            "                html += '<div class=\"card\" style=\"margin-bottom: 15px; border-left: 4px solid ' + trustColor + ';\">' +",
+            "                    '<div style=\"display:flex; gap:15px; align-items:center; margin-bottom:15px; flex-wrap:wrap;\">' +",
+            "                        '<img src=\"' + m.avatar + '\" style=\"width:60px; height:60px; border-radius:50%; box-shadow:0 4px 10px rgba(0,0,0,0.5);\">' +",
+            "                        '<div><h3 style=\"color:#fff; font-size:1.2em; margin:0;\">' + safeUsername + '</h3><span class=\"text-muted\" style=\"font-size:0.8em;\">ID: ' + m.id + '</span></div>' +",
+            "                        '<div style=\"margin-left:auto; text-align:right;\"><div style=\"color:' + trustColor + '; font-weight:bold;\">' + trustLabel + '</div><div class=\"money text-green font-bold\">Total Spent: €' + m.totalSpent + '</div></div>' +",
+            "                    '</div>' +",
+            "                    '<div style=\"display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:15px; margin-bottom:15px; font-size:0.9em;\">' +",
+            "                        '<div style=\"background:rgba(0,0,0,0.2); padding:10px; border-radius:8px;\"><strong>Account Created:</strong><br><span class=\"text-muted\">' + m.createdAt + '</span><br><br><strong>Joined Server:</strong><br><span class=\"text-muted\">' + m.joinedAt + '</span></div>' +",
+            "                        '<div style=\"background:rgba(0,0,0,0.2); padding:10px; border-radius:8px;\"><strong>Active Tickets:</strong><br>' + ticketsHtml + '</div>' +",
+            "                    '</div>' +",
+            "                    '<div style=\"display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:15px; margin-bottom:15px;\">' +",
+            "                        '<div style=\"background:rgba(0,0,0,0.2); padding:10px; border-radius:8px; max-height:150px; overflow-y:auto;\"><strong>Purchase History:</strong><br>' + historyHtml + '</div>' +",
+            "                        '<div style=\"background:rgba(0,0,0,0.2); padding:10px; border-radius:8px; max-height:150px; overflow-y:auto;\"><strong>Casier Judiciaire (Warns):</strong><br>' + warnsHtml + '</div>' +",
+            "                    '</div>' +",
+            "                    '<div style=\"margin-bottom:15px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.05);\">' +",
+            "                        '<label style=\"font-size:0.8rem; color:var(--text-muted); display:block; margin-bottom:5px;\">📝 Private Notes (Admin Only) :</label>' +",
+            "                        '<textarea id=\"note-' + m.id + '\" placeholder=\"Add private remarks about this client...\" style=\"min-height:50px;\" onblur=\"window.saveUserNote(\\\'' + m.id + '\\\')\">' + safeNote + '</textarea>' +",
+            "                    '</div>' +",
+            "                    '<div style=\"border-top:1px solid rgba(255,255,255,0.05); padding-top:10px;\">' +",
+            "                        '<span style=\"font-size:0.8rem; color:var(--text-muted); display:block; margin-bottom:8px;\">⚡ Action Controls :</span>' +",
+            "                        '<div style=\"display:flex; gap:8px; flex-wrap:wrap;\">' +",
+            "                            '<button class=\"admin-btn\" style=\"margin:0; background:#3498db;\" onclick=\"window.openDirectContact(\\\'' + m.id + '\\\')\">💬 DM</button>' +",
+            "                            '<button class=\"admin-btn\" style=\"margin:0; background:#e67e22;\" onclick=\"window.modAction(\\'mute\\', \\\'' + m.id + '\\\', {duration: 15})\">🔇 15m</button>' +",
+            "                            '<button class=\"admin-btn\" style=\"margin:0; background:#d35400;\" onclick=\"window.modAction(\\'mute\\', \\\'' + m.id + '\\\', {duration: 60})\">🔇 1h</button>' +",
+            "                            '<button class=\"admin-btn\" style=\"margin:0; background:#c0392b;\" onclick=\"window.modAction(\\'mute\\', \\\'' + m.id + '\\\', {duration: 1440})\">🔇 1d</button>' +",
+            "                            '<button class=\"admin-btn\" style=\"margin:0; background:#962d22;\" onclick=\"window.modAction(\\'mute\\', \\\'' + m.id + '\\\', {duration: 10080})\">🔇 1w</button>' +",
+            "                            '<button class=\"admin-btn\" style=\"margin:0; background:var(--accent-orange);\" onclick=\"window.modAction(\\'warn\\', \\\'' + m.id + '\\\')\">⚠️ Warn</button>' +",
+            "                            '<button class=\"admin-btn\" style=\"margin:0; background:var(--accent-red);\" onclick=\"window.modAction(\\'kick\\', \\\'' + m.id + '\\\')\">👢 Kick</button>' +",
+            "                            '<button class=\"admin-btn\" style=\"margin:0; background:var(--accent-red);\" onclick=\"window.modAction(\\'ban\\', \\\'' + m.id + '\\\')\">🔨 Ban</button>' +",
+            "                            '<button class=\"admin-btn\" style=\"width:auto; margin:0; background:#000; border:1px solid var(--accent-red);\" onclick=\"window.modAction(\\'toggle_blacklist\\', \\\'' + m.id + '\\\')\">' + (m.isBlacklisted ? '✅ Un-Blacklist' : '🚫 Blacklist') + '</button>' +",
+            "                        '</div>' +",
+            "                    '</div>' +",
+            "                '</div>';",
+            "            });",
+            "            document.getElementById('memberResults').innerHTML = html;",
+            "        }",
 
-                window.resolveReq = async function(id) { await executeAction({ action: "resolve_req", id: id }); }
-                
-                window.sendAdminAction = async function(type) {
-                    let payload = { action: type };
-                    if (type === "announce") {
-                        payload.channelId = document.getElementById("announce-channel").value; 
-                        payload.message = document.getElementById("announce-msg").value;
-                        if(!payload.channelId || !payload.message) return alert("Fill both fields!");
-                    }
-                    if (type === "close_all" && !confirm("Are you sure you want to delete ALL shop and support channels?")) return;
-                    await executeAction(payload);
-                }
-                
-                window.createPromo = async function() {
-                    const name = document.getElementById("promoName").value;
-                    const discount = document.getElementById("promoDiscount").value;
-                    const limit = document.getElementById("promoLimit").value;
-                    if(!name || !discount || !limit) return alert("Fill all promo fields!");
-                    await executeAction({ action: "create_promo", name: name, discount: discount, limit: limit });
-                }
-                
-                window.deletePromo = async function(name) {
-                    if(!confirm("Delete promo code " + name + "?")) return;
-                    await executeAction({ action: "delete_promo", name: name });
-                }
+            "        window.modAction = async function(action, userId, extra = {}) {",
+            "            let payload = { action: action, userId: userId, pin: PIN };",
+            "            if (extra.channelId) payload.channelId = extra.channelId;",
+            "            if (extra.duration) payload.duration = extra.duration;",
+            "            if (action === 'warn') { payload.reason = prompt('Reason for warning?'); if (!payload.reason) return; }",
+            "            else if (action === 'mute') { ",
+            "                if(!payload.duration) payload.duration = prompt('Mute duration in minutes?', '60'); ",
+            "                payload.reason = prompt('Reason for mute?'); ",
+            "                if (!payload.duration || !payload.reason) return; ",
+            "            }",
+            "            else if (action === 'kick' || action === 'ban') { payload.reason = prompt('Reason for ' + action + '?'); if (!payload.reason || !confirm('Execute ' + action + '?')) return; }",
+            "            else if (action === 'toggle_blacklist') { if (!confirm('Toggle shop blacklist for this user?')) return; }",
+            "            else if (action === 'close_channel') { if (!confirm('Force close this ticket?')) return; }",
+            "            try {",
+            "                const res = await fetch('/api/action', { method: 'POST', body: JSON.stringify(payload) });",
+            "                if (res.ok) { showToast('✅ Action applied successfully'); setTimeout(function() { window.loadAllMembers(); }, 1000); }",
+            "                else showToast('❌ Failed to apply action', 'error');",
+            "            } catch(e) { showToast('❌ Network Error', 'error'); }",
+            "        };",
 
-                window.saveUserNote = async function(userId) {
-                    const noteText = document.getElementById("note-" + userId).value;
-                    const res = await fetch("/api/action", { method: "POST", body: JSON.stringify({ action: "save_note", userId: userId, note: noteText, pin: PIN }) });
-                    if (res.ok) showToast("✅ Note saved successfully");
-                    else showToast("❌ Error saving note", "error");
-                }
+            "        Chart.defaults.color = '#94a3b8';",
+            "        Chart.defaults.font.family = 'Inter, sans-serif';",
+            "        ",
+            "        window.renderSalesChart = function(days) {",
+            "            let dates = Object.keys(rawStats.revenue || {}).sort();",
+            "            let values = dates.map(function(d) { return rawStats.revenue[d]; });",
+            "            if (days > 0 && dates.length > days) { dates = dates.slice(-days); values = values.slice(-days); }",
+            "            const ctxSales = document.getElementById('salesChart').getContext('2d');",
+            "            let grad = ctxSales.createLinearGradient(0,0,0,400);",
+            "            grad.addColorStop(0, 'rgba(56, 189, 248, 0.4)'); grad.addColorStop(1, 'transparent');",
+            "            if(salesChart) salesChart.destroy();",
+            "            salesChart = new Chart(ctxSales, {",
+            "                type: 'line',",
+            "                data: { labels: dates.length?dates:['No Data'], datasets: [{ data: values.length?values:[0], borderColor: '#38bdf8', backgroundColor: grad, fill: true, tension: 0.4 }] },",
+            "                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { grid: { color: 'rgba(255,255,255,0.05)'} } } }",
+            "            });",
+            "        };",
+            "        ",
+            "        window.updateChartFilter = function(days, btn) { ",
+            "            document.querySelectorAll('.filter-btn').forEach(function(b) { b.classList.remove('active'); });",
+            "            btn.classList.add('active'); renderSalesChart(days);",
+            "        };",
 
-                window.openDirectContact = async function(userId, username) {
-                    const message = prompt("Direct message for " + username + " (Sent via Bot) :");
-                    if (!message || message.trim() === "") return;
-                    const res = await fetch("/api/action", { method: "POST", body: JSON.stringify({ action: "send_dm", userId: userId, message: message, pin: PIN }) });
-                    if (res.ok) showToast("✅ DM sent successfully");
-                    else showToast("❌ Failed to send DM (DMs might be disabled)", "error");
-                }
+            "        function renderDoughnutChart() {",
+            "            const prodIds = Object.keys(rawStats.product_sales || {});",
+            "            new Chart(document.getElementById('productsChart'), {",
+            "                type: 'doughnut',",
+            "                data: { labels: prodIds.map(function(id) { return PRODUCT_DATA[id]?PRODUCT_DATA[id].name:'Unknown'; }), datasets: [{ data: Object.values(rawStats.product_sales||{}), backgroundColor: ['#38bdf8', '#a855f7', '#ec4899', '#f97316', '#10b981'], borderColor: '#0b0f19' }] },",
+            "                options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { position: 'right', labels: { color: '#f8fafc' } } } }",
+            "            });",
+            "        }",
 
-                async function executeAction(payload) {
-                    payload.pin = PIN;
-                    const res = await fetch("/api/action", { method: "POST", body: JSON.stringify(payload) });
-                    if(res.ok) { 
-                        showToast("✅ Action applied successfully"); 
-                        setTimeout(function(){ location.reload(); }, 1000); 
-                    } else {
-                        showToast("❌ Error executing action", "error");
-                    }
-                }
+            "        function renderBarChart() {",
+            "            const audienceDates = Array.from(new Set([...Object.keys(rawStats.joins || {}), ...Object.keys(rawStats.leaves || {})])).sort().slice(-10);",
+            "            new Chart(document.getElementById('audienceChart'), {",
+            "                type: 'bar',",
+            "                data: { labels: audienceDates.length ? audienceDates : ['No Data'], datasets: [{ label: 'Joins', data: audienceDates.map(function(d) { return rawStats.joins[d]||0; }), backgroundColor: '#10b981' }, { label: 'Leaves', data: audienceDates.map(function(d) { return rawStats.leaves[d]||0; }), backgroundColor: '#ef4444' }] },",
+            "                options: { responsive: true, maintainAspectRatio: false, scales: { x: { grid: { display: false } }, y: { grid: { color: 'rgba(255,255,255,0.05)'} } } }",
+            "            });",
+            "        }",
 
-                let allMembersData = [];
-                let isMembersLoaded = false;
-
-                window.loadAllMembers = async function() {
-                    document.getElementById("memberResults").innerHTML = "<p class='text-muted'>Loading directory...</p>";
-                    try {
-                        const res = await fetch("/api/members");
-                        if (!res.ok) throw new Error("Error");
-                        allMembersData = await res.json();
-                        isMembersLoaded = true;
-                        sortMembersLocally();
-                    } catch (e) { document.getElementById("memberResults").innerHTML = "<p class='text-pink'>Error fetching data.</p>"; }
-                }
-
-                window.sortMembersLocally = function() {
-                    const sortType = document.getElementById("memberSortSelect").value;
-                    if (sortType === "recent") allMembersData.sort(function(a, b) { return b.joinedTimestamp - a.joinedTimestamp; });
-                    else if (sortType === "oldest") allMembersData.sort(function(a, b) { return a.joinedTimestamp - b.joinedTimestamp; });
-                    else if (sortType === "spent") allMembersData.sort(function(a, b) { return b.totalSpent - a.totalSpent; });
-                    else if (sortType === "warns") allMembersData.sort(function(a, b) { return b.warns.length - a.warns.length; });
-                    filterMembersLocally();
-                }
-
-                window.filterMembersLocally = function() {
-                    const q = document.getElementById("memberSearchInput").value.toLowerCase();
-                    const filtered = allMembersData.filter(function(m) { return m.username.toLowerCase().includes(q) || m.id.includes(q); });
-                    renderMembers(filtered);
-                }
-
-                function renderMembers(members) {
-                    if (members.length === 0) {
-                        document.getElementById("memberResults").innerHTML = "<p class='text-pink'>No members found.</p>";
-                        return;
-                    }
-                    let html = "";
-                    members.forEach(function(m) {
-                        let trustColor = m.isBlacklisted ? "var(--accent-red)" : (m.totalSpent > 0 ? "var(--accent-green)" : "var(--accent-orange)");
-                        let trustLabel = m.isBlacklisted ? "Blacklisted" : (m.totalSpent > 0 ? "Trusted (Buyer)" : "New / No Purchases");
-                        
-                        let safeUsername = escapeHTML(m.username);
-                        let safeNote = escapeHTML(m.note);
-                        
-                        let ticketsHtml = m.activeTickets.map(function(t) {
-                            let safeTName = escapeHTML(t.name);
-                            return "<div style='display:flex; justify-content:space-between; background:rgba(0,0,0,0.3); padding:5px 10px; margin-top:5px; border-radius:5px;'>" +
-                                "<span>#" + safeTName + "</span>" +
-                                "<button style='background:var(--accent-red); border:none; color:white; border-radius:3px; cursor:pointer; padding:2px 8px;' onclick='modAction(&quot;close_channel&quot;, &quot;" + m.id + "&quot;, {channelId: &quot;" + t.id + "&quot;})'>Close</button>" +
-                            "</div>";
-                        }).join("") || "<span class='text-muted'>No active tickets</span>";
-
-                        let warnsHtml = m.warns.map(function(w, i) {
-                            return "<div style='font-size:0.8em; color:var(--accent-orange); margin-bottom:3px;'>⚠️ Warn " + (i+1) + ": " + escapeHTML(w.reason) + " (" + w.date + ")</div>";
-                        }).join("") || "<span class='text-muted' style='font-size:0.8em;'>Clean record</span>";
-                        
-                        let historyHtml = m.history.map(function(h) {
-                            return "<div style='font-size:0.8em;'>🛒 " + escapeHTML(h.product) + " - €" + h.price + " (" + h.date + ")</div>";
-                        }).join("") || "<span class='text-muted' style='font-size:0.8em;'>No purchases</span>";
-
-                        html += "<div class='card' style='margin-bottom: 15px; border-left: 4px solid " + trustColor + ";'>" +
-                            "<div style='display:flex; gap:15px; align-items:center; margin-bottom:15px; flex-wrap:wrap;'>" +
-                                "<img src='" + m.avatar + "' style='width:60px; height:60px; border-radius:50%; box-shadow:0 4px 10px rgba(0,0,0,0.5);'>" +
-                                "<div><h3 style='color:#fff; font-size:1.2em; margin:0;'>" + safeUsername + "</h3><span class='text-muted' style='font-size:0.8em;'>ID: " + m.id + "</span></div>" +
-                                "<div style='margin-left:auto; text-align:right;'><div style='color:" + trustColor + "; font-weight:bold;'>" + trustLabel + "</div><div class='money text-green font-bold'>Total Spent: €" + m.totalSpent + "</div></div>" +
-                            "</div>" +
-                            "<div style='display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:15px; margin-bottom:15px; font-size:0.9em;'>" +
-                                "<div style='background:rgba(0,0,0,0.2); padding:10px; border-radius:8px;'><strong>Account Created:</strong><br><span class='text-muted'>" + m.createdAt + "</span><br><br><strong>Joined Server:</strong><br><span class='text-muted'>" + m.joinedAt + "</span></div>" +
-                                "<div style='background:rgba(0,0,0,0.2); padding:10px; border-radius:8px;'><strong>Active Tickets:</strong><br>" + ticketsHtml + "</div>" +
-                            "</div>" +
-                            "<div style='display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:15px; margin-bottom:15px;'>" +
-                                "<div style='background:rgba(0,0,0,0.2); padding:10px; border-radius:8px; max-height:150px; overflow-y:auto;'><strong>Purchase History:</strong><br>" + historyHtml + "</div>" +
-                                "<div style='background:rgba(0,0,0,0.2); padding:10px; border-radius:8px; max-height:150px; overflow-y:auto;'><strong>Casier Judiciaire (Warns):</strong><br>" + warnsHtml + "</div>" +
-                            "</div>" +
-                            "<div style='margin-bottom:15px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.05);'>" +
-                                "<label style='font-size:0.8rem; color:var(--text-muted); display:block; margin-bottom:5px;'>📝 Private Notes (Admin Only) :</label>" +
-                                "<textarea id='note-" + m.id + "' placeholder='Add private remarks about this client...' style='min-height:50px;' onblur='saveUserNote(&quot;" + m.id + "&quot;)'>" + safeNote + "</textarea>" +
-                            "</div>" +
-                            "<div style='border-top:1px solid rgba(255,255,255,0.05); padding-top:10px;'>" +
-                                "<span style='font-size:0.8rem; color:var(--text-muted); display:block; margin-bottom:8px;'>⚡ Action Controls :</span>" +
-                                "<div style='display:flex; gap:8px; flex-wrap:wrap;'>" +
-                                    "<button class='admin-btn' style='margin:0; background:#3498db;' onclick='openDirectContact(&quot;" + m.id + "&quot;, &quot;" + safeUsername + "&quot;)'>💬 DM</button>" +
-                                    "<button class='admin-btn' style='margin:0; background:#e67e22;' onclick='modAction(&quot;mute&quot;, &quot;" + m.id + "&quot;, {duration: 15})'>🔇 15m</button>" +
-                                    "<button class='admin-btn' style='margin:0; background:#d35400;' onclick='modAction(&quot;mute&quot;, &quot;" + m.id + "&quot;, {duration: 60})'>🔇 1h</button>" +
-                                    "<button class='admin-btn' style='margin:0; background:#c0392b;' onclick='modAction(&quot;mute&quot;, &quot;" + m.id + "&quot;, {duration: 1440})'>🔇 1d</button>" +
-                                    "<button class='admin-btn' style='margin:0; background:#962d22;' onclick='modAction(&quot;mute&quot;, &quot;" + m.id + "&quot;, {duration: 10080})'>🔇 1w</button>" +
-                                    "<button class='admin-btn' style='margin:0; background:var(--accent-orange);' onclick='modAction(&quot;warn&quot;, &quot;" + m.id + "&quot;)'>⚠️ Warn</button>" +
-                                    "<button class='admin-btn' style='margin:0; background:var(--accent-red);' onclick='modAction(&quot;kick&quot;, &quot;" + m.id + "&quot;)'>👢 Kick</button>" +
-                                    "<button class='admin-btn' style='margin:0; background:var(--accent-red);' onclick='modAction(&quot;ban&quot;, &quot;" + m.id + "&quot;)'>🔨 Ban</button>" +
-                                    "<button class='admin-btn' style='width:auto; margin:0; background:#000; border:1px solid var(--accent-red);' onclick='modAction(&quot;toggle_blacklist&quot;, &quot;" + m.id + "&quot;)'>" + (m.isBlacklisted ? "✅ Un-Blacklist" : "🚫 Blacklist") + "</button>" +
-                                "</div>" +
-                            "</div>" +
-                        "</div>";
-                    });
-                    document.getElementById("memberResults").innerHTML = html;
-                }
-
-                window.modAction = async function(action, userId, extra = {}) {
-                    let payload = { action: action, userId: userId, pin: PIN };
-                    if (extra.channelId) payload.channelId = extra.channelId;
-                    if (extra.duration) payload.duration = extra.duration;
-
-                    if (action === "warn") { payload.reason = prompt("Reason for warning?"); if (!payload.reason) return; }
-                    else if (action === "mute") { 
-                        if(!payload.duration) payload.duration = prompt("Mute duration in minutes?", "60"); 
-                        payload.reason = prompt("Reason for mute?"); 
-                        if (!payload.duration || !payload.reason) return; 
-                    }
-                    else if (action === "kick" || action === "ban") { payload.reason = prompt("Reason for " + action + "?"); if (!payload.reason || !confirm("Execute " + action + "?")) return; }
-                    else if (action === "toggle_blacklist") { if (!confirm("Toggle shop blacklist for this user?")) return; }
-                    else if (action === "close_channel") { if (!confirm("Force close this ticket?")) return; }
-
-                    const res = await fetch("/api/action", { method: "POST", body: JSON.stringify(payload) });
-                    if (res.ok) { 
-                        showToast("✅ Action applied successfully"); 
-                        setTimeout(function() { loadAllMembers(); }, 1000); 
-                    } else {
-                        showToast("❌ Failed to apply action", "error");
-                    }
-                }
-
-                Chart.defaults.color = "#94a3b8"; 
-                Chart.defaults.font.family = "'Inter', sans-serif";
-                
-                window.renderSalesChart = function(days) {
-                    let dates = Object.keys(rawStats.revenue || {}).sort(); 
-                    let values = dates.map(function(d) { return rawStats.revenue[d]; });
-                    if (days > 0 && dates.length > days) { 
-                        dates = dates.slice(-days); 
-                        values = values.slice(-days); 
-                    }
-                    const ctxSales = document.getElementById("salesChart").getContext("2d");
-                    let grad = ctxSales.createLinearGradient(0,0,0,400); 
-                    grad.addColorStop(0, "rgba(56, 189, 248, 0.4)"); 
-                    grad.addColorStop(1, "transparent");
-                    
-                    if(salesChart) salesChart.destroy();
-                    salesChart = new Chart(ctxSales, {
-                        type: "line", 
-                        data: { 
-                            labels: dates.length?dates:["No Data"], 
-                            datasets: [{ data: values.length?values:[0], borderColor: "#38bdf8", backgroundColor: grad, fill: true, tension: 0.4 }] 
-                        },
-                        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { grid: { color: "rgba(255,255,255,0.05)"} } } }
-                    });
-                }
-                
-                window.updateChartFilter = function(days, btn) { 
-                    document.querySelectorAll(".filter-btn").forEach(function(b) { b.classList.remove("active"); }); 
-                    btn.classList.add("active"); 
-                    renderSalesChart(days); 
-                }
-
-                function renderDoughnutChart() {
-                    const prodIds = Object.keys(rawStats.product_sales || {});
-                    new Chart(document.getElementById("productsChart"), {
-                        type: "doughnut", 
-                        data: { 
-                            labels: prodIds.map(function(id) { return PRODUCT_DATA[id]?PRODUCT_DATA[id].name:"Unknown"; }), 
-                            datasets: [{ data: Object.values(rawStats.product_sales||{}), backgroundColor: ["#38bdf8", "#a855f7", "#ec4899", "#f97316", "#10b981"], borderColor: "#0b0f19" }] 
-                        },
-                        options: { responsive: true, maintainAspectRatio: false, cutout: "70%", plugins: { legend: { position: "right", labels: { color: "#f8fafc" } } } }
-                    });
-                }
-
-                function renderBarChart() {
-                    const audienceDates = Array.from(new Set([...Object.keys(rawStats.joins || {}), ...Object.keys(rawStats.leaves || {})])).sort().slice(-10);
-                    new Chart(document.getElementById("audienceChart"), {
-                        type: "bar", 
-                        data: { 
-                            labels: audienceDates.length ? audienceDates : ["No Data"], 
-                            datasets: [
-                                { label: "Joins", data: audienceDates.map(function(d) { return rawStats.joins[d]||0; }), backgroundColor: "#10b981" }, 
-                                { label: "Leaves", data: audienceDates.map(function(d) { return rawStats.leaves[d]||0; }), backgroundColor: "#ef4444" }
-                            ] 
-                        },
-                        options: { responsive: true, maintainAspectRatio: false, scales: { x: { grid: { display: false } }, y: { grid: { color: "rgba(255,255,255,0.05)"} } } }
-                    });
-                }
-
-                // Démarrage de l'application
-                initDashboard();
-            </script>
-        </body>
-        </html>
-        `);
+            "        initDashboard();",
+            "    </script>",
+            "</body>",
+            "</html>"
+        ].join("\n");
+        return res.end(htmlPage);
     } else {
         res.writeHead(200, { 'Content-Type': 'text/plain' });
         res.end('API Endpoint or Bot Status');
