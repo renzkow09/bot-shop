@@ -271,10 +271,37 @@ client.on('messageCreate', async (message) => {
         if (message.author.id === ADMIN_DISCORD_ID) {
             if (message.content === '!setup') {
                 const row = new ActionRowBuilder().addComponents(
-                    new ButtonBuilder().setCustomId('open_shop_channel').setLabel('📩 Redeem Code').setStyle(ButtonStyle.Primary),
-                    new ButtonBuilder().setCustomId('open_support_ticket').setLabel('🎧 Support').setStyle(ButtonStyle.Secondary)
+                    new ButtonBuilder().setCustomId('open_shop_channel').setLabel('📩 Redeem Code').setStyle(ButtonStyle.Success),
+                    new ButtonBuilder().setCustomId('open_support_ticket').setLabel('🎧 Need Support?').setStyle(ButtonStyle.Secondary)
                 );
-                await message.channel.send({ content: "# 💎 VIP MENU\nClick below to buy:", components: [row] }).catch(() => {});
+                
+                const menuText = `# 💎 VIP MENU & PRICES 💎
+> *Instant automatic delivery in your DMs! 🚀*
+
+### ✨ PHOTOS (€5)
+**1.** Boobs   |   **2.** Ass   |   **3.** Full Body
+**4.** Lingerie Try-On   |   **5.** Mirror Pic
+
+### 🔥 VIDEOS (€10)
+**6.** 5-Min Video   |   **7.** Shower / Bath
+
+### 💦 SPECIAL (€15)
+**8.** Friends Nude   |   **9.** Surprise Pack (3-5 items)
+
+### 💌 PERSONALIZED (On Request)
+**10.** Sexting   |   **11.** Custom
+
+━━━━━━━━━━━━━━━━━━━━━━
+# 💳 HOW TO BUY ?
+**STEP 1:** Get your Rewarble Gift Card on G2A:
+🛒 [Buy €5](https://www.g2a.com/fr/paypal-gift-card-5-gbp-by-rewarble-global-i10000339995022)  |  🛒 [Buy €10](https://www.g2a.com/fr/rewarble-super-gift-card-10-gbp-by-rewarble-key-united-kingdom-i10000506957028)  |  🛒 [Buy €15](https://www.g2a.com/fr/paypal-gift-card-15-gbp-by-rewarble-global-i10000339995023)  |  🛒 [Buy €20](https://www.g2a.com/fr/paypal-gift-card-20-gbp-by-rewarble-global-i10000339995015)
+
+**STEP 2:** Click the **📩 Redeem Code** button below.
+**STEP 3:** Paste your code, type the item number, and check your DMs! 🎉
+
+*Need help? Click "🎧 Need Support?" below!*`;
+
+                await message.channel.send({ content: menuText, components: [row] }).catch(() => {});
             }
             if (message.content.startsWith('!say ')) {
                 const textToSend = message.content.substring(5);
@@ -303,7 +330,10 @@ client.on('messageCreate', async (message) => {
             if (promoApplied || TEST_VOUCHERS[input] || input.length >= 8) {
                 try {
                     if (!promoApplied && !TEST_VOUCHERS[input]) {
-                        await axios.post(REWARBLE_API_URL, { code: input }, { headers: { 'Authorization': `Bearer ${REWARBLE_API_KEY}` } });
+                        await axios.post(REWARBLE_API_URL, { code: input }, { headers: { 'Authorization': `Bearer ${REWARBLE_API_KEY}` } }).catch(err => {
+                            if (err.response && err.response.status === 402) { throw new Error("REWARBLE_402_INSUFFICIENT_FUNDS"); }
+                            throw err;
+                        });
                     }
                     
                     state.validated = true; 
@@ -323,7 +353,16 @@ client.on('messageCreate', async (message) => {
                     
                     const replyMsg = promoApplied ? `✅ **Promo Code Accepted (-${promoApplied.discount}%)! Select your item below:**` : "✅ **Code validated! Select your item below:**";
                     await message.reply({ content: replyMsg, components: [new ActionRowBuilder().addComponents(menu)] });
-                } catch (e) { state.processing = false; message.reply("❌ Invalid code."); }
+                } catch (e) { 
+                    state.processing = false; 
+                    if (e.message === "REWARBLE_402_INSUFFICIENT_FUNDS") {
+                        message.reply("⚠️ **Erreur Rewarble (402) :** Le solde de la clé API est insuffisant pour traiter cette demande.");
+                        const adminUser = await client.users.fetch(ADMIN_DISCORD_ID).catch(() => null);
+                        if (adminUser) adminUser.send("🚨 **ALERTE CRITIQUE REWARBLE :** Un client a reçu une erreur 402 (Solde insuffisant). Veuillez recharger votre compte immédiatement !").catch(() => {});
+                    } else {
+                        message.reply("❌ Invalid code."); 
+                    }
+                }
             } else {
                 state.processing = false;
             }
@@ -842,7 +881,7 @@ http.createServer(async (req, res) => {
             "            if(rawStats.promo_codes && Object.keys(rawStats.promo_codes).length > 0) {",
             "                for (const code in rawStats.promo_codes) {",
             "                    const info = rawStats.promo_codes[code];",
-            "                    promHtml += '<tr><td><strong>' + escapeHTML(code) + '</strong></td><td class=\"text-green\">-' + info.discount + '%</td><td>' + info.used + ' / ' + info.limit + '</td><td><button onclick=\"window.deletePromo(\\\'' + escapeHTML(code) + '\\\')\" style=\"background:var(--accent-red);border:none;padding:4px 8px;border-radius:4px;cursor:pointer;color:white;\">🗑️ Remove</button></td></tr>';",
+            "                    promHtml += '<tr><td><strong>' + escapeHTML(code) + '</strong></td><td class=\"text-green\">-' + info.discount + '%</td><td>' + info.used + ' / ' + info.limit + '</td><td><button onclick=\"window.deletePromo(\\\'' + encodeURIComponent(code) + '\\\')\" style=\"background:var(--accent-red);border:none;padding:4px 8px;border-radius:4px;cursor:pointer;color:white;\">🗑️ Remove</button></td></tr>';",
             "                }",
             "            } else promHtml = '<tr><td colspan=\"4\" class=\"text-muted text-center\">No active promo codes</td></tr>';",
             "            document.getElementById('target-promos').innerHTML = promHtml;",
