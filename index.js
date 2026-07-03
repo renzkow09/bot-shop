@@ -75,12 +75,10 @@ async function loadCloudStats() {
         const res = await axios.get(`${cleanUrl}/get/bot_stats`, { headers: { Authorization: `Bearer ${token}` } });
         if (res.data && res.data.result) {
             memoryStats = { ...memoryStats, ...JSON.parse(res.data.result) };
-            
             if (!memoryStats.promo_codes) memoryStats.promo_codes = {};
             if (!memoryStats.user_notes) memoryStats.user_notes = {};
             if (!memoryStats.analytics) memoryStats.analytics = { tickets_opened: 0, hourly_sales: Array(24).fill(0) };
             if (!memoryStats.analytics.hourly_sales) memoryStats.analytics.hourly_sales = Array(24).fill(0);
-            
             console.log("✅ Base de données synchronisée avec le Cloud.");
         }
     } catch (e) { console.error("❌ Cloud GET Error :", e.message); }
@@ -155,10 +153,16 @@ function logStat(type, value = 1, extraData = null) {
 }
 
 // ==========================================
-// INITIALISATION DU BOT
+// INITIALISATION DU BOT (AVEC GUILDPRESENCES)
 // ==========================================
 const client = new Client({ 
-    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildMembers],
+    intents: [
+        GatewayIntentBits.Guilds, 
+        GatewayIntentBits.GuildMessages, 
+        GatewayIntentBits.MessageContent, 
+        GatewayIntentBits.GuildMembers,
+        GatewayIntentBits.GuildPresences // <-- Correction cruciale pour le Online Count
+    ],
     partials: [Partials.GuildMember, Partials.User, Partials.Message]
 });
 
@@ -345,7 +349,6 @@ http.createServer(async (req, res) => {
     const cookie = req.headers.cookie || '';
     const isAuthenticated = cookie.includes(`auth=${DASHBOARD_PIN}`);
 
-    // --- API DE CONNEXION ---
     if (req.url === '/api/login' && req.method === 'POST') {
         let body = ''; req.on('data', chunk => body += chunk);
         req.on('end', () => {
@@ -367,17 +370,15 @@ http.createServer(async (req, res) => {
 
     if ((req.url === '/dashboard' || req.url === '/') && !isAuthenticated) {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        const html = [
-            "<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'><title>Nexus Login</title>",
-            "<link href='https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap' rel='stylesheet'>",
-            "<style>body{font-family:'Inter',sans-serif;background:#0b0f19;color:#f8fafc;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;}.login-box{background:rgba(30,41,59,0.7);backdrop-filter:blur(10px);padding:40px;border-radius:16px;border:1px solid rgba(255,255,255,0.1);text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.5);}input{background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);color:white;padding:15px;border-radius:8px;font-size:1.5em;text-align:center;letter-spacing:10px;width:180px;margin:20px 0;outline:none;transition:0.3s;}input:focus{border-color:#38bdf8;box-shadow:0 0 10px rgba(56,189,248,0.3);}button{background:#38bdf8;color:white;border:none;padding:12px 30px;font-size:1.1em;border-radius:8px;cursor:pointer;font-weight:bold;width:100%;transition:0.2s;}button:hover{background:#0284c7;}</style>",
-            "</head><body><div class='login-box'><h2 style='margin-top:0;color:#38bdf8;'>🔒 Restricted Area</h2><p style='color:#94a3b8;font-size:0.9em;'>Please enter your PIN.</p><input type='password' id='pin' maxlength='4' placeholder='••••'><br><button onclick='login()'>Unlock Dashboard</button><p id='err' style='color:#ec4899;display:none;margin-top:10px;'>Invalid PIN or Blocked</p></div>",
+        return res.end(
+            "<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'><title>Nexus Login</title>" +
+            "<link href='https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap' rel='stylesheet'>" +
+            "<style>body{font-family:'Inter',sans-serif;background:#0b0f19;color:#f8fafc;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;}.login-box{background:rgba(30,41,59,0.7);backdrop-filter:blur(10px);padding:40px;border-radius:16px;border:1px solid rgba(255,255,255,0.1);text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.5);}input{background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);color:white;padding:15px;border-radius:8px;font-size:1.5em;text-align:center;letter-spacing:10px;width:180px;margin:20px 0;outline:none;transition:0.3s;}input:focus{border-color:#38bdf8;box-shadow:0 0 10px rgba(56,189,248,0.3);}button{background:#38bdf8;color:white;border:none;padding:12px 30px;font-size:1.1em;border-radius:8px;cursor:pointer;font-weight:bold;width:100%;transition:0.2s;}button:hover{background:#0284c7;}</style>" +
+            "</head><body><div class='login-box'><h2 style='margin-top:0;color:#38bdf8;'>🔒 Restricted Area</h2><p style='color:#94a3b8;font-size:0.9em;'>Please enter your PIN.</p><input type='password' id='pin' maxlength='4' placeholder='••••'><br><button onclick='login()'>Unlock Dashboard</button><p id='err' style='color:#ec4899;display:none;margin-top:10px;'>Invalid PIN or Blocked</p></div>" +
             "<script>async function login(){const res=await fetch('/api/login',{method:'POST',body:JSON.stringify({pin:document.getElementById('pin').value})});if(res.ok)location.reload();else{document.getElementById('err').style.display='block';}} document.getElementById('pin').addEventListener('keypress', e => { if (e.key === 'Enter') login(); });</script></body></html>"
-        ].join('\n');
-        return res.end(html);
+        );
     }
 
-    // --- API INITIALISATION DE DONNEES (Sécurisé) ---
     if (req.url === '/api/init-data' && req.method === 'GET') {
         if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         
@@ -385,9 +386,14 @@ http.createServer(async (req, res) => {
         const guild = client.guilds.cache.first();
         if (guild) {
             try {
+                // Utilisation de l'API Discord forcée pour des statistiques live précises
+                const response = await axios.get("https://discord.com/api/v10/guilds/" + guild.id + "?with_counts=true", { headers: { Authorization: "Bot " + DISCORD_BOT_TOKEN } });
+                memberCount = response.data.approximate_member_count; 
+                onlineCount = response.data.approximate_presence_count;
+            } catch (err) { 
                 memberCount = guild.memberCount;
                 onlineCount = guild.presences?.cache?.size || "N/A";
-            } catch (err) { }
+            }
         }
 
         const totalJoins = memoryStats.total_joins || 1; 
@@ -395,10 +401,8 @@ http.createServer(async (req, res) => {
         const totalHistorique = memberCount !== "N/A" ? (memberCount + (memoryStats.total_leaves || 0)) : 1;
         const retentionRate = memberCount !== "N/A" ? ((memberCount / totalHistorique) * 100).toFixed(1) : "N/A";
         
-        const todayStr = new Date().toISOString().split('T')[0]; 
-        const todayRevenue = memoryStats.revenue[todayStr] || 0;
-        const currentMonth = todayStr.substring(0, 7); 
-        let monthRevenue = 0;
+        const todayStr = new Date().toISOString().split('T')[0]; const todayRevenue = memoryStats.revenue[todayStr] || 0;
+        const currentMonth = todayStr.substring(0, 7); let monthRevenue = 0;
         Object.keys(memoryStats.revenue).forEach(date => { if(date.startsWith(currentMonth)) monthRevenue += memoryStats.revenue[date]; });
 
         const ticketsOpened = memoryStats.analytics?.tickets_opened || 0;
@@ -487,7 +491,7 @@ http.createServer(async (req, res) => {
 
     if (req.url === '/api/action' && req.method === 'POST') {
         if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
-        let body = ''; req.on('data', chunk => body += chunk.toString());
+        let body = ''; req.on('data', chunk => body += chunk);
         req.on('end', async () => {
             try {
                 const data = JSON.parse(body);
@@ -565,12 +569,9 @@ http.createServer(async (req, res) => {
         }); return;
     }
 
-    // --- LE DASHBOARD STATIQUE PARFAIT ---
     if (req.url === '/dashboard' || req.url === '/') {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        
-        // Assemblage 100% propre du fichier HTML sans aucune variable Node.js pour éviter les corruptions de chaînes
-        const htmlPage = [
+        const dashboardHTML = [
             "<!DOCTYPE html>",
             "<html lang='en'>",
             "<head>",
@@ -592,7 +593,6 @@ http.createServer(async (req, res) => {
             "        .status-badge { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--text-muted); background: var(--bg-card); padding: 8px 12px; border-radius: 20px; border: 1px solid var(--border-color); backdrop-filter: blur(10px); }",
             "        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #2ecc71; box-shadow: 0 0 8px #2ecc71; transition: 0.3s; }",
             "        .nav-menu { display: flex; gap: 10px; margin-bottom: 30px; background: var(--bg-card); backdrop-filter: blur(10px); padding: 10px; border-radius: 12px; border: 1px solid var(--border-color); overflow-x: auto; white-space: nowrap; scrollbar-width: none; }",
-            "        .nav-menu::-webkit-scrollbar { display: none; }",
             "        .nav-btn { background: transparent; border: none; color: var(--text-muted); font-size: 1em; font-weight: 600; padding: 10px 20px; border-radius: 8px; cursor: pointer; transition: 0.3s; }",
             "        .nav-btn:hover { color: #fff; background: rgba(255,255,255,0.05); }",
             "        .nav-btn.active { color: #fff; background: var(--accent-blue); box-shadow: 0 4px 15px rgba(56, 189, 248, 0.3); }",
@@ -810,7 +810,7 @@ http.createServer(async (req, res) => {
             "                document.getElementById('loading-screen').style.display = 'none';",
             "                document.getElementById('dashboard-container').style.display = 'block';",
             "            } catch (e) {",
-            "                alert('Erreur de connexion a l API. Impossible de charger le dashboard.');",
+            "                alert('Erreur de connexion API. Impossible de charger les donnees.');",
             "            }",
             "        }",
 
@@ -863,7 +863,7 @@ http.createServer(async (req, res) => {
             "            if(rawStats.promo_codes && Object.keys(rawStats.promo_codes).length > 0) {",
             "                for (const code in rawStats.promo_codes) {",
             "                    const info = rawStats.promo_codes[code];",
-            "                    promHtml += '<tr><td><strong>' + escapeHTML(code) + '</strong></td><td class=\"text-green\">-' + info.discount + '%</td><td>' + info.used + ' / ' + info.limit + '</td><td><button onclick=\"window.deletePromo(\\\'' + escapeHTML(code) + '\\\')\" style=\"background:var(--accent-red);border:none;padding:4px 8px;border-radius:4px;cursor:pointer;color:white;\">🗑️ Remove</button></td></tr>';",
+            "                    promHtml += '<tr><td><strong>' + escapeHTML(code) + '</strong></td><td class=\"text-green\">-' + info.discount + '%</td><td>' + info.used + ' / ' + info.limit + '</td><td><button onclick=\"window.deletePromo(\\\'' + encodeURIComponent(code) + '\\\')\" style=\"background:var(--accent-red);border:none;padding:4px 8px;border-radius:4px;cursor:pointer;color:white;\">🗑️ Remove</button></td></tr>';",
             "                }",
             "            } else promHtml = '<tr><td colspan=\"4\" class=\"text-muted text-center\">No active promo codes</td></tr>';",
             "            document.getElementById('target-promos').innerHTML = promHtml;",
@@ -988,9 +988,10 @@ http.createServer(async (req, res) => {
             "            await window.executeAction({ action: 'create_promo', name: name, discount: discount, limit: limit });",
             "        };",
             "        ",
-            "        window.deletePromo = async function(name) {",
-            "            if(!confirm('Delete promo code ' + name + '?')) return;",
-            "            await window.executeAction({ action: 'delete_promo', name: name });",
+            "        window.deletePromo = async function(encodedCode) {",
+            "            const code = decodeURIComponent(encodedCode);",
+            "            if(!confirm('Delete promo code ' + code + '?')) return;",
+            "            await window.executeAction({ action: 'delete_promo', name: code });",
             "        };",
 
             "        window.saveUserNote = async function(userId) {",
@@ -1120,7 +1121,8 @@ http.createServer(async (req, res) => {
             "            document.getElementById('memberResults').innerHTML = html;",
             "        }",
 
-            "        window.modAction = async function(action, userId, extra = {}) {",
+            "        window.modAction = async function(action, userId, extra) {",
+            "            extra = extra || {};",
             "            let payload = { action: action, userId: userId, pin: PIN };",
             "            if (extra.channelId) payload.channelId = extra.channelId;",
             "            if (extra.duration) payload.duration = extra.duration;",
@@ -1186,7 +1188,7 @@ http.createServer(async (req, res) => {
             "</body>",
             "</html>"
         ].join("\n");
-        return res.end(htmlPage);
+        return res.end(dashboardHTML);
     } else {
         res.writeHead(200, { 'Content-Type': 'text/plain' });
         res.end('API Endpoint or Bot Status');
