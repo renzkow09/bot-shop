@@ -270,7 +270,16 @@ client.on('messageCreate', async (message) => {
 
         if (message.author.id === ADMIN_DISCORD_ID) {
             if (message.content === '!setup') {
-                const row = new ActionRowBuilder().addComponents(
+                // LIGNE 1 : Boutons pour ACHETER LES CODES
+                const rowBuy = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setLabel('💳 Buy €5').setStyle(ButtonStyle.Link).setURL('https://www.eneba.com/rewarble-rewarble-revolut-5-gbp-voucher-global'),
+                    new ButtonBuilder().setLabel('💳 Buy €10').setStyle(ButtonStyle.Link).setURL('https://www.eneba.com/rewarble-rewarble-revolut-10-gbp-voucher-global'),
+                    new ButtonBuilder().setLabel('💳 Buy €15').setStyle(ButtonStyle.Link).setURL('https://www.eneba.com/rewarble-rewarble-revolut-15-gbp-voucher-global'),
+                    new ButtonBuilder().setLabel('💳 Buy €20').setStyle(ButtonStyle.Link).setURL('https://www.eneba.com/rewarble-rewarble-revolut-20-gbp-voucher-global')
+                );
+
+                // LIGNE 2 : Boutons d'ACTIONS
+                const rowActions = new ActionRowBuilder().addComponents(
                     new ButtonBuilder().setCustomId('open_shop_channel').setLabel('📩 Redeem Code').setStyle(ButtonStyle.Success),
                     new ButtonBuilder().setCustomId('open_support_ticket').setLabel('🎧 Need Support?').setStyle(ButtonStyle.Secondary)
                 );
@@ -293,15 +302,13 @@ client.on('messageCreate', async (message) => {
 
 ━━━━━━━━━━━━━━━━━━━━━━
 # 💳 HOW TO BUY ?
-**STEP 1:** Get your Rewarble Gift Card on Eneba:
-🛒 [Buy €5](https://www.eneba.com/rewarble-rewarble-revolut-5-gbp-voucher-global)  |  🛒 [Buy €10](https://www.eneba.com/rewarble-rewarble-revolut-10-gbp-voucher-global)  |  🛒 [Buy €15](https://www.eneba.com/rewarble-rewarble-crypto-15-gbp-voucher-global?srsltid=AfmBOoof0E66Jn2RX3QwQmVS_1k-D79flEt8AYAH4_pamo5GA38o3EdV)  |  🛒 [Buy €20](https://www.eneba.com/rewarble-rewarble-revolut-20-gbp-voucher-global)
-
-**STEP 2:** Click the **📩 Redeem Code** button below.
+**STEP 1:** Click a button below to get your Rewarble Gift Card on Eneba.
+**STEP 2:** Click the **📩 Redeem Code** button.
 **STEP 3:** Paste your code, type the item number, and check your DMs! 🎉
 
 *Need help or have a question? Click "🎧 Need Support?" below!*`;
 
-                await message.channel.send({ content: menuText, components: [row] }).catch(() => {});
+                await message.channel.send({ content: menuText, components: [rowBuy, rowActions] }).catch(() => {});
             }
             if (message.content.startsWith('!say ')) {
                 const textToSend = message.content.substring(5);
