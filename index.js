@@ -1,5 +1,4 @@
 // === [ANCHOR: IMPORTS_AND_CRASH_HANDLER] ===
-// 📎 AJOUT: AttachmentBuilder pour gérer les images
 const { Client, GatewayIntentBits, Partials, ButtonBuilder, ActionRowBuilder, ButtonStyle, ChannelType, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, EmbedBuilder, AttachmentBuilder } = require('discord.js');
 const axios = require('axios');
 const http = require('http');
@@ -45,9 +44,11 @@ let memoryStats = {
     referrals: {}, settings: { invite_reward_threshold: 10 },
     products: {},
     subscriptions: {},
+    buy_links: {}, // 🔗 NOUVEAU: Base de données des boutons d'achat
     last_update: Date.now() 
 };
 
+// 📦 INTÉGRATION: Stock initialisé à l'infini ("∞")
 const INITIAL_PRODUCTS = {
     "1": { name: "Boobs", price: "5", link: "https://drive.google.com/ton_lien_boobs", category: "✨ PHOTOS", stock: "∞" }, 
     "2": { name: "Ass", price: "5", link: "https://drive.google.com/ton_lien_ass", category: "✨ PHOTOS", stock: "∞" },
@@ -61,6 +62,14 @@ const INITIAL_PRODUCTS = {
     "10": { name: "Sexting", price: "Custom", link: "", category: "💌 PERSONALIZED", stock: "∞" },
     "11": { name: "Custom Request", price: "Custom", link: "", category: "💌 PERSONALIZED", stock: "∞" },
     "VIP": { name: "👑 VIP Pass 30 Jours", price: "20", link: "Welcome to VIP!", category: "👑 ABONNEMENT", stock: "∞" }
+};
+
+// 🔗 NOUVEAU: Liens d'achat Eneba par défaut
+const INITIAL_BUY_LINKS = {
+    "1": { label: "💳 Buy €5", url: "https://www.eneba.com/rewarble-rewarble-revolut-5-gbp-voucher-global" },
+    "2": { label: "💳 Buy €10", url: "https://www.eneba.com/rewarble-rewarble-revolut-10-gbp-voucher-global" },
+    "3": { label: "💳 Buy €15", url: "https://www.eneba.com/rewarble-rewarble-revolut-15-gbp-voucher-global" },
+    "4": { label: "💳 Buy €20", url: "https://www.eneba.com/rewarble-rewarble-revolut-20-gbp-voucher-global" }
 };
 
 // === [ANCHOR: CLOUD_SYNC_FUNCTIONS] ===
@@ -81,6 +90,7 @@ async function loadCloudStats() {
             if (!memoryStats.referrals) memoryStats.referrals = {};
             if (!memoryStats.subscriptions) memoryStats.subscriptions = {};
             if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10 };
+            if (!memoryStats.buy_links || Object.keys(memoryStats.buy_links).length === 0) memoryStats.buy_links = INITIAL_BUY_LINKS; // 🔗 Inject defaults
             if (!memoryStats.analytics) memoryStats.analytics = { tickets_opened: 0, hourly_sales: Array(24).fill(0) };
             if (!memoryStats.analytics.hourly_sales) memoryStats.analytics.hourly_sales = Array(24).fill(0);
             if (!memoryStats.products || Object.keys(memoryStats.products).length === 0) memoryStats.products = INITIAL_PRODUCTS;
@@ -181,18 +191,34 @@ function logStat(type, value = 1, extraData = null) {
 
 // === [ANCHOR: DISCORD_SHOP_EMBED_GENERATOR] ===
 async function sendShopSetup(channel) {
-    const rowBuy = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setLabel('💳 Buy €5').setStyle(ButtonStyle.Link).setURL('https://www.eneba.com/rewarble-rewarble-revolut-5-gbp-voucher-global'),
-        new ButtonBuilder().setLabel('💳 Buy €10').setStyle(ButtonStyle.Link).setURL('https://www.eneba.com/rewarble-rewarble-revolut-10-gbp-voucher-global'),
-        new ButtonBuilder().setLabel('💳 Buy €15').setStyle(ButtonStyle.Link).setURL('https://www.eneba.com/rewarble-rewarble-revolut-15-gbp-voucher-global'),
-        new ButtonBuilder().setLabel('💳 Buy €20').setStyle(ButtonStyle.Link).setURL('https://www.eneba.com/rewarble-rewarble-revolut-20-gbp-voucher-global')
-    );
+    
+    // 🔗 GÉNÉRATION DYNAMIQUE DES BOUTONS D'ACHAT
+    let buyRows = [];
+    let currentComponents = [];
+    
+    for (const [id, linkObj] of Object.entries(memoryStats.buy_links || {})) {
+        try {
+            currentComponents.push(new ButtonBuilder().setLabel(linkObj.label).setStyle(ButtonStyle.Link).setURL(linkObj.url));
+            if (currentComponents.length === 5) {
+                buyRows.push(new ActionRowBuilder().addComponents(currentComponents));
+                currentComponents = [];
+            }
+        } catch(e) {} // Ignore les URLs invalides pour éviter un crash
+    }
+    if (currentComponents.length > 0) {
+        buyRows.push(new ActionRowBuilder().addComponents(currentComponents));
+    }
+    
+    // Discord max components limit safety (max 5 rows of 5 per message. We reserve 1 for actions)
+    buyRows = buyRows.slice(0, 4);
 
     const rowActions = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('open_shop_channel').setLabel('📩 Redeem Code').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId('get_referral_link').setLabel('🔗 Get Referral Link').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId('open_support_ticket').setLabel('🎧 Need Support?').setStyle(ButtonStyle.Secondary)
     );
+    
+    const componentsToSend = [...buyRows, rowActions];
     
     const groupedProducts = {};
     for (const [id, prod] of Object.entries(memoryStats.products)) {
@@ -215,10 +241,10 @@ async function sendShopSetup(channel) {
         isFirst = false;
     }
 
-    shopEmbed.addFields({ name: '━━━━━━━━━━━━━━━━━━━━━━\n💳 HOW TO BUY ?', value: '**STEP 1:** Click an **Eneba** button below to get your voucher.\n**STEP 2:** Click the green **📩 Redeem Code** button.\n**STEP 3:** Paste your code, choose your item, and check your DMs! 🎉\n\n🎁 **FREE PRODUCT:** Click **🔗 Get Referral Link**, invite your friends, and get a 100% OFF code automatically!' });
+    shopEmbed.addFields({ name: '━━━━━━━━━━━━━━━━━━━━━━\n💳 HOW TO BUY ?', value: '**STEP 1:** Click a Buy button below to get your voucher.\n**STEP 2:** Click the green **📩 Redeem Code** button.\n**STEP 3:** Paste your code, choose your item, and check your DMs! 🎉\n\n🎁 **FREE PRODUCT:** Click **🔗 Get Referral Link**, invite your friends, and get a 100% OFF code automatically!' });
     shopEmbed.setFooter({ text: 'Powered by Nexus Premium • Secure & Automatic 🔒' });
 
-    await channel.send({ embeds: [shopEmbed], components: [rowBuy, rowActions] }).catch(() => {});
+    await channel.send({ embeds: [shopEmbed], components: componentsToSend }).catch(() => {});
 }
 
 // === [ANCHOR: DISCORD_BOT_CLIENT_INIT] ===
@@ -622,7 +648,6 @@ http.createServer(async (req, res) => {
             if (channel) {
                 try {
                     const fetched = await channel.messages.fetch({ limit: 50 });
-                    // 📎 Modif: Extraction de l'URL de l'image (s'il y en a une)
                     msgs = fetched.map(m => {
                         const attachment = m.attachments.first();
                         return { 
@@ -717,7 +742,6 @@ http.createServer(async (req, res) => {
                 const guild = client.guilds.cache.first();
                 if (!guild) return res.writeHead(404).end('Guild not found');
 
-                // 📎 AJOUT: Envoi d'un message avec potentiel image convertie depuis base64
                 if (data.action === 'send_ticket_message') {
                     const channel = guild.channels.cache.get(data.channelId);
                     if (channel) {
@@ -733,12 +757,30 @@ http.createServer(async (req, res) => {
                         await channel.send(payload);
                     } else throw new Error("Can't find channel");
                 }
-                // 👍 AJOUT: Ajout de réaction à un message Discord
                 else if (data.action === 'react_ticket_message') {
                     const channel = guild.channels.cache.get(data.channelId);
                     if (channel && data.messageId && data.emoji) {
                         const msgToReact = await channel.messages.fetch(data.messageId).catch(() => null);
                         if (msgToReact) await msgToReact.react(data.emoji).catch(()=>{});
+                    }
+                }
+                // 🔗 ACTIONS: BUY LINKS
+                else if (data.action === 'add_buy_link') {
+                    if (!memoryStats.buy_links) memoryStats.buy_links = {};
+                    const newId = (Object.keys(memoryStats.buy_links).length + 1).toString() + Date.now();
+                    memoryStats.buy_links[newId] = { label: data.label, url: data.url };
+                    syncCloud();
+                }
+                else if (data.action === 'edit_buy_link') {
+                    if (memoryStats.buy_links && memoryStats.buy_links[data.id]) {
+                        memoryStats.buy_links[data.id] = { label: data.label, url: data.url };
+                        syncCloud();
+                    }
+                }
+                else if (data.action === 'delete_buy_link') {
+                    if (memoryStats.buy_links && memoryStats.buy_links[data.id]) {
+                        delete memoryStats.buy_links[data.id];
+                        syncCloud();
                     }
                 }
                 else if (data.action === 'refund_tx') {
@@ -915,7 +957,7 @@ http.createServer(async (req, res) => {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         const dashboardHTML = [
             "<!DOCTYPE html><html lang='en'><head><meta charset='UTF-8'><title>Nexus Premium Dashboard</title><script src='https://cdn.jsdelivr.net/npm/chart.js'></script><link href='https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap' rel='stylesheet'>",
-            "",
+            "<!-- [ANCHOR: DASHBOARD_CSS] -->",
             "<style>",
             ":root { --bg-main: #070b14; --bg-card: rgba(15, 23, 42, 0.6); --border-color: rgba(56, 189, 248, 0.15); --text-main: #f8fafc; --text-muted: #94a3b8; --accent-blue: #38bdf8; --accent-green: #10b981; --accent-purple: #a855f7; --accent-orange: #f97316; --accent-pink: #ec4899; --accent-red: #ef4444; }",
             "* { box-sizing: border-box; } body { font-family: 'Inter', sans-serif; background-color: var(--bg-main); background-image: radial-gradient(circle at 15% 50%, rgba(56, 189, 248, 0.05), transparent 25%), radial-gradient(circle at 85% 30%, rgba(255, 20, 147, 0.05), transparent 25%); color: var(--text-main); margin: 0; padding: 20px; min-height: 100vh; overflow-x: hidden; }",
@@ -991,14 +1033,14 @@ http.createServer(async (req, res) => {
             ".progress-bg { width:100%; background:rgba(255,255,255,0.1); border-radius:4px; height:8px; margin-top:5px; overflow:hidden; }",
             ".progress-fill { height:100%; background:var(--accent-purple); }",
             "</style></head><body>",
-            "",
+            "<!-- [ANCHOR: DASHBOARD_MODALS_TOASTS] -->",
             "<div id='toast' style='position:fixed; bottom:-100px; right:20px; background:var(--accent-green); color:white; padding:15px 25px; border-radius:10px; font-weight:bold; transition:all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55); z-index:1000; box-shadow: 0 5px 20px rgba(0,0,0,0.5);'>🎉 Notification!</div>",
             "<div id='loading-screen' style='position:fixed; top:0; left:0; width:100%; height:100%; background:var(--bg-main); z-index:9999; display:flex; justify-content:center; align-items:center; flex-direction:column; transition: opacity 0.5s ease;'><div style='width: 50px; height: 50px; border: 4px solid rgba(56, 189, 248, 0.2); border-top: 4px solid var(--accent-blue); border-radius: 50%; animation: spin 1s linear infinite;'></div><h2 style='color:var(--accent-blue); margin-top:20px; font-weight:300;'>Loading Workspace...</h2></div>",
             "<div class='modal' id='syncModal'><div class='modal-content'><h2>📦 Catalog Saved!</h2><p class='text-muted' style='margin-bottom:20px;'>Apply these changes to your Discord shop channel right now?</p><button class='admin-btn' style='background:var(--accent-purple); width:100%; margin-bottom:10px;' onclick='window.triggerShopRefresh(); document.getElementById(\"syncModal\").style.display=\"none\";'>🔄 Setup & Clear Old Menu</button><button class='admin-btn' style='background:transparent; border:1px solid rgba(255,255,255,0.2); width:100%; color:var(--text-muted);' onclick='document.getElementById(\"syncModal\").style.display=\"none\";'>Skip for now</button></div></div>",
-            "",
+            "<!-- [ANCHOR: DASHBOARD_NAVBAR] -->",
             "<div class='container' id='dashboard-container' style='display:none;'><div class='header'><h1>Nexus Dashboard</h1><div class='controls'><div class='bot-status'><div class='status-dot'></div> System Online</div><button class='btn-icon' onclick='window.toggleStealth()' id='stealthBtn'>👁️ Stealth</button><div class='live-status btn-icon' style='background:var(--accent-blue); border:none; font-weight:bold;'><span id='live-tickets-count'>0</span> Live Tickets</div></div></div>",
             "<div class='nav-menu'><button class='nav-btn active' onclick='window.switchTab(\"overview\", this)'>📊 Overview</button><button class='nav-btn' onclick='window.switchTab(\"vip\", this)'>👑 VIP Pass</button><button class='nav-btn' onclick='window.switchTab(\"livechat\", this)'>💬 Live Chat</button><button class='nav-btn' onclick='window.switchTab(\"analytics\", this)'>📈 Analytics</button><button class='nav-btn' onclick='window.switchTab(\"transactions\", this)'>💳 Transactions</button><button class='nav-btn' onclick='window.switchTab(\"products\", this)'>📦 Products</button><button class='nav-btn' onclick='window.switchTab(\"audience\", this)'>👥 Audience</button><button class='nav-btn' onclick='window.switchTab(\"referrals\", this)'>🔗 Referrals</button><button class='nav-btn' onclick='window.switchTab(\"moderation\", this)'>🛡️ Moderation</button><button class='nav-btn' onclick='window.switchTab(\"monitoring\", this)'>📡 Monitoring</button><button class='nav-btn' onclick='window.switchTab(\"admin\", this)'>⚙️ Admin Config</button></div>",
-            "",
+            "<!-- [ANCHOR: DASHBOARD_TABS_CONTENT] -->",
             "<div id='overview' class='tab-content active'><div class='stats-grid'><div class='card green'><h3>Today's Earnings</h3><div class='value money text-green' id='ui-today-rev'>€0</div></div><div class='card blue'><h3>Total Earnings</h3><div class='value money text-blue' id='ui-total-rev'>€0</div></div><div class='card pink'><h3>Conversion Rate</h3><div class='value text-pink' id='ui-conv-rate'>0%</div></div><div class='card orange'><h3>Online / Total</h3><div class='value text-orange' id='ui-online-total'>0</div></div><div class='card purple'><h3>Retention Rate</h3><div class='value text-purple' id='ui-retention'>0%</div></div></div><div class='stats-grid'><div class='card purple'><h3>Tickets Opened</h3><div class='value' id='ui-tickets-opened'>0</div></div><div class='card red'><h3>Drop-off Rate</h3><div class='value text-red' id='ui-dropoff'>0%</div></div><div class='card orange'><h3>Peak Sales Hour</h3><div class='value' id='ui-peak-hour'>N/A</div></div></div><div class='box'><div style='display:flex; justify-content:space-between;'><h2>📈 Revenue Timeline</h2><div class='filter-group'><button class='admin-btn' style='margin:0; padding:5px 10px; background:var(--accent-green); margin-right:10px;' onclick='window.location.href=\"/api/export\"'>📥 Export CSV</button><button class='admin-btn' style='margin:0; padding:5px 10px;' onclick='window.updateSalesChart(7)'>7D</button><button class='admin-btn' style='margin:0; padding:5px 10px; background:rgba(0,0,0,0.5);' onclick='window.updateSalesChart(30)'>30D</button></div></div><div style='height:250px; margin-top:15px;'><canvas id='salesChart'></canvas></div></div></div>",
             
             "<div id='vip' class='tab-content'><div class='box' style='background:rgba(168, 85, 247, 0.1); border-color:var(--accent-purple);'><h2>👑 VIP Subscriptions</h2><p class='text-muted'>Active subscriptions. VIPs get a 20% discount on all shop items automatically.</p><div style='overflow-x:auto; margin-top:15px;'><table><thead><tr><th>Username</th><th>Expires On</th><th>Time Left</th><th>Actions</th></tr></thead><tbody id='target-vips'></tbody></table></div></div></div>",
@@ -1006,25 +1048,37 @@ http.createServer(async (req, res) => {
             "<div id='livechat' class='tab-content'><div class='box'><h2>💬 Live Chat Console</h2><p class='text-muted' style='margin-bottom:15px;'>Read and reply to Shop and Support tickets without opening Discord.</p><div class='chat-container'><div class='ticket-list' id='chat-ticket-list'><p class='text-muted text-center' style='margin-top:20px;'>Loading tickets...</p></div><div class='chat-window'><div class='chat-messages' id='chat-messages-area'><div style='margin:auto; color:var(--text-muted); text-align:center;'><h2 style='font-size:3em; margin:0;'>👈</h2><p>Select a ticket to view</p></div></div><div style='display:flex; gap:10px; padding: 10px 15px; background: rgba(0,0,0,0.2); border-top: 1px solid var(--border-color); flex-wrap: wrap;'><button class='admin-btn' style='margin:0; padding:6px 12px; font-size:0.85em; background: rgba(255,255,255,0.05);' onclick='window.sendQuickResponse(\"welcome\")'>👋 Welcome</button><button class='admin-btn' style='margin:0; padding:6px 12px; font-size:0.85em; background: rgba(255,255,255,0.05);' onclick='window.sendQuickResponse(\"wait\")'>⏳ Wait</button><button class='admin-btn' style='margin:0; padding:6px 12px; font-size:0.85em; background: rgba(255,255,255,0.05);' onclick='window.sendQuickResponse(\"resolved\")'>✅ Resolved?</button><button class='admin-btn' style='margin:0; padding:6px 12px; font-size:0.85em; background: var(--accent-red);' onclick='window.sendQuickResponse(\"close\")'>🔒 Close Ticket</button></div><div class='chat-input-area'><div class='chat-attachment-wrapper'><input type='file' id='chat-file-input' style='display:none' accept='image/*' onchange='document.getElementById(\"attach-badge\").style.display=\"block\"'><button class='chat-attachment-btn' onclick='document.getElementById(\"chat-file-input\").click()' title='Attach Image'>📎</button><div id='attach-badge' class='attachment-badge'></div></div><input type='text' id='chat-input-text' placeholder='Type your reply here...' onkeypress='if(event.key===\"Enter\") window.sendChatMessage()'><button class='admin-btn' style='margin:0; padding:12px 25px;' onclick='window.sendChatMessage()'>Send 🚀</button></div></div></div></div></div>",
             "<div id='analytics' class='tab-content'><div class='box'><h2>🕒 Peak Hours (Sales per Hour)</h2><div style='height:250px; margin-top:15px;'><canvas id='hourlyChart'></canvas></div></div><div style='display:grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap:20px;'><div class='box'><h2>🏆 Top Selling Products</h2><div style='height:300px; margin-top:15px;'><canvas id='topProductsBarChart'></canvas></div></div><div class='box'><h2>🏷️ Revenue by Category</h2><div style='height:300px; margin-top:15px;'><canvas id='categoryRevenueChart'></canvas></div></div></div></div>",
             "<div id='transactions' class='tab-content'><div class='box'><h2>🛒 Recent Transactions</h2><div style='overflow-x:auto;'><table><thead><tr><th>Customer</th><th>Product</th><th>Price</th><th>Date</th><th>Action</th></tr></thead><tbody id='target-tx'></tbody></table></div></div></div>",
-            "<div id='products' class='tab-content'><div class='box'><h2>📝 Add / Edit Product</h2><div style='display:flex; gap:15px; flex-wrap:wrap; margin-bottom:5px;'><input type='hidden' id='editProdId'><input type='text' id='newProdName' placeholder='Product Name (e.g. VIP Pack)' style='flex:1; min-width:200px;'><input type='text' id='newProdPrice' placeholder='Price in €' style='width:120px;'><input type='text' id='newProdStock' placeholder='Stock (e.g. ∞)' style='width:80px;'><input type='text' id='newProdLink' placeholder='Delivery Link (Drive, Mega...)' style='flex:2; min-width:200px;'><button class='admin-btn' style='margin:0;' onclick='window.saveProduct()' id='saveProdBtn'>➕ Add</button><button class='admin-btn' style='margin:0; background:transparent; border:1px solid var(--accent-red); color:var(--accent-red); display:none;' onclick='window.cancelEdit()' id='cancelEditBtn'>Cancel</button></div></div><div class='box'><h2>📦 Current Catalog</h2><div class='product-grid' id='target-products'></div></div></div>",
+            
+            // 📦 SECTION PRODUITS ET 🔗 BOUTONS D'ACHAT (Fusionnés proprement)
+            "<div id='products' class='tab-content'><div class='box'><h2>📝 Add / Edit Product</h2><div style='display:flex; gap:15px; flex-wrap:wrap; margin-bottom:5px;'><input type='hidden' id='editProdId'><input type='text' id='newProdName' placeholder='Product Name (e.g. VIP Pack)' style='flex:1; min-width:200px;'><input type='text' id='newProdPrice' placeholder='Price in €' style='width:120px;'><input type='text' id='newProdStock' placeholder='Stock (e.g. ∞)' style='width:80px;'><input type='text' id='newProdLink' placeholder='Delivery Link (Drive, Mega...)' style='flex:2; min-width:200px;'><button class='admin-btn' style='margin:0;' onclick='window.saveProduct()' id='saveProdBtn'>➕ Add</button><button class='admin-btn' style='margin:0; background:transparent; border:1px solid var(--accent-red); color:var(--accent-red); display:none;' onclick='window.cancelEdit()' id='cancelEditBtn'>Cancel</button></div></div><div class='box'><h2>🔗 Manage Buy Buttons (Shop Menu)</h2><p class='text-muted'>Define the Eneba/Voucher buttons that appear on your Discord Shop Embed.</p><div style='display:flex; gap:15px; flex-wrap:wrap; margin-bottom:5px;'><input type='hidden' id='editLinkId'><input type='text' id='newLinkLabel' placeholder='Button Label (e.g. 💳 Buy €5)' style='flex:1; min-width:150px;'><input type='text' id='newLinkUrl' placeholder='Voucher URL (https://...)' style='flex:2; min-width:200px;'><button class='admin-btn' style='margin:0;' onclick='window.saveBuyLink()' id='saveLinkBtn'>➕ Add Link</button><button class='admin-btn' style='margin:0; background:transparent; border:1px solid var(--accent-red); color:var(--accent-red); display:none;' onclick='window.cancelEditLink()' id='cancelEditLinkBtn'>Cancel</button></div><div style='overflow-x:auto; margin-top:15px;'><table><thead><tr><th>Label</th><th>URL</th><th>Actions</th></tr></thead><tbody id='target-buy-links'></tbody></table></div></div><div class='box'><h2>📦 Current Catalog</h2><div class='product-grid' id='target-products'></div></div></div>",
+            
             "<div id='audience' class='tab-content'><div class='box'><h2>📥 Latest Joins</h2><div style='overflow-x:auto;'><table><thead><tr><th>Username</th><th>Date</th></tr></thead><tbody id='target-joins'></tbody></table></div></div></div>",
             "<div id='referrals' class='tab-content'><div class='box'><h2>🔗 Referral Threshold</h2><p class='text-muted'>Number of invites required to get a free product code.</p><div style='display:flex; gap:10px; align-items:center;'><input type='number' id='ref-threshold' style='width:100px;'><button class='admin-btn' style='margin:0;' onclick='window.updateRefThreshold()'>💾 Save Settings</button></div></div><div class='box'><h2>🏆 Top Inviters</h2><div style='overflow-x:auto;'><table><thead><tr><th>User</th><th>Invites</th><th>Rewards Claimed</th><th>Recently Invited Users</th></tr></thead><tbody id='target-referrals'></tbody></table></div></div></div>",
             "<div id='moderation' class='tab-content'><div class='box'><h2>🔎 Member Directory</h2><p class='text-muted'>Search and manage users (Mute, Ban, Warn, Blacklist).</p><div style='display:flex; flex-wrap:wrap; gap:10px; margin-top:10px; align-items:center;'><input type='text' id='memberSearchInput' placeholder='Filter by username or ID...' style='margin-top:0; flex:1; min-width:200px;' oninput='window.sortMembersLocally()'><select id='memberStatusSelect' style='margin-top:0; width:auto;' onchange='window.sortMembersLocally()'><option value='all'>🌍 All Status</option><option value='online'>🟢 Online Only</option></select><select id='memberSortSelect' style='margin-top:0; width:auto;' onchange='window.sortMembersLocally()'><option value='recent'>🔽 Newest (Join)</option><option value='oldest'>🔼 Oldest (Join)</option><option value='spent_desc'>💰 Top Spenders</option><option value='spent_asc'>💸 Least Spenders</option><option value='warns'>⚠️ Most Warns</option></select><button class='admin-btn' style='margin-top:0; height:42px;' onclick='window.loadAllMembers()'>🔄 Load Database</button></div><div id='memberResults' style='margin-top:20px;'></div></div></div>",
             "<div id='monitoring' class='tab-content'><div class='box'><h2>📡 System Diagnostics & Latency</h2><p class='text-muted'>Check external API status and dashboard-to-Discord latency.</p><button class='admin-btn' onclick='window.runDiagnostics()'>🔄 Run API Diagnostics</button><div class='stats-grid' style='margin-top:20px;'><div class='card' id='card-upstash'><h3>Upstash Database</h3><div class='value' id='ui-upstash-status' style='font-size:1.5em;'>⚪ Waiting</div><p class='text-muted' id='ui-upstash-ping'>Latency: -- ms</p></div><div class='card' id='card-rewarble'><h3>Rewarble API</h3><div class='value' id='ui-rewarble-status' style='font-size:1.5em;'>⚪ Waiting</div><p class='text-muted' id='ui-rewarble-ping'>Latency: -- ms</p></div><div class='card' id='card-discord'><h3>Discord WebSocket</h3><div class='value text-blue' id='ui-discord-ws' style='font-size:1.5em;'>-- ms</div><p class='text-muted'>Global Gateway Ping</p></div></div><div style='margin-top:30px; background:rgba(0,0,0,0.3); padding:20px; border-radius:16px; border:1px solid var(--border-color);'><h3>⚡ Dashboard ➔ Discord Reactivity Test</h3><p class='text-muted' style='font-size:0.9em;'>Calculates the exact time between your click, server processing, ghost message creation on Discord, and final display here.</p><div style='display:flex; align-items:center; gap:20px; margin-top:15px;'><button class='admin-btn' style='margin:0; background:var(--accent-orange);' onclick='window.testActionLatency()'>⚡ Test Action Speed</button><div id='latency-result' style='font-size:1.5em; font-weight:bold; color:var(--text-muted);'>-- ms</div></div></div></div></div>",
             "<div id='admin' class='tab-content'><div class='box'><h2>⚡ 1-Click Shop Setup</h2><p class='text-muted'>Clear the old menu and instantly post the new aesthetic setup in your Discord shop channel.</p><button class='admin-btn' style='background:var(--accent-purple); width:100%; padding:15px;' onclick='window.triggerShopRefresh()'>🔄 Setup and clear old menu</button></div><div class='box'><h2>🎟️ Promo Codes</h2><div style='display:flex; gap:10px; flex-wrap:wrap;'><input type='text' id='promoName' placeholder='CODE' style='flex:1; min-width:150px;'><input type='number' id='promoDiscount' placeholder='% Off' style='width:100px;'><input type='number' id='promoLimit' placeholder='Uses' style='width:100px;'><button class='admin-btn' style='margin:0;' onclick='window.createPromo()'>➕ Create</button></div><div style='overflow-x:auto; margin-top:20px;'><table><thead><tr><th>Code</th><th>Discount</th><th>Usage</th><th>Action</th></tr></thead><tbody id='target-promos'></tbody></table></div></div><div class='box'><h2>🌟 Post Customer Review</h2><div style='display:flex; gap:10px; margin-bottom:10px;'><input type='text' id='rev-author' placeholder='Author Name' style='flex:1;'><select id='rev-rating' style='flex:1;'><option value='5'>5/5 ⭐ - Excellent</option><option value='4'>4/5 ⭐ - Very Good</option><option value='3'>3/5 ⭐ - Good</option><option value='2'>2/5 ⭐ - Fair</option><option value='1'>1/5 ⭐ - Poor</option></select></div><textarea id='rev-msg' placeholder='Type the review here...' style='margin-bottom:10px; min-height:80px;'></textarea><button class='admin-btn' style='background:var(--accent-green); width:100%;' onclick='window.sendReview()'>📤 Publish Review to Discord</button></div></div>",
             "</div>",
-            "",
+            "<!-- [ANCHOR: DASHBOARD_JS_LOGIC] -->",
             "<script>",
             "let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, userGoal=500, salesChart; let allMembersData = []; let isMembersLoaded = false; let activeChatChannel = null; let chatPollInterval = null;",
             "async function initDashboard(){ try{ const res=await fetch('/api/init-data'); if(!res.ok)throw new Error('Err'); const data=await res.json(); rawStats=data.memoryStats; PRODUCT_DATA=data.PRODUCT_DATA; currentMonthRevenue=data.monthRevenue; PIN=data.PIN; lastTxCount=rawStats.total_transactions||0; document.getElementById('ui-today-rev').innerText='€'+data.todayRevenue; document.getElementById('ui-total-rev').innerText='€'+(rawStats.total_revenue||0); document.getElementById('ui-conv-rate').innerText=data.conversionRate+'%'; document.getElementById('ui-online-total').innerHTML=data.onlineCount+\" <span style='font-size:0.5em;color:var(--text-muted);'>/ \"+data.memberCount+\"</span>\"; document.getElementById('ui-retention').innerText=data.retentionRate+'%'; document.getElementById('ui-tickets-opened').innerText=data.ticketsOpened; document.getElementById('ui-dropoff').innerText=data.dropOffRate+'%'; document.getElementById('ui-peak-hour').innerText=data.peakHourStr; buildStaticTables(); renderAnalyticsCharts(); setTimeout(()=>{ document.getElementById('loading-screen').style.opacity='0'; setTimeout(()=>{ document.getElementById('loading-screen').style.display='none'; document.getElementById('dashboard-container').style.display='block'; }, 500); }, 500); }catch(e){ alert('API Error'); } }",
             "function escapeHTML(str){ return str ? String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') : ''; }",
             "function buildStaticTables(){ let txHtml=''; if(rawStats.recent_transactions&&rawStats.recent_transactions.length>0){ rawStats.recent_transactions.forEach(tx=>{ txHtml+='<tr><td>'+escapeHTML(tx.username)+'</td><td>'+escapeHTML(tx.product)+'</td><td class=\"text-green font-bold\">€'+tx.price+'</td><td class=\"text-muted\">'+tx.date+'</td><td><button class=\"admin-btn\" style=\"padding:4px 8px; background:var(--accent-red); margin:0;\" onclick=\"window.refundTx(\\''+tx.date+'\\', \\''+escapeHTML(tx.username)+'\\')\">Refund</button></td></tr>'; }); } document.getElementById('target-tx').innerHTML=txHtml; let prodHtml=''; if(rawStats.products){ Object.entries(rawStats.products).forEach(([id,p])=>{ let icon='📦'; let cat = p.category||''; if(cat.includes('PHOTOS')) icon='📸'; else if(cat.includes('VIDEOS')) icon='🎥'; else if(cat.includes('SPECIAL')) icon='💦'; else if(cat.includes('PERSONALIZED')) icon='💌'; else if(cat.includes('ABONNEMENT')) icon='👑'; let pPrice = p.price==='Custom'?'Custom':'€'+p.price; let pLink = p.link?'<a href=\"'+escapeHTML(p.link)+'\" target=\"_blank\" style=\"color:var(--accent-blue);text-decoration:none;\">[🔗 Open Delivery Link]</a>':'<span class=\"text-muted\">No Link</span>'; let stockDisplay = p.stock === '∞' || !p.stock ? '∞' : p.stock; prodHtml+='<div class=\"product-card\"><div style=\"position:absolute; top:15px; right:15px; color:var(--text-muted); font-size:0.8em; font-weight:bold;\">ID: '+id+'</div><div class=\"prod-title\">'+icon+' '+escapeHTML(p.name)+'</div><div class=\"prod-price\">'+pPrice+' <span style=\"font-size:0.7em; color:var(--text-muted); font-weight:normal;\">| Stock: '+escapeHTML(stockDisplay)+'</span></div><div style=\"margin-bottom:10px; font-size:0.9em;\">'+pLink+'</div><div class=\"prod-actions\"><button class=\"admin-btn\" style=\"background:rgba(255,255,255,0.1);\" onclick=\"window.editProduct(\\''+id+'\\')\">✏️ Edit</button><button class=\"admin-btn\" style=\"background:rgba(239, 68, 68, 0.2); color:var(--accent-red);\" onclick=\"window.deleteProduct(\\''+id+'\\')\">🗑️ Delete</button></div></div>'; }); } document.getElementById('target-products').innerHTML=prodHtml; let jHtml=''; if(rawStats.recent_joins){ rawStats.recent_joins.forEach(u=>{ jHtml+='<tr><td>'+escapeHTML(u.username)+'</td><td class=\"text-muted\">'+u.date+'</td></tr>'; }); } document.getElementById('target-joins').innerHTML=jHtml; let promHtml=''; if(rawStats.promo_codes){ for(const code in rawStats.promo_codes){ const info=rawStats.promo_codes[code]; const isExhausted = info.used >= info.limit; const statusColor = isExhausted ? 'var(--accent-red)' : 'var(--accent-green)'; promHtml+='<tr style=\"opacity:'+(isExhausted?'0.5':'1')+'\"><td><strong>'+escapeHTML(code)+'</strong></td><td style=\"color:'+statusColor+'; font-weight:bold;\">-'+info.discount+'%</td><td>'+info.used+' / '+info.limit+'</td><td><button class=\"admin-btn\" style=\"margin:0; padding:5px 10px; background:var(--accent-red);\" onclick=\"window.deletePromo(\\\''+encodeURIComponent(code)+'\\\')\">🗑️</button></td></tr>'; } } document.getElementById('target-promos').innerHTML=promHtml; document.getElementById('ref-threshold').value=rawStats.settings?.invite_reward_threshold||10; let refHtml=''; if(rawStats.referrals){ Object.entries(rawStats.referrals).forEach(([id,r])=>{ let list=r.invited.slice(0,3).map(u=>escapeHTML(u.username)).join(', '); if(r.invited.length>3) list+='...'; refHtml+='<tr><td>'+escapeHTML(r.username||id)+'</td><td class=\"text-green font-bold\">'+r.count+'</td><td>'+r.total_rewards+'</td><td class=\"text-muted\">'+(list||'None')+'</td></tr>'; }); } document.getElementById('target-referrals').innerHTML=refHtml; ",
-            "let vipHtml = ''; const now = Date.now(); if(rawStats.subscriptions) { Object.entries(rawStats.subscriptions).forEach(([id, sub]) => { const dEnd = new Date(sub.expiresAt); const diffDays = Math.max(0, Math.ceil((sub.expiresAt - now)/(1000*60*60*24))); const pct = Math.min(100, Math.max(0, (diffDays/30)*100)); vipHtml += '<tr><td><strong>' + escapeHTML(sub.username) + '</strong><br><span class=\"text-muted\" style=\"font-size:0.8em;\">' + id + '</span></td><td>' + dEnd.toLocaleDateString('en-US') + '</td><td><div style=\"font-weight:bold;\">' + diffDays + ' Days Left</div><div class=\"progress-bg\"><div class=\"progress-fill\" style=\"width:' + pct + '%\"></div></div></td><td><button class=\"admin-btn\" style=\"padding:5px 10px; margin-right:5px; background:var(--accent-blue);\" onclick=\"window.manageVip(\\'' + id + '\\', \\'add\\')\">🎁 +7D</button><button class=\"admin-btn\" style=\"padding:5px 10px; background:var(--accent-red);\" onclick=\"window.manageVip(\\'' + id + '\\', \\'revoke\\')\">🛑 Revoke</button></td></tr>'; }); } document.getElementById('target-vips').innerHTML = vipHtml || '<tr><td colspan=\"4\" class=\"text-muted text-center\">No active VIP subscriptions.</td></tr>'; }",
+            "let vipHtml = ''; const now = Date.now(); if(rawStats.subscriptions) { Object.entries(rawStats.subscriptions).forEach(([id, sub]) => { const dEnd = new Date(sub.expiresAt); const diffDays = Math.max(0, Math.ceil((sub.expiresAt - now)/(1000*60*60*24))); const pct = Math.min(100, Math.max(0, (diffDays/30)*100)); vipHtml += '<tr><td><strong>' + escapeHTML(sub.username) + '</strong><br><span class=\"text-muted\" style=\"font-size:0.8em;\">' + id + '</span></td><td>' + dEnd.toLocaleDateString('en-US') + '</td><td><div style=\"font-weight:bold;\">' + diffDays + ' Days Left</div><div class=\"progress-bg\"><div class=\"progress-fill\" style=\"width:' + pct + '%\"></div></div></td><td><button class=\"admin-btn\" style=\"padding:5px 10px; margin-right:5px; background:var(--accent-blue);\" onclick=\"window.manageVip(\\'' + id + '\\', \\'add\\')\">🎁 +7D</button><button class=\"admin-btn\" style=\"padding:5px 10px; background:var(--accent-red);\" onclick=\"window.manageVip(\\'' + id + '\\', \\'revoke\\')\">🛑 Revoke</button></td></tr>'; }); } document.getElementById('target-vips').innerHTML = vipHtml || '<tr><td colspan=\"4\" class=\"text-muted text-center\">No active VIP subscriptions.</td></tr>'; ",
+            "// 🔗 POPULATE BUY LINKS",
+            "let blHtml=''; if(rawStats.buy_links){ Object.entries(rawStats.buy_links).forEach(([id, l]) => { blHtml += '<tr><td>'+escapeHTML(l.label)+'</td><td><a href=\"'+escapeHTML(l.url)+'\" target=\"_blank\" style=\"color:var(--accent-blue);\">Link</a></td><td><button class=\"admin-btn\" style=\"padding:4px 8px; margin:0 5px 0 0;\" onclick=\"window.editBuyLink(\\''+id+'\\')\">✏️</button><button class=\"admin-btn\" style=\"padding:4px 8px; background:var(--accent-red); margin:0;\" onclick=\"window.deleteBuyLink(\\''+id+'\\')\">🗑️</button></td></tr>'; }); } document.getElementById('target-buy-links').innerHTML=blHtml || '<tr><td colspan=\"3\" class=\"text-muted\">No buy links configured.</td></tr>'; }",
             
             "window.editProduct = function(id) { const p = rawStats.products[id]; if(!p) return; document.getElementById('editProdId').value = id; document.getElementById('newProdName').value = p.name; document.getElementById('newProdPrice').value = p.price; document.getElementById('newProdStock').value = p.stock || '∞'; document.getElementById('newProdLink').value = p.link; document.getElementById('saveProdBtn').innerText = '💾 Update'; document.getElementById('cancelEditBtn').style.display = 'block'; window.scrollTo({top:0, behavior:'smooth'}); };",
             "window.cancelEdit = function() { document.getElementById('editProdId').value = ''; document.getElementById('newProdName').value = ''; document.getElementById('newProdPrice').value = ''; document.getElementById('newProdStock').value = ''; document.getElementById('newProdLink').value = ''; document.getElementById('saveProdBtn').innerText = '➕ Add'; document.getElementById('cancelEditBtn').style.display = 'none'; };",
             "window.saveProduct = async function() { const id = document.getElementById('editProdId').value; const n = document.getElementById('newProdName').value; const p = document.getElementById('newProdPrice').value; const s = document.getElementById('newProdStock').value || '∞'; const l = document.getElementById('newProdLink').value; if(!n||!p) return alert('Name & Price required'); if(id) { await window.executeAction({action:'edit_product', id:id, name:n, price:p, stock:s, link:l}, true); } else { await window.executeAction({action:'add_product', name:n, price:p, stock:s, link:l}, true); } };",
             "window.deleteProduct = async function(id) { if(confirm('Delete product?')) await window.executeAction({action:'delete_product', id:id}, true); };",
+            
+            "// 🔗 ACTIONS: BUY LINKS",
+            "window.editBuyLink = function(id) { const l = rawStats.buy_links[id]; if(!l) return; document.getElementById('editLinkId').value = id; document.getElementById('newLinkLabel').value = l.label; document.getElementById('newLinkUrl').value = l.url; document.getElementById('saveLinkBtn').innerText = '💾 Update'; document.getElementById('cancelEditLinkBtn').style.display = 'block'; };",
+            "window.cancelEditLink = function() { document.getElementById('editLinkId').value = ''; document.getElementById('newLinkLabel').value = ''; document.getElementById('newLinkUrl').value = ''; document.getElementById('saveLinkBtn').innerText = '➕ Add Link'; document.getElementById('cancelEditLinkBtn').style.display = 'none'; };",
+            "window.saveBuyLink = async function() { const id = document.getElementById('editLinkId').value; const label = document.getElementById('newLinkLabel').value; const url = document.getElementById('newLinkUrl').value; if(!label || !url) return showToast('Label & URL required', 'error'); if(id) { await window.executeAction({action:'edit_buy_link', id:id, label:label, url:url}, true); } else { await window.executeAction({action:'add_buy_link', label:label, url:url}, true); } };",
+            "window.deleteBuyLink = async function(id) { if(confirm('Delete this buy button?')) await window.executeAction({action:'delete_buy_link', id:id}, true); };",
+
             "window.triggerShopRefresh = async function() { await window.executeAction({action:'refresh_setup'}, false); };",
             "window.switchTab = function(tabId, btn) { document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active')); document.querySelectorAll('.nav-btn').forEach(el=>el.classList.remove('active')); document.getElementById(tabId).classList.add('active'); btn.classList.add('active'); if(tabId === 'moderation' && !isMembersLoaded) window.loadAllMembers(); if(tabId === 'livechat'){ window.loadTicketsForChat(); if(activeChatChannel && !chatPollInterval){ chatPollInterval = setInterval(window.fetchChatMessages, 3000); } } else { if(chatPollInterval){ clearInterval(chatPollInterval); chatPollInterval = null; } } };",
             "function showToast(msg, type='success') { const t=document.getElementById('toast'); t.innerText=msg; t.style.background = type === 'error' ? 'var(--accent-red)' : 'var(--accent-green)'; t.style.bottom='20px'; setTimeout(()=>{t.style.bottom='-100px';}, 3000); }",
