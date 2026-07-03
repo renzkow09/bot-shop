@@ -655,7 +655,7 @@ http.createServer(async (req, res) => {
                     
                     const targetUser = await client.users.fetch(data.userId).catch(() => null);
                     if (targetUser) {
-                        await targetUser.send(`⚠️ **Warning (Warn) :**\n\n**Reason :** ${data.reason || "Not specified"}`).catch(() => {});
+                        await targetUser.send(`⚠️ **Warning :**\n\n**Reason :** ${data.reason || "Not specified"}`).catch(() => {});
                     }
                 }
                 else if (data.action === 'toggle_blacklist') {
