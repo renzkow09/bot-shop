@@ -73,11 +73,12 @@ async function logStat(type, value = 1, extraData = null) {
         return;
     }
 
+    const cleanUrl = url.endsWith('/') ? url.slice(0, -1) : url;
     let stats = { joins: {}, leaves: {}, revenue: {}, total_revenue: 0, transactions: {}, total_transactions: 0, product_sales: {}, recent_joins: [], total_leaves: 0, recent_transactions: [] };
     
     // 1. Lire les stats actuelles depuis le Cloud
     try {
-        const res = await axios.get(`${url}/get/bot_stats`, { headers: { Authorization: `Bearer ${token}` } });
+        const res = await axios.get(`${cleanUrl}/get/bot_stats`, { headers: { Authorization: `Bearer ${token}` } });
         if (res.data && res.data.result) {
             stats = { ...stats, ...JSON.parse(res.data.result) };
         }
@@ -120,9 +121,14 @@ async function logStat(type, value = 1, extraData = null) {
     
     // 3. Sauvegarder sur le Cloud
     try {
-        await axios.post(`${url}/set/bot_stats`, JSON.stringify(stats), { headers: { Authorization: `Bearer ${token}` } });
+        await axios.post(cleanUrl, ["SET", "bot_stats", JSON.stringify(stats)], { 
+            headers: { 
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json"
+            } 
+        });
     } catch (err) {
-        console.error("❌ Cloud SET Error :", err.message);
+        console.error("❌ Cloud SET Error :", err.response?.data || err.message);
     }
 }
 
@@ -214,7 +220,12 @@ client.on('interactionCreate', async (interaction) => {
                         await interaction.user.send({ embeds: [successEmbed] });
                         if (interaction.channel) {
                             await interaction.channel.send(`📬 **Sent to your DMs!**`).catch(() => {});
-                            setTimeout(() => { if (interaction.channel) interaction.channel.delete().catch(() => {}); }, 45000);
+                            setTimeout(() => { 
+                                if (interaction.channel) {
+                                    channelStates.delete(interaction.channel.id); // Nettoyage mémoire
+                                    interaction.channel.delete().catch(() => {}); 
+                                }
+                            }, 45000);
                         }
                     } catch (e) {
                         if (interaction.channel) {
@@ -260,6 +271,7 @@ client.on('messageCreate', async (message) => {
             }
 
             if (message.content === '!close') {
+                channelStates.delete(message.channel.id); // Nettoyage mémoire
                 await message.channel.delete().catch(() => {});
             }
 
@@ -317,7 +329,7 @@ client.on('messageCreate', async (message) => {
 // NOTIFICATIONS D'ARRIVEE ET DEPART (ADMIN)
 // ==========================================
 client.on('guildMemberAdd', async (member) => {
-    logStat('joins', 1, { username: member.user.username });
+    await logStat('joins', 1, { username: member.user.username });
     try {
         const admin = await client.users.fetch(ADMIN_DISCORD_ID).catch(() => null);
         if (!admin) return;
@@ -339,7 +351,7 @@ client.on('guildMemberAdd', async (member) => {
 });
 
 client.on('guildMemberRemove', async (member) => {
-    logStat('leaves');
+    await logStat('leaves');
     try {
         const admin = await client.users.fetch(ADMIN_DISCORD_ID).catch(() => null);
         if (!admin) return;
@@ -372,7 +384,8 @@ http.createServer(async (req, res) => {
         
         if (url && token) {
             try { 
-                const cloudRes = await axios.get(`${url}/get/bot_stats`, { headers: { Authorization: `Bearer ${token}` } });
+                const cleanUrl = url.endsWith('/') ? url.slice(0, -1) : url;
+                const cloudRes = await axios.get(`${cleanUrl}/get/bot_stats`, { headers: { Authorization: `Bearer ${token}` } });
                 if (cloudRes.data && cloudRes.data.result) {
                     stats = { ...stats, ...JSON.parse(cloudRes.data.result) };
                 }
