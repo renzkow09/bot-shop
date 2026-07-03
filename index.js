@@ -1,6 +1,8 @@
 const { Client, GatewayIntentBits, Partials, ButtonBuilder, ActionRowBuilder, ButtonStyle, ChannelType, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, EmbedBuilder } = require('discord.js');
 const axios = require('axios');
 const http = require('http');
+const fs = require('fs');
+const path = require('path');
 
 // ==========================================
 // 🛡️ BOUCLIER ANTI-CRASH GLOBAL 🛡️
@@ -60,38 +62,21 @@ const PRODUCT_LINKS = {
 };
 
 const channelStates = new Map();
+const STATS_FILE = path.join(__dirname, 'stats.json');
 
 // ==========================================
-// MOTEUR DE STATISTIQUES AVANCÉ (CLOUD UPSTASH)
+// MOTEUR DE STATISTIQUES AVANCE
 // ==========================================
-async function logStat(type, value = 1, extraData = null) {
-    const url = process.env.UPSTASH_REDIS_REST_URL;
-    const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-    
-    if (!url || !token) {
-        console.log("⚠️ Variables Upstash manquantes, cloud désactivé.");
-        return;
-    }
-
-    const cleanUrl = url.endsWith('/') ? url.slice(0, -1) : url;
+function logStat(type, value = 1, extraData = null) {
     let stats = { joins: {}, leaves: {}, revenue: {}, total_revenue: 0, transactions: {}, total_transactions: 0, product_sales: {}, recent_joins: [], total_leaves: 0, recent_transactions: [] };
-    
-    // 1. Lire les stats actuelles depuis le Cloud
-    try {
-        const res = await axios.get(`${cleanUrl}/get/bot_stats`, { headers: { Authorization: `Bearer ${token}` } });
-        if (res.data && res.data.result) {
-            stats = { ...stats, ...JSON.parse(res.data.result) };
-        }
-    } catch (e) {
-        console.error("❌ Cloud GET Error :", e.message);
+    if (fs.existsSync(STATS_FILE)) {
+        try { stats = { ...stats, ...JSON.parse(fs.readFileSync(STATS_FILE, 'utf8')) }; } catch (e) {}
     }
-
     const today = new Date().toISOString().split('T')[0];
     
     if (!stats[type]) stats[type] = {};
     if (!stats.recent_transactions) stats.recent_transactions = [];
     
-    // 2. Mettre à jour les données
     if (type === 'revenue') {
         stats.revenue[today] = (stats.revenue[today] || 0) + value;
         stats.total_revenue = (stats.total_revenue || 0) + value;
@@ -100,6 +85,7 @@ async function logStat(type, value = 1, extraData = null) {
         
         if (extraData && extraData.productId) {
             stats.product_sales[extraData.productId] = (stats.product_sales[extraData.productId] || 0) + 1;
+            
             stats.recent_transactions.unshift({
                 username: extraData.username || "Unknown Client",
                 product: extraData.productName || "Unknown Product",
@@ -119,16 +105,10 @@ async function logStat(type, value = 1, extraData = null) {
         stats.total_leaves = (stats.total_leaves || 0) + 1;
     }
     
-    // 3. Sauvegarder sur le Cloud
     try {
-        await axios.post(cleanUrl, ["SET", "bot_stats", JSON.stringify(stats)], { 
-            headers: { 
-                Authorization: `Bearer ${token}`,
-                "Content-Type": "application/json"
-            } 
-        });
+        fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2));
     } catch (err) {
-        console.error("❌ Cloud SET Error :", err.response?.data || err.message);
+        console.error("Erreur écriture stats:", err);
     }
 }
 
@@ -195,7 +175,6 @@ client.on('interactionCreate', async (interaction) => {
                 const selected = interaction.values[0];
                 const product = PRODUCT_DATA[selected];
 
-                // --- ANALYTICS AVANCÉES ---
                 const priceMatch = product.price.match(/\d+/);
                 if (priceMatch) {
                     logStat('revenue', parseInt(priceMatch[0]), { 
@@ -220,12 +199,7 @@ client.on('interactionCreate', async (interaction) => {
                         await interaction.user.send({ embeds: [successEmbed] });
                         if (interaction.channel) {
                             await interaction.channel.send(`📬 **Sent to your DMs!**`).catch(() => {});
-                            setTimeout(() => { 
-                                if (interaction.channel) {
-                                    channelStates.delete(interaction.channel.id); // Nettoyage mémoire
-                                    interaction.channel.delete().catch(() => {}); 
-                                }
-                            }, 45000);
+                            setTimeout(() => { if (interaction.channel) interaction.channel.delete().catch(() => {}); }, 45000);
                         }
                     } catch (e) {
                         if (interaction.channel) {
@@ -271,7 +245,6 @@ client.on('messageCreate', async (message) => {
             }
 
             if (message.content === '!close') {
-                channelStates.delete(message.channel.id); // Nettoyage mémoire
                 await message.channel.delete().catch(() => {});
             }
 
@@ -329,7 +302,7 @@ client.on('messageCreate', async (message) => {
 // NOTIFICATIONS D'ARRIVEE ET DEPART (ADMIN)
 // ==========================================
 client.on('guildMemberAdd', async (member) => {
-    await logStat('joins', 1, { username: member.user.username });
+    logStat('joins', 1, { username: member.user.username });
     try {
         const admin = await client.users.fetch(ADMIN_DISCORD_ID).catch(() => null);
         if (!admin) return;
@@ -351,7 +324,7 @@ client.on('guildMemberAdd', async (member) => {
 });
 
 client.on('guildMemberRemove', async (member) => {
-    await logStat('leaves');
+    logStat('leaves');
     try {
         const admin = await client.users.fetch(ADMIN_DISCORD_ID).catch(() => null);
         if (!admin) return;
@@ -373,23 +346,13 @@ client.on('guildMemberRemove', async (member) => {
 });
 
 // ==========================================
-// SERVEUR WEB (DASHBOARD ULTRA PREMIUM + CLOUD)
+// SERVEUR WEB (DASHBOARD ULTRA PREMIUM + ANIMATIONS)
 // ==========================================
 http.createServer(async (req, res) => {
     if (req.url === '/dashboard') {
         let stats = { joins: {}, leaves: {}, revenue: {}, total_revenue: 0, transactions: {}, total_transactions: 0, product_sales: {}, recent_joins: [], total_leaves: 0, recent_transactions: [] };
-        
-        const url = process.env.UPSTASH_REDIS_REST_URL;
-        const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-        
-        if (url && token) {
-            try { 
-                const cleanUrl = url.endsWith('/') ? url.slice(0, -1) : url;
-                const cloudRes = await axios.get(`${cleanUrl}/get/bot_stats`, { headers: { Authorization: `Bearer ${token}` } });
-                if (cloudRes.data && cloudRes.data.result) {
-                    stats = { ...stats, ...JSON.parse(cloudRes.data.result) };
-                }
-            } catch(e) { console.error("Cloud Dashboard Error:", e.message); } 
+        if (fs.existsSync(STATS_FILE)) { 
+            try { stats = { ...stats, ...JSON.parse(fs.readFileSync(STATS_FILE, 'utf8')) }; } catch(e){} 
         }
 
         let memberCount = "N/A";
@@ -454,16 +417,29 @@ http.createServer(async (req, res) => {
                 }
                 
                 * { box-sizing: border-box; }
-                body { font-family: 'Inter', sans-serif; background-color: var(--bg-main); color: var(--text-main); margin: 0; padding: 20px 20px 60px 20px; background-image: radial-gradient(circle at top right, rgba(56, 189, 248, 0.05), transparent 40%), radial-gradient(circle at bottom left, rgba(168, 85, 247, 0.05), transparent 40%); min-height: 100vh; }
+                body { font-family: 'Inter', sans-serif; background-color: var(--bg-main); color: var(--text-main); margin: 0; padding: 20px 20px 60px 20px; background-image: radial-gradient(circle at top right, rgba(56, 189, 248, 0.05), transparent 40%), radial-gradient(circle at bottom left, rgba(168, 85, 247, 0.05), transparent 40%); min-height: 100vh; overflow-x: hidden; }
                 
                 .container { max-width: 1250px; margin: 0 auto; }
                 
                 /* HEADER */
-                .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 40px; padding-bottom: 20px; border-bottom: 1px solid var(--border-color); }
+                .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid var(--border-color); animation: fadeInDown 0.6s ease-out; }
                 .header h1 { font-size: 2.2em; margin: 0; font-weight: 800; background: linear-gradient(to right, #38bdf8, #a855f7); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
                 .live-status { display: flex; align-items: center; gap: 8px; font-size: 0.9em; font-weight: 600; color: var(--accent-green); background: rgba(16, 185, 129, 0.1); padding: 8px 16px; border-radius: 20px; border: 1px solid rgba(16, 185, 129, 0.2); }
                 .pulse { width: 10px; height: 10px; background-color: var(--accent-green); border-radius: 50%; box-shadow: 0 0 10px var(--accent-green); animation: pulse-animation 1.5s infinite; }
                 @keyframes pulse-animation { 0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); } 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); } }
+
+                /* NAVIGATION MENU */
+                .nav-menu { display: flex; gap: 15px; margin-bottom: 30px; background: var(--bg-card); padding: 12px; border-radius: 12px; border: 1px solid var(--border-color); backdrop-filter: blur(12px); animation: fadeIn 0.8s ease-out; overflow-x: auto; }
+                .nav-btn { background: transparent; border: none; color: var(--text-muted); font-family: 'Inter', sans-serif; font-size: 1em; font-weight: 600; padding: 10px 24px; border-radius: 8px; cursor: pointer; transition: all 0.3s ease; white-space: nowrap; }
+                .nav-btn:hover { color: var(--text-main); background: rgba(255, 255, 255, 0.05); }
+                .nav-btn.active { color: #fff; background: var(--accent-blue); box-shadow: 0 4px 15px rgba(56, 189, 248, 0.4); }
+
+                /* ANIMATION POUR LES ONGLETS */
+                .tab-content { display: none; }
+                .tab-content.active { display: block; animation: fadeUp 0.5s ease-out forwards; }
+                @keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+                @keyframes fadeInDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+                @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
                 /* METRIC CARDS */
                 .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; margin-bottom: 40px; }
@@ -509,16 +485,37 @@ http.createServer(async (req, res) => {
                     </div>
                 </div>
 
-                <div class="stats-grid">
-                    <div class="card green"><h3>Today's Earnings</h3><div class="value text-green">€${todayRevenue}</div></div>
-                    <div class="card blue"><h3>Total Earnings</h3><div class="value text-blue">€${stats.total_revenue}</div></div>
-                    <div class="card pink"><h3>Avg Order Value</h3><div class="value text-pink">€${panierMoyen}</div></div>
-                    <div class="card orange"><h3>Online / Total</h3><div class="value text-orange">${onlineCount} <span style="font-size: 0.5em; color: var(--text-muted);">/ ${memberCount}</span></div></div>
-                    <div class="card purple"><h3>Retention Rate</h3><div class="value text-purple">${retentionRate}%</div></div>
+                <!-- NAVIGATION MENUS -->
+                <div class="nav-menu">
+                    <button class="nav-btn active" onclick="switchTab('overview', this)">📊 Overview</button>
+                    <button class="nav-btn" onclick="switchTab('transactions', this)">💳 Transactions</button>
+                    <button class="nav-btn" onclick="switchTab('audience', this)">👥 Audience</button>
                 </div>
 
-                <div class="content-grid">
-                    <div class="box">
+                <!-- TAB 1: OVERVIEW -->
+                <div id="overview" class="tab-content active">
+                    <div class="stats-grid">
+                        <div class="card green"><h3>Today's Earnings</h3><div class="value text-green">€${todayRevenue}</div></div>
+                        <div class="card blue"><h3>Total Earnings</h3><div class="value text-blue">€${stats.total_revenue}</div></div>
+                        <div class="card pink"><h3>Avg Order Value</h3><div class="value text-pink">€${panierMoyen}</div></div>
+                        <div class="card orange"><h3>Online / Total</h3><div class="value text-orange">${onlineCount} <span style="font-size: 0.5em; color: var(--text-muted);">/ ${memberCount}</span></div></div>
+                        <div class="card purple"><h3>Retention Rate</h3><div class="value text-purple">${retentionRate}%</div></div>
+                    </div>
+                    <div class="content-grid">
+                        <div class="box">
+                            <h2>📈 Revenue Timeline</h2>
+                            <div class="chart-container"><canvas id="salesChart"></canvas></div>
+                        </div>
+                        <div class="box">
+                            <h2>🏆 Top Sellers</h2>
+                            <div class="chart-container" style="height: 280px;"><canvas id="productsChart"></canvas></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 2: TRANSACTIONS -->
+                <div id="transactions" class="tab-content">
+                    <div class="box" style="margin-bottom: 25px;">
                         <h2>🛒 Recent Transactions</h2>
                         <div class="table-responsive">
                             <table>
@@ -527,17 +524,10 @@ http.createServer(async (req, res) => {
                             </table>
                         </div>
                     </div>
-                    <div class="box">
-                        <h2>🏆 Top Sellers</h2>
-                        <div class="chart-container" style="height: 280px;"><canvas id="productsChart"></canvas></div>
-                    </div>
                 </div>
-                
-                <div class="content-grid">
-                    <div class="box">
-                        <h2>📈 Revenue Timeline</h2>
-                        <div class="chart-container"><canvas id="salesChart"></canvas></div>
-                    </div>
+
+                <!-- TAB 3: AUDIENCE -->
+                <div id="audience" class="tab-content">
                     <div class="box">
                         <h2>👥 Latest Members</h2>
                         <div class="table-responsive">
@@ -555,6 +545,22 @@ http.createServer(async (req, res) => {
             </div>
 
             <script>
+                // Logique pour changer d'onglet
+                function switchTab(tabId, btnElement) {
+                    // Cacher tous les contenus
+                    document.querySelectorAll('.tab-content').forEach(el => {
+                        el.classList.remove('active');
+                    });
+                    // Désactiver tous les boutons
+                    document.querySelectorAll('.nav-btn').forEach(el => {
+                        el.classList.remove('active');
+                    });
+                    
+                    // Activer le bon contenu et le bon bouton
+                    document.getElementById(tabId).classList.add('active');
+                    btnElement.classList.add('active');
+                }
+
                 // Auto Refresh Logic
                 let timeLeft = 60;
                 setInterval(() => {
@@ -626,7 +632,10 @@ http.createServer(async (req, res) => {
                     },
                     options: { 
                         responsive: true, maintainAspectRatio: false, cutout: '70%',
-                        plugins: { legend: { position: 'bottom', labels: { padding: 20, usePointStyle: true, pointStyle: 'circle' } }, tooltip: { backgroundColor: 'rgba(15, 23, 42, 0.9)', padding: 12, cornerRadius: 8 } } 
+                        plugins: { 
+                            legend: { position: 'bottom', labels: { padding: 20, usePointStyle: true, pointStyle: 'circle', color: '#f8fafc' } }, 
+                            tooltip: { backgroundColor: 'rgba(15, 23, 42, 0.9)', padding: 12, cornerRadius: 8 } 
+                        } 
                     }
                 });
             </script>
