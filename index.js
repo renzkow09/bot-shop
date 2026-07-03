@@ -374,6 +374,53 @@ http.createServer(async (req, res) => {
         <script>async function login(){const res=await fetch('/api/login',{method:'POST',body:JSON.stringify({pin:document.getElementById('pin').value})});if(res.ok)location.reload();else{document.getElementById('err').style.display='block';}} document.getElementById('pin').addEventListener('keypress', e => { if (e.key === 'Enter') login(); });</script></body></html>`);
     }
 
+    // NOUVELLE ROUTE API : INIT DATA (Pour éviter d'injecter JSON dans HTML)
+    if (req.url === '/api/init-data' && req.method === 'GET') {
+        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
+        
+        let memberCount = "N/A"; let onlineCount = "N/A";
+        const guild = client.guilds.cache.first();
+        if (guild) {
+            try {
+                memberCount = guild.memberCount;
+            } catch (err) { }
+        }
+
+        const totalJoins = memoryStats.total_joins || 1; 
+        const conversionRate = ((memoryStats.total_transactions / totalJoins) * 100).toFixed(1);
+        const totalHistorique = memberCount !== "N/A" ? (memberCount + (memoryStats.total_leaves || 0)) : 1;
+        const retentionRate = memberCount !== "N/A" ? ((memberCount / totalHistorique) * 100).toFixed(1) : "N/A";
+        
+        const todayStr = new Date().toISOString().split('T')[0]; const todayRevenue = memoryStats.revenue[todayStr] || 0;
+        const currentMonth = todayStr.substring(0, 7); let monthRevenue = 0;
+        Object.keys(memoryStats.revenue).forEach(date => { if(date.startsWith(currentMonth)) monthRevenue += memoryStats.revenue[date]; });
+
+        const ticketsOpened = memoryStats.analytics?.tickets_opened || 0;
+        const ticketsPurchased = memoryStats.total_transactions || 0;
+        const dropOffRate = ticketsOpened > 0 ? (100 - (ticketsPurchased / ticketsOpened) * 100).toFixed(1) : 0;
+        
+        let peakHourIdx = 0; let maxSales = 0;
+        const hourly = memoryStats.analytics?.hourly_sales || Array(24).fill(0);
+        for(let i=0; i<24; i++) { if(hourly[i] > maxSales) { maxSales = hourly[i]; peakHourIdx = i; } }
+        const peakHourStr = maxSales > 0 ? peakHourIdx + "h00 - " + (peakHourIdx+1) + "h00" : "N/A";
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+            memoryStats,
+            PRODUCT_DATA,
+            todayRevenue,
+            monthRevenue,
+            ticketsOpened,
+            dropOffRate,
+            peakHourStr,
+            conversionRate,
+            retentionRate,
+            onlineCount,
+            memberCount,
+            MONTHLY_GOAL
+        }));
+    }
+
     if (req.url === '/api/live' && req.method === 'GET') {
         if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         const guild = client.guilds.cache.first(); let activeTickets = 0;
@@ -511,40 +558,8 @@ http.createServer(async (req, res) => {
         }); return;
     }
 
+    // ROUTE PRINCIPALE DASHBOARD : 100% STATIQUE = 0% CRASH
     if (req.url === '/dashboard' || req.url === '/') {
-        let memberCount = "N/A"; let onlineCount = "N/A";
-        const guild = client.guilds.cache.first();
-        if (guild) {
-            try {
-                const response = await axios.get(`https://discord.com/api/v10/guilds/${guild.id}?with_counts=true`, { headers: { Authorization: `Bot ${DISCORD_BOT_TOKEN}` } });
-                memberCount = response.data.approximate_member_count; onlineCount = response.data.approximate_presence_count;
-            } catch (err) { memberCount = guild.memberCount; }
-        }
-
-        const panierMoyen = memoryStats.total_transactions > 0 ? (memoryStats.total_revenue / memoryStats.total_transactions).toFixed(2) : 0;
-        const totalJoins = memoryStats.total_joins || 1; 
-        const conversionRate = ((memoryStats.total_transactions / totalJoins) * 100).toFixed(1);
-        const totalHistorique = memberCount !== "N/A" ? (memberCount + (memoryStats.total_leaves || 0)) : 1;
-        const retentionRate = memberCount !== "N/A" ? ((memberCount / totalHistorique) * 100).toFixed(1) : "N/A";
-        
-        const todayStr = new Date().toISOString().split('T')[0]; const todayRevenue = memoryStats.revenue[todayStr] || 0;
-        const currentMonth = todayStr.substring(0, 7); let monthRevenue = 0;
-        Object.keys(memoryStats.revenue).forEach(date => { if(date.startsWith(currentMonth)) monthRevenue += memoryStats.revenue[date]; });
-        const goalPercent = Math.min(100, Math.round((monthRevenue / MONTHLY_GOAL) * 100));
-
-        const ticketsOpened = memoryStats.analytics?.tickets_opened || 0;
-        const ticketsPurchased = memoryStats.total_transactions || 0;
-        const dropOffRate = ticketsOpened > 0 ? (100 - (ticketsPurchased / ticketsOpened) * 100).toFixed(1) : 0;
-        
-        let peakHourIdx = 0; let maxSales = 0;
-        const hourly = memoryStats.analytics?.hourly_sales || Array(24).fill(0);
-        for(let i=0; i<24; i++) { if(hourly[i] > maxSales) { maxSales = hourly[i]; peakHourIdx = i; } }
-        const peakHourStr = maxSales > 0 ? peakHourIdx + "h00 - " + (peakHourIdx+1) + "h00" : "N/A";
-
-        // ENCODAGE BASE64 POUR LA SECURITE DU SCRIPT
-        const safeStatsBase64 = Buffer.from(JSON.stringify(memoryStats)).toString('base64');
-        const safeProductDataBase64 = Buffer.from(JSON.stringify(PRODUCT_DATA)).toString('base64');
-
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         res.end(`
         <!DOCTYPE html>
@@ -633,7 +648,14 @@ http.createServer(async (req, res) => {
         <body>
             <div id="toast">🎉 Notification!</div>
 
-            <div class="container" id="dashboard-container">
+            <!-- ECRAN DE CHARGEMENT POUR EVITER LES ERREURS -->
+            <div id="loading-screen" style="position:fixed; top:0; left:0; width:100%; height:100%; background:var(--bg-main); z-index:9999; display:flex; justify-content:center; align-items:center; flex-direction:column;">
+                <div style="width: 40px; height: 40px; border: 4px solid rgba(56, 189, 248, 0.3); border-top: 4px solid var(--accent-blue); border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                <h2 style="color:var(--accent-blue); margin-top:20px;">Fetching Secured Data...</h2>
+                <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
+            </div>
+
+            <div class="container" id="dashboard-container" style="display:none;">
                 <div class="header">
                     <h1>Nexus Dashboard</h1>
                     <div class="controls">
@@ -653,18 +675,18 @@ http.createServer(async (req, res) => {
 
                 <div id="overview" class="tab-content active">
                     <div class="stats-grid">
-                        <div class="card green"><h3>Today's Earnings</h3><div class="value money text-green">€${todayRevenue}</div></div>
-                        <div class="card blue"><h3>Total Earnings</h3><div class="value money text-blue">€${memoryStats.total_revenue}</div></div>
-                        <div class="card pink"><h3>Conversion Rate</h3><div class="value text-pink">${conversionRate}%</div></div>
-                        <div class="card orange"><h3>Online / Total</h3><div class="value text-orange">${onlineCount} <span style="font-size: 0.5em; color: var(--text-muted);">/ ${memberCount}</span></div></div>
-                        <div class="card purple"><h3>Retention Rate</h3><div class="value text-purple">${retentionRate}%</div></div>
+                        <div class="card green"><h3>Today's Earnings</h3><div class="value money text-green" id="ui-today-rev">€0</div></div>
+                        <div class="card blue"><h3>Total Earnings</h3><div class="value money text-blue" id="ui-total-rev">€0</div></div>
+                        <div class="card pink"><h3>Conversion Rate</h3><div class="value text-pink" id="ui-conv-rate">0%</div></div>
+                        <div class="card orange"><h3>Online / Total</h3><div class="value text-orange" id="ui-online-total">0</div></div>
+                        <div class="card purple"><h3>Retention Rate</h3><div class="value text-purple" id="ui-retention">0%</div></div>
                         <div class="card yellow"><h3>💳 Rewarble Balance</h3><div class="value money" style="color:#f1c40f;" id="rewarble-balance">Loading...</div><button onclick="fetchBalance()" style="background:rgba(255,255,255,0.1); border:none; color:white; padding:4px 8px; border-radius:4px; font-size:0.7em; margin-top:8px; cursor:pointer;">🔄 Refresh</button></div>
                     </div>
                     
                     <div class="stats-grid" style="margin-top: 15px; margin-bottom: 25px;">
-                        <div class="card purple"><h3>Tickets Opened</h3><div class="value">${ticketsOpened}</div></div>
-                        <div class="card red"><h3>Drop-off Rate</h3><div class="value text-red">${dropOffRate}%</div></div>
-                        <div class="card orange"><h3>Peak Sales Hour</h3><div class="value" style="font-size:1.5em; margin-top:10px;">${peakHourStr}</div></div>
+                        <div class="card purple"><h3>Tickets Opened</h3><div class="value" id="ui-tickets-opened">0</div></div>
+                        <div class="card red"><h3>Drop-off Rate</h3><div class="value text-red" id="ui-dropoff">0%</div></div>
+                        <div class="card orange"><h3>Peak Sales Hour</h3><div class="value" style="font-size:1.5em; margin-top:10px;" id="ui-peak-hour">N/A</div></div>
                     </div>
                     
                     <div class="goal-container">
@@ -672,9 +694,9 @@ http.createServer(async (req, res) => {
                             <span class="font-bold">🎯 Monthly Goal (Current Month) 
                                 <button onclick="editGoal()" style="background:none;border:none;cursor:pointer;font-size:1em;margin-left:10px; transition:0.2s;">✏️</button>
                             </span>
-                            <span class="money font-bold" id="goal-text">€${monthRevenue} / €${MONTHLY_GOAL} (${goalPercent}%)</span>
+                            <span class="money font-bold" id="goal-text">€0 / €0 (0%)</span>
                         </div>
-                        <div class="progress-bg"><div class="progress-fill" id="goal-bar" style="width: ${goalPercent}%;"></div></div>
+                        <div class="progress-bg"><div class="progress-fill" id="goal-bar" style="width: 0%;"></div></div>
                     </div>
 
                     <div class="content-grid">
@@ -697,17 +719,17 @@ http.createServer(async (req, res) => {
                     <div class="content-grid">
                         <div class="box">
                             <div class="box-header"><h2>🛒 Recent Transactions</h2><button class="btn-icon" style="background:var(--accent-green);font-size:0.8em;" onclick="exportCSV()">📥 Export CSV</button></div>
-                            <div style="overflow-x:auto; max-height: 400px;"><table><thead><tr><th>Customer</th><th>Product</th><th>Price</th><th>Date</th></tr></thead><tbody><span id="target-tx"></span></tbody></table></div>
+                            <div style="overflow-x:auto; max-height: 400px;"><table><thead><tr><th>Customer</th><th>Product</th><th>Price</th><th>Date</th></tr></thead><tbody id="target-tx"></tbody></table></div>
                         </div>
-                        <div class="box"><h2>💎 Top Spenders (VIPs)</h2><table><thead><tr><th>Customer</th><th>Total Spent</th></tr></thead><tbody><span id="target-spenders"></span></tbody></table></div>
+                        <div class="box"><h2>💎 Top Spenders (VIPs)</h2><table><thead><tr><th>Customer</th><th>Total Spent</th></tr></thead><tbody id="target-spenders"></tbody></table></div>
                     </div>
                 </div>
 
                 <div id="audience" class="tab-content">
                     <div class="box" style="margin-bottom:20px;"><h2>📊 Community Activity (Last 10 Days)</h2><div class="chart-container"><canvas id="audienceChart"></canvas></div></div>
                     <div class="content-grid">
-                        <div class="box"><h2>📥 Latest Joins</h2><div style="overflow-x:auto; max-height:300px;"><table><thead><tr><th>Username</th><th>Date</th></tr></thead><tbody><span id="target-joins"></span></tbody></table></div></div>
-                        <div class="box"><h2>📤 Latest Leaves</h2><div style="overflow-x:auto; max-height:300px;"><table><thead><tr><th>Username</th><th>Date</th></tr></thead><tbody><span id="target-leaves"></span></tbody></table></div></div>
+                        <div class="box"><h2>📥 Latest Joins</h2><div style="overflow-x:auto; max-height:300px;"><table><thead><tr><th>Username</th><th>Date</th></tr></thead><tbody id="target-joins"></tbody></table></div></div>
+                        <div class="box"><h2>📤 Latest Leaves</h2><div style="overflow-x:auto; max-height:300px;"><table><thead><tr><th>Username</th><th>Date</th></tr></thead><tbody id="target-leaves"></tbody></table></div></div>
                     </div>
                 </div>
 
@@ -733,7 +755,7 @@ http.createServer(async (req, res) => {
                         <div class="box">
                             <h2>📋 Custom Requests Manager</h2>
                             <p class="text-muted" style="font-size:0.8em;">Manage custom orders (Products 10 & 11) from your clients.</p>
-                            <div style="overflow-x:auto; max-height: 300px;"><table><thead><tr><th>Customer</th><th>Request</th><th>Date</th><th>Action</th></tr></thead><tbody><span id="target-reqs"></span></tbody></table></div>
+                            <div style="overflow-x:auto; max-height: 300px;"><table><thead><tr><th>Customer</th><th>Request</th><th>Date</th><th>Action</th></tr></thead><tbody id="target-reqs"></tbody></table></div>
                         </div>
                         <div class="box">
                             <h2>🎟️ Promo Codes Generator</h2>
@@ -744,7 +766,7 @@ http.createServer(async (req, res) => {
                                 <input type="number" id="promoLimit" placeholder="Max Uses" style="width:110px;">
                                 <button class="admin-btn" style="margin-top:0;" onclick="createPromo()">➕ Create</button>
                             </div>
-                            <div style="overflow-x:auto; max-height: 200px;"><table><thead><tr><th>Code</th><th>Discount</th><th>Usage</th><th>Action</th></tr></thead><tbody><span id="target-promos"></span></tbody></table></div>
+                            <div style="overflow-x:auto; max-height: 200px;"><table><thead><tr><th>Code</th><th>Discount</th><th>Usage</th><th>Action</th></tr></thead><tbody id="target-promos"></tbody></table></div>
                         </div>
                     </div>
                     <div class="content-grid">
@@ -767,69 +789,113 @@ http.createServer(async (req, res) => {
             </div>
 
             <script>
+                // SECURITE MAXIMALE : AUCUNE VARIABLE NODE.JS DYNAMIQUE ICI SAUF LE PIN !
+                // Le navigateur charge tout proprement via l'API.
                 const PIN = "${DASHBOARD_PIN}";
-                const b64_stats = "${safeStatsBase64}";
-                const b64_prods = "${safeProductDataBase64}";
-                const rawStats = JSON.parse(decodeURIComponent(escape(atob(b64_stats))));
-                const PRODUCT_DATA = JSON.parse(decodeURIComponent(escape(atob(b64_prods))));
                 
+                let rawStats = {};
+                let PRODUCT_DATA = {};
                 let stealthMode = false; 
-                let lastTxCount = rawStats.total_transactions;
-
-                const currentMonthRevenue = ${monthRevenue};
-                const defaultGoal = ${MONTHLY_GOAL};
+                let lastTxCount = 0;
+                let currentMonthRevenue = 0;
+                let defaultGoal = 500;
                 let userGoal = localStorage.getItem("customGoal") ? parseInt(localStorage.getItem("customGoal")) : defaultGoal;
+                let salesChart;
+                
+                // 1. CHARGEMENT DES DONNÉES SÉCURISÉES DEPUIS L'API
+                async function initDashboard() {
+                    try {
+                        const res = await fetch("/api/init-data");
+                        if (!res.ok) throw new Error("Fetch failed");
+                        const data = await res.json();
+                        
+                        rawStats = data.memoryStats;
+                        PRODUCT_DATA = data.PRODUCT_DATA;
+                        currentMonthRevenue = data.monthRevenue;
+                        defaultGoal = data.MONTHLY_GOAL;
+                        lastTxCount = rawStats.total_transactions || 0;
+                        
+                        // Remplissage des indicateurs
+                        document.getElementById("ui-today-rev").innerText = "€" + data.todayRevenue;
+                        document.getElementById("ui-total-rev").innerText = "€" + rawStats.total_revenue;
+                        document.getElementById("ui-conv-rate").innerText = data.conversionRate + "%";
+                        document.getElementById("ui-online-total").innerHTML = data.onlineCount + " <span style='font-size: 0.5em; color: var(--text-muted);'>/ " + data.memberCount + "</span>";
+                        document.getElementById("ui-retention").innerText = data.retentionRate + "%";
+                        
+                        document.getElementById("ui-tickets-opened").innerText = data.ticketsOpened;
+                        document.getElementById("ui-dropoff").innerText = data.dropOffRate + "%";
+                        document.getElementById("ui-peak-hour").innerText = data.peakHourStr;
 
-                // --- RENDERING STATIC HTML ON LOAD TO AVOID QUOTES CRASH ---
+                        buildStaticTables();
+                        updateGoalUI();
+                        renderSalesChart(7);
+                        renderDoughnutChart();
+                        renderBarChart();
+                        fetchBalance();
+
+                        // Afficher le site
+                        document.getElementById("loading-screen").style.display = "none";
+                        document.getElementById("dashboard-container").style.display = "block";
+                    } catch (e) {
+                        alert("Erreur de connexion. Veuillez rafraîchir la page.");
+                    }
+                }
+
+                // ECHAPPEMENT ANTI-HACK
+                function escapeHTML(str) {
+                    if (!str) return "";
+                    return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+                }
+
                 function buildStaticTables() {
-                    let txHtml = '';
+                    let txHtml = "";
                     if(rawStats.recent_transactions && rawStats.recent_transactions.length > 0) {
-                        rawStats.recent_transactions.forEach(tx => {
-                            txHtml += "<tr><td><span class='highlight-text'>" + tx.username.replace(/</g,'&lt;') + "</span></td><td>" + tx.product.replace(/</g,'&lt;') + "</td><td class='money text-green font-bold'>€" + tx.price + "</td><td class='text-muted'>" + tx.date + "</td></tr>";
+                        rawStats.recent_transactions.forEach(function(tx) {
+                            txHtml += "<tr><td><span class='highlight-text'>" + escapeHTML(tx.username) + "</span></td><td>" + escapeHTML(tx.product) + "</td><td class='money text-green font-bold'>€" + tx.price + "</td><td class='text-muted'>" + tx.date + "</td></tr>";
                         });
                     } else txHtml = "<tr><td colspan='4' class='text-muted text-center'>Empty</td></tr>";
-                    document.getElementById('target-tx').outerHTML = txHtml;
+                    document.getElementById("target-tx").innerHTML = txHtml;
 
-                    let spHtml = '';
-                    const sortedSpenders = Object.entries(rawStats.user_spending || {}).sort((a,b) => b[1] - a[1]).slice(0, 10);
+                    let spHtml = "";
+                    const sortedSpenders = Object.entries(rawStats.user_spending || {}).sort(function(a,b) { return b[1] - a[1]; }).slice(0, 10);
                     if(sortedSpenders.length > 0) {
-                        sortedSpenders.forEach((user, i) => {
-                            let badgeColor = i < 3 ? '#FFD700' : 'var(--accent-blue)';
-                            spHtml += "<tr><td><div class='user-badge' style='background:" + badgeColor + ";'>" + (i+1) + "</div> " + user[0].replace(/</g,'&lt;') + "</td><td class='text-green font-bold'>€" + user[1] + "</td></tr>";
+                        sortedSpenders.forEach(function(user, i) {
+                            let badgeColor = i < 3 ? "#FFD700" : "var(--accent-blue)";
+                            spHtml += "<tr><td><div class='user-badge' style='background:" + badgeColor + ";'>" + (i+1) + "</div> " + escapeHTML(user[0]) + "</td><td class='text-green font-bold'>€" + user[1] + "</td></tr>";
                         });
                     } else spHtml = "<tr><td colspan='2' class='text-muted text-center'>No data</td></tr>";
-                    document.getElementById('target-spenders').outerHTML = spHtml;
+                    document.getElementById("target-spenders").innerHTML = spHtml;
 
-                    let jHtml = '';
+                    let jHtml = "";
                     if(rawStats.recent_joins && rawStats.recent_joins.length > 0) {
-                        rawStats.recent_joins.forEach(u => { jHtml += "<tr><td><div class='user-badge'>" + u.username.charAt(0).toUpperCase().replace(/</g,'&lt;') + "</div> " + u.username.replace(/</g,'&lt;') + "</td><td class='text-muted'>" + u.date + "</td></tr>"; });
+                        rawStats.recent_joins.forEach(function(u) { jHtml += "<tr><td><div class='user-badge'>" + escapeHTML(u.username.charAt(0).toUpperCase()) + "</div> " + escapeHTML(u.username) + "</td><td class='text-muted'>" + u.date + "</td></tr>"; });
                     } else jHtml = "<tr><td colspan='2' class='text-muted text-center'>Empty</td></tr>";
-                    document.getElementById('target-joins').outerHTML = jHtml;
+                    document.getElementById("target-joins").innerHTML = jHtml;
 
-                    let lHtml = '';
+                    let lHtml = "";
                     if(rawStats.recent_leaves && rawStats.recent_leaves.length > 0) {
-                        rawStats.recent_leaves.forEach(u => { lHtml += "<tr><td><div class='user-badge leave'>" + u.username.charAt(0).toUpperCase().replace(/</g,'&lt;') + "</div> " + u.username.replace(/</g,'&lt;') + "</td><td class='text-muted'>" + u.date + "</td></tr>"; });
+                        rawStats.recent_leaves.forEach(function(u) { lHtml += "<tr><td><div class='user-badge leave'>" + escapeHTML(u.username.charAt(0).toUpperCase()) + "</div> " + escapeHTML(u.username) + "</td><td class='text-muted'>" + u.date + "</td></tr>"; });
                     } else lHtml = "<tr><td colspan='2' class='text-muted text-center'>Empty</td></tr>";
-                    document.getElementById('target-leaves').outerHTML = lHtml;
+                    document.getElementById("target-leaves").innerHTML = lHtml;
 
-                    let reqHtml = '';
+                    let reqHtml = "";
                     if(rawStats.custom_requests && rawStats.custom_requests.length > 0) {
-                        rawStats.custom_requests.forEach(req => {
-                            let btn = req.status === 'pending' ? "<button onclick='resolveReq(\"" + req.id + "\")' style='background:var(--accent-green);border:none;padding:5px 10px;border-radius:5px;cursor:pointer;color:white;'>✔ Done</button>" : "Resolved";
-                            reqHtml += "<tr style='opacity: " + (req.status==='done'?'0.5':'1') + ";'><td>" + req.username.replace(/</g,'&lt;') + "</td><td><span class='highlight-text'>" + req.product.replace(/</g,'&lt;') + "</span></td><td>" + req.date + "</td><td>" + btn + "</td></tr>";
+                        rawStats.custom_requests.forEach(function(req) {
+                            let btn = req.status === "pending" ? "<button onclick='resolveReq(&quot;" + req.id + "&quot;)' style='background:var(--accent-green);border:none;padding:5px 10px;border-radius:5px;cursor:pointer;color:white;'>✔ Done</button>" : "Resolved";
+                            reqHtml += "<tr style='opacity: " + (req.status==="done"?"0.5":"1") + ";'><td>" + escapeHTML(req.username) + "</td><td><span class='highlight-text'>" + escapeHTML(req.product) + "</span></td><td>" + req.date + "</td><td>" + btn + "</td></tr>";
                         });
                     } else reqHtml = "<tr><td colspan='4' class='text-muted text-center'>No pending requests</td></tr>";
-                    document.getElementById('target-reqs').outerHTML = reqHtml;
+                    document.getElementById("target-reqs").innerHTML = reqHtml;
 
-                    let promHtml = '';
+                    let promHtml = "";
                     if(rawStats.promo_codes && Object.keys(rawStats.promo_codes).length > 0) {
-                        for (const [code, info] of Object.entries(rawStats.promo_codes)) {
-                            promHtml += "<tr><td><strong>" + code.replace(/</g,'&lt;') + "</strong></td><td class='text-green'>-" + info.discount + "%</td><td>" + info.used + " / " + info.limit + "</td><td><button onclick='deletePromo(\"" + code.replace(/"/g,'&quot;') + "\")' style='background:var(--accent-red);border:none;padding:4px 8px;border-radius:4px;cursor:pointer;color:white;'>🗑️ Remove</button></td></tr>";
+                        for (const code in rawStats.promo_codes) {
+                            const info = rawStats.promo_codes[code];
+                            promHtml += "<tr><td><strong>" + escapeHTML(code) + "</strong></td><td class='text-green'>-" + info.discount + "%</td><td>" + info.used + " / " + info.limit + "</td><td><button onclick='deletePromo(&quot;" + escapeHTML(code) + "&quot;)' style='background:var(--accent-red);border:none;padding:4px 8px;border-radius:4px;cursor:pointer;color:white;'>🗑️ Remove</button></td></tr>";
                         }
                     } else promHtml = "<tr><td colspan='4' class='text-muted text-center'>No active promo codes</td></tr>";
-                    document.getElementById('target-promos').outerHTML = promHtml;
+                    document.getElementById("target-promos").innerHTML = promHtml;
                 }
-                buildStaticTables();
 
                 function updateGoalUI() {
                     let percent = Math.min(100, Math.round((currentMonthRevenue / userGoal) * 100));
@@ -837,7 +903,7 @@ http.createServer(async (req, res) => {
                     document.getElementById("goal-bar").style.width = percent + "%";
                 }
 
-                function editGoal() {
+                window.editGoal = function() {
                     let newGoal = prompt("Configure your Monthly Goal (€):", userGoal);
                     if (newGoal !== null && !isNaN(newGoal) && parseInt(newGoal) > 0) {
                         userGoal = parseInt(newGoal);
@@ -845,15 +911,14 @@ http.createServer(async (req, res) => {
                         updateGoalUI();
                     }
                 }
-                updateGoalUI(); 
 
-                function toggleStealth() {
+                window.toggleStealth = function() {
                     stealthMode = !stealthMode; 
                     document.body.classList.toggle("stealth-active", stealthMode);
                     document.getElementById("stealthBtn").innerText = stealthMode ? "🙈 Show Revenue" : "👁️ Stealth Mode";
                 }
 
-                function switchTab(tabId, btn) {
+                window.switchTab = function(tabId, btn) {
                     document.querySelectorAll(".tab-content").forEach(function(el) { el.classList.remove("active"); });
                     document.querySelectorAll(".nav-btn").forEach(function(el) { el.classList.remove("active"); });
                     document.getElementById(tabId).classList.add("active"); 
@@ -861,7 +926,8 @@ http.createServer(async (req, res) => {
                     if (tabId === "moderation" && !isMembersLoaded) loadAllMembers();
                 }
 
-                function showToast(msg, type = "success") {
+                function showToast(msg, type) {
+                    type = type || "success";
                     const toast = document.getElementById("toast"); 
                     toast.innerText = msg;
                     toast.style.background = type === "error" ? "var(--accent-red)" : "var(--accent-green)";
@@ -884,7 +950,7 @@ http.createServer(async (req, res) => {
                     }
                 }
 
-                async function fetchBalance() {
+                window.fetchBalance = async function() {
                     const el = document.getElementById("rewarble-balance");
                     el.innerText = "Loading...";
                     try {
@@ -897,11 +963,8 @@ http.createServer(async (req, res) => {
                         } else {
                             el.innerText = "Error";
                         }
-                    } catch(e) {
-                        el.innerText = "Error";
-                    }
+                    } catch(e) { el.innerText = "Error"; }
                 }
-                fetchBalance();
 
                 setInterval(async function() {
                     try {
@@ -915,18 +978,14 @@ http.createServer(async (req, res) => {
                                 showToast("💰 New Sale! " + data.lastTx.username + " bought " + data.lastTx.product);
                                 setTimeout(function() { location.reload(); }, 2000); 
                             }
-                        } else {
-                            updateUpstashStatus(false);
-                        }
-                    } catch(e){
-                        updateUpstashStatus(false);
-                    }
+                        } else { updateUpstashStatus(false); }
+                    } catch(e){ updateUpstashStatus(false); }
                 }, 5000);
 
-                function exportCSV() {
+                window.exportCSV = function() {
                     let csvRows = ["Customer,Product,Price,Date"];
                     rawStats.recent_transactions.forEach(function(tx) { 
-                        csvRows.push('"' + tx.username + '","' + tx.product + '","' + tx.price + '","' + tx.date + '"'); 
+                        csvRows.push('"' + escapeHTML(tx.username) + '","' + escapeHTML(tx.product) + '","' + tx.price + '","' + tx.date + '"'); 
                     });
                     const blob = new Blob([csvRows.join("\\n")], { type: "text/csv" }); 
                     const a = document.createElement("a"); 
@@ -935,8 +994,9 @@ http.createServer(async (req, res) => {
                     a.click();
                 }
 
-                async function resolveReq(id) { await executeAction({ action: "resolve_req", id: id }); }
-                async function sendAdminAction(type) {
+                window.resolveReq = async function(id) { await executeAction({ action: "resolve_req", id: id }); }
+                
+                window.sendAdminAction = async function(type) {
                     let payload = { action: type };
                     if (type === "announce") {
                         payload.channelId = document.getElementById("announce-channel").value; 
@@ -947,26 +1007,27 @@ http.createServer(async (req, res) => {
                     await executeAction(payload);
                 }
                 
-                async function createPromo() {
+                window.createPromo = async function() {
                     const name = document.getElementById("promoName").value;
                     const discount = document.getElementById("promoDiscount").value;
                     const limit = document.getElementById("promoLimit").value;
                     if(!name || !discount || !limit) return alert("Fill all promo fields!");
                     await executeAction({ action: "create_promo", name: name, discount: discount, limit: limit });
                 }
-                async function deletePromo(name) {
+                
+                window.deletePromo = async function(name) {
                     if(!confirm("Delete promo code " + name + "?")) return;
                     await executeAction({ action: "delete_promo", name: name });
                 }
 
-                async function saveUserNote(userId) {
+                window.saveUserNote = async function(userId) {
                     const noteText = document.getElementById("note-" + userId).value;
                     const res = await fetch("/api/action", { method: "POST", body: JSON.stringify({ action: "save_note", userId: userId, note: noteText, pin: PIN }) });
                     if (res.ok) showToast("✅ Note saved successfully");
                     else showToast("❌ Error saving note", "error");
                 }
 
-                async function openDirectContact(userId, username) {
+                window.openDirectContact = async function(userId, username) {
                     const message = prompt("Direct message for " + username + " (Sent via Bot) :");
                     if (!message || message.trim() === "") return;
                     const res = await fetch("/api/action", { method: "POST", body: JSON.stringify({ action: "send_dm", userId: userId, message: message, pin: PIN }) });
@@ -988,7 +1049,7 @@ http.createServer(async (req, res) => {
                 let allMembersData = [];
                 let isMembersLoaded = false;
 
-                async function loadAllMembers() {
+                window.loadAllMembers = async function() {
                     document.getElementById("memberResults").innerHTML = "<p class='text-muted'>Loading directory...</p>";
                     try {
                         const res = await fetch("/api/members");
@@ -999,7 +1060,7 @@ http.createServer(async (req, res) => {
                     } catch (e) { document.getElementById("memberResults").innerHTML = "<p class='text-pink'>Error fetching data.</p>"; }
                 }
 
-                function sortMembersLocally() {
+                window.sortMembersLocally = function() {
                     const sortType = document.getElementById("memberSortSelect").value;
                     if (sortType === "recent") allMembersData.sort(function(a, b) { return b.joinedTimestamp - a.joinedTimestamp; });
                     else if (sortType === "oldest") allMembersData.sort(function(a, b) { return a.joinedTimestamp - b.joinedTimestamp; });
@@ -1008,7 +1069,7 @@ http.createServer(async (req, res) => {
                     filterMembersLocally();
                 }
 
-                function filterMembersLocally() {
+                window.filterMembersLocally = function() {
                     const q = document.getElementById("memberSearchInput").value.toLowerCase();
                     const filtered = allMembersData.filter(function(m) { return m.username.toLowerCase().includes(q) || m.id.includes(q); });
                     renderMembers(filtered);
@@ -1024,25 +1085,23 @@ http.createServer(async (req, res) => {
                         let trustColor = m.isBlacklisted ? "var(--accent-red)" : (m.totalSpent > 0 ? "var(--accent-green)" : "var(--accent-orange)");
                         let trustLabel = m.isBlacklisted ? "Blacklisted" : (m.totalSpent > 0 ? "Trusted (Buyer)" : "New / No Purchases");
                         
-                        let safeUsername = m.username.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-                        let safeNote = m.note ? m.note.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;") : "";
+                        let safeUsername = escapeHTML(m.username);
+                        let safeNote = escapeHTML(m.note);
                         
                         let ticketsHtml = m.activeTickets.map(function(t) {
-                            let safeTName = t.name.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                            let safeTName = escapeHTML(t.name);
                             return "<div style='display:flex; justify-content:space-between; background:rgba(0,0,0,0.3); padding:5px 10px; margin-top:5px; border-radius:5px;'>" +
                                 "<span>#" + safeTName + "</span>" +
-                                "<button style='background:var(--accent-red); border:none; color:white; border-radius:3px; cursor:pointer; padding:2px 8px;' onclick='modAction(\\"close_channel\\", \\"" + m.id + "\\", {channelId: \\"" + t.id + "\\"})'>Close</button>" +
+                                "<button style='background:var(--accent-red); border:none; color:white; border-radius:3px; cursor:pointer; padding:2px 8px;' onclick='modAction(&quot;close_channel&quot;, &quot;" + m.id + "&quot;, {channelId: &quot;" + t.id + "&quot;})'>Close</button>" +
                             "</div>";
                         }).join("") || "<span class='text-muted'>No active tickets</span>";
 
                         let warnsHtml = m.warns.map(function(w, i) {
-                            let safeReason = w.reason.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-                            return "<div style='font-size:0.8em; color:var(--accent-orange); margin-bottom:3px;'>⚠️ Warn " + (i+1) + ": " + safeReason + " (" + w.date + ")</div>";
+                            return "<div style='font-size:0.8em; color:var(--accent-orange); margin-bottom:3px;'>⚠️ Warn " + (i+1) + ": " + escapeHTML(w.reason) + " (" + w.date + ")</div>";
                         }).join("") || "<span class='text-muted' style='font-size:0.8em;'>Clean record</span>";
                         
                         let historyHtml = m.history.map(function(h) {
-                            let safeProduct = h.product.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-                            return "<div style='font-size:0.8em;'>🛒 " + safeProduct + " - €" + h.price + " (" + h.date + ")</div>";
+                            return "<div style='font-size:0.8em;'>🛒 " + escapeHTML(h.product) + " - €" + h.price + " (" + h.date + ")</div>";
                         }).join("") || "<span class='text-muted' style='font-size:0.8em;'>No purchases</span>";
 
                         html += "<div class='card' style='margin-bottom: 15px; border-left: 4px solid " + trustColor + ";'>" +
@@ -1061,20 +1120,20 @@ http.createServer(async (req, res) => {
                             "</div>" +
                             "<div style='margin-bottom:15px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.05);'>" +
                                 "<label style='font-size:0.8rem; color:var(--text-muted); display:block; margin-bottom:5px;'>📝 Private Notes (Admin Only) :</label>" +
-                                "<textarea id='note-" + m.id + "' placeholder='Add private remarks about this client...' style='min-height:50px;' onblur='saveUserNote(\"" + m.id + "\")'>" + safeNote + "</textarea>" +
+                                "<textarea id='note-" + m.id + "' placeholder='Add private remarks about this client...' style='min-height:50px;' onblur='saveUserNote(&quot;" + m.id + "&quot;)'>" + safeNote + "</textarea>" +
                             "</div>" +
                             "<div style='border-top:1px solid rgba(255,255,255,0.05); padding-top:10px;'>" +
                                 "<span style='font-size:0.8rem; color:var(--text-muted); display:block; margin-bottom:8px;'>⚡ Action Controls :</span>" +
                                 "<div style='display:flex; gap:8px; flex-wrap:wrap;'>" +
-                                    "<button class='admin-btn' style='margin:0; background:#3498db;' onclick='openDirectContact(\"" + m.id + "\", \"" + safeUsername + "\")'>💬 DM</button>" +
-                                    "<button class='admin-btn' style='margin:0; background:#e67e22;' onclick='modAction(\\"mute\\", \\"" + m.id + "\\", {duration: 15})'>🔇 15m</button>" +
-                                    "<button class='admin-btn' style='margin:0; background:#d35400;' onclick='modAction(\\"mute\\", \\"" + m.id + "\\", {duration: 60})'>🔇 1h</button>" +
-                                    "<button class='admin-btn' style='margin:0; background:#c0392b;' onclick='modAction(\\"mute\\", \\"" + m.id + "\\", {duration: 1440})'>🔇 1d</button>" +
-                                    "<button class='admin-btn' style='margin:0; background:#962d22;' onclick='modAction(\\"mute\\", \\"" + m.id + "\\", {duration: 10080})'>🔇 1w</button>" +
-                                    "<button class='admin-btn' style='margin:0; background:var(--accent-orange);' onclick='modAction(\\"warn\\", \\"" + m.id + "\\")'>⚠️ Warn</button>" +
-                                    "<button class='admin-btn' style='margin:0; background:var(--accent-red);' onclick='modAction(\\"kick\\", \\"" + m.id + "\\")'>👢 Kick</button>" +
-                                    "<button class='admin-btn' style='margin:0; background:var(--accent-red);' onclick='modAction(\\"ban\\", \\"" + m.id + "\\")'>🔨 Ban</button>" +
-                                    "<button class='admin-btn' style='width:auto; margin:0; background:#000; border:1px solid var(--accent-red);' onclick='modAction(\\"toggle_blacklist\\", \\"" + m.id + "\\")'>" + (m.isBlacklisted ? "✅ Un-Blacklist" : "🚫 Blacklist") + "</button>" +
+                                    "<button class='admin-btn' style='margin:0; background:#3498db;' onclick='openDirectContact(&quot;" + m.id + "&quot;, &quot;" + safeUsername + "&quot;)'>💬 DM</button>" +
+                                    "<button class='admin-btn' style='margin:0; background:#e67e22;' onclick='modAction(&quot;mute&quot;, &quot;" + m.id + "&quot;, {duration: 15})'>🔇 15m</button>" +
+                                    "<button class='admin-btn' style='margin:0; background:#d35400;' onclick='modAction(&quot;mute&quot;, &quot;" + m.id + "&quot;, {duration: 60})'>🔇 1h</button>" +
+                                    "<button class='admin-btn' style='margin:0; background:#c0392b;' onclick='modAction(&quot;mute&quot;, &quot;" + m.id + "&quot;, {duration: 1440})'>🔇 1d</button>" +
+                                    "<button class='admin-btn' style='margin:0; background:#962d22;' onclick='modAction(&quot;mute&quot;, &quot;" + m.id + "&quot;, {duration: 10080})'>🔇 1w</button>" +
+                                    "<button class='admin-btn' style='margin:0; background:var(--accent-orange);' onclick='modAction(&quot;warn&quot;, &quot;" + m.id + "&quot;)'>⚠️ Warn</button>" +
+                                    "<button class='admin-btn' style='margin:0; background:var(--accent-red);' onclick='modAction(&quot;kick&quot;, &quot;" + m.id + "&quot;)'>👢 Kick</button>" +
+                                    "<button class='admin-btn' style='margin:0; background:var(--accent-red);' onclick='modAction(&quot;ban&quot;, &quot;" + m.id + "&quot;)'>🔨 Ban</button>" +
+                                    "<button class='admin-btn' style='width:auto; margin:0; background:#000; border:1px solid var(--accent-red);' onclick='modAction(&quot;toggle_blacklist&quot;, &quot;" + m.id + "&quot;)'>" + (m.isBlacklisted ? "✅ Un-Blacklist" : "🚫 Blacklist") + "</button>" +
                                 "</div>" +
                             "</div>" +
                         "</div>";
@@ -1082,7 +1141,7 @@ http.createServer(async (req, res) => {
                     document.getElementById("memberResults").innerHTML = html;
                 }
 
-                async function modAction(action, userId, extra = {}) {
+                window.modAction = async function(action, userId, extra = {}) {
                     let payload = { action: action, userId: userId, pin: PIN };
                     if (extra.channelId) payload.channelId = extra.channelId;
                     if (extra.duration) payload.duration = extra.duration;
@@ -1108,7 +1167,6 @@ http.createServer(async (req, res) => {
 
                 Chart.defaults.color = "#94a3b8"; 
                 Chart.defaults.font.family = "'Inter', sans-serif";
-                let salesChart;
                 
                 window.renderSalesChart = function(days) {
                     let dates = Object.keys(rawStats.revenue || {}).sort(); 
@@ -1132,7 +1190,6 @@ http.createServer(async (req, res) => {
                         options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { grid: { color: "rgba(255,255,255,0.05)"} } } }
                     });
                 }
-                renderSalesChart(7);
                 
                 window.updateChartFilter = function(days, btn) { 
                     document.querySelectorAll(".filter-btn").forEach(function(b) { b.classList.remove("active"); }); 
@@ -1140,29 +1197,35 @@ http.createServer(async (req, res) => {
                     renderSalesChart(days); 
                 }
 
-                const prodDataRaw = PRODUCT_DATA; 
-                const prodIds = Object.keys(rawStats.product_sales || {});
-                new Chart(document.getElementById("productsChart"), {
-                    type: "doughnut", 
-                    data: { 
-                        labels: prodIds.map(function(id) { return prodDataRaw[id]?prodDataRaw[id].name:"Unknown"; }), 
-                        datasets: [{ data: Object.values(rawStats.product_sales||{}), backgroundColor: ["#38bdf8", "#a855f7", "#ec4899", "#f97316", "#10b981"], borderColor: "#0b0f19" }] 
-                    },
-                    options: { responsive: true, maintainAspectRatio: false, cutout: "70%", plugins: { legend: { position: "right", labels: { color: "#f8fafc" } } } }
-                });
+                function renderDoughnutChart() {
+                    const prodIds = Object.keys(rawStats.product_sales || {});
+                    new Chart(document.getElementById("productsChart"), {
+                        type: "doughnut", 
+                        data: { 
+                            labels: prodIds.map(function(id) { return PRODUCT_DATA[id]?PRODUCT_DATA[id].name:"Unknown"; }), 
+                            datasets: [{ data: Object.values(rawStats.product_sales||{}), backgroundColor: ["#38bdf8", "#a855f7", "#ec4899", "#f97316", "#10b981"], borderColor: "#0b0f19" }] 
+                        },
+                        options: { responsive: true, maintainAspectRatio: false, cutout: "70%", plugins: { legend: { position: "right", labels: { color: "#f8fafc" } } } }
+                    });
+                }
 
-                const audienceDates = Array.from(new Set([...Object.keys(rawStats.joins || {}), ...Object.keys(rawStats.leaves || {})])).sort().slice(-10);
-                new Chart(document.getElementById("audienceChart"), {
-                    type: "bar", 
-                    data: { 
-                        labels: audienceDates.length ? audienceDates : ["No Data"], 
-                        datasets: [
-                            { label: "Joins", data: audienceDates.map(function(d) { return rawStats.joins[d]||0; }), backgroundColor: "#10b981" }, 
-                            { label: "Leaves", data: audienceDates.map(function(d) { return rawStats.leaves[d]||0; }), backgroundColor: "#ef4444" }
-                        ] 
-                    },
-                    options: { responsive: true, maintainAspectRatio: false, scales: { x: { grid: { display: false } }, y: { grid: { color: "rgba(255,255,255,0.05)"} } } }
-                });
+                function renderBarChart() {
+                    const audienceDates = Array.from(new Set([...Object.keys(rawStats.joins || {}), ...Object.keys(rawStats.leaves || {})])).sort().slice(-10);
+                    new Chart(document.getElementById("audienceChart"), {
+                        type: "bar", 
+                        data: { 
+                            labels: audienceDates.length ? audienceDates : ["No Data"], 
+                            datasets: [
+                                { label: "Joins", data: audienceDates.map(function(d) { return rawStats.joins[d]||0; }), backgroundColor: "#10b981" }, 
+                                { label: "Leaves", data: audienceDates.map(function(d) { return rawStats.leaves[d]||0; }), backgroundColor: "#ef4444" }
+                            ] 
+                        },
+                        options: { responsive: true, maintainAspectRatio: false, scales: { x: { grid: { display: false } }, y: { grid: { color: "rgba(255,255,255,0.05)"} } } }
+                    });
+                }
+
+                // Démarrage de l'application
+                initDashboard();
             </script>
         </body>
         </html>
