@@ -143,10 +143,10 @@ function logStat(type, value = 1, extraData = null) {
 // === [ANCHOR: DISCORD_SHOP_EMBED_GENERATOR] ===
 async function sendShopSetup(channel) {
     const rowBuy = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setLabel('💳 Acheter €5').setStyle(ButtonStyle.Link).setURL('https://www.eneba.com/rewarble-rewarble-revolut-5-gbp-voucher-global'),
-        new ButtonBuilder().setLabel('💳 Acheter €10').setStyle(ButtonStyle.Link).setURL('https://www.eneba.com/rewarble-rewarble-revolut-10-gbp-voucher-global'),
-        new ButtonBuilder().setLabel('💳 Acheter €15').setStyle(ButtonStyle.Link).setURL('https://www.eneba.com/rewarble-rewarble-revolut-15-gbp-voucher-global'),
-        new ButtonBuilder().setLabel('💳 Acheter €20').setStyle(ButtonStyle.Link).setURL('https://www.eneba.com/rewarble-rewarble-revolut-20-gbp-voucher-global')
+        new ButtonBuilder().setLabel('💳 Buy €5').setStyle(ButtonStyle.Link).setURL('https://www.eneba.com/rewarble-rewarble-revolut-5-gbp-voucher-global'),
+        new ButtonBuilder().setLabel('💳 Buy €10').setStyle(ButtonStyle.Link).setURL('https://www.eneba.com/rewarble-rewarble-revolut-10-gbp-voucher-global'),
+        new ButtonBuilder().setLabel('💳 BUy €15').setStyle(ButtonStyle.Link).setURL('https://www.eneba.com/rewarble-rewarble-revolut-15-gbp-voucher-global'),
+        new ButtonBuilder().setLabel('💳 Buy €20').setStyle(ButtonStyle.Link).setURL('https://www.eneba.com/rewarble-rewarble-revolut-20-gbp-voucher-global')
     );
 
     const rowActions = new ActionRowBuilder().addComponents(
