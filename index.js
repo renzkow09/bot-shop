@@ -293,13 +293,13 @@ client.on('messageCreate', async (message) => {
 
 ━━━━━━━━━━━━━━━━━━━━━━
 # 💳 HOW TO BUY ?
-**STEP 1:** Get your Rewarble Gift Card on G2A:
-🛒 [Buy €5](https://www.g2a.com/fr/paypal-gift-card-5-gbp-by-rewarble-global-i10000339995022)  |  🛒 [Buy €10](https://www.g2a.com/fr/rewarble-super-gift-card-10-gbp-by-rewarble-key-united-kingdom-i10000506957028)  |  🛒 [Buy €15](https://www.g2a.com/fr/paypal-gift-card-15-gbp-by-rewarble-global-i10000339995023)  |  🛒 [Buy €20](https://www.g2a.com/fr/paypal-gift-card-20-gbp-by-rewarble-global-i10000339995015)
+**STEP 1:** Get your Rewarble Gift Card on Eneba:
+🛒 [Buy €5](https://www.eneba.com/rewarble-rewarble-revolut-5-gbp-voucher-global)  |  🛒 [Buy €10](https://www.eneba.com/rewarble-rewarble-revolut-10-gbp-voucher-global)  |  🛒 [Buy €15](https://www.eneba.com/rewarble-rewarble-crypto-15-gbp-voucher-global?srsltid=AfmBOoof0E66Jn2RX3QwQmVS_1k-D79flEt8AYAH4_pamo5GA38o3EdV)  |  🛒 [Buy €20](https://www.eneba.com/rewarble-rewarble-revolut-20-gbp-voucher-global)
 
 **STEP 2:** Click the **📩 Redeem Code** button below.
 **STEP 3:** Paste your code, type the item number, and check your DMs! 🎉
 
-*Need help? Click "🎧 Need Support?" below!*`;
+*Need help or have a question? Click "🎧 Need Support?" below!*`;
 
                 await message.channel.send({ content: menuText, components: [row] }).catch(() => {});
             }
