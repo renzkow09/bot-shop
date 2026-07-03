@@ -76,6 +76,7 @@ async function loadCloudStats() {
         if (res.data && res.data.result) {
             memoryStats = { ...memoryStats, ...JSON.parse(res.data.result) };
             
+            // Patch de sécurité
             if (!memoryStats.promo_codes) memoryStats.promo_codes = {};
             if (!memoryStats.analytics) memoryStats.analytics = { tickets_opened: 0, hourly_sales: Array(24).fill(0) };
             if (!memoryStats.analytics.hourly_sales) memoryStats.analytics.hourly_sales = Array(24).fill(0);
@@ -107,6 +108,7 @@ function logStat(type, value = 1, extraData = null) {
         memoryStats.transactions[today] = (memoryStats.transactions[today] || 0) + 1;
         memoryStats.total_transactions += 1;
         
+        // Track Peak Hours
         if (!memoryStats.analytics) memoryStats.analytics = { tickets_opened: 0, hourly_sales: Array(24).fill(0) };
         if (!memoryStats.analytics.hourly_sales) memoryStats.analytics.hourly_sales = Array(24).fill(0);
         const currentHour = new Date().getHours();
@@ -179,6 +181,7 @@ client.on('interactionCreate', async (interaction) => {
             }
             
             if (interaction.customId === 'open_shop_channel') {
+                // Tracking Drop-off Rate (Tickets Opened)
                 if (!memoryStats.analytics) memoryStats.analytics = { tickets_opened: 0, hourly_sales: Array(24).fill(0) };
                 memoryStats.analytics.tickets_opened = (memoryStats.analytics.tickets_opened || 0) + 1;
                 syncCloud();
@@ -235,6 +238,7 @@ client.on('interactionCreate', async (interaction) => {
             } else if (priceMatch) {
                 let finalPrice = parseInt(priceMatch[0]);
                 
+                // Application de la réduction si code promo utilisé
                 if (promo) {
                     finalPrice = Math.max(0, finalPrice - (finalPrice * promo.discount / 100));
                     if (memoryStats.promo_codes && memoryStats.promo_codes[promo.name]) {
@@ -283,6 +287,7 @@ client.on('messageCreate', async (message) => {
             state.processing = true; 
             let promoApplied = null;
 
+            // Vérification si c'est un Promo Code Custom
             if (memoryStats.promo_codes && memoryStats.promo_codes[input]) {
                 const promo = memoryStats.promo_codes[input];
                 if (promo.used < promo.limit) {
@@ -506,418 +511,515 @@ http.createServer(async (req, res) => {
         for(let i=0; i<24; i++) { if(hourly[i] > maxSales) { maxSales = hourly[i]; peakHourIdx = i; } }
         const peakHourStr = maxSales > 0 ? peakHourIdx + "h00 - " + (peakHourIdx+1) + "h00" : "N/A";
 
+        // Génération HTML propre pour les listes statiques
+        let topSpendersHTML = '';
         const sortedSpenders = Object.entries(memoryStats.user_spending).sort((a,b) => b[1] - a[1]).slice(0, 10);
-        const topSpendersHTML = sortedSpenders.length > 0 ? sortedSpenders.map((user, i) => '<tr><td><div class="user-badge" style="background:' + (i<3?'#FFD700':'var(--accent-blue)') + ';">' + (i+1) + '</div> ' + user[0] + '</td><td class="text-green font-bold">€' + user[1] + '</td></tr>').join('') : '<tr><td colspan="2" class="text-muted text-center">No data</td></tr>';
+        if(sortedSpenders.length > 0) {
+            sortedSpenders.forEach((user, i) => {
+                let badgeColor = i < 3 ? '#FFD700' : 'var(--accent-blue)';
+                topSpendersHTML += `<tr><td><div class="user-badge" style="background:${badgeColor};">${i+1}</div> ${user[0]}</td><td class="text-green font-bold">€${user[1]}</td></tr>`;
+            });
+        } else {
+            topSpendersHTML = '<tr><td colspan="2" class="text-muted text-center">No data</td></tr>';
+        }
 
-        const tableRowsMembers = memoryStats.recent_joins.length > 0 ? memoryStats.recent_joins.map(u => '<tr><td><div class="user-badge">' + u.username.charAt(0).toUpperCase() + '</div> ' + u.username + '</td><td class="text-muted">' + u.date + '</td></tr>').join('') : '<tr><td colspan="2" class="text-muted text-center">Empty</td></tr>';
-        const tableRowsLeaves = memoryStats.recent_leaves.length > 0 ? memoryStats.recent_leaves.map(u => '<tr><td><div class="user-badge leave">' + u.username.charAt(0).toUpperCase() + '</div> ' + u.username + '</td><td class="text-muted">' + u.date + '</td></tr>').join('') : '<tr><td colspan="2" class="text-muted text-center">Empty</td></tr>';
-        const tableRowsTransactions = memoryStats.recent_transactions.length > 0 ? memoryStats.recent_transactions.map(tx => '<tr><td><span class="highlight-text">' + tx.username + '</span></td><td>' + tx.product + '</td><td class="money text-green font-bold">€' + tx.price + '</td><td class="text-muted">' + tx.date + '</td></tr>').join('') : '<tr><td colspan="4" class="text-muted text-center">Empty</td></tr>';
-        const customReqsHTML = memoryStats.custom_requests.length > 0 ? memoryStats.custom_requests.map(req => '<tr style="opacity: ' + (req.status==='done'?'0.5':'1') + ';"><td>' + req.username + '</td><td><span class="highlight-text">' + req.product + '</span></td><td>' + req.date + '</td><td>' + (req.status==='pending' ? '<button onclick="resolveReq(\'' + req.id + '\')" style="background:var(--accent-green);border:none;padding:5px 10px;border-radius:5px;cursor:pointer;color:white;">✔ Done</button>' : 'Resolved') + '</td></tr>').join('') : '<tr><td colspan="4" class="text-muted text-center">No pending requests</td></tr>';
+        let tableRowsTransactions = '';
+        if(memoryStats.recent_transactions.length > 0) {
+            memoryStats.recent_transactions.forEach(tx => {
+                tableRowsTransactions += `<tr><td><span class="highlight-text">${tx.username}</span></td><td>${tx.product}</td><td class="money text-green font-bold">€${tx.price}</td><td class="text-muted">${tx.date}</td></tr>`;
+            });
+        } else {
+            tableRowsTransactions = '<tr><td colspan="4" class="text-muted text-center">Empty</td></tr>';
+        }
+
+        let tableRowsMembers = '';
+        if(memoryStats.recent_joins.length > 0) {
+            memoryStats.recent_joins.forEach(u => {
+                tableRowsMembers += `<tr><td><div class="user-badge">${u.username.charAt(0).toUpperCase()}</div> ${u.username}</td><td class="text-muted">${u.date}</td></tr>`;
+            });
+        } else {
+            tableRowsMembers = '<tr><td colspan="2" class="text-muted text-center">Empty</td></tr>';
+        }
+
+        let tableRowsLeaves = '';
+        if(memoryStats.recent_leaves.length > 0) {
+            memoryStats.recent_leaves.forEach(u => {
+                tableRowsLeaves += `<tr><td><div class="user-badge leave">${u.username.charAt(0).toUpperCase()}</div> ${u.username}</td><td class="text-muted">${u.date}</td></tr>`;
+            });
+        } else {
+            tableRowsLeaves = '<tr><td colspan="2" class="text-muted text-center">Empty</td></tr>';
+        }
+
+        let customReqsHTML = '';
+        if(memoryStats.custom_requests.length > 0) {
+            memoryStats.custom_requests.forEach(req => {
+                let btn = req.status === 'pending' ? `<button onclick="resolveReq('${req.id}')" style="background:var(--accent-green);border:none;padding:5px 10px;border-radius:5px;cursor:pointer;color:white;">✔ Done</button>` : 'Resolved';
+                customReqsHTML += `<tr style="opacity: ${req.status==='done'?'0.5':'1'};"><td>${req.username}</td><td><span class="highlight-text">${req.product}</span></td><td>${req.date}</td><td>${btn}</td></tr>`;
+            });
+        } else {
+            customReqsHTML = '<tr><td colspan="4" class="text-muted text-center">No pending requests</td></tr>';
+        }
         
         let promoCodesHTML = '';
-        if (memoryStats.promo_codes) {
+        if (memoryStats.promo_codes && Object.keys(memoryStats.promo_codes).length > 0) {
             for (const [code, info] of Object.entries(memoryStats.promo_codes)) {
-                promoCodesHTML += '<tr><td><strong>' + code + '</strong></td><td class="text-green">-' + info.discount + '%</td><td>' + info.used + ' / ' + info.limit + '</td><td><button onclick="deletePromo(\'' + code + '\')" style="background:var(--accent-red);border:none;padding:4px 8px;border-radius:4px;cursor:pointer;color:white;">🗑️ Remove</button></td></tr>';
+                promoCodesHTML += `<tr><td><strong>${code}</strong></td><td class="text-green">-${info.discount}%</td><td>${info.used} / ${info.limit}</td><td><button onclick="deletePromo('${code}')" style="background:var(--accent-red);border:none;padding:4px 8px;border-radius:4px;cursor:pointer;color:white;">🗑️ Remove</button></td></tr>`;
             }
+        } else {
+            promoCodesHTML = '<tr><td colspan="4" class="text-muted text-center">No active promo codes</td></tr>';
         }
-        if (!promoCodesHTML) promoCodesHTML = '<tr><td colspan="4" class="text-muted text-center">No active promo codes</td></tr>';
 
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        res.end('<!DOCTYPE html><html lang="en"><head>' +
-            '<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Nexus Premium Dashboard</title>' +
-            '<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>' +
-            '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">' +
-            '<style>' +
-                ':root { --bg-main: #0b0f19; --bg-card: rgba(30, 41, 59, 0.7); --border-color: rgba(255, 255, 255, 0.1); --text-main: #f8fafc; --text-muted: #94a3b8; --accent-blue: #38bdf8; --accent-green: #10b981; --accent-purple: #a855f7; --accent-orange: #f97316; --accent-pink: #ec4899; --accent-red: #ef4444; }' +
-                '* { box-sizing: border-box; }' +
-                'body { font-family: "Inter", sans-serif; background-color: var(--bg-main); color: var(--text-main); margin: 0; padding: 20px; min-height: 100vh; overflow-x: hidden; }' +
-                '.container { max-width: 1300px; margin: 0 auto; animation: fadeIn 0.5s; }' +
-                '.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid var(--border-color); }' +
-                '.header h1 { font-size: 2em; margin: 0; background: linear-gradient(to right, #38bdf8, #a855f7); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }' +
-                '.controls { display: flex; gap: 15px; align-items: center; }' +
-                '.btn-icon { background: var(--bg-card); border: 1px solid var(--border-color); color: white; padding: 8px 15px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 5px; }' +
-                '.nav-menu { display: flex; gap: 10px; margin-bottom: 30px; background: var(--bg-card); padding: 10px; border-radius: 12px; border: 1px solid var(--border-color); overflow-x: auto; }' +
-                '.nav-btn { background: transparent; border: none; color: var(--text-muted); font-size: 1em; font-weight: 600; padding: 10px 20px; border-radius: 8px; cursor: pointer; }' +
-                '.nav-btn.active { color: #fff; background: var(--accent-blue); box-shadow: 0 4px 15px rgba(56, 189, 248, 0.3); }' +
-                '.stealth-active .money { filter: blur(6px); transition: 0.3s; opacity: 0.8; }' +
-                '#toast { position: fixed; bottom: -100px; right: 20px; background: var(--accent-green); color: white; padding: 15px 25px; border-radius: 10px; font-weight: bold; box-shadow: 0 5px 15px rgba(0,0,0,0.5); transition: 0.5s; z-index: 1000; }' +
-                '.tab-content { display: none; animation: fadeIn 0.4s; } .tab-content.active { display: block; }' +
-                '@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }' +
-                '.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 25px; }' +
-                '.card { background: var(--bg-card); padding: 20px; border-radius: 12px; border: 1px solid var(--border-color); position: relative; overflow: hidden; }' +
-                '.card::before { content: ""; position: absolute; top: 0; left: 0; width: 4px; height: 100%; background: var(--accent-blue); }' +
-                '.card.green::before{background:var(--accent-green)} .card.pink::before{background:var(--accent-pink)} .card.orange::before{background:var(--accent-orange)} .card.purple::before{background:var(--accent-purple)} .card.red::before{background:var(--accent-red)}' +
-                '.card h3 { margin: 0; color: var(--text-muted); font-size: 0.8em; text-transform: uppercase; } .card .value { font-size: 2em; font-weight: 800; margin-top: 5px; }' +
-                '.goal-container { background: var(--bg-card); padding: 20px; border-radius: 12px; border: 1px solid var(--border-color); margin-bottom: 25px; }' +
-                '.goal-header { display: flex; justify-content: space-between; margin-bottom: 10px; }' +
-                '.progress-bg { background: rgba(255,255,255,0.1); height: 12px; border-radius: 6px; overflow: hidden; }' +
-                '.progress-fill { background: linear-gradient(90deg, var(--accent-blue), var(--accent-purple)); height: 100%; transition: width 1s ease-in-out; }' +
-                '.content-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 20px; }' +
-                '.box { background: var(--bg-card); padding: 20px; border-radius: 12px; border: 1px solid var(--border-color); }' +
-                '.box-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }' +
-                '.box h2 { font-size: 1.1em; margin: 0; } .chart-container { position: relative; height: 250px; width: 100%; }' +
-                '.filter-group { display: flex; gap: 5px; background: rgba(0,0,0,0.2); padding: 4px; border-radius: 6px; }' +
-                '.filter-btn { background: transparent; border: none; color: var(--text-muted); font-size: 0.8em; padding: 4px 10px; border-radius: 4px; cursor: pointer; }' +
-                '.filter-btn.active { background: var(--accent-blue); color: #fff; }' +
-                'table { width: 100%; border-collapse: collapse; } th, td { padding: 12px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.9em; }' +
-                'th { color: var(--text-muted); text-transform: uppercase; font-size: 0.75em; }' +
-                '.user-badge { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; background: var(--accent-blue); color: #fff; font-size: 0.7em; margin-right: 8px; font-weight: bold;}' +
-                '.user-badge.leave { background: var(--accent-red); }' +
-                'input, textarea { width: 100%; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); color: white; padding: 10px; border-radius: 6px; font-family: "Inter", sans-serif; }' +
-                '.admin-btn { background: var(--accent-blue); color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; margin-top: 10px; transition: 0.2s; }' +
-                '.admin-btn:hover { filter: brightness(1.2); }' +
-                '.text-green { color: var(--accent-green); } .text-blue { color: var(--accent-blue); } .font-bold { font-weight: 600; } .text-muted { color: var(--text-muted); } .text-red { color: var(--accent-red); }' +
-            '</style>' +
-        '</head>' +
-        '<body>' +
-            '<div id="toast">🎉 Notification!</div>' +
-            '<div class="container" id="dashboard-container">' +
-                '<div class="header">' +
-                    '<h1>Nexus Dashboard</h1>' +
-                    '<div class="controls">' +
-                        '<button class="btn-icon" onclick="toggleStealth()" id="stealthBtn">👁️ Stealth Mode</button>' +
-                        '<div class="live-status"><div class="pulse"></div> Live (<span id="live-tickets-count">0</span> Tickets)</div>' +
-                    '</div>' +
-                '</div>' +
+        res.end(`
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Nexus Premium Dashboard</title>
+            <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+            <style>
+                :root { --bg-main: #0b0f19; --bg-card: rgba(30, 41, 59, 0.7); --border-color: rgba(255, 255, 255, 0.1); --text-main: #f8fafc; --text-muted: #94a3b8; --accent-blue: #38bdf8; --accent-green: #10b981; --accent-purple: #a855f7; --accent-orange: #f97316; --accent-pink: #ec4899; --accent-red: #ef4444; }
+                * { box-sizing: border-box; }
+                body { font-family: "Inter", sans-serif; background-color: var(--bg-main); color: var(--text-main); margin: 0; padding: 20px; min-height: 100vh; overflow-x: hidden; }
+                .container { max-width: 1300px; margin: 0 auto; animation: fadeIn 0.5s; }
+                .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid var(--border-color); }
+                .header h1 { font-size: 2em; margin: 0; background: linear-gradient(to right, #38bdf8, #a855f7); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+                .controls { display: flex; gap: 15px; align-items: center; }
+                .btn-icon { background: var(--bg-card); border: 1px solid var(--border-color); color: white; padding: 8px 15px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 5px; }
+                .nav-menu { display: flex; gap: 10px; margin-bottom: 30px; background: var(--bg-card); padding: 10px; border-radius: 12px; border: 1px solid var(--border-color); overflow-x: auto; }
+                .nav-btn { background: transparent; border: none; color: var(--text-muted); font-size: 1em; font-weight: 600; padding: 10px 20px; border-radius: 8px; cursor: pointer; }
+                .nav-btn.active { color: #fff; background: var(--accent-blue); box-shadow: 0 4px 15px rgba(56, 189, 248, 0.3); }
+                .stealth-active .money { filter: blur(6px); transition: 0.3s; opacity: 0.8; }
+                #toast { position: fixed; bottom: -100px; right: 20px; background: var(--accent-green); color: white; padding: 15px 25px; border-radius: 10px; font-weight: bold; box-shadow: 0 5px 15px rgba(0,0,0,0.5); transition: 0.5s; z-index: 1000; }
+                .tab-content { display: none; animation: fadeIn 0.4s; } .tab-content.active { display: block; }
+                @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+                .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 25px; }
+                .card { background: var(--bg-card); padding: 20px; border-radius: 12px; border: 1px solid var(--border-color); position: relative; overflow: hidden; }
+                .card::before { content: ""; position: absolute; top: 0; left: 0; width: 4px; height: 100%; background: var(--accent-blue); }
+                .card.green::before{background:var(--accent-green)} .card.pink::before{background:var(--accent-pink)} .card.orange::before{background:var(--accent-orange)} .card.purple::before{background:var(--accent-purple)} .card.red::before{background:var(--accent-red)}
+                .card h3 { margin: 0; color: var(--text-muted); font-size: 0.8em; text-transform: uppercase; } .card .value { font-size: 2em; font-weight: 800; margin-top: 5px; }
+                .goal-container { background: var(--bg-card); padding: 20px; border-radius: 12px; border: 1px solid var(--border-color); margin-bottom: 25px; }
+                .goal-header { display: flex; justify-content: space-between; margin-bottom: 10px; }
+                .progress-bg { background: rgba(255,255,255,0.1); height: 12px; border-radius: 6px; overflow: hidden; }
+                .progress-fill { background: linear-gradient(90deg, var(--accent-blue), var(--accent-purple)); height: 100%; transition: width 1s ease-in-out; }
+                .content-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 20px; }
+                .box { background: var(--bg-card); padding: 20px; border-radius: 12px; border: 1px solid var(--border-color); }
+                .box-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+                .box h2 { font-size: 1.1em; margin: 0; } .chart-container { position: relative; height: 250px; width: 100%; }
+                .filter-group { display: flex; gap: 5px; background: rgba(0,0,0,0.2); padding: 4px; border-radius: 6px; }
+                .filter-btn { background: transparent; border: none; color: var(--text-muted); font-size: 0.8em; padding: 4px 10px; border-radius: 4px; cursor: pointer; }
+                .filter-btn.active { background: var(--accent-blue); color: #fff; }
+                table { width: 100%; border-collapse: collapse; } th, td { padding: 12px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.9em; }
+                th { color: var(--text-muted); text-transform: uppercase; font-size: 0.75em; }
+                .user-badge { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; background: var(--accent-blue); color: #fff; font-size: 0.7em; margin-right: 8px; font-weight: bold;}
+                .user-badge.leave { background: var(--accent-red); }
+                input, textarea { width: 100%; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); color: white; padding: 10px; border-radius: 6px; font-family: "Inter", sans-serif; }
+                .admin-btn { background: var(--accent-blue); color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; margin-top: 10px; transition: 0.2s; }
+                .admin-btn:hover { filter: brightness(1.2); }
+                .text-green { color: var(--accent-green); } .text-blue { color: var(--accent-blue); } .font-bold { font-weight: 600; } .text-muted { color: var(--text-muted); } .text-red { color: var(--accent-red); }
+            </style>
+        </head>
+        <body>
+            <div id="toast">🎉 Notification!</div>
 
-                '<div class="nav-menu">' +
-                    '<button class="nav-btn active" onclick="switchTab(\'overview\', this)">📊 Overview</button>' +
-                    '<button class="nav-btn" onclick="switchTab(\'transactions\', this)">💳 Transactions & VIPs</button>' +
-                    '<button class="nav-btn" onclick="switchTab(\'audience\', this)">👥 Audience</button>' +
-                    '<button class="nav-btn" onclick="switchTab(\'moderation\', this)">🛡️ Moderation</button>' +
-                    '<button class="nav-btn" onclick="switchTab(\'admin\', this)">⚙️ Admin Config</button>' +
-                '</div>' +
+            <div class="container" id="dashboard-container">
+                <div class="header">
+                    <h1>Nexus Dashboard</h1>
+                    <div class="controls">
+                        <button class="btn-icon" onclick="toggleStealth()" id="stealthBtn">👁️ Stealth Mode</button>
+                        <div class="live-status"><div class="pulse"></div> Live (<span id="live-tickets-count">0</span> Tickets)</div>
+                    </div>
+                </div>
 
-                '<div id="overview" class="tab-content active">' +
-                    '<div class="stats-grid">' +
-                        '<div class="card green"><h3>Today\'s Earnings</h3><div class="value money text-green">€' + todayRevenue + '</div></div>' +
-                        '<div class="card blue"><h3>Total Earnings</h3><div class="value money text-blue">€' + memoryStats.total_revenue + '</div></div>' +
-                        '<div class="card pink"><h3>Conversion Rate</h3><div class="value text-pink">' + conversionRate + '%</div></div>' +
-                        '<div class="card orange"><h3>Online / Total</h3><div class="value text-orange">' + onlineCount + ' <span style="font-size: 0.5em; color: var(--text-muted);">/ ' + memberCount + '</span></div></div>' +
-                        '<div class="card purple"><h3>Retention Rate</h3><div class="value text-purple">' + retentionRate + '%</div></div>' +
-                    '</div>' +
+                <div class="nav-menu">
+                    <button class="nav-btn active" onclick="switchTab('overview', this)">📊 Overview</button>
+                    <button class="nav-btn" onclick="switchTab('transactions', this)">💳 Transactions & VIPs</button>
+                    <button class="nav-btn" onclick="switchTab('audience', this)">👥 Audience</button>
+                    <button class="nav-btn" onclick="switchTab('moderation', this)">🛡️ Moderation</button>
+                    <button class="nav-btn" onclick="switchTab('admin', this)">⚙️ Admin Config</button>
+                </div>
+
+                <div id="overview" class="tab-content active">
+                    <div class="stats-grid">
+                        <div class="card green"><h3>Today's Earnings</h3><div class="value money text-green">€${todayRevenue}</div></div>
+                        <div class="card blue"><h3>Total Earnings</h3><div class="value money text-blue">€${memoryStats.total_revenue}</div></div>
+                        <div class="card pink"><h3>Conversion Rate</h3><div class="value text-pink">${conversionRate}%</div></div>
+                        <div class="card orange"><h3>Online / Total</h3><div class="value text-orange">${onlineCount} <span style="font-size: 0.5em; color: var(--text-muted);">/ ${memberCount}</span></div></div>
+                        <div class="card purple"><h3>Retention Rate</h3><div class="value text-purple">${retentionRate}%</div></div>
+                    </div>
                     
-                    '<div class="stats-grid" style="margin-top: 15px; margin-bottom: 25px;">' +
-                        '<div class="card purple"><h3>Tickets Opened</h3><div class="value">' + ticketsOpened + '</div></div>' +
-                        '<div class="card red"><h3>Drop-off Rate (Abandon)</h3><div class="value text-red">' + dropOffRate + '%</div></div>' +
-                        '<div class="card orange"><h3>Peak Sales Hour</h3><div class="value" style="font-size:1.5em; margin-top:10px;">' + peakHourStr + '</div></div>' +
-                    '</div>' +
+                    <div class="stats-grid" style="margin-top: 15px; margin-bottom: 25px;">
+                        <div class="card purple"><h3>Tickets Opened</h3><div class="value">${ticketsOpened}</div></div>
+                        <div class="card red"><h3>Drop-off Rate (Abandon)</h3><div class="value text-red">${dropOffRate}%</div></div>
+                        <div class="card orange"><h3>Peak Sales Hour</h3><div class="value" style="font-size:1.5em; margin-top:10px;">${peakHourStr}</div></div>
+                    </div>
                     
-                    '<div class="goal-container">' +
-                        '<div class="goal-header">' +
-                            '<span class="font-bold">🎯 Monthly Goal (Current Month) ' +
-                                '<button onclick="editGoal()" style="background:none;border:none;cursor:pointer;font-size:1em;margin-left:10px;">✏️</button>' +
-                            '</span>' +
-                            '<span class="money font-bold" id="goal-text">€' + monthRevenue + ' / €' + MONTHLY_GOAL + ' (' + goalPercent + '%)</span>' +
-                        '</div>' +
-                        '<div class="progress-bg"><div class="progress-fill" id="goal-bar" style="width: ' + goalPercent + '%;"></div></div>' +
-                    '</div>' +
+                    <div class="goal-container">
+                        <div class="goal-header">
+                            <span class="font-bold">🎯 Monthly Goal (Current Month) 
+                                <button onclick="editGoal()" style="background:none;border:none;cursor:pointer;font-size:1em;margin-left:10px;">✏️</button>
+                            </span>
+                            <span class="money font-bold" id="goal-text">€${monthRevenue} / €${MONTHLY_GOAL} (${goalPercent}%)</span>
+                        </div>
+                        <div class="progress-bg"><div class="progress-fill" id="goal-bar" style="width: ${goalPercent}%;"></div></div>
+                    </div>
 
-                    '<div class="content-grid">' +
-                        '<div class="box">' +
-                            '<div class="box-header">' +
-                                '<h2>📈 Revenue Timeline</h2>' +
-                                '<div class="filter-group">' +
-                                    '<button class="filter-btn active" onclick="updateChartFilter(7, this)">7D</button>' +
-                                    '<button class="filter-btn" onclick="updateChartFilter(30, this)">30D</button>' +
-                                    '<button class="filter-btn" onclick="updateChartFilter(0, this)">All</button>' +
-                                '</div>' +
-                            '</div>' +
-                            '<div class="chart-container"><canvas id="salesChart"></canvas></div>' +
-                        '</div>' +
-                        '<div class="box"><div class="box-header"><h2>🏆 Top Sellers</h2></div><div class="chart-container"><canvas id="productsChart"></canvas></div></div>' +
-                    '</div>' +
-                '</div>' +
+                    <div class="content-grid">
+                        <div class="box">
+                            <div class="box-header">
+                                <h2>📈 Revenue Timeline</h2>
+                                <div class="filter-group">
+                                    <button class="filter-btn active" onclick="updateChartFilter(7, this)">7D</button>
+                                    <button class="filter-btn" onclick="updateChartFilter(30, this)">30D</button>
+                                    <button class="filter-btn" onclick="updateChartFilter(0, this)">All</button>
+                                </div>
+                            </div>
+                            <div class="chart-container"><canvas id="salesChart"></canvas></div>
+                        </div>
+                        <div class="box"><div class="box-header"><h2>🏆 Top Sellers</h2></div><div class="chart-container"><canvas id="productsChart"></canvas></div></div>
+                    </div>
+                </div>
 
-                '<div id="transactions" class="tab-content">' +
-                    '<div class="content-grid">' +
-                        '<div class="box">' +
-                            '<div class="box-header"><h2>🛒 Recent Transactions</h2><button class="btn-icon" style="background:var(--accent-green);font-size:0.8em;" onclick="exportCSV()">📥 Export CSV</button></div>' +
-                            '<div style="overflow-x:auto; max-height: 400px;"><table><thead><tr><th>Customer</th><th>Product</th><th>Price</th><th>Date</th></tr></thead><tbody>' + tableRowsTransactions + '</tbody></table></div>' +
-                        '</div>' +
-                        '<div class="box"><h2>💎 Top Spenders (VIPs)</h2><table><thead><tr><th>Customer</th><th>Total Spent</th></tr></thead><tbody>' + topSpendersHTML + '</tbody></table></div>' +
-                    '</div>' +
-                '</div>' +
+                <div id="transactions" class="tab-content">
+                    <div class="content-grid">
+                        <div class="box">
+                            <div class="box-header"><h2>🛒 Recent Transactions</h2><button class="btn-icon" style="background:var(--accent-green);font-size:0.8em;" onclick="exportCSV()">📥 Export CSV</button></div>
+                            <div style="overflow-x:auto; max-height: 400px;"><table><thead><tr><th>Customer</th><th>Product</th><th>Price</th><th>Date</th></tr></thead><tbody>${tableRowsTransactions}</tbody></table></div>
+                        </div>
+                        <div class="box"><h2>💎 Top Spenders (VIPs)</h2><table><thead><tr><th>Customer</th><th>Total Spent</th></tr></thead><tbody>${topSpendersHTML}</tbody></table></div>
+                    </div>
+                </div>
 
-                '<div id="audience" class="tab-content">' +
-                    '<div class="box" style="margin-bottom:20px;"><h2>📊 Community Activity (Last 10 Days)</h2><div class="chart-container"><canvas id="audienceChart"></canvas></div></div>' +
-                    '<div class="content-grid">' +
-                        '<div class="box"><h2>📥 Latest Joins</h2><div style="overflow-x:auto; max-height:300px;"><table><thead><tr><th>Username</th><th>Date</th></tr></thead><tbody>' + tableRowsMembers + '</tbody></table></div></div>' +
-                        '<div class="box"><h2>📤 Latest Leaves</h2><div style="overflow-x:auto; max-height:300px;"><table><thead><tr><th>Username</th><th>Date</th></tr></thead><tbody>' + tableRowsLeaves + '</tbody></table></div></div>' +
-                    '</div>' +
-                '</div>' +
+                <div id="audience" class="tab-content">
+                    <div class="box" style="margin-bottom:20px;"><h2>📊 Community Activity (Last 10 Days)</h2><div class="chart-container"><canvas id="audienceChart"></canvas></div></div>
+                    <div class="content-grid">
+                        <div class="box"><h2>📥 Latest Joins</h2><div style="overflow-x:auto; max-height:300px;"><table><thead><tr><th>Username</th><th>Date</th></tr></thead><tbody>${tableRowsMembers}</tbody></table></div></div>
+                        <div class="box"><h2>📤 Latest Leaves</h2><div style="overflow-x:auto; max-height:300px;"><table><thead><tr><th>Username</th><th>Date</th></tr></thead><tbody>${tableRowsLeaves}</tbody></table></div></div>
+                    </div>
+                </div>
 
-                '<div id="moderation" class="tab-content">' +
-                    '<div class="box">' +
-                        '<h2>🔎 Member Directory & Moderation</h2>' +
-                        '<div style="display:flex; gap:10px; margin-top:10px; align-items:center;">' +
-                            '<input type="text" id="memberSearchInput" placeholder="Filter by username or ID..." style="margin-top:0;" oninput="filterMembersLocally()">' +
-                            '<select id="memberSortSelect" style="background:rgba(0,0,0,0.3); border:1px solid var(--border-color); color:white; padding:10px; border-radius:6px; outline:none; height:40px;" onchange="sortMembersLocally()">' +
-                                '<option value="recent">🔽 Newest Members</option>' +
-                                '<option value="spent">💰 Top Spenders</option>' +
-                                '<option value="oldest">🔼 Oldest Members</option>' +
-                                '<option value="warns">⚠️ Most Warned</option>' +
-                            '</select>' +
-                            '<button class="admin-btn" style="width:auto; margin-top:0; height:40px;" onclick="loadAllMembers()">🔄 Refresh</button>' +
-                        '</div>' +
-                        '<div id="memberResults" style="margin-top: 20px;"><p class="text-muted">Loading members list...</p></div>' +
-                    '</div>' +
-                '</div>' +
+                <div id="moderation" class="tab-content">
+                    <div class="box">
+                        <h2>🔎 Member Directory & Moderation</h2>
+                        <div style="display:flex; gap:10px; margin-top:10px; align-items:center;">
+                            <input type="text" id="memberSearchInput" placeholder="Filter by username or ID..." style="margin-top:0;" oninput="filterMembersLocally()">
+                            <select id="memberSortSelect" style="background:rgba(0,0,0,0.3); border:1px solid var(--border-color); color:white; padding:10px; border-radius:6px; outline:none; height:40px;" onchange="sortMembersLocally()">
+                                <option value="recent">🔽 Newest Members</option>
+                                <option value="spent">💰 Top Spenders</option>
+                                <option value="oldest">🔼 Oldest Members</option>
+                                <option value="warns">⚠️ Most Warned</option>
+                            </select>
+                            <button class="admin-btn" style="width:auto; margin-top:0; height:40px;" onclick="loadAllMembers()">🔄 Refresh</button>
+                        </div>
+                        <div id="memberResults" style="margin-top: 20px;"><p class="text-muted">Loading members list...</p></div>
+                    </div>
+                </div>
 
-                '<div id="admin" class="tab-content">' +
-                    '<div class="content-grid">' +
-                        '<div class="box">' +
-                            '<h2>📋 Custom Requests Manager</h2>' +
-                            '<p class="text-muted" style="font-size:0.8em;">Manage custom orders (Products 10 & 11) from your clients.</p>' +
-                            '<div style="overflow-x:auto; max-height: 300px;"><table><thead><tr><th>Customer</th><th>Request</th><th>Date</th><th>Action</th></tr></thead><tbody>' + customReqsHTML + '</tbody></table></div>' +
-                        '</div>' +
-                        '<div class="box">' +
-                            '<h2>🎟️ Promo Codes Generator</h2>' +
-                            '<p class="text-muted" style="font-size:0.8em;">Create limited usage discount codes.</p>' +
-                            '<div style="display:flex; gap:10px; margin-bottom:15px; flex-wrap:wrap;">' +
-                                '<input type="text" id="promoName" placeholder="Code (e.g. VIP20)" style="flex:1;">' +
-                                '<input type="number" id="promoDiscount" placeholder="% Off (e.g. 20)" style="width:110px;">' +
-                                '<input type="number" id="promoLimit" placeholder="Max Uses" style="width:110px;">' +
-                                '<button class="admin-btn" style="margin-top:0;" onclick="createPromo()">➕ Create</button>' +
-                            '</div>' +
-                            '<div style="overflow-x:auto; max-height: 200px;"><table><thead><tr><th>Code</th><th>Discount</th><th>Usage</th><th>Action</th></tr></thead><tbody>' + promoCodesHTML + '</tbody></table></div>' +
-                        '</div>' +
-                    '</div>' +
-                    '<div class="content-grid">' +
-                        '<div class="box">' +
-                            '<h2>🎛️ Global Announcement</h2>' +
-                            '<div style="margin-bottom: 20px;">' +
-                                '<label class="text-muted">Channel ID</label>' +
-                                '<input type="text" id="announce-channel" placeholder="e.g. 123456789012345678">' +
-                                '<textarea id="announce-msg" rows="3" placeholder="Type your announcement here..."></textarea>' +
-                                '<button class="admin-btn" onclick="sendAdminAction(\'announce\')">📢 Send</button>' +
-                            '</div>' +
-                        '</div>' +
-                        '<div class="box">' +
-                            '<h2>🚨 Emergency Controls</h2>' +
-                            '<p class="text-muted" style="font-size:0.8em;">Instantly delete all active shop and support channels.</p>' +
-                            '<button class="admin-btn" style="background:var(--accent-red); width:100%; margin-top:10px;" onclick="sendAdminAction(\'close_all\')">🗑️ Close All Open Tickets</button>' +
-                        '</div>' +
-                    '</div>' +
-                '</div>' +
-            '</div>' +
+                <div id="admin" class="tab-content">
+                    <div class="content-grid">
+                        <div class="box">
+                            <h2>📋 Custom Requests Manager</h2>
+                            <p class="text-muted" style="font-size:0.8em;">Manage custom orders (Products 10 & 11) from your clients.</p>
+                            <div style="overflow-x:auto; max-height: 300px;"><table><thead><tr><th>Customer</th><th>Request</th><th>Date</th><th>Action</th></tr></thead><tbody>${customReqsHTML}</tbody></table></div>
+                        </div>
+                        <div class="box">
+                            <h2>🎟️ Promo Codes Generator</h2>
+                            <p class="text-muted" style="font-size:0.8em;">Create limited usage discount codes.</p>
+                            <div style="display:flex; gap:10px; margin-bottom:15px; flex-wrap:wrap;">
+                                <input type="text" id="promoName" placeholder="Code (e.g. VIP20)" style="flex:1;">
+                                <input type="number" id="promoDiscount" placeholder="% Off (e.g. 20)" style="width:110px;">
+                                <input type="number" id="promoLimit" placeholder="Max Uses" style="width:110px;">
+                                <button class="admin-btn" style="margin-top:0;" onclick="createPromo()">➕ Create</button>
+                            </div>
+                            <div style="overflow-x:auto; max-height: 200px;"><table><thead><tr><th>Code</th><th>Discount</th><th>Usage</th><th>Action</th></tr></thead><tbody>${promoCodesHTML}</tbody></table></div>
+                        </div>
+                    </div>
+                    <div class="content-grid">
+                        <div class="box">
+                            <h2>🎛️ Global Announcement</h2>
+                            <div style="margin-bottom: 20px;">
+                                <label class="text-muted">Channel ID</label>
+                                <input type="text" id="announce-channel" placeholder="e.g. 123456789012345678">
+                                <textarea id="announce-msg" rows="3" placeholder="Type your announcement here..."></textarea>
+                                <button class="admin-btn" onclick="sendAdminAction('announce')">📢 Send</button>
+                            </div>
+                        </div>
+                        <div class="box">
+                            <h2>🚨 Emergency Controls</h2>
+                            <p class="text-muted" style="font-size:0.8em;">Instantly delete all active shop and support channels.</p>
+                            <button class="admin-btn" style="background:var(--accent-red); width:100%; margin-top:10px;" onclick="sendAdminAction('close_all')">🗑️ Close All Open Tickets</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
-            '<script>' +
-                'const PIN = "' + DASHBOARD_PIN + '";' +
-                'const rawStats = ' + JSON.stringify(memoryStats) + ';' +
-                'let stealthMode = false; let lastTxCount = ' + memoryStats.total_transactions + ';' +
+            <script>
+                const PIN = "${DASHBOARD_PIN}";
+                const rawStats = ${JSON.stringify(memoryStats)};
+                let stealthMode = false; 
+                let lastTxCount = ${memoryStats.total_transactions};
 
-                'const currentMonthRevenue = ' + monthRevenue + ';' +
-                'const defaultGoal = ' + MONTHLY_GOAL + ';' +
-                'let userGoal = localStorage.getItem("customGoal") ? parseInt(localStorage.getItem("customGoal")) : defaultGoal;' +
+                const currentMonthRevenue = ${monthRevenue};
+                const defaultGoal = ${MONTHLY_GOAL};
+                let userGoal = localStorage.getItem("customGoal") ? parseInt(localStorage.getItem("customGoal")) : defaultGoal;
 
-                'function updateGoalUI() {' +
-                    'let percent = Math.min(100, Math.round((currentMonthRevenue / userGoal) * 100));' +
-                    'document.getElementById("goal-text").innerText = "€" + currentMonthRevenue + " / €" + userGoal + " (" + percent + "%)";' +
-                    'document.getElementById("goal-bar").style.width = percent + "%";' +
-                '}' +
+                function updateGoalUI() {
+                    let percent = Math.min(100, Math.round((currentMonthRevenue / userGoal) * 100));
+                    document.getElementById("goal-text").innerText = "€" + currentMonthRevenue + " / €" + userGoal + " (" + percent + "%)";
+                    document.getElementById("goal-bar").style.width = percent + "%";
+                }
 
-                'function editGoal() {' +
-                    'let newGoal = prompt("Configure your Monthly Goal (€):", userGoal);' +
-                    'if (newGoal !== null && !isNaN(newGoal) && parseInt(newGoal) > 0) {' +
-                        'userGoal = parseInt(newGoal);' +
-                        'localStorage.setItem("customGoal", userGoal);' +
-                        'updateGoalUI();' +
-                    '}' +
-                '}' +
-                'updateGoalUI();' +
+                function editGoal() {
+                    let newGoal = prompt("Configure your Monthly Goal (€):", userGoal);
+                    if (newGoal !== null && !isNaN(newGoal) && parseInt(newGoal) > 0) {
+                        userGoal = parseInt(newGoal);
+                        localStorage.setItem("customGoal", userGoal);
+                        updateGoalUI();
+                    }
+                }
+                updateGoalUI(); 
 
-                'function toggleStealth() {' +
-                    'stealthMode = !stealthMode; document.body.classList.toggle("stealth-active", stealthMode);' +
-                    'document.getElementById("stealthBtn").innerText = stealthMode ? "🙈 Show Revenue" : "👁️ Stealth Mode";' +
-                '}' +
+                function toggleStealth() {
+                    stealthMode = !stealthMode; 
+                    document.body.classList.toggle("stealth-active", stealthMode);
+                    document.getElementById("stealthBtn").innerText = stealthMode ? "🙈 Show Revenue" : "👁️ Stealth Mode";
+                }
 
-                'function switchTab(tabId, btn) {' +
-                    'document.querySelectorAll(".tab-content").forEach(function(el) { el.classList.remove("active"); });' +
-                    'document.querySelectorAll(".nav-btn").forEach(function(el) { el.classList.remove("active"); });' +
-                    'document.getElementById(tabId).classList.add("active"); btn.classList.add("active");' +
-                    'if (tabId === "moderation" && !isMembersLoaded) loadAllMembers();' +
-                '}' +
+                function switchTab(tabId, btn) {
+                    document.querySelectorAll(".tab-content").forEach(function(el) { el.classList.remove("active"); });
+                    document.querySelectorAll(".nav-btn").forEach(function(el) { el.classList.remove("active"); });
+                    document.getElementById(tabId).classList.add("active"); 
+                    btn.classList.add("active");
+                    if (tabId === "moderation" && !isMembersLoaded) loadAllMembers();
+                }
 
-                'function showToast(msg) {' +
-                    'const toast = document.getElementById("toast"); toast.innerText = msg; toast.style.bottom = "20px";' +
-                    'setTimeout(function() { toast.style.bottom = "-100px"; }, 4000);' +
-                '}' +
+                function showToast(msg) {
+                    const toast = document.getElementById("toast"); 
+                    toast.innerText = msg; 
+                    toast.style.bottom = "20px";
+                    setTimeout(function() { toast.style.bottom = "-100px"; }, 4000);
+                }
 
-                'setInterval(async function() {' +
-                    'try {' +
-                        'const res = await fetch("/api/live"); const data = await res.json();' +
-                        'document.getElementById("live-tickets-count").innerText = data.liveTickets;' +
-                        'if (data.txCount > lastTxCount && data.lastTx) {' +
-                            'lastTxCount = data.txCount; showToast("💰 New Sale! " + data.lastTx.username + " bought " + data.lastTx.product);' +
-                            'setTimeout(function() { location.reload(); }, 2000);' +
-                        '}' +
-                    '} catch(e){}' +
-                '}, 5000);' +
+                setInterval(async function() {
+                    try {
+                        const res = await fetch("/api/live"); 
+                        const data = await res.json();
+                        document.getElementById("live-tickets-count").innerText = data.liveTickets;
+                        if (data.txCount > lastTxCount && data.lastTx) {
+                            lastTxCount = data.txCount; 
+                            showToast("💰 New Sale! " + data.lastTx.username + " bought " + data.lastTx.product);
+                            setTimeout(function() { location.reload(); }, 2000); 
+                        }
+                    } catch(e){}
+                }, 5000);
 
-                'function exportCSV() {' +
-                    'let csvRows = ["Customer,Product,Price,Date"];' +
-                    'rawStats.recent_transactions.forEach(function(tx) {' +
-                        'csvRows.push("\\"" + tx.username + "\\",\\"" + tx.product + "\\",\\"" + tx.price + "\\",\\"" + tx.date + "\\"");' +
-                    '});' +
-                    'const blob = new Blob([csvRows.join("\\n")], { type: "text/csv" });' +
-                    'const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "sales_export.csv"; a.click();' +
-                '}' +
+                function exportCSV() {
+                    let csvRows = ["Customer,Product,Price,Date"];
+                    rawStats.recent_transactions.forEach(function(tx) { 
+                        csvRows.push('"' + tx.username + '","' + tx.product + '","' + tx.price + '","' + tx.date + '"'); 
+                    });
+                    const blob = new Blob([csvRows.join("\\n")], { type: "text/csv" }); 
+                    const a = document.createElement("a"); 
+                    a.href = URL.createObjectURL(blob); 
+                    a.download = "sales_export.csv"; 
+                    a.click();
+                }
 
-                'async function resolveReq(id) { await executeAction({ action: "resolve_req", id: id }); }' +
-                'async function sendAdminAction(type) {' +
-                    'let payload = { action: type };' +
-                    'if (type === "announce") {' +
-                        'payload.channelId = document.getElementById("announce-channel").value; payload.message = document.getElementById("announce-msg").value;' +
-                        'if(!payload.channelId || !payload.message) return alert("Fill both fields!");' +
-                    '}' +
-                    'if (type === "close_all" && !confirm("Are you sure you want to delete ALL shop and support channels?")) return;' +
-                    'await executeAction(payload);' +
-                '}' +
+                async function resolveReq(id) { await executeAction({ action: "resolve_req", id: id }); }
+                async function sendAdminAction(type) {
+                    let payload = { action: type };
+                    if (type === "announce") {
+                        payload.channelId = document.getElementById("announce-channel").value; 
+                        payload.message = document.getElementById("announce-msg").value;
+                        if(!payload.channelId || !payload.message) return alert("Fill both fields!");
+                    }
+                    if (type === "close_all" && !confirm("Are you sure you want to delete ALL shop and support channels?")) return;
+                    await executeAction(payload);
+                }
                 
-                'async function createPromo() {' +
-                    'const name = document.getElementById("promoName").value;' +
-                    'const discount = document.getElementById("promoDiscount").value;' +
-                    'const limit = document.getElementById("promoLimit").value;' +
-                    'if(!name || !discount || !limit) return alert("Fill all promo fields!");' +
-                    'await executeAction({ action: "create_promo", name: name, discount: discount, limit: limit });' +
-                '}' +
-                'async function deletePromo(name) {' +
-                    'if(!confirm("Delete promo code " + name + "?")) return;' +
-                    'await executeAction({ action: "delete_promo", name: name });' +
-                '}' +
+                async function createPromo() {
+                    const name = document.getElementById("promoName").value;
+                    const discount = document.getElementById("promoDiscount").value;
+                    const limit = document.getElementById("promoLimit").value;
+                    if(!name || !discount || !limit) return alert("Fill all promo fields!");
+                    await executeAction({ action: "create_promo", name: name, discount: discount, limit: limit });
+                }
+                async function deletePromo(name) {
+                    if(!confirm("Delete promo code " + name + "?")) return;
+                    await executeAction({ action: "delete_promo", name: name });
+                }
 
-                'async function executeAction(payload) {' +
-                    'payload.pin = PIN;' +
-                    'const res = await fetch("/api/action", { method: "POST", body: JSON.stringify(payload) });' +
-                    'if(res.ok) { showToast("✅ Action applied successfully"); setTimeout(function(){ location.reload(); }, 1000); } else alert("Error executing action");' +
-                '}' +
+                async function executeAction(payload) {
+                    payload.pin = PIN;
+                    const res = await fetch("/api/action", { method: "POST", body: JSON.stringify(payload) });
+                    if(res.ok) { 
+                        showToast("✅ Action applied successfully"); 
+                        setTimeout(function(){ location.reload(); }, 1000); 
+                    } else {
+                        alert("Error executing action");
+                    }
+                }
 
-                'let allMembersData = [];' +
-                'let isMembersLoaded = false;' +
+                let allMembersData = [];
+                let isMembersLoaded = false;
 
-                'async function loadAllMembers() {' +
-                    'document.getElementById("memberResults").innerHTML = "<p class=\\"text-muted\\">Loading directory...</p>";' +
-                    'try {' +
-                        'const res = await fetch("/api/members");' +
-                        'if (!res.ok) throw new Error("Error");' +
-                        'allMembersData = await res.json();' +
-                        'isMembersLoaded = true;' +
-                        'sortMembersLocally();' +
-                    '} catch (e) { document.getElementById("memberResults").innerHTML = "<p class=\\"text-pink\\">Error fetching data.</p>"; }' +
-                '}' +
+                async function loadAllMembers() {
+                    document.getElementById("memberResults").innerHTML = "<p class='text-muted'>Loading directory...</p>";
+                    try {
+                        const res = await fetch("/api/members");
+                        if (!res.ok) throw new Error("Error");
+                        allMembersData = await res.json();
+                        isMembersLoaded = true;
+                        sortMembersLocally();
+                    } catch (e) { document.getElementById("memberResults").innerHTML = "<p class='text-pink'>Error fetching data.</p>"; }
+                }
 
-                'function sortMembersLocally() {' +
-                    'const sortType = document.getElementById("memberSortSelect").value;' +
-                    'if (sortType === "recent") allMembersData.sort(function(a, b) { return b.joinedTimestamp - a.joinedTimestamp; });' +
-                    'else if (sortType === "oldest") allMembersData.sort(function(a, b) { return a.joinedTimestamp - b.joinedTimestamp; });' +
-                    'else if (sortType === "spent") allMembersData.sort(function(a, b) { return b.totalSpent - a.totalSpent; });' +
-                    'else if (sortType === "warns") allMembersData.sort(function(a, b) { return b.warns.length - a.warns.length; });' +
-                    'filterMembersLocally();' +
-                '}' +
+                function sortMembersLocally() {
+                    const sortType = document.getElementById("memberSortSelect").value;
+                    if (sortType === "recent") allMembersData.sort(function(a, b) { return b.joinedTimestamp - a.joinedTimestamp; });
+                    else if (sortType === "oldest") allMembersData.sort(function(a, b) { return a.joinedTimestamp - b.joinedTimestamp; });
+                    else if (sortType === "spent") allMembersData.sort(function(a, b) { return b.totalSpent - a.totalSpent; });
+                    else if (sortType === "warns") allMembersData.sort(function(a, b) { return b.warns.length - a.warns.length; });
+                    filterMembersLocally();
+                }
 
-                'function filterMembersLocally() {' +
-                    'const q = document.getElementById("memberSearchInput").value.toLowerCase();' +
-                    'const filtered = allMembersData.filter(function(m) { return m.username.toLowerCase().includes(q) || m.id.includes(q); });' +
-                    'renderMembers(filtered);' +
-                '}' +
+                function filterMembersLocally() {
+                    const q = document.getElementById("memberSearchInput").value.toLowerCase();
+                    const filtered = allMembersData.filter(function(m) { return m.username.toLowerCase().includes(q) || m.id.includes(q); });
+                    renderMembers(filtered);
+                }
 
-                'function renderMembers(members) {' +
-                    'if (members.length === 0) {' +
-                        'document.getElementById("memberResults").innerHTML = "<p class=\\"text-pink\\">No members found.</p>";' +
-                        'return;' +
-                    '}' +
-                    'let html = "";' +
-                    'members.forEach(function(m) {' +
-                        'let trustColor = m.isBlacklisted ? "var(--accent-red)" : (m.totalSpent > 0 ? "var(--accent-green)" : "var(--accent-orange)");' +
-                        'let trustLabel = m.isBlacklisted ? "Blacklisted" : (m.totalSpent > 0 ? "Trusted (Buyer)" : "New / No Purchases");' +
+                function renderMembers(members) {
+                    if (members.length === 0) {
+                        document.getElementById("memberResults").innerHTML = "<p class='text-pink'>No members found.</p>";
+                        return;
+                    }
+                    let html = "";
+                    members.forEach(function(m) {
+                        let trustColor = m.isBlacklisted ? "var(--accent-red)" : (m.totalSpent > 0 ? "var(--accent-green)" : "var(--accent-orange)");
+                        let trustLabel = m.isBlacklisted ? "Blacklisted" : (m.totalSpent > 0 ? "Trusted (Buyer)" : "New / No Purchases");
                         
-                        'let ticketsHtml = m.activeTickets.map(function(t) {' +
-                            'return "<div style=\\"display:flex; justify-content:space-between; background:rgba(0,0,0,0.3); padding:5px 10px; margin-top:5px; border-radius:5px;\\">" +' +
-                                '"<span>#" + t.name + "</span>" +' +
-                                '"<button style=\\"background:var(--accent-red); border:none; color:white; border-radius:3px; cursor:pointer; padding:2px 8px;\\" onclick=\\"modAction(\'close_channel\', \'" + m.id + "\', {channelId: \'" + t.id + "\'})\\">Close</button>" +' +
-                            '"</div>";' +
-                        '}).join("") || "<span class=\\"text-muted\\">No active tickets</span>";' +
+                        let ticketsHtml = m.activeTickets.map(function(t) {
+                            return "<div style='display:flex; justify-content:space-between; background:rgba(0,0,0,0.3); padding:5px 10px; margin-top:5px; border-radius:5px;'>" +
+                                "<span>#" + t.name + "</span>" +
+                                "<button style='background:var(--accent-red); border:none; color:white; border-radius:3px; cursor:pointer; padding:2px 8px;' onclick='modAction(\\"close_channel\\", \\"" + m.id + "\\", {channelId: \\"" + t.id + "\\"})'>Close</button>" +
+                            "</div>";
+                        }).join("") || "<span class='text-muted'>No active tickets</span>";
 
-                        'let warnsHtml = m.warns.map(function(w, i) {' +
-                            'return "<div style=\\"font-size:0.8em; color:var(--accent-orange); margin-bottom:3px;\\">⚠️ Warn " + (i+1) + ": " + w.reason + " (" + w.date + ")</div>";' +
-                        '}).join("") || "<span class=\\"text-muted\\" style=\\"font-size:0.8em;\\">Clean record</span>";' +
+                        let warnsHtml = m.warns.map(function(w, i) {
+                            return "<div style='font-size:0.8em; color:var(--accent-orange); margin-bottom:3px;'>⚠️ Warn " + (i+1) + ": " + w.reason + " (" + w.date + ")</div>";
+                        }).join("") || "<span class='text-muted' style='font-size:0.8em;'>Clean record</span>";
                         
-                        'let historyHtml = m.history.map(function(h) {' +
-                            'return "<div style=\\"font-size:0.8em;\\">🛒 " + h.product + " - €" + h.price + " (" + h.date + ")</div>";' +
-                        '}).join("") || "<span class=\\"text-muted\\" style=\\"font-size:0.8em;\\">No purchases</span>";' +
+                        let historyHtml = m.history.map(function(h) {
+                            return "<div style='font-size:0.8em;'>🛒 " + h.product + " - €" + h.price + " (" + h.date + ")</div>";
+                        }).join("") || "<span class='text-muted' style='font-size:0.8em;'>No purchases</span>";
 
-                        'html += "<div class=\\"card\\" style=\\"margin-bottom: 15px; border-left: 4px solid " + trustColor + ";\\">" +' +
-                            '"<div style=\\"display:flex; gap:15px; align-items:center; margin-bottom:15px;\\">" +' +
-                                '"<img src=\\"" + m.avatar + "\\" style=\\"width:60px; height:60px; border-radius:50%;\\">" +' +
-                                '"<div><h3 style=\\"color:#fff; font-size:1.2em; margin:0;\\">" + m.username + "</h3><span class=\\"text-muted\\" style=\\"font-size:0.8em;\\">ID: " + m.id + "</span></div>" +' +
-                                '"<div style=\\"margin-left:auto; text-align:right;\\"><div style=\\"color:" + trustColor + "; font-weight:bold;\\">" + trustLabel + "</div><div class=\\"money text-green font-bold\\">Total Spent: €" + m.totalSpent + "</div></div>" +' +
-                            '"</div>" +' +
-                            '"<div style=\\"display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:15px; font-size:0.9em;\\">" +' +
-                                '"<div style=\\"background:rgba(0,0,0,0.2); padding:10px; border-radius:8px;\\"><strong>Account Created:</strong> " + m.createdAt + "<br><strong>Joined Server:</strong> " + m.joinedAt + "</div>" +' +
-                                '"<div style=\\"background:rgba(0,0,0,0.2); padding:10px; border-radius:8px;\\"><strong>Active Tickets:</strong><br>" + ticketsHtml + "</div>" +' +
-                            '"</div>" +' +
-                            '"<div style=\\"display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:15px;\\">" +' +
-                                '"<div style=\\"background:rgba(0,0,0,0.2); padding:10px; border-radius:8px;\\"><strong>Purchase History:</strong><br>" + historyHtml + "</div>" +' +
-                                '"<div style=\\"background:rgba(0,0,0,0.2); padding:10px; border-radius:8px;\\"><strong>Casier Judiciaire (Warns):</strong><br>" + warnsHtml + "</div>" +' +
-                            '"</div>" +' +
-                            '"<div style=\\"display:flex; gap:10px; flex-wrap:wrap;\\">" +' +
-                                '"<button class=\\"admin-btn\\" style=\\"width:auto; margin:0; background:var(--accent-orange);\\" onclick=\\"modAction(\'warn\', \'" + m.id + "\')\\">⚠️ Warn</button>" +' +
-                                '"<button class=\\"admin-btn\\" style=\\"width:auto; margin:0; background:var(--accent-orange);\\" onclick=\\"modAction(\'mute\', \'" + m.id + "\')\\">🔇 Mute</button>" +' +
-                                '"<button class=\\"admin-btn\\" style=\\"width:auto; margin:0; background:var(--accent-red);\\" onclick=\\"modAction(\'kick\', \'" + m.id + "\')\\">👢 Kick</button>" +' +
-                                '"<button class=\\"admin-btn\\" style=\\"width:auto; margin:0; background:var(--accent-red);\\" onclick=\\"modAction(\'ban\', \'" + m.id + "\')\\">🔨 Ban</button>" +' +
-                                '"<button class=\\"admin-btn\\" style=\\"width:auto; margin:0; background:#000; border:1px solid var(--accent-red);\\" onclick=\\"modAction(\'toggle_blacklist\', \'" + m.id + "\')\\">" + (m.isBlacklisted ? "✅ Remove Shop Blacklist" : "🚫 Blacklist Shop") + "</button>" +' +
-                            '"</div>" +' +
-                        '"</div>";' +
-                    '});' +
-                    'document.getElementById("memberResults").innerHTML = html;' +
-                '}' +
+                        html += "<div class='card' style='margin-bottom: 15px; border-left: 4px solid " + trustColor + ";'>" +
+                            "<div style='display:flex; gap:15px; align-items:center; margin-bottom:15px;'>" +
+                                "<img src='" + m.avatar + "' style='width:60px; height:60px; border-radius:50%;'>" +
+                                "<div><h3 style='color:#fff; font-size:1.2em; margin:0;'>" + m.username + "</h3><span class='text-muted' style='font-size:0.8em;'>ID: " + m.id + "</span></div>" +
+                                "<div style='margin-left:auto; text-align:right;'><div style='color:" + trustColor + "; font-weight:bold;'>" + trustLabel + "</div><div class='money text-green font-bold'>Total Spent: €" + m.totalSpent + "</div></div>" +
+                            "</div>" +
+                            "<div style='display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:15px; font-size:0.9em;'>" +
+                                "<div style='background:rgba(0,0,0,0.2); padding:10px; border-radius:8px;'><strong>Account Created:</strong> " + m.createdAt + "<br><strong>Joined Server:</strong> " + m.joinedAt + "</div>" +
+                                "<div style='background:rgba(0,0,0,0.2); padding:10px; border-radius:8px;'><strong>Active Tickets:</strong><br>" + ticketsHtml + "</div>" +
+                            "</div>" +
+                            "<div style='display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:15px;'>" +
+                                "<div style='background:rgba(0,0,0,0.2); padding:10px; border-radius:8px;'><strong>Purchase History:</strong><br>" + historyHtml + "</div>" +
+                                "<div style='background:rgba(0,0,0,0.2); padding:10px; border-radius:8px;'><strong>Casier Judiciaire (Warns):</strong><br>" + warnsHtml + "</div>" +
+                            "</div>" +
+                            "<div style='display:flex; gap:10px; flex-wrap:wrap;'>" +
+                                "<button class='admin-btn' style='width:auto; margin:0; background:var(--accent-orange);' onclick='modAction(\\"warn\\", \\"" + m.id + "\\")'>⚠️ Warn</button>" +
+                                "<button class='admin-btn' style='width:auto; margin:0; background:var(--accent-orange);' onclick='modAction(\\"mute\\", \\"" + m.id + "\\")'>🔇 Mute</button>" +
+                                "<button class='admin-btn' style='width:auto; margin:0; background:var(--accent-red);' onclick='modAction(\\"kick\\", \\"" + m.id + "\\")'>👢 Kick</button>" +
+                                "<button class='admin-btn' style='width:auto; margin:0; background:var(--accent-red);' onclick='modAction(\\"ban\\", \\"" + m.id + "\\")'>🔨 Ban</button>" +
+                                "<button class='admin-btn' style='width:auto; margin:0; background:#000; border:1px solid var(--accent-red);' onclick='modAction(\\"toggle_blacklist\\", \\"" + m.id + "\\")'>" + (m.isBlacklisted ? "✅ Remove Shop Blacklist" : "🚫 Blacklist Shop") + "</button>" +
+                            "</div>" +
+                        "</div>";
+                    });
+                    document.getElementById("memberResults").innerHTML = html;
+                }
 
-                'async function modAction(action, userId, extra = {}) {' +
-                    'let payload = { action: action, userId: userId, pin: PIN };' +
-                    'if (extra.channelId) payload.channelId = extra.channelId;' +
+                async function modAction(action, userId, extra = {}) {
+                    let payload = { action: action, userId: userId, pin: PIN };
+                    if (extra.channelId) payload.channelId = extra.channelId;
 
-                    'if (action === "warn") { payload.reason = prompt("Reason for warning?"); if (!payload.reason) return; }' +
-                    'else if (action === "mute") { payload.duration = prompt("Mute duration in minutes?", "60"); payload.reason = prompt("Reason for mute?"); if (!payload.duration || !payload.reason) return; }' +
-                    'else if (action === "kick" || action === "ban") { payload.reason = prompt("Reason for " + action + "?"); if (!payload.reason || !confirm("Execute " + action + "?")) return; }' +
-                    'else if (action === "toggle_blacklist") { if (!confirm("Toggle shop blacklist for this user?")) return; }' +
-                    'else if (action === "close_channel") { if (!confirm("Force close this ticket?")) return; }' +
+                    if (action === "warn") { payload.reason = prompt("Reason for warning?"); if (!payload.reason) return; }
+                    else if (action === "mute") { payload.duration = prompt("Mute duration in minutes?", "60"); payload.reason = prompt("Reason for mute?"); if (!payload.duration || !payload.reason) return; }
+                    else if (action === "kick" || action === "ban") { payload.reason = prompt("Reason for " + action + "?"); if (!payload.reason || !confirm("Execute " + action + "?")) return; }
+                    else if (action === "toggle_blacklist") { if (!confirm("Toggle shop blacklist for this user?")) return; }
+                    else if (action === "close_channel") { if (!confirm("Force close this ticket?")) return; }
 
-                    'const res = await fetch("/api/action", { method: "POST", body: JSON.stringify(payload) });' +
-                    'if (res.ok) { showToast("✅ Action applied successfully"); setTimeout(function() { loadAllMembers(); }, 1000); } else alert("Failed to apply action.");' +
-                '}' +
+                    const res = await fetch("/api/action", { method: "POST", body: JSON.stringify(payload) });
+                    if (res.ok) { 
+                        showToast("✅ Action applied successfully"); 
+                        setTimeout(function() { loadAllMembers(); }, 1000); 
+                    } else {
+                        alert("Failed to apply action.");
+                    }
+                }
 
-                'Chart.defaults.color = "#94a3b8"; Chart.defaults.font.family = "\\"Inter\\", sans-serif";' +
-                'let salesChart;' +
-                'window.renderSalesChart = function(days) {' +
-                    'let dates = Object.keys(rawStats.revenue || {}).sort();' +
-                    'let values = dates.map(function(d) { return rawStats.revenue[d]; });' +
-                    'if (days > 0 && dates.length > days) { dates = dates.slice(-days); values = values.slice(-days); }' +
-                    'const ctxSales = document.getElementById("salesChart").getContext("2d");' +
-                    'let grad = ctxSales.createLinearGradient(0,0,0,400); grad.addColorStop(0, "rgba(56, 189, 248, 0.4)"); grad.addColorStop(1, "transparent");' +
-                    'if(salesChart) salesChart.destroy();' +
-                    'salesChart = new Chart(ctxSales, {' +
-                        'type: "line", data: { labels: dates.length?dates:["No Data"], datasets: [{ data: values.length?values:[0], borderColor: "#38bdf8", backgroundColor: grad, fill: true, tension: 0.4 }] },' +
-                        'options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { grid: { color: "rgba(255,255,255,0.05)"} } } }' +
-                    '});' +
-                '}' +
-                'renderSalesChart(7);' +
-                'window.updateChartFilter = function(days, btn) { document.querySelectorAll(".filter-btn").forEach(function(b) { b.classList.remove("active"); }); btn.classList.add("active"); renderSalesChart(days); }' +
+                Chart.defaults.color = "#94a3b8"; 
+                Chart.defaults.font.family = "'Inter', sans-serif";
+                let salesChart;
+                
+                window.renderSalesChart = function(days) {
+                    let dates = Object.keys(rawStats.revenue || {}).sort(); 
+                    let values = dates.map(function(d) { return rawStats.revenue[d]; });
+                    if (days > 0 && dates.length > days) { 
+                        dates = dates.slice(-days); 
+                        values = values.slice(-days); 
+                    }
+                    const ctxSales = document.getElementById("salesChart").getContext("2d");
+                    let grad = ctxSales.createLinearGradient(0,0,0,400); 
+                    grad.addColorStop(0, "rgba(56, 189, 248, 0.4)"); 
+                    grad.addColorStop(1, "transparent");
+                    
+                    if(salesChart) salesChart.destroy();
+                    salesChart = new Chart(ctxSales, {
+                        type: "line", 
+                        data: { 
+                            labels: dates.length?dates:["No Data"], 
+                            datasets: [{ data: values.length?values:[0], borderColor: "#38bdf8", backgroundColor: grad, fill: true, tension: 0.4 }] 
+                        },
+                        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { grid: { color: "rgba(255,255,255,0.05)"} } } }
+                    });
+                }
+                renderSalesChart(7);
+                
+                window.updateChartFilter = function(days, btn) { 
+                    document.querySelectorAll(".filter-btn").forEach(function(b) { b.classList.remove("active"); }); 
+                    btn.classList.add("active"); 
+                    renderSalesChart(days); 
+                }
 
-                'const prodDataRaw = ' + JSON.stringify(PRODUCT_DATA) + '; const prodIds = Object.keys(rawStats.product_sales || {});' +
-                'new Chart(document.getElementById("productsChart"), {' +
-                    'type: "doughnut", data: { labels: prodIds.map(function(id) { return prodDataRaw[id]?prodDataRaw[id].name:"Unknown"; }), datasets: [{ data: Object.values(rawStats.product_sales||{}), backgroundColor: ["#38bdf8", "#a855f7", "#ec4899", "#f97316", "#10b981"], borderColor: "#0b0f19" }] },' +
-                    'options: { responsive: true, maintainAspectRatio: false, cutout: "70%", plugins: { legend: { position: "right", labels: { color: "#f8fafc" } } } }' +
-                '});' +
+                const prodDataRaw = ${JSON.stringify(PRODUCT_DATA)}; 
+                const prodIds = Object.keys(rawStats.product_sales || {});
+                new Chart(document.getElementById("productsChart"), {
+                    type: "doughnut", 
+                    data: { 
+                        labels: prodIds.map(function(id) { return prodDataRaw[id]?prodDataRaw[id].name:"Unknown"; }), 
+                        datasets: [{ data: Object.values(rawStats.product_sales||{}), backgroundColor: ["#38bdf8", "#a855f7", "#ec4899", "#f97316", "#10b981"], borderColor: "#0b0f19" }] 
+                    },
+                    options: { responsive: true, maintainAspectRatio: false, cutout: "70%", plugins: { legend: { position: "right", labels: { color: "#f8fafc" } } } }
+                });
 
-                'const audienceDates = Array.from(new Set([...Object.keys(rawStats.joins), ...Object.keys(rawStats.leaves)])).sort().slice(-10);' +
-                'new Chart(document.getElementById("audienceChart"), {' +
-                    'type: "bar", data: { labels: audienceDates.length ? audienceDates : ["No Data"], datasets: [{ label: "Joins", data: audienceDates.map(function(d) { return rawStats.joins[d]||0; }), backgroundColor: "#10b981" }, { label: "Leaves", data: audienceDates.map(function(d) { return rawStats.leaves[d]||0; }), backgroundColor: "#ef4444" }] },' +
-                    'options: { responsive: true, maintainAspectRatio: false, scales: { x: { grid: { display: false } }, y: { grid: { color: "rgba(255,255,255,0.05)"} } } }' +
-                '});' +
-            '</script>' +
-        '</body>' +
-        '</html>');
+                const audienceDates = Array.from(new Set([...Object.keys(rawStats.joins), ...Object.keys(rawStats.leaves)])).sort().slice(-10);
+                new Chart(document.getElementById("audienceChart"), {
+                    type: "bar", 
+                    data: { 
+                        labels: audienceDates.length ? audienceDates : ["No Data"], 
+                        datasets: [
+                            { label: "Joins", data: audienceDates.map(function(d) { return rawStats.joins[d]||0; }), backgroundColor: "#10b981" }, 
+                            { label: "Leaves", data: audienceDates.map(function(d) { return rawStats.leaves[d]||0; }), backgroundColor: "#ef4444" }
+                        ] 
+                    },
+                    options: { responsive: true, maintainAspectRatio: false, scales: { x: { grid: { display: false } }, y: { grid: { color: "rgba(255,255,255,0.05)"} } } }
+                });
+            </script>
+        </body>
+        </html>
+        `);
     } else {
         res.writeHead(200, { 'Content-Type': 'text/plain' });
         res.end('API Endpoint or Bot Status');
