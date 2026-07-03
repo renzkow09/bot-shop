@@ -330,7 +330,8 @@ http.createServer(async (req, res) => {
         const guild = client.guilds.cache.first();
         if(!guild) return res.writeHead(400).end('[]');
         try {
-            const fetchedMembers = await guild.members.fetch({ limit: 100 });
+            // CORRECTION: Limite augmentée à 1000 pour toujours avoir les top spenders
+            const fetchedMembers = await guild.members.fetch({ limit: 1000 });
             const list = fetchedMembers.map(m => {
                 const userTickets = guild.channels.cache.filter(c => c.name.includes(m.user.username.toLowerCase())).map(c => ({ id: c.id, name: c.name }));
                 return {
