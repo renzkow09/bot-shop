@@ -270,29 +270,26 @@ client.on('messageCreate', async (message) => {
 
         if (message.author.id === ADMIN_DISCORD_ID) {
             if (message.content === '!setup') {
-                // LIGNE 1 : Boutons pour ACHETER LES CODES SUR ENEBA
                 const rowBuy = new ActionRowBuilder().addComponents(
-                    new ButtonBuilder().setLabel('💳 BUY €5').setStyle(ButtonStyle.Link).setURL('https://www.eneba.com/rewarble-rewarble-revolut-5-gbp-voucher-global'),
-                    new ButtonBuilder().setLabel('💳 BUY €10').setStyle(ButtonStyle.Link).setURL('https://www.eneba.com/rewarble-rewarble-revolut-10-gbp-voucher-global'),
-                    new ButtonBuilder().setLabel('💳 BUY €15').setStyle(ButtonStyle.Link).setURL('https://www.eneba.com/rewarble-rewarble-revolut-15-gbp-voucher-global'),
-                    new ButtonBuilder().setLabel('💳 BUY €20').setStyle(ButtonStyle.Link).setURL('https://www.eneba.com/rewarble-rewarble-revolut-20-gbp-voucher-global')
+                    new ButtonBuilder().setLabel('💳 Acheter €5').setStyle(ButtonStyle.Link).setURL('https://www.eneba.com/rewarble-rewarble-revolut-5-gbp-voucher-global'),
+                    new ButtonBuilder().setLabel('💳 Acheter €10').setStyle(ButtonStyle.Link).setURL('https://www.eneba.com/rewarble-rewarble-revolut-10-gbp-voucher-global'),
+                    new ButtonBuilder().setLabel('💳 Acheter €15').setStyle(ButtonStyle.Link).setURL('https://www.eneba.com/rewarble-rewarble-revolut-15-gbp-voucher-global'),
+                    new ButtonBuilder().setLabel('💳 Acheter €20').setStyle(ButtonStyle.Link).setURL('https://www.eneba.com/rewarble-rewarble-revolut-20-gbp-voucher-global')
                 );
 
-                // LIGNE 2 : Boutons d'ACTIONS SUR LE BOT
                 const rowActions = new ActionRowBuilder().addComponents(
                     new ButtonBuilder().setCustomId('open_shop_channel').setLabel('📩 Redeem Code').setStyle(ButtonStyle.Success),
                     new ButtonBuilder().setCustomId('open_support_ticket').setLabel('🎧 Need Support?').setStyle(ButtonStyle.Secondary)
                 );
                 
-                // EMBED PREMIUM ET ESTHÉTIQUE
                 const shopEmbed = new EmbedBuilder()
-                    .setColor('#FF1493') // Rose Néon esthétique
+                    .setColor('#FF1493')
                     .setTitle('💎 VIP EXCLUSIVE MENU & PRICES 💎')
                     .setDescription('> *Instant automatic delivery directly in your DMs!* 🚀\n\n━━━━━━━━━━━━━━━━━━━━━━')
                     .addFields(
                         { name: '✨ PHOTOS (€5)', value: '> 🎀 **1.** Boobs\n> 🍑 **2.** Ass\n> 📸 **3.** Full Body\n> 👙 **4.** Lingerie Try-On\n> 🪞 **5.** Mirror Pic', inline: true },
                         { name: '🔥 VIDEOS (€10)', value: '> 🎥 **6.** 5-Min Video\n> 🛁 **7.** Shower / Bath\n\u200B', inline: true },
-                        { name: '\u200B', value: '\u200B' }, // Séparateur invisible
+                        { name: '\u200B', value: '\u200B' },
                         { name: '💦 SPECIAL (€15)', value: '> 👯‍♀️ **8.** Friends Nude\n> 🎁 **9.** Surprise Pack', inline: true },
                         { name: '💌 PERSONALIZED', value: '> 💬 **10.** Sexting (On Req)\n> 🪄 **11.** Custom Request', inline: true },
                         { name: '━━━━━━━━━━━━━━━━━━━━━━\n💳 HOW TO BUY ?', value: '**STEP 1:** Click an **Eneba** button below to get your voucher.\n**STEP 2:** Click the green **📩 Redeem Code** button.\n**STEP 3:** Paste your code, choose your item, and check your DMs! 🎉' }
@@ -581,6 +578,13 @@ http.createServer(async (req, res) => {
                         throw new Error("Utilisateur introuvable.");
                     }
                 }
+                // NOUVELLE ACTION: POSTER UNE REVIEW
+                else if (data.action === 'post_review') {
+                    const reviewChannel = await client.channels.fetch(REVIEW_CHANNEL_ID).catch(() => null);
+                    if (!reviewChannel) throw new Error("Salon de reviews introuvable. Vérifiez l'ID.");
+                    const reviewMsg = `> 🌟 **NEW FEEDBACK** 🌟\n> ━━━━━━━━━━━━━━━━━━━━\n> 📝 » **Feedback :** "${data.text}"\n> 📈 » **Rating :** ${data.rating}/5 ⭐\n> 👤 » **By :** ${data.author}`;
+                    await reviewChannel.send(reviewMsg);
+                }
                 res.writeHead(200).end('OK');
             } catch(e) { res.writeHead(500).end(e.message); }
         }); return;
@@ -777,9 +781,25 @@ http.createServer(async (req, res) => {
             "                    </div>",
             "                </div>",
             "                <div class='box'>",
-            "                    <h2>🚨 Emergency Controls</h2>",
-            "                    <button class='admin-btn' style='background:var(--accent-red); width:100%; margin-top:10px;' onclick='window.sendAdminAction(\"close_all\")'>🗑️ Close All Open Tickets</button>",
+            "                    <h2>🌟 Post Customer Review</h2>",
+            "                    <p class='text-muted' style='font-size:0.85rem;'>Publish feedback directly to the reviews channel.</p>",
+            "                    <div style='margin-bottom: 20px;'>",
+            "                        <input type='text' id='rev-author' placeholder='Customer Name (e.g. John Doe)' style='margin-bottom:10px;'>",
+            "                        <select id='rev-rating' style='margin-bottom:10px;'>",
+            "                            <option value='5'>5/5 ⭐ - Excellent</option>",
+            "                            <option value='4'>4/5 ⭐ - Very Good</option>",
+            "                            <option value='3'>3/5 ⭐ - Good</option>",
+            "                            <option value='2'>2/5 ⭐ - Fair</option>",
+            "                            <option value='1'>1/5 ⭐ - Poor</option>",
+            "                        </select>",
+            "                        <textarea id='rev-msg' rows='3' placeholder='Paste the customer feedback here...' style='margin-bottom:10px;'></textarea>",
+            "                        <button class='admin-btn' style='background:var(--accent-green);' onclick='window.sendReview()'>📤 Publish Review</button>",
+            "                    </div>",
             "                </div>",
+            "            </div>",
+            "            <div class='box'>",
+            "                <h2>🚨 Emergency Controls</h2>",
+            "                <button class='admin-btn' style='background:var(--accent-red); width:100%; margin-top:10px;' onclick='window.sendAdminAction(\"close_all\")'>🗑️ Close All Open Tickets</button>",
             "            </div>",
             "        </div>",
             "    </div>",
@@ -978,6 +998,16 @@ http.createServer(async (req, res) => {
             "            }",
             "            if (type === 'close_all' && !confirm('Are you sure you want to delete ALL shop and support channels?')) return;",
             "            await window.executeAction(payload);",
+            "        };",
+
+            "        window.sendReview = async function() {",
+            "            const author = document.getElementById('rev-author').value;",
+            "            const rating = document.getElementById('rev-rating').value;",
+            "            const text = document.getElementById('rev-msg').value;",
+            "            if(!author || !text) return alert('Fill both author and feedback fields!');",
+            "            await window.executeAction({ action: 'post_review', author: author, rating: rating, text: text });",
+            "            document.getElementById('rev-author').value = '';",
+            "            document.getElementById('rev-msg').value = '';",
             "        };",
             "        ",
             "        window.createPromo = async function() {",
