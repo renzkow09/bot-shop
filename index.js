@@ -75,10 +75,12 @@ async function loadCloudStats() {
         const res = await axios.get(`${cleanUrl}/get/bot_stats`, { headers: { Authorization: `Bearer ${token}` } });
         if (res.data && res.data.result) {
             memoryStats = { ...memoryStats, ...JSON.parse(res.data.result) };
+            
             if (!memoryStats.promo_codes) memoryStats.promo_codes = {};
             if (!memoryStats.user_notes) memoryStats.user_notes = {};
             if (!memoryStats.analytics) memoryStats.analytics = { tickets_opened: 0, hourly_sales: Array(24).fill(0) };
             if (!memoryStats.analytics.hourly_sales) memoryStats.analytics.hourly_sales = Array(24).fill(0);
+            
             console.log("✅ Base de données synchronisée avec le Cloud.");
         }
     } catch (e) { console.error("❌ Cloud GET Error :", e.message); }
@@ -161,7 +163,7 @@ const client = new Client({
         GatewayIntentBits.GuildMessages, 
         GatewayIntentBits.MessageContent, 
         GatewayIntentBits.GuildMembers,
-        GatewayIntentBits.GuildPresences // <-- Correction cruciale pour le Online Count
+        GatewayIntentBits.GuildPresences
     ],
     partials: [Partials.GuildMember, Partials.User, Partials.Message]
 });
@@ -386,7 +388,6 @@ http.createServer(async (req, res) => {
         const guild = client.guilds.cache.first();
         if (guild) {
             try {
-                // Utilisation de l'API Discord forcée pour des statistiques live précises
                 const response = await axios.get("https://discord.com/api/v10/guilds/" + guild.id + "?with_counts=true", { headers: { Authorization: "Bot " + DISCORD_BOT_TOKEN } });
                 memberCount = response.data.approximate_member_count; 
                 onlineCount = response.data.approximate_presence_count;
@@ -440,27 +441,6 @@ http.createServer(async (req, res) => {
         return res.end(JSON.stringify({ txCount: memoryStats.total_transactions, lastTx: memoryStats.recent_transactions[0] || null, liveTickets: activeTickets }));
     }
 
-    if (req.url === '/api/balance' && req.method === 'GET') {
-        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
-        try {
-            const response = await axios.get("https://api.rewarble.com/client/1.00/balance", {
-                headers: { 'Authorization': `Bearer ${REWARBLE_API_KEY}` }
-            });
-            let bal = "N/A";
-            if (response.data) {
-                if (response.data.balance !== undefined) bal = response.data.balance;
-                else if (response.data.amount !== undefined) bal = response.data.amount;
-                else if (typeof response.data === 'number') bal = response.data;
-                else bal = "API OK (See Logs)"; 
-            }
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            return res.end(JSON.stringify({ balance: bal }));
-        } catch(e) {
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            return res.end(JSON.stringify({ balance: "API Error" }));
-        }
-    }
-
     if (req.url.startsWith('/api/members') && req.method === 'GET') {
         if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         const guild = client.guilds.cache.first();
@@ -491,7 +471,7 @@ http.createServer(async (req, res) => {
 
     if (req.url === '/api/action' && req.method === 'POST') {
         if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
-        let body = ''; req.on('data', chunk => body += chunk);
+        let body = ''; req.on('data', chunk => body += chunk.toString());
         req.on('end', async () => {
             try {
                 const data = JSON.parse(body);
@@ -593,6 +573,7 @@ http.createServer(async (req, res) => {
             "        .status-badge { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--text-muted); background: var(--bg-card); padding: 8px 12px; border-radius: 20px; border: 1px solid var(--border-color); backdrop-filter: blur(10px); }",
             "        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #2ecc71; box-shadow: 0 0 8px #2ecc71; transition: 0.3s; }",
             "        .nav-menu { display: flex; gap: 10px; margin-bottom: 30px; background: var(--bg-card); backdrop-filter: blur(10px); padding: 10px; border-radius: 12px; border: 1px solid var(--border-color); overflow-x: auto; white-space: nowrap; scrollbar-width: none; }",
+            "        .nav-menu::-webkit-scrollbar { display: none; }",
             "        .nav-btn { background: transparent; border: none; color: var(--text-muted); font-size: 1em; font-weight: 600; padding: 10px 20px; border-radius: 8px; cursor: pointer; transition: 0.3s; }",
             "        .nav-btn:hover { color: #fff; background: rgba(255,255,255,0.05); }",
             "        .nav-btn.active { color: #fff; background: var(--accent-blue); box-shadow: 0 4px 15px rgba(56, 189, 248, 0.3); }",
@@ -671,7 +652,6 @@ http.createServer(async (req, res) => {
             "                <div class='card pink'><h3>Conversion Rate</h3><div class='value text-pink' id='ui-conv-rate'>0%</div></div>",
             "                <div class='card orange'><h3>Online / Total</h3><div class='value text-orange' id='ui-online-total'>0</div></div>",
             "                <div class='card purple'><h3>Retention Rate</h3><div class='value text-purple' id='ui-retention'>0%</div></div>",
-            "                <div class='card yellow'><h3>💳 Rewarble Balance</h3><div class='value money' style='color:#f1c40f;' id='rewarble-balance'>Loading...</div><button onclick='window.fetchBalance()' style='background:rgba(255,255,255,0.1); border:none; color:white; padding:4px 8px; border-radius:4px; font-size:0.7em; margin-top:8px; cursor:pointer;'>🔄 Refresh</button></div>",
             "            </div>",
             "            <div class='stats-grid' style='margin-top: 15px; margin-bottom: 25px;'>",
             "                <div class='card purple'><h3>Tickets Opened</h3><div class='value' id='ui-tickets-opened'>0</div></div>",
@@ -805,7 +785,6 @@ http.createServer(async (req, res) => {
             "                renderSalesChart(7);",
             "                renderDoughnutChart();",
             "                renderBarChart();",
-            "                window.fetchBalance();",
 
             "                document.getElementById('loading-screen').style.display = 'none';",
             "                document.getElementById('dashboard-container').style.display = 'block';",
@@ -863,7 +842,7 @@ http.createServer(async (req, res) => {
             "            if(rawStats.promo_codes && Object.keys(rawStats.promo_codes).length > 0) {",
             "                for (const code in rawStats.promo_codes) {",
             "                    const info = rawStats.promo_codes[code];",
-            "                    promHtml += '<tr><td><strong>' + escapeHTML(code) + '</strong></td><td class=\"text-green\">-' + info.discount + '%</td><td>' + info.used + ' / ' + info.limit + '</td><td><button onclick=\"window.deletePromo(\\\'' + encodeURIComponent(code) + '\\\')\" style=\"background:var(--accent-red);border:none;padding:4px 8px;border-radius:4px;cursor:pointer;color:white;\">🗑️ Remove</button></td></tr>';",
+            "                    promHtml += '<tr><td><strong>' + escapeHTML(code) + '</strong></td><td class=\"text-green\">-' + info.discount + '%</td><td>' + info.used + ' / ' + info.limit + '</td><td><button onclick=\"window.deletePromo(\\\'' + escapeHTML(code) + '\\\')\" style=\"background:var(--accent-red);border:none;padding:4px 8px;border-radius:4px;cursor:pointer;color:white;\">🗑️ Remove</button></td></tr>';",
             "                }",
             "            } else promHtml = '<tr><td colspan=\"4\" class=\"text-muted text-center\">No active promo codes</td></tr>';",
             "            document.getElementById('target-promos').innerHTML = promHtml;",
@@ -920,22 +899,6 @@ http.createServer(async (req, res) => {
             "                text.innerText = 'Sync Error (Offline)';",
             "            }",
             "        }",
-
-            "        window.fetchBalance = async function() {",
-            "            const el = document.getElementById('rewarble-balance');",
-            "            el.innerText = 'Loading...';",
-            "            try {",
-            "                const res = await fetch('/api/balance');",
-            "                const data = await res.json();",
-            "                if (data.balance !== 'N/A' && data.balance !== 'API Error' && typeof data.balance === 'number') {",
-            "                    el.innerText = '€' + data.balance.toFixed(2);",
-            "                } else if (data.balance) {",
-            "                    el.innerText = data.balance;",
-            "                } else {",
-            "                    el.innerText = 'Error';",
-            "                }",
-            "            } catch(e) { el.innerText = 'Error'; }",
-            "        };",
 
             "        setInterval(async function() {",
             "            try {",
