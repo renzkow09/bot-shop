@@ -51,6 +51,9 @@ const PRODUCT_LINKS = {
 const channelStates = new Map();
 const STATS_FILE = path.join(__dirname, 'stats.json');
 
+// TRACKER D'INVITATIONS EN MEMOIRE VIVE
+const guildInvites = new Map(); 
+
 // ==========================================
 // 🗄️ MEMORY CACHE & CLOUD SYNC
 // ==========================================
@@ -60,6 +63,7 @@ let memoryStats = {
     total_leaves: 0, total_joins: 0, recent_transactions: [], user_spending: {}, 
     custom_requests: [], user_history: {}, warns: {}, blacklist: [], user_notes: {},
     promo_codes: {}, analytics: { tickets_opened: 0, hourly_sales: Array(24).fill(0) },
+    referrals: {}, settings: { invite_reward_threshold: 10 }, // <-- NOUVEAU: SYSTEME REFERRAL
     last_update: Date.now() 
 };
 
@@ -78,6 +82,8 @@ async function loadCloudStats() {
             
             if (!memoryStats.promo_codes) memoryStats.promo_codes = {};
             if (!memoryStats.user_notes) memoryStats.user_notes = {};
+            if (!memoryStats.referrals) memoryStats.referrals = {};
+            if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10 };
             if (!memoryStats.analytics) memoryStats.analytics = { tickets_opened: 0, hourly_sales: Array(24).fill(0) };
             if (!memoryStats.analytics.hourly_sales) memoryStats.analytics.hourly_sales = Array(24).fill(0);
             
@@ -155,7 +161,7 @@ function logStat(type, value = 1, extraData = null) {
 }
 
 // ==========================================
-// INITIALISATION DU BOT (AVEC GUILDPRESENCES)
+// INITIALISATION DU BOT (AVEC GUILDINVITES)
 // ==========================================
 const client = new Client({ 
     intents: [
@@ -163,7 +169,8 @@ const client = new Client({
         GatewayIntentBits.GuildMessages, 
         GatewayIntentBits.MessageContent, 
         GatewayIntentBits.GuildMembers,
-        GatewayIntentBits.GuildPresences
+        GatewayIntentBits.GuildPresences,
+        GatewayIntentBits.GuildInvites // <-- NECESSAIRE POUR TRACKER LES REFERRALS
     ],
     partials: [Partials.GuildMember, Partials.User, Partials.Message]
 });
@@ -171,6 +178,22 @@ const client = new Client({
 client.once('ready', () => {
     console.log(`✅ Bot connecté en tant que ${client.user.tag}`);
     loadCloudStats();
+
+    // Cache toutes les invitations au démarrage
+    client.guilds.cache.forEach(async guild => {
+        try {
+            const firstInvites = await guild.invites.fetch();
+            guildInvites.set(guild.id, new Map(firstInvites.map(invite => [invite.code, invite.uses])));
+        } catch (err) { console.log(`⚠️ Impossible d'accéder aux invitations du serveur ${guild.id}`); }
+    });
+});
+
+client.on('inviteCreate', invite => {
+    try { guildInvites.get(invite.guild.id)?.set(invite.code, invite.uses); } catch (e) {}
+});
+
+client.on('inviteDelete', invite => {
+    try { guildInvites.get(invite.guild.id)?.delete(invite.code); } catch (e) {}
 });
 
 // ==========================================
@@ -179,13 +202,45 @@ client.once('ready', () => {
 client.on('interactionCreate', async (interaction) => {
     try {
         if (interaction.isButton()) {
-            await interaction.deferReply({ flags: 64 }).catch(() => {});
-
             if (memoryStats.blacklist && memoryStats.blacklist.includes(interaction.user.id)) {
+                await interaction.deferReply({ flags: 64 }).catch(() => {});
                 return await interaction.editReply({ content: "❌ You have been blacklisted from using the shop and support system." }).catch(()=>{});
+            }
+
+            // GESTION DU REFERRAL LINK
+            if (interaction.customId === 'get_referral_link') {
+                await interaction.deferReply({ flags: 64 }).catch(() => {});
+                let invite = null;
+                try {
+                    const invites = await interaction.guild.invites.fetch();
+                    invite = invites.find(i => i.inviter && i.inviter.id === interaction.user.id && i.maxAge === 0);
+                    
+                    if (!invite) {
+                        invite = await interaction.channel.createInvite({ maxAge: 0, maxUses: 0, unique: false });
+                        const cache = guildInvites.get(interaction.guild.id);
+                        if (cache) cache.set(invite.code, invite.uses);
+                    }
+                    
+                    const refs = memoryStats.referrals?.[interaction.user.id];
+                    const threshold = memoryStats.settings?.invite_reward_threshold || 10;
+                    const current = refs ? refs.count : 0;
+                    const total = refs ? refs.total_rewards : 0;
+                    
+                    const refEmbed = new EmbedBuilder()
+                        .setColor('#38bdf8')
+                        .setTitle('🔗 Your Exclusive Referral Link')
+                        .setDescription(`Here is your permanent link to invite people:\n**${invite.url}**\n\n📊 **Your Progress:**\n> 🎯 **${current} / ${threshold}** invites for a free product.\n> 🏆 **${total}** rewards claimed.`)
+                        .setFooter({ text: 'Invitations are automatically tracked!' });
+
+                    await interaction.editReply({ embeds: [refEmbed] }).catch(() => {});
+                } catch (e) {
+                    await interaction.editReply({ content: "❌ Error generating invite. Tell the admin to check bot permissions (Manage Server/Create Invite)." }).catch(() => {});
+                }
+                return;
             }
             
             if (interaction.customId === 'open_shop_channel') {
+                await interaction.deferReply({ flags: 64 }).catch(() => {});
                 if (!memoryStats.analytics) memoryStats.analytics = { tickets_opened: 0, hourly_sales: Array(24).fill(0) };
                 memoryStats.analytics.tickets_opened = (memoryStats.analytics.tickets_opened || 0) + 1;
                 syncCloud();
@@ -208,6 +263,7 @@ client.on('interactionCreate', async (interaction) => {
                     await interaction.editReply({ content: `❌ Error creating the room.` }).catch(() => {});
                 }
             } else if (interaction.customId === 'open_support_ticket') {
+                await interaction.deferReply({ flags: 64 }).catch(() => {});
                 const channel = await interaction.guild.channels.create({
                     name: `support-${interaction.user.username}`, type: ChannelType.GuildText, parent: CATEGORY_SUPPORT_ID,
                     permissionOverwrites: [
@@ -279,6 +335,7 @@ client.on('messageCreate', async (message) => {
 
                 const rowActions = new ActionRowBuilder().addComponents(
                     new ButtonBuilder().setCustomId('open_shop_channel').setLabel('📩 Redeem Code').setStyle(ButtonStyle.Success),
+                    new ButtonBuilder().setCustomId('get_referral_link').setLabel('🔗 Get Referral Link').setStyle(ButtonStyle.Primary),
                     new ButtonBuilder().setCustomId('open_support_ticket').setLabel('🎧 Need Support?').setStyle(ButtonStyle.Secondary)
                 );
                 
@@ -292,7 +349,7 @@ client.on('messageCreate', async (message) => {
                         { name: '\u200B', value: '\u200B' },
                         { name: '💦 SPECIAL (€15)', value: '> 👯‍♀️ **8.** Friends Nude\n> 🎁 **9.** Surprise Pack', inline: true },
                         { name: '💌 PERSONALIZED', value: '> 💬 **10.** Sexting (On Req)\n> 🪄 **11.** Custom Request', inline: true },
-                        { name: '━━━━━━━━━━━━━━━━━━━━━━\n💳 HOW TO BUY ?', value: '**STEP 1:** Click an **Eneba** button below to get your voucher.\n**STEP 2:** Click the green **📩 Redeem Code** button.\n**STEP 3:** Paste your code, choose your item, and check your DMs! 🎉' }
+                        { name: '━━━━━━━━━━━━━━━━━━━━━━\n💳 HOW TO BUY ?', value: '**STEP 1:** Click an **Eneba** button below to get your voucher.\n**STEP 2:** Click the green **📩 Redeem Code** button.\n**STEP 3:** Paste your code, choose your item, and check your DMs! 🎉\n\n🎁 **FREE PRODUCT:** Click **🔗 Get Referral Link**, invite your friends, and get a 100% OFF code automatically!' }
                     )
                     .setFooter({ text: 'Powered by Nexus Premium • Secure & Automatic 🔒' });
 
@@ -365,7 +422,52 @@ client.on('messageCreate', async (message) => {
     } catch (globalError) {}
 });
 
-client.on('guildMemberAdd', async (member) => { logStat('joins', 1, { username: member.user.username }); });
+// GESTION DES REJOINTES ET TRACKING DES REFERRALS
+client.on('guildMemberAdd', async (member) => { 
+    logStat('joins', 1, { username: member.user.username }); 
+    try {
+        const newInvites = await member.guild.invites.fetch();
+        const oldInvites = guildInvites.get(member.guild.id);
+        
+        const invite = newInvites.find(i => {
+            const oldUses = oldInvites.get(i.code);
+            return oldUses && i.uses > oldUses;
+        }) || newInvites.find(i => !oldInvites.has(i.code) && i.uses > 0);
+        
+        guildInvites.set(member.guild.id, new Map(newInvites.map(i => [i.code, i.uses])));
+
+        if (invite && invite.inviter) {
+            const inviterId = invite.inviter.id;
+            if (!memoryStats.referrals) memoryStats.referrals = {};
+            if (!memoryStats.referrals[inviterId]) memoryStats.referrals[inviterId] = { count: 0, total_rewards: 0, invited: [], username: invite.inviter.username };
+            
+            memoryStats.referrals[inviterId].count++;
+            memoryStats.referrals[inviterId].invited.unshift({
+                username: member.user.username,
+                date: new Date().toLocaleString('fr-FR')
+            });
+            if(memoryStats.referrals[inviterId].invited.length > 50) memoryStats.referrals[inviterId].invited.pop();
+            
+            // SYSTEME DE RECOMPENSE AUTOMATIQUE
+            const threshold = memoryStats.settings?.invite_reward_threshold || 10;
+            if (memoryStats.referrals[inviterId].count >= threshold) {
+                memoryStats.referrals[inviterId].count -= threshold; // Reset
+                memoryStats.referrals[inviterId].total_rewards++;
+                
+                if (!memoryStats.promo_codes) memoryStats.promo_codes = {};
+                const codeName = "REF" + Math.random().toString(36).substring(2, 8).toUpperCase();
+                memoryStats.promo_codes[codeName] = { discount: 100, limit: 1, used: 0, createdAt: new Date().toLocaleDateString('fr-FR') };
+                
+                const inviterUser = await client.users.fetch(inviterId).catch(()=>null);
+                if (inviterUser) {
+                    inviterUser.send(`🎉 **CONGRATULATIONS!** You invited ${threshold} people and unlocked a FREE product!\n\nHere is your personal 100% OFF Promo Code:\n\`${codeName}\`\n\nUse it securely in the shop using the 'Redeem Code' button!`).catch(()=>{});
+                }
+            }
+            syncCloud();
+        }
+    } catch (err) { console.error("Invite Track Error:", err); }
+});
+
 client.on('guildMemberRemove', async (member) => { logStat('leaves', 1, { username: member.user.username }); });
 
 // ==========================================
@@ -578,12 +680,17 @@ http.createServer(async (req, res) => {
                         throw new Error("Utilisateur introuvable.");
                     }
                 }
-                // NOUVELLE ACTION: POSTER UNE REVIEW
                 else if (data.action === 'post_review') {
                     const reviewChannel = await client.channels.fetch(REVIEW_CHANNEL_ID).catch(() => null);
                     if (!reviewChannel) throw new Error("Salon de reviews introuvable. Vérifiez l'ID.");
                     const reviewMsg = `> 🌟 **NEW FEEDBACK** 🌟\n> ━━━━━━━━━━━━━━━━━━━━\n> 📝 » **Feedback :** "${data.text}"\n> 📈 » **Rating :** ${data.rating}/5 ⭐\n> 👤 » **By :** ${data.author}`;
                     await reviewChannel.send(reviewMsg);
+                }
+                // NOUVEAU : MISE A JOUR DU SEUIL DE REWARD
+                else if (data.action === 'update_ref_threshold') {
+                    if (!memoryStats.settings) memoryStats.settings = {};
+                    memoryStats.settings.invite_reward_threshold = parseInt(data.threshold) || 10;
+                    syncCloud();
                 }
                 res.writeHead(200).end('OK');
             } catch(e) { res.writeHead(500).end(e.message); }
@@ -683,6 +790,7 @@ http.createServer(async (req, res) => {
             "            <button class='nav-btn active' onclick='window.switchTab(\"overview\", this)'>📊 Overview</button>",
             "            <button class='nav-btn' onclick='window.switchTab(\"transactions\", this)'>💳 Transactions</button>",
             "            <button class='nav-btn' onclick='window.switchTab(\"audience\", this)'>👥 Audience</button>",
+            "            <button class='nav-btn' onclick='window.switchTab(\"referrals\", this)'>🔗 Referrals</button>",
             "            <button class='nav-btn' onclick='window.switchTab(\"moderation\", this)'>🛡️ Moderation</button>",
             "            <button class='nav-btn' onclick='window.switchTab(\"admin\", this)'>⚙️ Admin Config</button>",
             "        </div>",
@@ -735,6 +843,25 @@ http.createServer(async (req, res) => {
             "            <div class='content-grid'>",
             "                <div class='box'><h2>📥 Latest Joins</h2><div style='overflow-x:auto; max-height:300px;'><table><thead><tr><th>Username</th><th>Date</th></tr></thead><tbody id='target-joins'></tbody></table></div></div>",
             "                <div class='box'><h2>📤 Latest Leaves</h2><div style='overflow-x:auto; max-height:300px;'><table><thead><tr><th>Username</th><th>Date</th></tr></thead><tbody id='target-leaves'></tbody></table></div></div>",
+            "            </div>",
+            "        </div>",
+            "        <div id='referrals' class='tab-content'>",
+            "            <div class='box' style='margin-bottom:20px;'>",
+            "                <h2>⚙️ Referral Settings</h2>",
+            "                <p class='text-muted' style='font-size:0.85rem;'>Number of invites needed to unlock a 100% OFF product automatically.</p>",
+            "                <div style='display:flex; gap:10px; align-items:center;'>",
+            "                    <input type='number' id='ref-threshold' style='width:100px;' value='10'>",
+            "                    <button class='admin-btn' style='margin:0;' onclick='window.updateRefThreshold()'>💾 Save Settings</button>",
+            "                </div>",
+            "            </div>",
+            "            <div class='box'>",
+            "                <h2>🏆 Top Inviters</h2>",
+            "                <div style='overflow-x:auto;'>",
+            "                    <table>",
+            "                        <thead><tr><th>User</th><th>Current Invites</th><th>Rewards Claimed</th><th>Recently Invited Users</th></tr></thead>",
+            "                        <tbody id='target-referrals'></tbody>",
+            "                    </table>",
+            "                </div>",
             "            </div>",
             "        </div>",
             "        <div id='moderation' class='tab-content'>",
@@ -903,7 +1030,24 @@ http.createServer(async (req, res) => {
             "                }",
             "            } else promHtml = '<tr><td colspan=\"4\" class=\"text-muted text-center\">No active promo codes</td></tr>';",
             "            document.getElementById('target-promos').innerHTML = promHtml;",
+
+            "            document.getElementById('ref-threshold').value = rawStats.settings?.invite_reward_threshold || 10;",
+            "            let refHtml = '';",
+            "            if(rawStats.referrals && Object.keys(rawStats.referrals).length > 0) {",
+            "                const sortedRefs = Object.entries(rawStats.referrals).sort((a,b) => (b[1].count + b[1].total_rewards*100) - (a[1].count + a[1].total_rewards*100));",
+            "                sortedRefs.forEach(function([id, r]) {",
+            "                    let invitedList = (r.invited || []).slice(0,3).map(u => escapeHTML(u.username)).join(', ');",
+            "                    if((r.invited || []).length > 3) invitedList += '...';",
+            "                    refHtml += `<tr><td>${escapeHTML(r.username || id)}</td><td class='text-green font-bold'>${r.count}</td><td>${r.total_rewards}</td><td class='text-muted' style='font-size:0.8em;'>${invitedList || 'None'}</td></tr>`;",
+            "                });",
+            "            } else refHtml = '<tr><td colspan=\"4\" class=\"text-center text-muted\">No referrals yet</td></tr>';",
+            "            document.getElementById('target-referrals').innerHTML = refHtml;",
             "        }",
+
+            "        window.updateRefThreshold = async function() {",
+            "            const val = document.getElementById('ref-threshold').value;",
+            "            await window.executeAction({ action: 'update_ref_threshold', threshold: val });",
+            "        };",
 
             "        function updateGoalUI() {",
             "            let percent = Math.min(100, Math.round((currentMonthRevenue / userGoal) * 100));",
