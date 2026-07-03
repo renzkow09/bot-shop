@@ -76,7 +76,6 @@ async function loadCloudStats() {
         if (res.data && res.data.result) {
             memoryStats = { ...memoryStats, ...JSON.parse(res.data.result) };
             
-            // Patch de sécurité si mise à jour
             if (!memoryStats.promo_codes) memoryStats.promo_codes = {};
             if (!memoryStats.user_notes) memoryStats.user_notes = {};
             if (!memoryStats.analytics) memoryStats.analytics = { tickets_opened: 0, hourly_sales: Array(24).fill(0) };
@@ -526,7 +525,7 @@ http.createServer(async (req, res) => {
         if(sortedSpenders.length > 0) {
             sortedSpenders.forEach((user, i) => {
                 let badgeColor = i < 3 ? '#FFD700' : 'var(--accent-blue)';
-                topSpendersHTML += '<tr><td><div class="user-badge" style="background:' + badgeColor + ';">' + (i+1) + '</div> ' + user[0] + '</td><td class="text-green font-bold">€' + user[1] + '</td></tr>';
+                topSpendersHTML += `<tr><td><div class="user-badge" style="background:${badgeColor};">${i+1}</div> ${user[0].replace(/</g,'&lt;')}</td><td class="text-green font-bold">€${user[1]}</td></tr>`;
             });
         } else {
             topSpendersHTML = '<tr><td colspan="2" class="text-muted text-center">No data</td></tr>';
@@ -535,7 +534,7 @@ http.createServer(async (req, res) => {
         let tableRowsTransactions = '';
         if(memoryStats.recent_transactions.length > 0) {
             memoryStats.recent_transactions.forEach(tx => {
-                tableRowsTransactions += '<tr><td><span class="highlight-text">' + tx.username + '</span></td><td>' + tx.product + '</td><td class="money text-green font-bold">€' + tx.price + '</td><td class="text-muted">' + tx.date + '</td></tr>';
+                tableRowsTransactions += `<tr><td><span class="highlight-text">${tx.username.replace(/</g,'&lt;')}</span></td><td>${tx.product.replace(/</g,'&lt;')}</td><td class="money text-green font-bold">€${tx.price}</td><td class="text-muted">${tx.date}</td></tr>`;
             });
         } else {
             tableRowsTransactions = '<tr><td colspan="4" class="text-muted text-center">Empty</td></tr>';
@@ -544,7 +543,7 @@ http.createServer(async (req, res) => {
         let tableRowsMembers = '';
         if(memoryStats.recent_joins.length > 0) {
             memoryStats.recent_joins.forEach(u => {
-                tableRowsMembers += '<tr><td><div class="user-badge">' + u.username.charAt(0).toUpperCase() + '</div> ' + u.username + '</td><td class="text-muted">' + u.date + '</td></tr>';
+                tableRowsMembers += `<tr><td><div class="user-badge">${u.username.charAt(0).toUpperCase().replace(/</g,'&lt;')}</div> ${u.username.replace(/</g,'&lt;')}</td><td class="text-muted">${u.date}</td></tr>`;
             });
         } else {
             tableRowsMembers = '<tr><td colspan="2" class="text-muted text-center">Empty</td></tr>';
@@ -553,7 +552,7 @@ http.createServer(async (req, res) => {
         let tableRowsLeaves = '';
         if(memoryStats.recent_leaves.length > 0) {
             memoryStats.recent_leaves.forEach(u => {
-                tableRowsLeaves += '<tr><td><div class="user-badge leave">' + u.username.charAt(0).toUpperCase() + '</div> ' + u.username + '</td><td class="text-muted">' + u.date + '</td></tr>';
+                tableRowsLeaves += `<tr><td><div class="user-badge leave">${u.username.charAt(0).toUpperCase().replace(/</g,'&lt;')}</div> ${u.username.replace(/</g,'&lt;')}</td><td class="text-muted">${u.date}</td></tr>`;
             });
         } else {
             tableRowsLeaves = '<tr><td colspan="2" class="text-muted text-center">Empty</td></tr>';
@@ -562,8 +561,8 @@ http.createServer(async (req, res) => {
         let customReqsHTML = '';
         if(memoryStats.custom_requests.length > 0) {
             memoryStats.custom_requests.forEach(req => {
-                let btn = req.status === 'pending' ? '<button onclick="resolveReq(\'' + req.id + '\')" style="background:var(--accent-green);border:none;padding:5px 10px;border-radius:5px;cursor:pointer;color:white;">✔ Done</button>' : 'Resolved';
-                customReqsHTML += '<tr style="opacity: ' + (req.status==='done'?'0.5':'1') + ';"><td>' + req.username + '</td><td><span class="highlight-text">' + req.product + '</span></td><td>' + req.date + '</td><td>' + btn + '</td></tr>';
+                let btn = req.status === 'pending' ? `<button onclick="resolveReq('${req.id}')" style="background:var(--accent-green);border:none;padding:5px 10px;border-radius:5px;cursor:pointer;color:white;">✔ Done</button>` : 'Resolved';
+                customReqsHTML += `<tr style="opacity: ${req.status==='done'?'0.5':'1'};"><td>${req.username.replace(/</g,'&lt;')}</td><td><span class="highlight-text">${req.product.replace(/</g,'&lt;')}</span></td><td>${req.date}</td><td>${btn}</td></tr>`;
             });
         } else {
             customReqsHTML = '<tr><td colspan="4" class="text-muted text-center">No pending requests</td></tr>';
@@ -572,11 +571,13 @@ http.createServer(async (req, res) => {
         let promoCodesHTML = '';
         if (memoryStats.promo_codes && Object.keys(memoryStats.promo_codes).length > 0) {
             for (const [code, info] of Object.entries(memoryStats.promo_codes)) {
-                promoCodesHTML += '<tr><td><strong>' + code + '</strong></td><td class="text-green">-' + info.discount + '%</td><td>' + info.used + ' / ' + info.limit + '</td><td><button onclick="deletePromo(\'' + code + '\')" style="background:var(--accent-red);border:none;padding:4px 8px;border-radius:4px;cursor:pointer;color:white;">🗑️ Remove</button></td></tr>';
+                promoCodesHTML += `<tr><td><strong>${code.replace(/</g,'&lt;')}</strong></td><td class="text-green">-${info.discount}%</td><td>${info.used} / ${info.limit}</td><td><button onclick="deletePromo(&quot;${code.replace(/"/g,'&quot;')}&quot;)" style="background:var(--accent-red);border:none;padding:4px 8px;border-radius:4px;cursor:pointer;color:white;">🗑️ Remove</button></td></tr>`;
             }
         } else {
             promoCodesHTML = '<tr><td colspan="4" class="text-muted text-center">No active promo codes</td></tr>';
         }
+
+        const safeStatsString = JSON.stringify(memoryStats).replace(/</g, '\\u003c');
 
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         res.end(`
@@ -591,7 +592,6 @@ http.createServer(async (req, res) => {
                 * { box-sizing: border-box; }
                 body { font-family: "Inter", sans-serif; background-color: var(--bg-main); color: var(--text-main); margin: 0; padding: 20px; min-height: 100vh; overflow-x: hidden; }
                 
-                /* RESPONSIVE CONTAINER & HEADER */
                 .container { max-width: 1300px; margin: 0 auto; animation: fadeIn 0.5s; }
                 .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid var(--border-color); flex-wrap: wrap; gap: 15px; }
                 .header h1 { font-size: 2em; margin: 0; background: linear-gradient(to right, #38bdf8, #a855f7); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
@@ -599,11 +599,9 @@ http.createServer(async (req, res) => {
                 .btn-icon { background: var(--bg-card); backdrop-filter: blur(10px); border: 1px solid var(--border-color); color: white; padding: 8px 15px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 5px; transition: 0.2s; }
                 .btn-icon:hover { background: rgba(255,255,255,0.1); }
                 
-                /* UPSTASH STATUS BADGE */
                 .status-badge { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--text-muted); background: var(--bg-card); padding: 8px 12px; border-radius: 20px; border: 1px solid var(--border-color); backdrop-filter: blur(10px); }
                 .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #2ecc71; box-shadow: 0 0 8px #2ecc71; transition: 0.3s; }
                 
-                /* RESPONSIVE NAVIGATION */
                 .nav-menu { display: flex; gap: 10px; margin-bottom: 30px; background: var(--bg-card); backdrop-filter: blur(10px); padding: 10px; border-radius: 12px; border: 1px solid var(--border-color); overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
                 .nav-menu::-webkit-scrollbar { display: none; }
                 .nav-btn { background: transparent; border: none; color: var(--text-muted); font-size: 1em; font-weight: 600; padding: 10px 20px; border-radius: 8px; cursor: pointer; transition: 0.3s; }
@@ -616,7 +614,6 @@ http.createServer(async (req, res) => {
                 .tab-content { display: none; animation: fadeIn 0.4s; } .tab-content.active { display: block; }
                 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
                 
-                /* RESPONSIVE GRIDS */
                 .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 25px; }
                 .card { background: var(--bg-card); backdrop-filter: blur(10px); padding: 20px; border-radius: 12px; border: 1px solid var(--border-color); position: relative; overflow: hidden; transition: transform 0.2s; }
                 .card:hover { transform: translateY(-2px); }
@@ -656,7 +653,6 @@ http.createServer(async (req, res) => {
                 
                 .text-green { color: var(--accent-green); } .text-blue { color: var(--accent-blue); } .font-bold { font-weight: 600; } .text-muted { color: var(--text-muted); } .text-red { color: var(--accent-red); }
 
-                /* MEDIA QUERIES MOBILE */
                 @media (max-width: 768px) {
                     .content-grid { grid-template-columns: 1fr; }
                     .stats-grid { grid-template-columns: 1fr 1fr; }
@@ -804,9 +800,8 @@ http.createServer(async (req, res) => {
             </div>
 
             <script>
-                // SECURITE: Aucune utilisation de backticks dynamiques ici. Concaténation classique pure.
                 const PIN = "${DASHBOARD_PIN}";
-                const rawStats = ${JSON.stringify(memoryStats)};
+                const rawStats = ${safeStatsString};
                 let stealthMode = false; 
                 let lastTxCount = ${memoryStats.total_transactions};
 
@@ -923,7 +918,6 @@ http.createServer(async (req, res) => {
                     await executeAction({ action: "delete_promo", name: name });
                 }
 
-                // === NOUVELLES FONCTIONS DE MODERATION ===
                 async function saveUserNote(userId) {
                     const noteText = document.getElementById("note-" + userId).value;
                     const res = await fetch("/api/action", { method: "POST", body: JSON.stringify({ action: "save_note", userId: userId, note: noteText, pin: PIN }) });
@@ -938,7 +932,6 @@ http.createServer(async (req, res) => {
                     if (res.ok) showToast("✅ DM sent successfully");
                     else showToast("❌ Failed to send DM (DMs might be disabled)", "error");
                 }
-                // ==========================================
 
                 async function executeAction(payload) {
                     payload.pin = PIN;
@@ -989,28 +982,32 @@ http.createServer(async (req, res) => {
                     members.forEach(function(m) {
                         let trustColor = m.isBlacklisted ? "var(--accent-red)" : (m.totalSpent > 0 ? "var(--accent-green)" : "var(--accent-orange)");
                         let trustLabel = m.isBlacklisted ? "Blacklisted" : (m.totalSpent > 0 ? "Trusted (Buyer)" : "New / No Purchases");
-                        let safeUsername = m.username.replace(/"/g, "&quot;");
-                        let safeNote = m.note ? m.note.replace(/"/g, "&quot;") : "";
+                        
+                        let safeUsername = m.username.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+                        let safeNote = m.note ? m.note.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;") : "";
                         
                         let ticketsHtml = m.activeTickets.map(function(t) {
+                            let safeTName = t.name.replace(/</g, "&lt;").replace(/>/g, "&gt;");
                             return "<div style='display:flex; justify-content:space-between; background:rgba(0,0,0,0.3); padding:5px 10px; margin-top:5px; border-radius:5px;'>" +
-                                "<span>#" + t.name + "</span>" +
-                                "<button style='background:var(--accent-red); border:none; color:white; border-radius:3px; cursor:pointer; padding:2px 8px;' onclick='modAction(\\"close_channel\\", \\"" + m.id + "\\", {channelId: \\"" + t.id + "\\"})'>Close</button>" +
+                                "<span>#" + safeTName + "</span>" +
+                                "<button style='background:var(--accent-red); border:none; color:white; border-radius:3px; cursor:pointer; padding:2px 8px;' onclick='modAction(&quot;close_channel&quot;, &quot;" + m.id + "&quot;, {channelId: &quot;" + t.id + "&quot;})'>Close</button>" +
                             "</div>";
                         }).join("") || "<span class='text-muted'>No active tickets</span>";
 
                         let warnsHtml = m.warns.map(function(w, i) {
-                            return "<div style='font-size:0.8em; color:var(--accent-orange); margin-bottom:3px;'>⚠️ Warn " + (i+1) + ": " + w.reason + " (" + w.date + ")</div>";
+                            let safeReason = w.reason.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                            return "<div style='font-size:0.8em; color:var(--accent-orange); margin-bottom:3px;'>⚠️ Warn " + (i+1) + ": " + safeReason + " (" + w.date + ")</div>";
                         }).join("") || "<span class='text-muted' style='font-size:0.8em;'>Clean record</span>";
                         
                         let historyHtml = m.history.map(function(h) {
-                            return "<div style='font-size:0.8em;'>🛒 " + h.product + " - €" + h.price + " (" + h.date + ")</div>";
+                            let safeProduct = h.product.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                            return "<div style='font-size:0.8em;'>🛒 " + safeProduct + " - €" + h.price + " (" + h.date + ")</div>";
                         }).join("") || "<span class='text-muted' style='font-size:0.8em;'>No purchases</span>";
 
                         html += "<div class='card' style='margin-bottom: 15px; border-left: 4px solid " + trustColor + ";'>" +
                             "<div style='display:flex; gap:15px; align-items:center; margin-bottom:15px; flex-wrap:wrap;'>" +
                                 "<img src='" + m.avatar + "' style='width:60px; height:60px; border-radius:50%; box-shadow:0 4px 10px rgba(0,0,0,0.5);'>" +
-                                "<div><h3 style='color:#fff; font-size:1.2em; margin:0;'>" + m.username + "</h3><span class='text-muted' style='font-size:0.8em;'>ID: " + m.id + "</span></div>" +
+                                "<div><h3 style='color:#fff; font-size:1.2em; margin:0;'>" + safeUsername + "</h3><span class='text-muted' style='font-size:0.8em;'>ID: " + m.id + "</span></div>" +
                                 "<div style='margin-left:auto; text-align:right;'><div style='color:" + trustColor + "; font-weight:bold;'>" + trustLabel + "</div><div class='money text-green font-bold'>Total Spent: €" + m.totalSpent + "</div></div>" +
                             "</div>" +
                             "<div style='display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:15px; margin-bottom:15px; font-size:0.9em;'>" +
@@ -1023,20 +1020,20 @@ http.createServer(async (req, res) => {
                             "</div>" +
                             "<div style='margin-bottom:15px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.05);'>" +
                                 "<label style='font-size:0.8rem; color:var(--text-muted); display:block; margin-bottom:5px;'>📝 Private Notes (Admin Only) :</label>" +
-                                "<textarea id='note-" + m.id + "' placeholder='Add private remarks about this client...' style='min-height:50px;' onblur='saveUserNote(\"" + m.id + "\")'>" + safeNote + "</textarea>" +
+                                "<textarea id='note-" + m.id + "' placeholder='Add private remarks about this client...' style='min-height:50px;' onblur='saveUserNote(&quot;" + m.id + "&quot;)'>" + safeNote + "</textarea>" +
                             "</div>" +
                             "<div style='border-top:1px solid rgba(255,255,255,0.05); padding-top:10px;'>" +
                                 "<span style='font-size:0.8rem; color:var(--text-muted); display:block; margin-bottom:8px;'>⚡ Action Controls :</span>" +
                                 "<div style='display:flex; gap:8px; flex-wrap:wrap;'>" +
-                                    "<button class='admin-btn' style='margin:0; background:#3498db;' onclick='openDirectContact(\"" + m.id + "\", \"" + safeUsername + "\")'>💬 DM</button>" +
-                                    "<button class='admin-btn' style='margin:0; background:#e67e22;' onclick='modAction(\\"mute\\", \\"" + m.id + "\\", {duration: 15})'>🔇 15m</button>" +
-                                    "<button class='admin-btn' style='margin:0; background:#d35400;' onclick='modAction(\\"mute\\", \\"" + m.id + "\\", {duration: 60})'>🔇 1h</button>" +
-                                    "<button class='admin-btn' style='margin:0; background:#c0392b;' onclick='modAction(\\"mute\\", \\"" + m.id + "\\", {duration: 1440})'>🔇 1d</button>" +
-                                    "<button class='admin-btn' style='margin:0; background:#962d22;' onclick='modAction(\\"mute\\", \\"" + m.id + "\\", {duration: 10080})'>🔇 1w</button>" +
-                                    "<button class='admin-btn' style='margin:0; background:var(--accent-orange);' onclick='modAction(\\"warn\\", \\"" + m.id + "\\")'>⚠️ Warn</button>" +
-                                    "<button class='admin-btn' style='margin:0; background:var(--accent-red);' onclick='modAction(\\"kick\\", \\"" + m.id + "\\")'>👢 Kick</button>" +
-                                    "<button class='admin-btn' style='margin:0; background:var(--accent-red);' onclick='modAction(\\"ban\\", \\"" + m.id + "\\")'>🔨 Ban</button>" +
-                                    "<button class='admin-btn' style='margin:0; background:#000; border:1px solid var(--accent-red);' onclick='modAction(\\"toggle_blacklist\\", \\"" + m.id + "\\")'>" + (m.isBlacklisted ? "✅ Un-Blacklist" : "🚫 Blacklist") + "</button>" +
+                                    "<button class='admin-btn' style='margin:0; background:#3498db;' onclick='openDirectContact(&quot;" + m.id + "&quot;, &quot;" + safeUsername + "&quot;)'>💬 DM</button>" +
+                                    "<button class='admin-btn' style='margin:0; background:#e67e22;' onclick='modAction(&quot;mute&quot;, &quot;" + m.id + "&quot;, {duration: 15})'>🔇 15m</button>" +
+                                    "<button class='admin-btn' style='margin:0; background:#d35400;' onclick='modAction(&quot;mute&quot;, &quot;" + m.id + "&quot;, {duration: 60})'>🔇 1h</button>" +
+                                    "<button class='admin-btn' style='margin:0; background:#c0392b;' onclick='modAction(&quot;mute&quot;, &quot;" + m.id + "&quot;, {duration: 1440})'>🔇 1d</button>" +
+                                    "<button class='admin-btn' style='margin:0; background:#962d22;' onclick='modAction(&quot;mute&quot;, &quot;" + m.id + "&quot;, {duration: 10080})'>🔇 1w</button>" +
+                                    "<button class='admin-btn' style='margin:0; background:var(--accent-orange);' onclick='modAction(&quot;warn&quot;, &quot;" + m.id + "&quot;)'>⚠️ Warn</button>" +
+                                    "<button class='admin-btn' style='margin:0; background:var(--accent-red);' onclick='modAction(&quot;kick&quot;, &quot;" + m.id + "&quot;)'>👢 Kick</button>" +
+                                    "<button class='admin-btn' style='margin:0; background:var(--accent-red);' onclick='modAction(&quot;ban&quot;, &quot;" + m.id + "&quot;)'>🔨 Ban</button>" +
+                                    "<button class='admin-btn' style='width:auto; margin:0; background:#000; border:1px solid var(--accent-red);' onclick='modAction(&quot;toggle_blacklist&quot;, &quot;" + m.id + "&quot;)'>" + (m.isBlacklisted ? "✅ Un-Blacklist" : "🚫 Blacklist") + "</button>" +
                                 "</div>" +
                             "</div>" +
                         "</div>";
