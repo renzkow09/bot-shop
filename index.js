@@ -16,6 +16,7 @@ process.on('uncaughtException', (err, origin) => { console.log(' [ANTI-CRASH] Un
 const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
 const REWARBLE_API_KEY = process.env.REWARBLE_API_KEY;
 const REVIEW_CHANNEL_ID = "1521625370929922078"; 
+const SHOP_CHANNEL_ID = "1520803761130311970"; // 👈 REMPLACE LES ZÉROS PAR L'ID DE TON SALON BOUTIQUE
 
 if (!DISCORD_BOT_TOKEN) {
     console.error("❌ ERREUR CRITIQUE : Le DISCORD_BOT_TOKEN est introuvable !");
@@ -63,7 +64,7 @@ let memoryStats = {
     total_leaves: 0, total_joins: 0, recent_transactions: [], user_spending: {}, 
     custom_requests: [], user_history: {}, warns: {}, blacklist: [], user_notes: {},
     promo_codes: {}, analytics: { tickets_opened: 0, hourly_sales: Array(24).fill(0) },
-    referrals: {}, settings: { invite_reward_threshold: 10 }, // <-- NOUVEAU: SYSTEME REFERRAL
+    referrals: {}, settings: { invite_reward_threshold: 10 },
     last_update: Date.now() 
 };
 
@@ -161,6 +162,40 @@ function logStat(type, value = 1, extraData = null) {
 }
 
 // ==========================================
+// CREATION DU MENU BOUTIQUE
+// ==========================================
+async function sendShopSetup(channel) {
+    const rowBuy = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setLabel('💳 Buy €5').setStyle(ButtonStyle.Link).setURL('https://www.eneba.com/rewarble-rewarble-revolut-5-gbp-voucher-global'),
+        new ButtonBuilder().setLabel('💳 Buy €10').setStyle(ButtonStyle.Link).setURL('https://www.eneba.com/rewarble-rewarble-revolut-10-gbp-voucher-global'),
+        new ButtonBuilder().setLabel('💳 Buy €15').setStyle(ButtonStyle.Link).setURL('https://www.eneba.com/rewarble-rewarble-revolut-15-gbp-voucher-global'),
+        new ButtonBuilder().setLabel('💳 Buy €20').setStyle(ButtonStyle.Link).setURL('https://www.eneba.com/rewarble-rewarble-revolut-20-gbp-voucher-global')
+    );
+
+    const rowActions = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('open_shop_channel').setLabel('📩 Redeem Code').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId('get_referral_link').setLabel('🔗 Get Referral Link').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId('open_support_ticket').setLabel('🎧 Need Support?').setStyle(ButtonStyle.Secondary)
+    );
+    
+    const shopEmbed = new EmbedBuilder()
+        .setColor('#FF1493')
+        .setTitle('💎 VIP EXCLUSIVE MENU & PRICES 💎')
+        .setDescription('> *Instant automatic delivery directly in your DMs!* 🚀\n\n━━━━━━━━━━━━━━━━━━━━━━')
+        .addFields(
+            { name: '✨ PHOTOS (€5)', value: '> 🎀 **1.** Boobs\n> 🍑 **2.** Ass\n> 📸 **3.** Full Body\n> 👙 **4.** Lingerie Try-On\n> 🪞 **5.** Mirror Pic', inline: true },
+            { name: '🔥 VIDEOS (€10)', value: '> 🎥 **6.** 5-Min Video\n> 🛁 **7.** Shower / Bath\n\u200B', inline: true },
+            { name: '\u200B', value: '\u200B' },
+            { name: '💦 SPECIAL (€15)', value: '> 👯‍♀️ **8.** Friends Nude\n> 🎁 **9.** Surprise Pack', inline: true },
+            { name: '💌 PERSONALIZED', value: '> 💬 **10.** Sexting (On Req)\n> 🪄 **11.** Custom Request', inline: true },
+            { name: '━━━━━━━━━━━━━━━━━━━━━━\n💳 HOW TO BUY ?', value: '**STEP 1:** Click an **Eneba** button below to get your voucher.\n**STEP 2:** Click the green **📩 Redeem Code** button.\n**STEP 3:** Paste your code, choose your item, and check your DMs! 🎉\n\n🎁 **FREE PRODUCT:** Click **🔗 Get Referral Link**, invite your friends, and get a 100% OFF code automatically!' }
+        )
+        .setFooter({ text: 'Powered by Nexus Premium • Secure & Automatic 🔒' });
+
+    await channel.send({ embeds: [shopEmbed], components: [rowBuy, rowActions] }).catch(() => {});
+}
+
+// ==========================================
 // INITIALISATION DU BOT (AVEC GUILDINVITES)
 // ==========================================
 const client = new Client({ 
@@ -170,7 +205,7 @@ const client = new Client({
         GatewayIntentBits.MessageContent, 
         GatewayIntentBits.GuildMembers,
         GatewayIntentBits.GuildPresences,
-        GatewayIntentBits.GuildInvites // <-- NECESSAIRE POUR TRACKER LES REFERRALS
+        GatewayIntentBits.GuildInvites
     ],
     partials: [Partials.GuildMember, Partials.User, Partials.Message]
 });
@@ -179,7 +214,6 @@ client.once('ready', () => {
     console.log(`✅ Bot connecté en tant que ${client.user.tag}`);
     loadCloudStats();
 
-    // Cache toutes les invitations au démarrage
     client.guilds.cache.forEach(async guild => {
         try {
             const firstInvites = await guild.invites.fetch();
@@ -207,7 +241,6 @@ client.on('interactionCreate', async (interaction) => {
                 return await interaction.editReply({ content: "❌ You have been blacklisted from using the shop and support system." }).catch(()=>{});
             }
 
-            // GESTION DU REFERRAL LINK
             if (interaction.customId === 'get_referral_link') {
                 await interaction.deferReply({ flags: 64 }).catch(() => {});
                 let invite = null;
@@ -326,34 +359,7 @@ client.on('messageCreate', async (message) => {
 
         if (message.author.id === ADMIN_DISCORD_ID) {
             if (message.content === '!setup') {
-                const rowBuy = new ActionRowBuilder().addComponents(
-                    new ButtonBuilder().setLabel('💳 Acheter €5').setStyle(ButtonStyle.Link).setURL('https://www.eneba.com/rewarble-rewarble-revolut-5-gbp-voucher-global'),
-                    new ButtonBuilder().setLabel('💳 Acheter €10').setStyle(ButtonStyle.Link).setURL('https://www.eneba.com/rewarble-rewarble-revolut-10-gbp-voucher-global'),
-                    new ButtonBuilder().setLabel('💳 Acheter €15').setStyle(ButtonStyle.Link).setURL('https://www.eneba.com/rewarble-rewarble-revolut-15-gbp-voucher-global'),
-                    new ButtonBuilder().setLabel('💳 Acheter €20').setStyle(ButtonStyle.Link).setURL('https://www.eneba.com/rewarble-rewarble-revolut-20-gbp-voucher-global')
-                );
-
-                const rowActions = new ActionRowBuilder().addComponents(
-                    new ButtonBuilder().setCustomId('open_shop_channel').setLabel('📩 Redeem Code').setStyle(ButtonStyle.Success),
-                    new ButtonBuilder().setCustomId('get_referral_link').setLabel('🔗 Get Referral Link').setStyle(ButtonStyle.Primary),
-                    new ButtonBuilder().setCustomId('open_support_ticket').setLabel('🎧 Need Support?').setStyle(ButtonStyle.Secondary)
-                );
-                
-                const shopEmbed = new EmbedBuilder()
-                    .setColor('#FF1493')
-                    .setTitle('💎 VIP EXCLUSIVE MENU & PRICES 💎')
-                    .setDescription('> *Instant automatic delivery directly in your DMs!* 🚀\n\n━━━━━━━━━━━━━━━━━━━━━━')
-                    .addFields(
-                        { name: '✨ PHOTOS (€5)', value: '> 🎀 **1.** Boobs\n> 🍑 **2.** Ass\n> 📸 **3.** Full Body\n> 👙 **4.** Lingerie Try-On\n> 🪞 **5.** Mirror Pic', inline: true },
-                        { name: '🔥 VIDEOS (€10)', value: '> 🎥 **6.** 5-Min Video\n> 🛁 **7.** Shower / Bath\n\u200B', inline: true },
-                        { name: '\u200B', value: '\u200B' },
-                        { name: '💦 SPECIAL (€15)', value: '> 👯‍♀️ **8.** Friends Nude\n> 🎁 **9.** Surprise Pack', inline: true },
-                        { name: '💌 PERSONALIZED', value: '> 💬 **10.** Sexting (On Req)\n> 🪄 **11.** Custom Request', inline: true },
-                        { name: '━━━━━━━━━━━━━━━━━━━━━━\n💳 HOW TO BUY ?', value: '**STEP 1:** Click an **Eneba** button below to get your voucher.\n**STEP 2:** Click the green **📩 Redeem Code** button.\n**STEP 3:** Paste your code, choose your item, and check your DMs! 🎉\n\n🎁 **FREE PRODUCT:** Click **🔗 Get Referral Link**, invite your friends, and get a 100% OFF code automatically!' }
-                    )
-                    .setFooter({ text: 'Powered by Nexus Premium • Secure & Automatic 🔒' });
-
-                await message.channel.send({ embeds: [shopEmbed], components: [rowBuy, rowActions] }).catch(() => {});
+                await sendShopSetup(message.channel);
             }
             if (message.content.startsWith('!say ')) {
                 const textToSend = message.content.substring(5);
@@ -422,7 +428,6 @@ client.on('messageCreate', async (message) => {
     } catch (globalError) {}
 });
 
-// GESTION DES REJOINTES ET TRACKING DES REFERRALS
 client.on('guildMemberAdd', async (member) => { 
     logStat('joins', 1, { username: member.user.username }); 
     try {
@@ -448,7 +453,6 @@ client.on('guildMemberAdd', async (member) => {
             });
             if(memoryStats.referrals[inviterId].invited.length > 50) memoryStats.referrals[inviterId].invited.pop();
             
-            // SYSTEME DE RECOMPENSE AUTOMATIQUE
             const threshold = memoryStats.settings?.invite_reward_threshold || 10;
             if (memoryStats.referrals[inviterId].count >= threshold) {
                 memoryStats.referrals[inviterId].count -= threshold; // Reset
@@ -614,7 +618,17 @@ http.createServer(async (req, res) => {
                 const guild = client.guilds.cache.first();
                 if (!guild) return res.writeHead(404).end('Serveur Discord introuvable');
 
-                if (['ban', 'kick', 'mute'].includes(data.action)) {
+                if (data.action === 'refresh_setup') {
+                    const targetChannel = await client.channels.fetch(SHOP_CHANNEL_ID).catch(() => null);
+                    if (!targetChannel) throw new Error("Salon boutique introuvable. Avez-vous mis le bon ID dans SHOP_CHANNEL_ID ?");
+                    
+                    const messages = await targetChannel.messages.fetch({ limit: 50 });
+                    const botMessages = messages.filter(m => m.author.id === client.user.id);
+                    for (const m of botMessages.values()) { await m.delete().catch(() => {}); }
+                    
+                    await sendShopSetup(targetChannel);
+                }
+                else if (['ban', 'kick', 'mute'].includes(data.action)) {
                     const target = await guild.members.fetch(data.userId).catch(() => null);
                     if (!target && data.action !== 'ban') return res.writeHead(404).end('Membre introuvable');
                     const reason = data.reason || "Sanction via Panel Web";
@@ -686,7 +700,6 @@ http.createServer(async (req, res) => {
                     const reviewMsg = `> 🌟 **NEW FEEDBACK** 🌟\n> ━━━━━━━━━━━━━━━━━━━━\n> 📝 » **Feedback :** "${data.text}"\n> 📈 » **Rating :** ${data.rating}/5 ⭐\n> 👤 » **By :** ${data.author}`;
                     await reviewChannel.send(reviewMsg);
                 }
-                // NOUVEAU : MISE A JOUR DU SEUIL DE REWARD
                 else if (data.action === 'update_ref_threshold') {
                     if (!memoryStats.settings) memoryStats.settings = {};
                     memoryStats.settings.invite_reward_threshold = parseInt(data.threshold) || 10;
@@ -881,6 +894,11 @@ http.createServer(async (req, res) => {
             "            </div>",
             "        </div>",
             "        <div id='admin' class='tab-content'>",
+            "            <div class='box' style='margin-bottom: 20px;'>",
+            "                <h2>⚡ 1-Click Shop Setup</h2>",
+            "                <p class='text-muted' style='font-size:0.85rem;'>Clear the old menu and instantly post the new aesthetic setup in your shop channel.</p>",
+            "                <button class='admin-btn' style='background:var(--accent-purple); width:100%; font-size:1.1em; padding:12px;' onclick='window.triggerShopRefresh()'>🔄 Setup and clear old menu</button>",
+            "            </div>",
             "            <div class='content-grid'>",
             "                <div class='box'>",
             "                    <h2>📋 Custom Requests Manager</h2>",
@@ -1043,6 +1061,11 @@ http.createServer(async (req, res) => {
             "            } else refHtml = '<tr><td colspan=\"4\" class=\"text-center text-muted\">No referrals yet</td></tr>';",
             "            document.getElementById('target-referrals').innerHTML = refHtml;",
             "        }",
+
+            "        window.triggerShopRefresh = async function() {",
+            "            if(!confirm('This will delete old bot messages in the shop channel and post a new menu. Proceed?')) return;",
+            "            await window.executeAction({ action: 'refresh_setup' });",
+            "        };",
 
             "        window.updateRefThreshold = async function() {",
             "            const val = document.getElementById('ref-threshold').value;",
