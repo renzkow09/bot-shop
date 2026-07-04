@@ -1,5 +1,5 @@
 // === [ANCHOR: IMPORTS_AND_CRASH_HANDLER] ===
-const { Client, GatewayIntentBits, Partials, ButtonBuilder, ActionRowBuilder, ButtonStyle, ChannelType, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, EmbedBuilder, AttachmentBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, Partials, ButtonBuilder, ActionRowBuilder, ButtonStyle, ChannelType, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, EmbedBuilder, AttachmentBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const axios = require('axios');
 const http = require('http');
 const fs = require('fs');
@@ -42,9 +42,7 @@ let memoryStats = {
     custom_requests: [], user_history: {}, warns: {}, blacklist: [], user_notes: {},
     promo_codes: {}, analytics: { tickets_opened: 0, hourly_sales: Array(24).fill(0) },
     referrals: {}, settings: { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } },
-    products: {},
-    subscriptions: {},
-    buy_links: {},
+    products: {}, subscriptions: {}, buy_links: {}, pending_reviews: [],
     last_update: Date.now() 
 };
 
@@ -88,6 +86,7 @@ async function loadCloudStats() {
             if (!memoryStats.user_notes) memoryStats.user_notes = {};
             if (!memoryStats.referrals) memoryStats.referrals = {};
             if (!memoryStats.subscriptions) memoryStats.subscriptions = {};
+            if (!memoryStats.pending_reviews) memoryStats.pending_reviews = [];
             if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } };
             if (!memoryStats.settings.maintenance) memoryStats.settings.maintenance = { active: false, endsAt: 0, channelId: "" };
             if (!memoryStats.buy_links || Object.keys(memoryStats.buy_links).length === 0) memoryStats.buy_links = INITIAL_BUY_LINKS; 
@@ -301,11 +300,49 @@ client.on('interactionCreate', async (interaction) => {
             }
         }
         // -------------------------------
+        
+        // --- CUSTOMER REVIEW MODAL SUBMIT ---
+        if (interaction.isModalSubmit() && interaction.customId.startsWith('submitreview_')) {
+            const productId = interaction.customId.replace('submitreview_', '');
+            const rating = interaction.fields.getTextInputValue('rating');
+            const feedback = interaction.fields.getTextInputValue('feedback');
+            
+            let numRating = parseInt(rating);
+            if (isNaN(numRating) || numRating < 1 || numRating > 5) numRating = 5;
+
+            const product = memoryStats.products[productId];
+            const productName = product ? product.name : "Purchased Item";
+
+            if (!memoryStats.pending_reviews) memoryStats.pending_reviews = [];
+            memoryStats.pending_reviews.push({
+                id: Date.now().toString() + Math.floor(Math.random() * 1000),
+                userId: interaction.user.id,
+                username: interaction.user.username,
+                product: productName,
+                rating: numRating,
+                text: feedback,
+                date: new Date().toLocaleString('en-US')
+            });
+            syncCloud();
+
+            return await interaction.reply({ content: "✅ **Thank you!** Your review has been submitted to our team for moderation.", ephemeral: true }).catch(()=>{});
+        }
+        // ------------------------------------
 
         if (interaction.isButton()) {
             if (memoryStats.blacklist && memoryStats.blacklist.includes(interaction.user.id)) {
                 await interaction.deferReply({ flags: 64 }).catch(() => {});
                 return await interaction.editReply({ content: "❌ You have been blacklisted from using the shop and support system." }).catch(()=>{});
+            }
+            
+            // --- CUSTOMER REVIEW BUTTON CLICK ---
+            if (interaction.customId.startsWith('review_')) {
+                const productId = interaction.customId.replace('review_', '');
+                const modal = new ModalBuilder().setCustomId(`submitreview_${productId}`).setTitle('Leave a Review');
+                const ratingInput = new TextInputBuilder().setCustomId('rating').setLabel('Rating (1 to 5)').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(1);
+                const feedbackInput = new TextInputBuilder().setCustomId('feedback').setLabel('Your Feedback').setStyle(TextInputStyle.Paragraph).setRequired(true);
+                modal.addComponents(new ActionRowBuilder().addComponents(ratingInput), new ActionRowBuilder().addComponents(feedbackInput));
+                return await interaction.showModal(modal).catch(()=>{});
             }
 
             if (interaction.customId === 'get_referral_link') {
@@ -423,7 +460,10 @@ client.on('interactionCreate', async (interaction) => {
                     try {
                         const member = await interaction.guild.members.fetch(interaction.user.id);
                         await member.roles.add(VIP_ROLE_ID).catch(()=>{});
-                        await interaction.user.send("👑 **WELCOME TO VIP!** Your 30-Day pass is now active. Enjoy your exclusive content and 20% off all future purchases in the shop!").catch(()=>{});
+                        
+                        // Envoi message succès VIP avec bouton Review
+                        const reviewRowVIP = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`review_${selected}`).setLabel('⭐ Leave a Review').setStyle(ButtonStyle.Secondary));
+                        await interaction.user.send({ content: "👑 **WELCOME TO VIP!** Your 30-Day pass is now active. Enjoy your exclusive content and 20% off all future purchases in the shop!", components: [reviewRowVIP] }).catch(()=>{});
                     } catch(e) {}
                     
                     if (interaction.channel) {
@@ -434,10 +474,16 @@ client.on('interactionCreate', async (interaction) => {
                 }
 
                 const successEmbed = new EmbedBuilder().setColor('#FFD700').setTitle('✨ Purchase Successful!').setDescription(`🔗 ${product.link || 'Link not configured.'}`);
+                const reviewRow = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setCustomId(`review_${selected}`).setLabel('⭐ Leave a Review').setStyle(ButtonStyle.Secondary)
+                );
+
                 try {
-                    await interaction.user.send({ embeds: [successEmbed] });
+                    await interaction.user.send({ embeds: [successEmbed], components: [reviewRow] });
                     if (interaction.channel) setTimeout(() => { channelStates.delete(interaction.channel.id); interaction.channel.delete().catch(()=>{}); }, 45000);
-                } catch (e) { if (interaction.channel) await interaction.channel.send({ embeds: [successEmbed] }).catch(()=>{}); }
+                } catch (e) { 
+                    if (interaction.channel) await interaction.channel.send({ embeds: [successEmbed], components: [reviewRow] }).catch(()=>{}); 
+                }
             }
         }
     } catch (globalError) {}
@@ -758,7 +804,28 @@ http.createServer(async (req, res) => {
                 const guild = client.guilds.cache.first();
                 if (!guild) return res.writeHead(404).end('Guild not found');
 
-                if (data.action === 'toggle_maintenance') {
+                // --- MODERATION DES REVIEWS PENDING ---
+                if (data.action === 'approve_review') {
+                    if (!memoryStats.pending_reviews) memoryStats.pending_reviews = [];
+                    const idx = memoryStats.pending_reviews.findIndex(r => r.id === data.id);
+                    if (idx > -1) {
+                        const review = memoryStats.pending_reviews[idx];
+                        memoryStats.pending_reviews.splice(idx, 1);
+                        syncCloud();
+                        const reviewChannel = await guild.channels.fetch(REVIEW_CHANNEL_ID).catch(() => null);
+                        if (reviewChannel) {
+                            await reviewChannel.send(`> 🌟 **NEW CUSTOMER REVIEW** 🌟\n> ━━━━━━━━━━━━━━━━━━━━\n> 📦 » **Product:** ${review.product}\n> 📝 » **Feedback:** "${review.text}"\n> 📈 » **Rating:** ${review.rating}/5 ⭐\n> 👤 » **By:** ${review.username}`).catch(() => {});
+                        }
+                    }
+                }
+                else if (data.action === 'reject_review') {
+                    if (memoryStats.pending_reviews) {
+                        memoryStats.pending_reviews = memoryStats.pending_reviews.filter(r => r.id !== data.id);
+                        syncCloud();
+                    }
+                }
+                // --------------------------------------
+                else if (data.action === 'toggle_maintenance') {
                     if (!memoryStats.settings) memoryStats.settings = {};
                     if (!memoryStats.settings.maintenance) memoryStats.settings.maintenance = { active: false, endsAt: 0, channelId: "" };
                     
@@ -1166,8 +1233,20 @@ http.createServer(async (req, res) => {
             "<div id='moderation' class='tab-content'><div class='box'><h2>🔎 Member Directory</h2><p class='text-muted'>Search and manage users (Mute, Ban, Warn, Blacklist).</p><div style='display:flex; flex-wrap:wrap; gap:10px; margin-top:10px; align-items:center;'><input type='text' id='memberSearchInput' placeholder='Filter by username or ID...' style='margin-top:0; flex:1; min-width:200px;' oninput='window.sortMembersLocally()'><select id='memberStatusSelect' style='margin-top:0; width:auto;' onchange='window.sortMembersLocally()'><option value='all'>🌍 All Status</option><option value='online'>🟢 Online Only</option></select><select id='memberSortSelect' style='margin-top:0; width:auto;' onchange='window.sortMembersLocally()'><option value='recent'>🔽 Newest (Join)</option><option value='oldest'>🔼 Oldest (Join)</option><option value='spent_desc'>💰 Top Spenders</option><option value='spent_asc'>💸 Least Spenders</option><option value='warns'>⚠️ Most Warns</option></select><button class='admin-btn' style='margin-top:0; height:42px;' onclick='window.loadAllMembers()'>🔄 Load Database</button></div><div id='memberResults' style='margin-top:20px;'></div></div></div>",
             "<div id='monitoring' class='tab-content'><div class='box'><h2>📡 System Diagnostics & Latency</h2><p class='text-muted'>Check external API status and dashboard-to-Discord latency.</p><button class='admin-btn' onclick='window.runDiagnostics()'>🔄 Run API Diagnostics</button><div class='stats-grid' style='margin-top:20px;'><div class='card' id='card-upstash'><h3>Upstash Database</h3><div class='value' id='ui-upstash-status' style='font-size:1.5em;'>⚪ Waiting</div><p class='text-muted' id='ui-upstash-ping'>Latency: -- ms</p></div><div class='card' id='card-rewarble'><h3>Rewarble API</h3><div class='value' id='ui-rewarble-status' style='font-size:1.5em;'>⚪ Waiting</div><p class='text-muted' id='ui-rewarble-ping'>Latency: -- ms</p></div><div class='card' id='card-discord'><h3>Discord WebSocket</h3><div class='value text-blue' id='ui-discord-ws' style='font-size:1.5em;'>-- ms</div><p class='text-muted'>Global Gateway Ping</p></div></div><div style='margin-top:30px; background:rgba(0,0,0,0.3); padding:20px; border-radius:16px; border:1px solid var(--border-color);'><h3>⚡ Dashboard ➔ Discord Reactivity Test</h3><p class='text-muted' style='font-size:0.9em;'>Calculates the exact time between your click, server processing, ghost message creation on Discord, and final display here.</p><div style='display:flex; align-items:center; gap:20px; margin-top:15px;'><button class='admin-btn' style='margin:0; background:var(--accent-orange);' onclick='window.testActionLatency()'>⚡ Test Action Speed</button><div id='latency-result' style='font-size:1.5em; font-weight:bold; color:var(--text-muted);'>-- ms</div></div></div></div></div>",
             
-            // 🌟 NEW BLOCK: ADMIN / MAINTENANCE
+            // 🌟 ADMIN CONFIG TAB
             "<div id='admin' class='tab-content'>",
+            
+            "   <div class='box' style='border:1px solid var(--accent-blue); background:linear-gradient(145deg, rgba(56, 189, 248, 0.05), transparent);'>",
+            "       <h2 style='color:var(--accent-blue); margin-top:0;'>⏳ Pending Reviews (Moderation)</h2>",
+            "       <p class='text-muted'>Reviews submitted by clients after their purchase. Accept them to auto-post to Discord.</p>",
+            "       <div style='overflow-x:auto; margin-top:15px;'>",
+            "           <table>",
+            "               <thead><tr><th>Date</th><th>Customer</th><th>Product</th><th>Rating</th><th>Feedback</th><th>Actions</th></tr></thead>",
+            "               <tbody id='target-pending-reviews'></tbody>",
+            "           </table>",
+            "       </div>",
+            "   </div>",
+            
             "   <div class='box' style='border:1px solid var(--accent-orange); background:linear-gradient(145deg, rgba(249, 115, 22, 0.05), transparent);'>",
             "       <h2 style='color:var(--accent-orange); margin-top:0;'>🚧 Maintenance Mode (Kill Switch)</h2>",
             "       <p class='text-muted'>Temporarily freeze all shop purchases and support tickets for clients. Useful for stock updates or breaks.</p>",
@@ -1178,7 +1257,8 @@ http.createServer(async (req, res) => {
             "           <button class='admin-btn' style='margin:0; background:var(--accent-green);' onclick='window.toggleMaintenance(false)'>▶️ Disable</button>",
             "       </div>",
             "   </div>",
-            "   <div class='box'><h2>⚡ 1-Click Shop Setup</h2><p class='text-muted'>Clear the old menu and instantly post the new aesthetic setup in your Discord shop channel.</p><button class='admin-btn' style='background:var(--accent-purple); width:100%; padding:15px;' onclick='window.triggerShopRefresh()'>🔄 Setup and clear old menu</button></div><div class='box'><h2>🎟️ Promo Codes</h2><div style='display:flex; gap:10px; flex-wrap:wrap;'><input type='text' id='promoName' placeholder='CODE' style='flex:1; min-width:150px;'><input type='number' id='promoDiscount' placeholder='% Off' style='width:100px;'><input type='number' id='promoLimit' placeholder='Uses' style='width:100px;'><button class='admin-btn' style='margin:0;' onclick='window.createPromo()'>➕ Create</button></div><div style='overflow-x:auto; margin-top:20px;'><table><thead><tr><th>Code</th><th>Discount</th><th>Usage</th><th>Action</th></tr></thead><tbody id='target-promos'></tbody></table></div></div><div class='box'><h2>🌟 Post Customer Review</h2><div style='display:flex; gap:10px; margin-bottom:10px;'><input type='text' id='rev-author' placeholder='Author Name' style='flex:1;'><select id='rev-rating' style='flex:1;'><option value='5'>5/5 ⭐ - Excellent</option><option value='4'>4/5 ⭐ - Very Good</option><option value='3'>3/5 ⭐ - Good</option><option value='2'>2/5 ⭐ - Fair</option><option value='1'>1/5 ⭐ - Poor</option></select></div><textarea id='rev-msg' placeholder='Type the review here...' style='margin-bottom:10px; min-height:80px;'></textarea><button class='admin-btn' style='background:var(--accent-green); width:100%;' onclick='window.sendReview()'>📤 Publish Review to Discord</button></div></div>",
+            
+            "   <div class='box'><h2>⚡ 1-Click Shop Setup</h2><p class='text-muted'>Clear the old menu and instantly post the new aesthetic setup in your Discord shop channel.</p><button class='admin-btn' style='background:var(--accent-purple); width:100%; padding:15px;' onclick='window.triggerShopRefresh()'>🔄 Setup and clear old menu</button></div><div class='box'><h2>🎟️ Promo Codes</h2><div style='display:flex; gap:10px; flex-wrap:wrap;'><input type='text' id='promoName' placeholder='CODE' style='flex:1; min-width:150px;'><input type='number' id='promoDiscount' placeholder='% Off' style='width:100px;'><input type='number' id='promoLimit' placeholder='Uses' style='width:100px;'><button class='admin-btn' style='margin:0;' onclick='window.createPromo()'>➕ Create</button></div><div style='overflow-x:auto; margin-top:20px;'><table><thead><tr><th>Code</th><th>Discount</th><th>Usage</th><th>Action</th></tr></thead><tbody id='target-promos'></tbody></table></div></div><div class='box'><h2>🌟 Manual Customer Review</h2><div style='display:flex; gap:10px; margin-bottom:10px;'><input type='text' id='rev-author' placeholder='Author Name' style='flex:1;'><select id='rev-rating' style='flex:1;'><option value='5'>5/5 ⭐ - Excellent</option><option value='4'>4/5 ⭐ - Very Good</option><option value='3'>3/5 ⭐ - Good</option><option value='2'>2/5 ⭐ - Fair</option><option value='1'>1/5 ⭐ - Poor</option></select></div><textarea id='rev-msg' placeholder='Type the review here...' style='margin-bottom:10px; min-height:80px;'></textarea><button class='admin-btn' style='background:var(--accent-green); width:100%;' onclick='window.sendReview()'>📤 Publish Review to Discord</button></div></div>",
             "</div>",
             
             "<!-- [ANCHOR: DASHBOARD_JS_LOGIC] -->",
@@ -1194,8 +1274,12 @@ http.createServer(async (req, res) => {
 
             "function buildStaticTables(){ let txHtml=''; if(rawStats.recent_transactions&&rawStats.recent_transactions.length>0){ rawStats.recent_transactions.forEach(tx=>{ txHtml+='<tr><td>'+escapeHTML(tx.username)+'</td><td>'+escapeHTML(tx.product)+'</td><td class=\"text-green font-bold\">€'+tx.price+'</td><td class=\"text-muted\">'+tx.date+'</td><td><button class=\"admin-btn\" style=\"padding:4px 8px; background:var(--accent-red); margin:0;\" onclick=\"window.refundTx(\\''+tx.date+'\\', \\''+escapeHTML(tx.username)+'\\')\">Refund</button></td></tr>'; }); } document.getElementById('target-tx').innerHTML=txHtml; let prodHtml=''; if(rawStats.products){ Object.entries(rawStats.products).forEach(([id,p])=>{ let icon='📦'; let cat = p.category||''; if(cat.includes('PHOTOS')) icon='📸'; else if(cat.includes('VIDEOS')) icon='🎥'; else if(cat.includes('SPECIAL')) icon='💦'; else if(cat.includes('PERSONALIZED')) icon='💌'; else if(cat.includes('SUBSCRIPTION')) icon='👑'; let pPrice = p.price==='Custom'?'Custom':'€'+p.price; let pLink = p.link?'<a href=\"'+escapeHTML(p.link)+'\" target=\"_blank\" style=\"color:var(--accent-blue);text-decoration:none;\">[🔗 Open Delivery Link]</a>':'<span class=\"text-muted\">No Link</span>'; let stockDisplay = p.stock === '∞' || !p.stock ? '∞' : p.stock; prodHtml+='<div class=\"product-card\"><div style=\"position:absolute; top:15px; right:15px; color:var(--text-muted); font-size:0.8em; font-weight:bold;\">ID: '+id+'</div><div class=\"prod-title\">'+icon+' '+escapeHTML(p.name)+'</div><div class=\"prod-price\">'+pPrice+' <span style=\"font-size:0.7em; color:var(--text-muted); font-weight:normal;\">| Stock: '+escapeHTML(stockDisplay)+'</span></div><div style=\"margin-bottom:10px; font-size:0.9em;\">'+pLink+'</div><div class=\"prod-actions\"><button class=\"admin-btn\" style=\"background:rgba(255,255,255,0.1);\" onclick=\"window.editProduct(\\''+id+'\\')\">✏️ Edit</button><button class=\"admin-btn\" style=\"background:rgba(239, 68, 68, 0.2); color:var(--accent-red);\" onclick=\"window.deleteProduct(\\''+id+'\\')\">🗑️ Delete</button></div></div>'; }); } document.getElementById('target-products').innerHTML=prodHtml; let jHtml=''; if(rawStats.recent_joins){ rawStats.recent_joins.forEach(u=>{ jHtml+='<tr><td>'+escapeHTML(u.username)+'</td><td class=\"text-muted\">'+u.date+'</td></tr>'; }); } document.getElementById('target-joins').innerHTML=jHtml; let promHtml=''; if(rawStats.promo_codes){ for(const code in rawStats.promo_codes){ const info=rawStats.promo_codes[code]; const isExhausted = info.used >= info.limit; const statusColor = isExhausted ? 'var(--accent-red)' : 'var(--accent-green)'; promHtml+='<tr style=\"opacity:'+(isExhausted?'0.5':'1')+'\"><td><strong>'+escapeHTML(code)+'</strong></td><td style=\"color:'+statusColor+'; font-weight:bold;\">-'+info.discount+'%</td><td>'+info.used+' / '+info.limit+'</td><td><button class=\"admin-btn\" style=\"margin:0; padding:5px 10px; background:var(--accent-red);\" onclick=\"window.deletePromo(\\\''+encodeURIComponent(code)+'\\\')\">🗑️</button></td></tr>'; } } document.getElementById('target-promos').innerHTML=promHtml; document.getElementById('ref-threshold').value=rawStats.settings?.invite_reward_threshold||10; let refHtml=''; if(rawStats.referrals){ Object.entries(rawStats.referrals).forEach(([id,r])=>{ let list=r.invited.slice(0,3).map(u=>escapeHTML(u.username)).join(', '); if(r.invited.length>3) list+='...'; refHtml+='<tr><td>'+escapeHTML(r.username||id)+'<br><span class=\"text-muted\" style=\"font-size:0.8em;\">'+id+'</span></td><td class=\"text-green font-bold\">'+r.count+'</td><td>'+r.total_rewards+'</td><td class=\"text-muted\">'+(list||'None')+'</td><td><button class=\"admin-btn\" style=\"padding:4px 8px; margin:0;\" onclick=\"window.editReferralCount(\\''+id+'\\', '+r.count+')\">✏️ Edit</button></td></tr>'; }); } document.getElementById('target-referrals').innerHTML=refHtml; ",
             "let vipHtml = ''; const now = Date.now(); if(rawStats.subscriptions) { Object.entries(rawStats.subscriptions).forEach(([id, sub]) => { const dEnd = new Date(sub.expiresAt); const diffDays = Math.max(0, Math.ceil((sub.expiresAt - now)/(1000*60*60*24))); const pct = Math.min(100, Math.max(0, (diffDays/30)*100)); vipHtml += '<tr><td><strong>' + escapeHTML(sub.username) + '</strong><br><span class=\"text-muted\" style=\"font-size:0.8em;\">' + id + '</span></td><td>' + dEnd.toLocaleDateString('en-US') + '</td><td><div style=\"font-weight:bold;\">' + diffDays + ' Days Left</div><div class=\"progress-bg\"><div class=\"progress-fill\" style=\"width:' + pct + '%\"></div></div></td><td><button class=\"admin-btn\" style=\"padding:5px 10px; margin-right:5px; background:var(--accent-blue);\" onclick=\"window.manageVip(\\'' + id + '\\', \\'add\\')\">🎁 +7D</button><button class=\"admin-btn\" style=\"padding:5px 10px; background:var(--accent-red);\" onclick=\"window.manageVip(\\'' + id + '\\', \\'revoke\\')\">🛑 Revoke</button></td></tr>'; }); } document.getElementById('target-vips').innerHTML = vipHtml || '<tr><td colspan=\"4\" class=\"text-muted text-center\">No active VIP subscriptions.</td></tr>'; ",
-            "let blHtml=''; if(rawStats.buy_links){ Object.entries(rawStats.buy_links).forEach(([id, l]) => { blHtml += '<tr><td>'+escapeHTML(l.label)+'</td><td><a href=\"'+escapeHTML(l.url)+'\" target=\"_blank\" style=\"color:var(--accent-blue);\">Link</a></td><td><button class=\"admin-btn\" style=\"padding:4px 8px; margin:0 5px 0 0;\" onclick=\"window.editBuyLink(\\''+id+'\\')\">✏️</button><button class=\"admin-btn\" style=\"padding:4px 8px; background:var(--accent-red); margin:0;\" onclick=\"window.deleteBuyLink(\\''+id+'\\')\">🗑️</button></td></tr>'; }); } document.getElementById('target-buy-links').innerHTML=blHtml || '<tr><td colspan=\"3\" class=\"text-muted\">No buy links configured.</td></tr>'; }",
+            "let blHtml=''; if(rawStats.buy_links){ Object.entries(rawStats.buy_links).forEach(([id, l]) => { blHtml += '<tr><td>'+escapeHTML(l.label)+'</td><td><a href=\"'+escapeHTML(l.url)+'\" target=\"_blank\" style=\"color:var(--accent-blue);\">Link</a></td><td><button class=\"admin-btn\" style=\"padding:4px 8px; margin:0 5px 0 0;\" onclick=\"window.editBuyLink(\\''+id+'\\')\">✏️</button><button class=\"admin-btn\" style=\"padding:4px 8px; background:var(--accent-red); margin:0;\" onclick=\"window.deleteBuyLink(\\''+id+'\\')\">🗑️</button></td></tr>'; }); } document.getElementById('target-buy-links').innerHTML=blHtml || '<tr><td colspan=\"3\" class=\"text-muted\">No buy links configured.</td></tr>'; ",
+            "let prHtml=''; if(rawStats.pending_reviews && rawStats.pending_reviews.length>0){ rawStats.pending_reviews.forEach(r=>{ prHtml+='<tr><td class=\"text-muted\">'+r.date+'</td><td><strong>'+escapeHTML(r.username)+'</strong></td><td>'+escapeHTML(r.product)+'</td><td style=\"color:var(--accent-orange); font-weight:bold;\">'+r.rating+'/5 ⭐</td><td style=\"max-width:250px; white-space:normal; font-style:italic;\">\"'+escapeHTML(r.text)+'\"</td><td><button class=\"admin-btn\" style=\"padding:4px 8px; margin:0 5px 0 0; background:var(--accent-green);\" onclick=\"window.approveReview(\\''+r.id+'\\')\">✅ Accept</button><button class=\"admin-btn\" style=\"padding:4px 8px; background:var(--accent-red); margin:0;\" onclick=\"window.rejectReview(\\''+r.id+'\\')\">❌ Reject</button></td></tr>'; }); } else { prHtml='<tr><td colspan=\"6\" class=\"text-muted text-center\">No pending reviews to moderate.</td></tr>'; } document.getElementById('target-pending-reviews').innerHTML=prHtml; }",
             
+            "window.approveReview = async function(id) { await window.executeAction({action:'approve_review', id:id}); };",
+            "window.rejectReview = async function(id) { if(confirm('Reject and delete this review?')) await window.executeAction({action:'reject_review', id:id}); };",
+
             "window.toggleMaintenance = async function(state) { const dur = document.getElementById('maint-duration').value; const ch = document.getElementById('maint-channel').value; if(state && !dur) return showToast('Set duration', 'error'); await window.executeAction({action:'toggle_maintenance', state:state, duration:dur, channelId:ch}); };",
             "window.editReferralCount = async function(id, current) { const n = prompt('Enter the new referral count for this user:', current); if(n !== null) { const parsed = parseInt(n); if(!isNaN(parsed)) { await window.executeAction({action:'edit_referral_count', userId:id, newCount: parsed}); } } };",
             "window.editProduct = function(id) { const p = rawStats.products[id]; if(!p) return; document.getElementById('editProdId').value = id; document.getElementById('newProdName').value = p.name; document.getElementById('newProdPrice').value = p.price; document.getElementById('newProdStock').value = p.stock || '∞'; document.getElementById('newProdLink').value = p.link; document.getElementById('saveProdBtn').innerText = '💾 Update'; document.getElementById('cancelEditBtn').style.display = 'block'; window.scrollTo({top:0, behavior:'smooth'}); };",
