@@ -43,6 +43,7 @@ let memoryStats = {
     promo_codes: {}, analytics: { tickets_opened: 0, hourly_sales: Array(24).fill(0) },
     referrals: {}, settings: { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } },
     products: {}, subscriptions: {}, buy_links: {}, pending_reviews: [],
+    activity_feed: [],
     last_update: Date.now() 
 };
 
@@ -70,6 +71,13 @@ const INITIAL_BUY_LINKS = {
 };
 
 // === [ANCHOR: CLOUD_SYNC_FUNCTIONS] ===
+function addActivity(type, message) {
+    if (!memoryStats.activity_feed) memoryStats.activity_feed = [];
+    memoryStats.activity_feed.unshift({ type, message, time: Date.now() });
+    if (memoryStats.activity_feed.length > 30) memoryStats.activity_feed.pop();
+    syncCloud();
+}
+
 async function loadCloudStats() {
     if (fs.existsSync(STATS_FILE)) {
         try { memoryStats = { ...memoryStats, ...JSON.parse(fs.readFileSync(STATS_FILE, 'utf8')) }; } catch (e) {}
@@ -87,6 +95,7 @@ async function loadCloudStats() {
             if (!memoryStats.referrals) memoryStats.referrals = {};
             if (!memoryStats.subscriptions) memoryStats.subscriptions = {};
             if (!memoryStats.pending_reviews) memoryStats.pending_reviews = [];
+            if (!memoryStats.activity_feed) memoryStats.activity_feed = [];
             if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } };
             if (!memoryStats.settings.maintenance) memoryStats.settings.maintenance = { active: false, endsAt: 0, channelId: "" };
             if (!memoryStats.buy_links || Object.keys(memoryStats.buy_links).length === 0) memoryStats.buy_links = INITIAL_BUY_LINKS; 
@@ -162,6 +171,8 @@ function logStat(type, value = 1, extraData = null) {
             if (memoryStats.user_history[extraData.username].length > 20) memoryStats.user_history[extraData.username].pop();
             memoryStats.recent_transactions.unshift({ username: extraData.username, product: extraData.productName, price: value, date: new Date().toLocaleString('en-US') });
             if (memoryStats.recent_transactions.length > 50) memoryStats.recent_transactions.pop();
+            
+            addActivity('sale', `💰 €${value} Sale: ${extraData.username} bought ${extraData.productName}`);
         }
     } else if (type === 'joins') {
         memoryStats.joins[today] = (memoryStats.joins[today] || 0) + value;
@@ -170,6 +181,7 @@ function logStat(type, value = 1, extraData = null) {
         if (extraData && extraData.username) {
             memoryStats.recent_joins.unshift({ username: extraData.username, date: new Date().toLocaleString('en-US') });
             if (memoryStats.recent_joins.length > 15) memoryStats.recent_joins.pop();
+            addActivity('join', `👋 ${extraData.username} joined the server`);
         }
     } else if (type === 'leaves') {
         memoryStats.leaves[today] = (memoryStats.leaves[today] || 0) + value;
@@ -323,6 +335,7 @@ client.on('interactionCreate', async (interaction) => {
                 text: feedback,
                 date: new Date().toLocaleString('en-US')
             });
+            addActivity('review', `⭐ New ${numRating}/5 review submitted by ${interaction.user.username}`);
             syncCloud();
 
             return await interaction.reply({ content: "✅ **Thank you!** Your review has been submitted to our team for moderation.", ephemeral: true }).catch(()=>{});
@@ -383,6 +396,7 @@ client.on('interactionCreate', async (interaction) => {
                 }).catch(() => null);
 
                 if (channel) {
+                    addActivity('ticket', `🎫 New shop ticket opened by ${interaction.user.username}`);
                     channelStates.set(channel.id, { validated: false, processing: false, promo: null });
                     await channel.send(`👋 Welcome <@${interaction.user.id}>!\n\n**Please paste your Rewarble voucher code or Promo Code below.**`).catch(() => {});
                     await interaction.editReply({ content: `✅ Room ready: <#${channel.id}>` }).catch(() => {});
@@ -400,6 +414,7 @@ client.on('interactionCreate', async (interaction) => {
                 }).catch(() => null);
 
                 if (channel) {
+                    addActivity('ticket', `🎧 New support ticket opened by ${interaction.user.username}`);
                     await channel.send(`🎧 **Support Ticket for <@${interaction.user.id}>**`).catch(() => {});
                     await interaction.editReply({ content: `✅ Support room created: <#${channel.id}>` }).catch(() => {});
                 }
@@ -651,18 +666,19 @@ http.createServer(async (req, res) => {
     // === [ANCHOR: API_ROUTES_GET] ===
     if (req.url === '/api/init-data' && req.method === 'GET') {
         if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
-        let memberCount = "N/A"; let onlineCount = "N/A";
+        let memberCount = "N/A"; let onlineCount = "N/A"; let activeTickets = 0;
         const guild = client.guilds.cache.first();
         if (guild) {
             try {
                 const response = await axios.get("https://discord.com/api/v10/guilds/" + guild.id + "?with_counts=true", { headers: { Authorization: "Bot " + DISCORD_BOT_TOKEN } });
                 memberCount = response.data.approximate_member_count; onlineCount = response.data.approximate_presence_count;
             } catch (err) { memberCount = guild.memberCount; }
+            activeTickets = guild.channels.cache.filter(c => c.name.startsWith('shop-') || c.name.startsWith('support-')).size;
         }
         const todayStr = new Date().toISOString().split('T')[0];
         let monthRevenue = 0; Object.keys(memoryStats.revenue).forEach(date => { if(date.startsWith(todayStr.substring(0, 7))) monthRevenue += memoryStats.revenue[date]; });
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify({ memoryStats, maintenance: memoryStats.settings?.maintenance, todayRevenue: memoryStats.revenue[todayStr] || 0, monthRevenue, ticketsOpened: memoryStats.analytics?.tickets_opened || 0, dropOffRate: memoryStats.analytics?.tickets_opened > 0 ? (100 - (memoryStats.total_transactions / memoryStats.analytics.tickets_opened) * 100).toFixed(1) : 0, peakHourStr: "N/A", conversionRate: ((memoryStats.total_transactions / (memoryStats.total_joins || 1)) * 100).toFixed(1), retentionRate: memberCount !== "N/A" ? ((memberCount / (memberCount + (memoryStats.total_leaves || 0))) * 100).toFixed(1) : "N/A", onlineCount, memberCount, MONTHLY_GOAL, PIN: DASHBOARD_PIN }));
+        return res.end(JSON.stringify({ memoryStats, maintenance: memoryStats.settings?.maintenance, pendingReviewsCount: memoryStats.pending_reviews?.length || 0, activeTickets: activeTickets, todayRevenue: memoryStats.revenue[todayStr] || 0, monthRevenue, ticketsOpened: memoryStats.analytics?.tickets_opened || 0, dropOffRate: memoryStats.analytics?.tickets_opened > 0 ? (100 - (memoryStats.total_transactions / memoryStats.analytics.tickets_opened) * 100).toFixed(1) : 0, peakHourStr: "N/A", conversionRate: ((memoryStats.total_transactions / (memoryStats.total_joins || 1)) * 100).toFixed(1), retentionRate: memberCount !== "N/A" ? ((memberCount / (memberCount + (memoryStats.total_leaves || 0))) * 100).toFixed(1) : "N/A", onlineCount, memberCount, MONTHLY_GOAL, PIN: DASHBOARD_PIN }));
     }
 
     if (req.url === '/api/export' && req.method === 'GET') {
@@ -1092,6 +1108,9 @@ http.createServer(async (req, res) => {
             "@keyframes slideIn { from { opacity: 0; transform: translateX(-20px); } to { opacity: 1; transform: translateX(0); } }",
             "@keyframes slideDownMenu { from { opacity: 0; transform: translateY(-15px); } to { opacity: 1; transform: translateY(0); } }",
             "@keyframes pulseGreen { 0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); } 70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); } 100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); } }",
+            "@keyframes pulseRed { 0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); } 70% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); } 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } }",
+            "@keyframes spin { 100% { transform: rotate(360deg); } }",
+            ".spinning { animation: spin 1s cubic-bezier(0.4, 0, 0.2, 1); }",
             ".status-dot { width: 12px; height: 12px; background-color: var(--accent-green); border-radius: 50%; display: inline-block; animation: pulseGreen 2s infinite; margin-right: 8px; transition: 0.3s; }",
             ".bot-status { display: flex; align-items: center; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); padding: 8px 15px; border-radius: 8px; font-weight: bold; color: var(--accent-green); font-size: 0.9em; transition: 0.3s; }",
             ".container { max-width: 1300px; margin: 0 auto; animation: fadeInSmooth 0.6s ease-out; }",
@@ -1102,9 +1121,10 @@ http.createServer(async (req, res) => {
             ".btn-icon:hover { background: rgba(255,255,255,0.1); transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.3); }",
             ".nav-menu { display: flex; gap: 10px; margin-bottom: 30px; background: var(--bg-card); padding: 10px; border-radius: 12px; border: 1px solid var(--border-color); overflow-x: auto; scrollbar-width: none; animation: slideDownMenu 0.5s ease-out forwards; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);}",
             ".nav-menu::-webkit-scrollbar { display: none; }",
-            ".nav-btn { background: transparent; border: none; color: var(--text-muted); font-size: 1em; font-weight: 600; padding: 10px 20px; border-radius: 8px; cursor: pointer; transition: all 0.3s ease; }",
+            ".nav-btn { background: transparent; border: none; color: var(--text-muted); font-size: 1em; font-weight: 600; padding: 10px 20px; border-radius: 8px; cursor: pointer; transition: all 0.3s ease; display: flex; align-items: center; }",
             ".nav-btn:hover { color: #fff; background: rgba(255,255,255,0.05); transform: scale(1.03); }",
             ".nav-btn.active { color: #fff; background: var(--accent-blue); box-shadow: 0 4px 15px rgba(56, 189, 248, 0.4); transform: scale(1.05); }",
+            ".nav-badge { background: var(--accent-red); color: white; border-radius: 10px; padding: 2px 6px; font-size: 0.75em; margin-left: 8px; animation: pulseRed 2s infinite; display: none; }",
             ".tab-content { display: none; animation: fadeInSmooth 0.4s ease-out; } .tab-content.active { display: block; }",
             ".stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 25px; }",
             ".card { background: var(--bg-card); padding: 20px; border-radius: 16px; border: 1px solid var(--border-color); transition: all 0.3s ease; position: relative; overflow: hidden; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: 0 4px 20px rgba(0,0,0,0.2); }",
@@ -1127,6 +1147,16 @@ http.createServer(async (req, res) => {
             ".prod-price { color: var(--accent-green); font-weight: 800; font-size: 1.1em; margin-bottom: 12px; }",
             ".prod-actions { display: flex; gap: 8px; margin-top: 15px; }",
             ".prod-actions button { flex: 1; padding: 8px; font-size: 0.85em; margin: 0; border-radius: 6px; }",
+            
+            // 🌟 FEED ACTIVITY UI
+            ".feed-container { max-height: 300px; overflow-y: auto; padding-right: 5px; }",
+            ".feed-container::-webkit-scrollbar { width: 5px; } .feed-container::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 5px; }",
+            ".feed-item { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 12px; padding: 12px; background: rgba(255,255,255,0.02); border-left: 3px solid var(--accent-blue); border-radius: 0 8px 8px 0; font-size: 0.9em; transition: 0.3s; }",
+            ".feed-item:hover { background: rgba(255,255,255,0.05); transform: translateX(3px); }",
+            ".feed-item.sale { border-color: var(--accent-green); }",
+            ".feed-item.ticket { border-color: var(--accent-orange); }",
+            ".feed-item.review { border-color: var(--accent-purple); }",
+            ".feed-time { font-size: 0.8em; color: var(--text-muted); min-width: 50px; font-weight: bold; }",
             
             // 🌟 NEW LOADING ANIMATION
             "@keyframes barRise1 { 0% { height: 10px; opacity: 0; } 100% { height: 40px; opacity: 1; } }",
@@ -1186,6 +1216,7 @@ http.createServer(async (req, res) => {
             "  .header h1 { font-size: 1.8em; }",
             "  .controls { width: 100%; justify-content: center; flex-wrap: wrap; gap: 10px; }",
             "  .stats-grid { grid-template-columns: 1fr; gap: 10px; }",
+            "  .overview-grid { grid-template-columns: 1fr !important; }",
             "  .chat-container { flex-direction: column; height: 80vh; }",
             "  .ticket-list { flex: 0 0 130px; border-radius: 12px; margin-bottom: 10px; }",
             "  .chat-window { flex: 1; border-radius: 12px; }",
@@ -1215,10 +1246,36 @@ http.createServer(async (req, res) => {
 
             "<div class='modal' id='syncModal'><div class='modal-content'><h2>📦 Catalog Saved!</h2><p class='text-muted' style='margin-bottom:20px;'>Apply these changes to your Discord shop channel right now?</p><button class='admin-btn' style='background:var(--accent-purple); width:100%; margin-bottom:10px;' onclick='window.triggerShopRefresh(); document.getElementById(\"syncModal\").style.display=\"none\";'>🔄 Setup & Clear Old Menu</button><button class='admin-btn' style='background:transparent; border:1px solid rgba(255,255,255,0.2); width:100%; color:var(--text-muted);' onclick='document.getElementById(\"syncModal\").style.display=\"none\";'>Skip for now</button></div></div>",
             "<!-- [ANCHOR: DASHBOARD_NAVBAR] -->",
-            "<div class='container' id='dashboard-container' style='display:none;'><div class='header'><h1>Nexus Dashboard</h1><div class='controls'><div class='bot-status'><div class='status-dot'></div> System Online</div><button class='btn-icon' onclick='window.toggleStealth()' id='stealthBtn'>👁️ Stealth</button><div class='live-status btn-icon' style='background:var(--accent-blue); border:none; font-weight:bold;'><span id='live-tickets-count'>0</span> Live Tickets</div></div></div>",
-            "<div class='nav-menu'><button class='nav-btn active' onclick='window.switchTab(\"overview\", this)'>📊 Overview</button><button class='nav-btn' onclick='window.switchTab(\"vip\", this)'>👑 VIP Pass</button><button class='nav-btn' onclick='window.switchTab(\"livechat\", this)'>💬 Live Chat</button><button class='nav-btn' onclick='window.switchTab(\"analytics\", this)'>📈 Analytics</button><button class='nav-btn' onclick='window.switchTab(\"transactions\", this)'>💳 Transactions</button><button class='nav-btn' onclick='window.switchTab(\"products\", this)'>📦 Products</button><button class='nav-btn' onclick='window.switchTab(\"audience\", this)'>👥 Audience</button><button class='nav-btn' onclick='window.switchTab(\"referrals\", this)'>🔗 Referrals</button><button class='nav-btn' onclick='window.switchTab(\"moderation\", this)'>🛡️ Moderation</button><button class='nav-btn' onclick='window.switchTab(\"monitoring\", this)'>📡 Monitoring</button><button class='nav-btn' onclick='window.switchTab(\"admin\", this)'>⚙️ Admin Config</button></div>",
+            "<div class='container' id='dashboard-container' style='display:none;'>",
+            "   <div class='header'>",
+            "       <h1>Nexus Dashboard</h1>",
+            "       <div class='controls'>",
+            "           <button class='btn-icon' onclick='window.toggleMute()' id='audioBtn' title='Mute/Unmute Alerts'>🔊</button>",
+            "           <button class='btn-icon' onclick='window.manualRefresh()' id='refreshBtn' title='Sync Now'>🔄</button>",
+            "           <button class='btn-icon' onclick='window.toggleStealth()' id='stealthBtn'>👁️ Stealth</button>",
+            "           <div class='bot-status'><div class='status-dot'></div> System Online</div>",
+            "       </div>",
+            "   </div>",
+            "<div class='nav-menu'>",
+            "   <button class='nav-btn active' onclick='window.switchTab(\"overview\", this)'>📊 Overview</button>",
+            "   <button class='nav-btn' onclick='window.switchTab(\"vip\", this)'>👑 VIP Pass</button>",
+            "   <button class='nav-btn' onclick='window.switchTab(\"livechat\", this)'>💬 Live Chat <span class='nav-badge' id='badge-chat'>0</span></button>",
+            "   <button class='nav-btn' onclick='window.switchTab(\"analytics\", this)'>📈 Analytics</button>",
+            "   <button class='nav-btn' onclick='window.switchTab(\"transactions\", this)'>💳 Transactions</button>",
+            "   <button class='nav-btn' onclick='window.switchTab(\"products\", this)'>📦 Products</button>",
+            "   <button class='nav-btn' onclick='window.switchTab(\"audience\", this)'>👥 Audience</button>",
+            "   <button class='nav-btn' onclick='window.switchTab(\"referrals\", this)'>🔗 Referrals</button>",
+            "   <button class='nav-btn' onclick='window.switchTab(\"moderation\", this)'>🛡️ Moderation</button>",
+            "   <button class='nav-btn' onclick='window.switchTab(\"monitoring\", this)'>📡 Monitoring</button>",
+            "   <button class='nav-btn' onclick='window.switchTab(\"admin\", this)'>⚙️ Admin Config <span class='nav-badge' id='badge-admin'>0</span></button>",
+            "</div>",
             "<!-- [ANCHOR: DASHBOARD_TABS_CONTENT] -->",
-            "<div id='overview' class='tab-content active'><div class='stats-grid'><div class='card green'><h3>Today's Earnings</h3><div class='value money text-green' id='ui-today-rev'>€0</div></div><div class='card blue'><h3>Total Earnings</h3><div class='value money text-blue' id='ui-total-rev'>€0</div></div><div class='card pink'><h3>Conversion Rate</h3><div class='value text-pink' id='ui-conv-rate'>0%</div></div><div class='card orange'><h3>Online / Total</h3><div class='value text-orange' id='ui-online-total'>0</div></div><div class='card purple'><h3>Retention Rate</h3><div class='value text-purple' id='ui-retention'>0%</div></div></div><div class='stats-grid'><div class='card purple'><h3>Tickets Opened</h3><div class='value' id='ui-tickets-opened'>0</div></div><div class='card red'><h3>Drop-off Rate</h3><div class='value text-red' id='ui-dropoff'>0%</div></div><div class='card orange'><h3>Peak Sales Hour</h3><div class='value' id='ui-peak-hour'>N/A</div></div></div><div class='box'><div style='display:flex; justify-content:space-between;'><h2>📈 Revenue Timeline</h2><div class='filter-group'><button class='admin-btn' style='margin:0; padding:5px 10px; background:var(--accent-green); margin-right:10px;' onclick='window.location.href=\"/api/export\"'>📥 Export CSV</button><button class='admin-btn' style='margin:0; padding:5px 10px;' onclick='window.updateSalesChart(7)'>7D</button><button class='admin-btn' style='margin:0; padding:5px 10px; background:rgba(0,0,0,0.5);' onclick='window.updateSalesChart(30)'>30D</button></div></div><div style='height:250px; margin-top:15px;'><canvas id='salesChart'></canvas></div></div></div>",
+            "<div id='overview' class='tab-content active'><div class='stats-grid'><div class='card green'><h3>Today's Earnings</h3><div class='value money text-green' id='ui-today-rev'>€0</div></div><div class='card blue'><h3>Total Earnings</h3><div class='value money text-blue' id='ui-total-rev'>€0</div></div><div class='card pink'><h3>Conversion Rate</h3><div class='value text-pink' id='ui-conv-rate'>0%</div></div><div class='card orange'><h3>Online / Total</h3><div class='value text-orange' id='ui-online-total'>0</div></div><div class='card purple'><h3>Retention Rate</h3><div class='value text-purple' id='ui-retention'>0%</div></div></div><div class='stats-grid'><div class='card purple'><h3>Tickets Opened</h3><div class='value' id='ui-tickets-opened'>0</div></div><div class='card red'><h3>Drop-off Rate</h3><div class='value text-red' id='ui-dropoff'>0%</div></div><div class='card orange'><h3>Peak Sales Hour</h3><div class='value' id='ui-peak-hour'>N/A</div></div></div>",
+            "   <div style='display:grid; grid-template-columns: 2fr 1fr; gap:20px; align-items:stretch;' class='overview-grid'>",
+            "       <div class='box' style='margin:0;'><div style='display:flex; justify-content:space-between;'><h2>📈 Revenue Timeline</h2><div class='filter-group'><button class='admin-btn' style='margin:0; padding:5px 10px; background:var(--accent-green); margin-right:10px;' onclick='window.location.href=\"/api/export\"'>📥 Export CSV</button><button class='admin-btn' style='margin:0; padding:5px 10px;' onclick='window.updateSalesChart(7)'>7D</button><button class='admin-btn' style='margin:0; padding:5px 10px; background:rgba(0,0,0,0.5);' onclick='window.updateSalesChart(30)'>30D</button></div></div><div style='height:250px; margin-top:15px;'><canvas id='salesChart'></canvas></div></div>",
+            "       <div class='box' style='margin:0; display:flex; flex-direction:column; overflow:hidden;'><div style='display:flex; justify-content:space-between; align-items:center;'><h2 style='margin:0;'>⚡ Live Pulse</h2><div class='status-dot' style='margin:0;'></div></div><div class='feed-container' id='target-feed' style='margin-top:15px; flex:1;'></div></div>",
+            "   </div>",
+            "</div>",
             
             "<div id='vip' class='tab-content'><div class='box' style='background:rgba(168, 85, 247, 0.1); border-color:var(--accent-purple);'><h2>👑 VIP Subscriptions</h2><p class='text-muted'>Active subscriptions. VIPs get a 20% discount on all shop items automatically.</p><div style='overflow-x:auto; margin-top:15px;'><table><thead><tr><th>Username</th><th>Expires On</th><th>Time Left</th><th>Actions</th></tr></thead><tbody id='target-vips'></tbody></table></div></div></div>",
 
@@ -1265,12 +1322,39 @@ http.createServer(async (req, res) => {
             "<script>",
             "let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, userGoal=500, salesChart, hourlyChart, topProdChart, catChart; let allMembersData = []; let isMembersLoaded = false; let activeChatChannel = null; let chatPollInterval = null;",
             
+            // 🌟 AUDIO ENGINE (Pure JS AudioContext - No assets needed)
+            "let isMuted = false;",
+            "window.toggleMute = function() { isMuted = !isMuted; document.getElementById('audioBtn').innerText = isMuted ? '🔇' : '🔊'; };",
+            "const audioCtx = new (window.AudioContext || window.webkitAudioContext)();",
+            "function playSound(type) {",
+            "   if(isMuted) return;",
+            "   if(audioCtx.state === 'suspended') audioCtx.resume();",
+            "   const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain(); osc.connect(gain); gain.connect(audioCtx.destination);",
+            "   if(type === 'sale') {",
+            "       osc.type = 'sine'; osc.frequency.setValueAtTime(800, audioCtx.currentTime); osc.frequency.exponentialRampToValueAtTime(1200, audioCtx.currentTime + 0.1);",
+            "       gain.gain.setValueAtTime(0, audioCtx.currentTime); gain.gain.linearRampToValueAtTime(0.3, audioCtx.currentTime + 0.05); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);",
+            "       osc.start(audioCtx.currentTime); osc.stop(audioCtx.currentTime + 0.3);",
+            "       setTimeout(() => { const osc2 = audioCtx.createOscillator(); const gain2 = audioCtx.createGain(); osc2.connect(gain2); gain2.connect(audioCtx.destination); osc2.type = 'sine'; osc2.frequency.setValueAtTime(1200, audioCtx.currentTime); gain2.gain.setValueAtTime(0.3, audioCtx.currentTime); gain2.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4); osc2.start(audioCtx.currentTime); osc2.stop(audioCtx.currentTime + 0.4); }, 100);",
+            "   } else if(type === 'notification') {",
+            "       osc.type = 'sine'; osc.frequency.setValueAtTime(400, audioCtx.currentTime);",
+            "       gain.gain.setValueAtTime(0.2, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);",
+            "       osc.start(audioCtx.currentTime); osc.stop(audioCtx.currentTime + 0.2);",
+            "   }",
+            "}",
+
+            // State tracking for audio alerts
+            "let trackedTickets = 0; let trackedReviews = 0; let trackedSales = 0;",
+            
             // 🌟 SPLASH SCREEN LOGIC
-            "async function initDashboard(){ try{ const res=await fetch('/api/init-data'); if(!res.ok)throw new Error('Err'); const data=await res.json(); rawStats=data.memoryStats; PRODUCT_DATA=data.PRODUCT_DATA; currentMonthRevenue=data.monthRevenue; PIN=data.PIN; lastTxCount=rawStats.total_transactions||0; document.getElementById('ui-today-rev').innerText='€'+data.todayRevenue; document.getElementById('ui-total-rev').innerText='€'+(rawStats.total_revenue||0); document.getElementById('ui-conv-rate').innerText=data.conversionRate+'%'; document.getElementById('ui-online-total').innerHTML=data.onlineCount+\" <span style='font-size:0.5em;color:var(--text-muted);'>/ \"+data.memberCount+\"</span>\"; document.getElementById('ui-retention').innerText=data.retentionRate+'%'; document.getElementById('ui-tickets-opened').innerText=data.ticketsOpened; document.getElementById('ui-dropoff').innerText=data.dropOffRate+'%'; document.getElementById('ui-peak-hour').innerText=data.peakHourStr; buildStaticTables(); window.renderSalesChart(7); renderAnalyticsCharts(); updateMaintenanceBadge(data.maintenance); setTimeout(()=>{ document.getElementById('loading-screen').style.opacity='0'; setTimeout(()=>{ document.getElementById('loading-screen').style.display='none'; document.getElementById('dashboard-container').style.display='block'; }, 800); }, 2500); }catch(e){ alert('API Error'); } }",
+            "async function initDashboard(){ try{ const res=await fetch('/api/init-data'); if(!res.ok)throw new Error('Err'); const data=await res.json(); rawStats=data.memoryStats; PRODUCT_DATA=data.PRODUCT_DATA; currentMonthRevenue=data.monthRevenue; PIN=data.PIN; lastTxCount=rawStats.total_transactions||0; document.getElementById('ui-today-rev').innerText='€'+data.todayRevenue; document.getElementById('ui-total-rev').innerText='€'+(rawStats.total_revenue||0); document.getElementById('ui-conv-rate').innerText=data.conversionRate+'%'; document.getElementById('ui-online-total').innerHTML=data.onlineCount+\" <span style='font-size:0.5em;color:var(--text-muted);'>/ \"+data.memberCount+\"</span>\"; document.getElementById('ui-retention').innerText=data.retentionRate+'%'; document.getElementById('ui-tickets-opened').innerText=data.ticketsOpened; document.getElementById('ui-dropoff').innerText=data.dropOffRate+'%'; document.getElementById('ui-peak-hour').innerText=data.peakHourStr; ",
+            "trackedTickets = data.activeTickets || 0; trackedReviews = data.pendingReviewsCount || 0; trackedSales = rawStats.total_transactions || 0;",
+            "buildStaticTables(); window.renderSalesChart(7); renderAnalyticsCharts(); updateMaintenanceBadge(data.maintenance); updateBadgesAndFeed(data); setTimeout(()=>{ document.getElementById('loading-screen').style.opacity='0'; setTimeout(()=>{ document.getElementById('loading-screen').style.display='none'; document.getElementById('dashboard-container').style.display='block'; }, 800); }, 2500); }catch(e){ alert('API Error'); } }",
             
             "function escapeHTML(str){ return str ? String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') : ''; }",
             
             "function updateMaintenanceBadge(m) { const botStatus = document.querySelector('.bot-status'); if(m && m.active && Date.now() < m.endsAt) { const minsLeft = Math.ceil((m.endsAt - Date.now())/60000); botStatus.innerHTML = '<div class=\"status-dot\" style=\"background:var(--accent-orange); animation:none; box-shadow:0 0 10px var(--accent-orange);\"></div> <span style=\"color:var(--accent-orange);\">Maintenance (' + minsLeft + 'm)</span>'; botStatus.style.background = 'rgba(249, 115, 22, 0.1)'; botStatus.style.borderColor = 'rgba(249, 115, 22, 0.3)'; } else { botStatus.innerHTML = '<div class=\"status-dot\"></div> <span style=\"color:var(--accent-green);\">System Online</span>'; botStatus.style.background = 'rgba(16, 185, 129, 0.1)'; botStatus.style.borderColor = 'rgba(16, 185, 129, 0.2)'; } }",
+
+            "function updateBadgesAndFeed(data) { const bChat = document.getElementById('badge-chat'); const bAdmin = document.getElementById('badge-admin'); if(data.activeTickets > 0) { bChat.innerText = data.activeTickets; bChat.style.display = 'inline-block'; } else { bChat.style.display = 'none'; } if(data.pendingReviewsCount > 0) { bAdmin.innerText = data.pendingReviewsCount; bAdmin.style.display = 'inline-block'; } else { bAdmin.style.display = 'none'; } let feedHtml = ''; if(data.memoryStats.activity_feed && data.memoryStats.activity_feed.length > 0) { data.memoryStats.activity_feed.forEach(f => { const mins = Math.max(0, Math.floor((Date.now() - f.time) / 60000)); let timeStr = mins === 0 ? 'Just now' : mins + 'm ago'; feedHtml += '<div class=\"feed-item ' + f.type + '\"><div class=\"feed-time\">' + timeStr + '</div><div>' + escapeHTML(f.message) + '</div></div>'; }); } else { feedHtml = '<p class=\"text-muted text-center\" style=\"margin-top:20px;\">No recent activity.</p>'; } document.getElementById('target-feed').innerHTML = feedHtml; }",
 
             "function buildStaticTables(){ let txHtml=''; if(rawStats.recent_transactions&&rawStats.recent_transactions.length>0){ rawStats.recent_transactions.forEach(tx=>{ txHtml+='<tr><td>'+escapeHTML(tx.username)+'</td><td>'+escapeHTML(tx.product)+'</td><td class=\"text-green font-bold\">€'+tx.price+'</td><td class=\"text-muted\">'+tx.date+'</td><td><button class=\"admin-btn\" style=\"padding:4px 8px; background:var(--accent-red); margin:0;\" onclick=\"window.refundTx(\\''+tx.date+'\\', \\''+escapeHTML(tx.username)+'\\')\">Refund</button></td></tr>'; }); } document.getElementById('target-tx').innerHTML=txHtml; let prodHtml=''; if(rawStats.products){ Object.entries(rawStats.products).forEach(([id,p])=>{ let icon='📦'; let cat = p.category||''; if(cat.includes('PHOTOS')) icon='📸'; else if(cat.includes('VIDEOS')) icon='🎥'; else if(cat.includes('SPECIAL')) icon='💦'; else if(cat.includes('PERSONALIZED')) icon='💌'; else if(cat.includes('SUBSCRIPTION')) icon='👑'; let pPrice = p.price==='Custom'?'Custom':'€'+p.price; let pLink = p.link?'<a href=\"'+escapeHTML(p.link)+'\" target=\"_blank\" style=\"color:var(--accent-blue);text-decoration:none;\">[🔗 Open Delivery Link]</a>':'<span class=\"text-muted\">No Link</span>'; let stockDisplay = p.stock === '∞' || !p.stock ? '∞' : p.stock; prodHtml+='<div class=\"product-card\"><div style=\"position:absolute; top:15px; right:15px; color:var(--text-muted); font-size:0.8em; font-weight:bold;\">ID: '+id+'</div><div class=\"prod-title\">'+icon+' '+escapeHTML(p.name)+'</div><div class=\"prod-price\">'+pPrice+' <span style=\"font-size:0.7em; color:var(--text-muted); font-weight:normal;\">| Stock: '+escapeHTML(stockDisplay)+'</span></div><div style=\"margin-bottom:10px; font-size:0.9em;\">'+pLink+'</div><div class=\"prod-actions\"><button class=\"admin-btn\" style=\"background:rgba(255,255,255,0.1);\" onclick=\"window.editProduct(\\''+id+'\\')\">✏️ Edit</button><button class=\"admin-btn\" style=\"background:rgba(239, 68, 68, 0.2); color:var(--accent-red);\" onclick=\"window.deleteProduct(\\''+id+'\\')\">🗑️ Delete</button></div></div>'; }); } document.getElementById('target-products').innerHTML=prodHtml; let jHtml=''; if(rawStats.recent_joins){ rawStats.recent_joins.forEach(u=>{ jHtml+='<tr><td>'+escapeHTML(u.username)+'</td><td class=\"text-muted\">'+u.date+'</td></tr>'; }); } document.getElementById('target-joins').innerHTML=jHtml; let promHtml=''; if(rawStats.promo_codes){ for(const code in rawStats.promo_codes){ const info=rawStats.promo_codes[code]; const isExhausted = info.used >= info.limit; const statusColor = isExhausted ? 'var(--accent-red)' : 'var(--accent-green)'; promHtml+='<tr style=\"opacity:'+(isExhausted?'0.5':'1')+'\"><td><strong>'+escapeHTML(code)+'</strong></td><td style=\"color:'+statusColor+'; font-weight:bold;\">-'+info.discount+'%</td><td>'+info.used+' / '+info.limit+'</td><td><button class=\"admin-btn\" style=\"margin:0; padding:5px 10px; background:var(--accent-red);\" onclick=\"window.deletePromo(\\\''+encodeURIComponent(code)+'\\\')\">🗑️</button></td></tr>'; } } document.getElementById('target-promos').innerHTML=promHtml; document.getElementById('ref-threshold').value=rawStats.settings?.invite_reward_threshold||10; let refHtml=''; if(rawStats.referrals){ Object.entries(rawStats.referrals).forEach(([id,r])=>{ let list=r.invited.slice(0,3).map(u=>escapeHTML(u.username)).join(', '); if(r.invited.length>3) list+='...'; refHtml+='<tr><td>'+escapeHTML(r.username||id)+'<br><span class=\"text-muted\" style=\"font-size:0.8em;\">'+id+'</span></td><td class=\"text-green font-bold\">'+r.count+'</td><td>'+r.total_rewards+'</td><td class=\"text-muted\">'+(list||'None')+'</td><td><button class=\"admin-btn\" style=\"padding:4px 8px; margin:0;\" onclick=\"window.editReferralCount(\\''+id+'\\', '+r.count+')\">✏️ Edit</button></td></tr>'; }); } document.getElementById('target-referrals').innerHTML=refHtml; ",
             "let vipHtml = ''; const now = Date.now(); if(rawStats.subscriptions) { Object.entries(rawStats.subscriptions).forEach(([id, sub]) => { const dEnd = new Date(sub.expiresAt); const diffDays = Math.max(0, Math.ceil((sub.expiresAt - now)/(1000*60*60*24))); const pct = Math.min(100, Math.max(0, (diffDays/30)*100)); vipHtml += '<tr><td><strong>' + escapeHTML(sub.username) + '</strong><br><span class=\"text-muted\" style=\"font-size:0.8em;\">' + id + '</span></td><td>' + dEnd.toLocaleDateString('en-US') + '</td><td><div style=\"font-weight:bold;\">' + diffDays + ' Days Left</div><div class=\"progress-bg\"><div class=\"progress-fill\" style=\"width:' + pct + '%\"></div></div></td><td><button class=\"admin-btn\" style=\"padding:5px 10px; margin-right:5px; background:var(--accent-blue);\" onclick=\"window.manageVip(\\'' + id + '\\', \\'add\\')\">🎁 +7D</button><button class=\"admin-btn\" style=\"padding:5px 10px; background:var(--accent-red);\" onclick=\"window.manageVip(\\'' + id + '\\', \\'revoke\\')\">🛑 Revoke</button></td></tr>'; }); } document.getElementById('target-vips').innerHTML = vipHtml || '<tr><td colspan=\"4\" class=\"text-muted text-center\">No active VIP subscriptions.</td></tr>'; ",
@@ -1294,15 +1378,19 @@ http.createServer(async (req, res) => {
 
             "window.triggerShopRefresh = async function() { await window.executeAction({action:'refresh_setup'}, false); };",
             
-            // 🌟 NEW: trigger re-renders on tab switch to see animations
             "window.switchTab = function(tabId, btn) { document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active')); document.querySelectorAll('.nav-btn').forEach(el=>el.classList.remove('active')); document.getElementById(tabId).classList.add('active'); btn.classList.add('active'); if(tabId === 'moderation' && !isMembersLoaded) window.loadAllMembers(); if(tabId === 'livechat'){ window.loadTicketsForChat(); if(activeChatChannel && !chatPollInterval){ chatPollInterval = setInterval(window.fetchChatMessages, 3000); } } else { if(chatPollInterval){ clearInterval(chatPollInterval); chatPollInterval = null; } } if(tabId === 'analytics'){ renderAnalyticsCharts(); } if(tabId === 'overview'){ window.renderSalesChart(7); } };",
             
             "function showToast(msg, type='success') { const t=document.getElementById('toast'); t.innerText=msg; t.style.background = type === 'error' ? 'var(--accent-red)' : 'var(--accent-green)'; t.style.bottom='20px'; setTimeout(()=>{t.style.bottom='-100px';}, 3000); }",
             
-            // 🌟 NEW: Invisible data refresh without reloading the page
-            "window.refreshDataSilently = async function() { try{ const res=await fetch('/api/init-data'); if(res.ok){ const data=await res.json(); rawStats=data.memoryStats; document.getElementById('ui-today-rev').innerText='€'+data.todayRevenue; document.getElementById('ui-total-rev').innerText='€'+(rawStats.total_revenue||0); document.getElementById('ui-conv-rate').innerText=data.conversionRate+'%'; buildStaticTables(); updateMaintenanceBadge(data.maintenance); if(isMembersLoaded) window.loadAllMembers(); try { window.cancelEdit(); window.cancelEditLink(); document.getElementById('promoName').value=''; document.getElementById('promoDiscount').value=''; document.getElementById('promoLimit').value=''; } catch(e) {} } }catch(e){} };",
+            // 🌟 MANUAL REFRESH WITH SPIN ANIMATION
+            "window.manualRefresh = async function() { const btn = document.getElementById('refreshBtn'); btn.classList.add('spinning'); await window.refreshDataSilently(); setTimeout(()=>btn.classList.remove('spinning'), 1000); showToast('✅ Data Synced!'); };",
+
+            // 🌟 AUTO-SYNC EVERY 15 SECONDS (Only if tab is visible)
+            "setInterval(() => { if(document.visibilityState === 'visible') window.refreshDataSilently(true); }, 15000);",
+
+            // 🌟 SILENT REFRESH LOGIC (Includes Audio Triggers)
+            "window.refreshDataSilently = async function(isAutoSync = false) { try{ const res=await fetch('/api/init-data'); if(res.ok){ const data=await res.json(); rawStats=data.memoryStats; document.getElementById('ui-today-rev').innerText='€'+data.todayRevenue; document.getElementById('ui-total-rev').innerText='€'+(rawStats.total_revenue||0); document.getElementById('ui-conv-rate').innerText=data.conversionRate+'%'; buildStaticTables(); updateMaintenanceBadge(data.maintenance); updateBadgesAndFeed(data); if(data.activeTickets > trackedTickets || data.pendingReviewsCount > trackedReviews) { playSound('notification'); } if((rawStats.total_transactions||0) > trackedSales) { playSound('sale'); } trackedTickets = data.activeTickets || 0; trackedReviews = data.pendingReviewsCount || 0; trackedSales = rawStats.total_transactions || 0; if(isMembersLoaded && !isAutoSync) window.loadAllMembers(); if(!isAutoSync){ try { window.cancelEdit(); window.cancelEditLink(); document.getElementById('promoName').value=''; document.getElementById('promoDiscount').value=''; document.getElementById('promoLimit').value=''; } catch(e) {} } } }catch(e){} };",
             
-            // 🌟 NEW: executeAction now uses the silent function
             "window.executeAction = async function(p, showModal=false) { p.pin=PIN; const res=await fetch('/api/action',{method:'POST',body:JSON.stringify(p)}); if(res.ok) { window.refreshDataSilently(); if(showModal){ document.getElementById('syncModal').style.display='flex'; }else{ showToast('✅ Success!'); } } else { showToast('❌ Error', 'error'); } };",
             
             "window.sendReview = async function() { const author = document.getElementById('rev-author').value; const rating = document.getElementById('rev-rating').value; const text = document.getElementById('rev-msg').value; if(!author || !text) return alert('Fill both author and feedback fields!'); await window.executeAction({ action: 'post_review', author: author, rating: rating, text: text }); document.getElementById('rev-author').value = ''; document.getElementById('rev-msg').value = ''; };",
