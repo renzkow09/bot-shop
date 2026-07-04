@@ -956,8 +956,33 @@ http.createServer(async (req, res) => {
                         if (txIndex > -1) {
                             const tx = memoryStats.recent_transactions[txIndex];
                             memoryStats.recent_transactions.splice(txIndex, 1);
+                            
+                            // 🔄 CORRECTION 1: Total Revenue and transactions
                             memoryStats.total_transactions = Math.max(0, memoryStats.total_transactions - 1);
                             memoryStats.total_revenue = Math.max(0, memoryStats.total_revenue - tx.price);
+                            
+                            // 🔄 CORRECTION 2: Today's Revenue
+                            try {
+                                const revKey = new Date(tx.date).toISOString().split('T')[0];
+                                if (memoryStats.revenue[revKey]) {
+                                    memoryStats.revenue[revKey] = Math.max(0, memoryStats.revenue[revKey] - tx.price);
+                                }
+                            } catch(err) {}
+
+                            // 🔄 CORRECTION 3: User spending
+                            if (memoryStats.user_spending && memoryStats.user_spending[tx.username]) {
+                                memoryStats.user_spending[tx.username] = Math.max(0, memoryStats.user_spending[tx.username] - tx.price);
+                            }
+                            
+                            // 🔄 CORRECTION 4: Remove from Activity Feed (Live Pulse)
+                            if (Array.isArray(memoryStats.activity_feed)) {
+                                const feedMsg = `💰 €${tx.price} Sale: ${tx.username} bought ${tx.product}`;
+                                const feedIdx = memoryStats.activity_feed.findIndex(f => f.type === 'sale' && f.message === feedMsg);
+                                if (feedIdx > -1) {
+                                    memoryStats.activity_feed.splice(feedIdx, 1);
+                                }
+                            }
+
                             syncCloud();
                         } else throw new Error("Transaction not found");
                     }
