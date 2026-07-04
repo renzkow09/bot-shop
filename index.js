@@ -306,7 +306,6 @@ client.on('interactionCreate', async (interaction) => {
                     return interaction.reply({ embeds: [embed], ephemeral: true }).catch(()=>{});
                 }
             } else {
-                // Auto-disable if time exceeded
                 memoryStats.settings.maintenance.active = false;
                 syncCloud();
             }
@@ -381,12 +380,20 @@ client.on('interactionCreate', async (interaction) => {
             
             if (interaction.customId === 'open_shop_channel') {
                 await interaction.deferReply({ flags: 64 }).catch(() => {});
+                
+                // 🛡️ ANTI-SPAM TICKET CHECK
+                const sanitizedName = interaction.user.username.toLowerCase().replace(/[^a-z0-9]/g, '');
+                const existingChannel = interaction.guild.channels.cache.find(c => c.name === `shop-${sanitizedName}` || c.name === `support-${sanitizedName}`);
+                if (existingChannel) {
+                    return await interaction.editReply({ content: `❌ You already have an open ticket: <#${existingChannel.id}>` }).catch(() => {});
+                }
+
                 if (!memoryStats.analytics) memoryStats.analytics = { tickets_opened: 0, hourly_sales: Array(24).fill(0) };
                 memoryStats.analytics.tickets_opened = (memoryStats.analytics.tickets_opened || 0) + 1;
                 syncCloud();
 
                 const channel = await interaction.guild.channels.create({
-                    name: `shop-${interaction.user.username}`, type: ChannelType.GuildText, parent: CATEGORY_CUSTOMER_ID,
+                    name: `shop-${sanitizedName}`, type: ChannelType.GuildText, parent: CATEGORY_CUSTOMER_ID,
                     permissionOverwrites: [
                         { id: interaction.guild.id, deny: ['ViewChannel'], type: 0 },
                         { id: interaction.user.id, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'], type: 1 },
@@ -397,15 +404,23 @@ client.on('interactionCreate', async (interaction) => {
 
                 if (channel) {
                     addActivity('ticket', `🎫 New shop ticket opened by ${interaction.user.username}`);
-                    // 🛡️ FIX 1 : Init redeemed state
                     channelStates.set(channel.id, { validated: false, processing: false, promo: null, redeemed: false });
                     await channel.send(`👋 Welcome <@${interaction.user.id}>!\n\n**Please paste your Rewarble voucher code or Promo Code below.**`).catch(() => {});
                     await interaction.editReply({ content: `✅ Room ready: <#${channel.id}>` }).catch(() => {});
                 } else { await interaction.editReply({ content: `❌ Error creating the room.` }).catch(() => {}); }
+            
             } else if (interaction.customId === 'open_support_ticket') {
                 await interaction.deferReply({ flags: 64 }).catch(() => {});
+                
+                // 🛡️ ANTI-SPAM TICKET CHECK
+                const sanitizedName = interaction.user.username.toLowerCase().replace(/[^a-z0-9]/g, '');
+                const existingChannel = interaction.guild.channels.cache.find(c => c.name === `shop-${sanitizedName}` || c.name === `support-${sanitizedName}`);
+                if (existingChannel) {
+                    return await interaction.editReply({ content: `❌ You already have an open ticket: <#${existingChannel.id}>` }).catch(() => {});
+                }
+
                 const channel = await interaction.guild.channels.create({
-                    name: `support-${interaction.user.username}`, type: ChannelType.GuildText, parent: CATEGORY_SUPPORT_ID,
+                    name: `support-${sanitizedName}`, type: ChannelType.GuildText, parent: CATEGORY_SUPPORT_ID,
                     permissionOverwrites: [
                         { id: interaction.guild.id, deny: ['ViewChannel'], type: 0 },
                         { id: interaction.user.id, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'], type: 1 },
@@ -425,15 +440,15 @@ client.on('interactionCreate', async (interaction) => {
         if (interaction.isStringSelectMenu() && interaction.customId === 'product_select') {
             const state = interaction.channel ? channelStates.get(interaction.channel.id) : null;
             
-            // 🛡️ FIX 1 : VERROUILLAGE STRICT (BACKEND REPLAY PROTECTION)
+            // 🛡️ VERROUILLAGE STRICT (BACKEND REPLAY PROTECTION)
             if (state) {
                 if (state.redeemed) {
                     return await interaction.reply({ content: "❌ **SECURITY ALERT:** This code has already been redeemed for a product.", ephemeral: true }).catch(()=>{});
                 }
-                state.redeemed = true; // On verrouille instantanément
+                state.redeemed = true; 
             }
 
-            // 💥 FIX 2 : DESTRUCTION VISUELLE DE L'UI
+            // 💥 DESTRUCTION VISUELLE DE L'UI
             await interaction.update({ content: "📦 **Processing your order... The menu has been locked.**", components: [] }).catch(() => {});
 
             const selected = interaction.values[0]; const product = memoryStats.products[selected]; 
@@ -444,7 +459,6 @@ client.on('interactionCreate', async (interaction) => {
             if (product.price === "Custom") {
                 logStat('custom_request', 0, { username: interaction.user.username, productName: product.name });
                 if (interaction.channel) {
-                    // ⏱️ FIX 3 : FERMETURE ECLAIR
                     await interaction.channel.send(`📩 **Custom request registered!** An admin will review it. Closing ticket in 10 seconds...`).catch(() => {});
                     setTimeout(() => { channelStates.delete(interaction.channel.id); interaction.channel.delete().catch(()=>{}); }, 10000);
                 }
@@ -492,13 +506,11 @@ client.on('interactionCreate', async (interaction) => {
                         const member = await interaction.guild.members.fetch(interaction.user.id);
                         await member.roles.add(VIP_ROLE_ID).catch(()=>{});
                         
-                        // Envoi message succès VIP avec bouton Review
                         const reviewRowVIP = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`review_${selected}`).setLabel('⭐ Leave a Review').setStyle(ButtonStyle.Secondary));
                         await interaction.user.send({ content: "👑 **WELCOME TO VIP!** Your 30-Day pass is now active. Enjoy your exclusive content and 20% off all future purchases in the shop!", components: [reviewRowVIP] }).catch(()=>{});
                     } catch(e) {}
                     
                     if (interaction.channel) {
-                        // ⏱️ FIX 3 : FERMETURE ECLAIR
                         await interaction.channel.send("✅ **VIP Pass Activated successfully!** Closing ticket in 5 seconds...").catch(()=>{});
                         setTimeout(() => { channelStates.delete(interaction.channel.id); interaction.channel.delete().catch(()=>{}); }, 5000);
                     }
@@ -513,7 +525,6 @@ client.on('interactionCreate', async (interaction) => {
                 try {
                     await interaction.user.send({ embeds: [successEmbed], components: [reviewRow] });
                     if (interaction.channel) {
-                        // ⏱️ FIX 3 : FERMETURE ECLAIR
                         await interaction.channel.send("✅ **Product delivered to your DMs!** Closing ticket in 5 seconds...").catch(()=>{});
                         setTimeout(() => { channelStates.delete(interaction.channel.id); interaction.channel.delete().catch(()=>{}); }, 5000);
                     }
@@ -844,8 +855,17 @@ http.createServer(async (req, res) => {
                 const guild = client.guilds.cache.first();
                 if (!guild) return res.writeHead(404).end('Guild not found');
 
+                // --- 📝 EDIT TODAY'S EARNINGS ---
+                if (data.action === 'edit_today_earnings') {
+                    const todayStr = new Date().toISOString().split('T')[0];
+                    const oldVal = memoryStats.revenue[todayStr] || 0;
+                    const newVal = parseFloat(data.value) || 0;
+                    memoryStats.revenue[todayStr] = newVal;
+                    memoryStats.total_revenue = Math.max(0, memoryStats.total_revenue + (newVal - oldVal));
+                    syncCloud();
+                }
                 // --- MODERATION DES REVIEWS PENDING ---
-                if (data.action === 'approve_review') {
+                else if (data.action === 'approve_review') {
                     if (!memoryStats.pending_reviews) memoryStats.pending_reviews = [];
                     const idx = memoryStats.pending_reviews.findIndex(r => r.id === data.id);
                     if (idx > -1) {
@@ -1197,6 +1217,9 @@ http.createServer(async (req, res) => {
             ".prod-actions { display: flex; gap: 8px; margin-top: 15px; }",
             ".prod-actions button { flex: 1; padding: 8px; font-size: 0.85em; margin: 0; border-radius: 6px; }",
             
+            // 🌟 CLICKABLE EARNINGS CARD
+            "#ui-today-rev:hover { opacity: 0.7; transform: scale(1.02); }",
+            
             // 🌟 FEED ACTIVITY UI
             ".feed-container { max-height: 300px; overflow-y: auto; padding-right: 5px; }",
             ".feed-container::-webkit-scrollbar { width: 5px; } .feed-container::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 5px; }",
@@ -1207,24 +1230,13 @@ http.createServer(async (req, res) => {
             ".feed-item.review { border-color: var(--accent-purple); }",
             ".feed-time { font-size: 0.8em; color: var(--text-muted); min-width: 50px; font-weight: bold; }",
             
-            // 🌟 NEW LOADING ANIMATION
-            "@keyframes barRise1 { 0% { height: 10px; opacity: 0; } 100% { height: 40px; opacity: 1; } }",
-            "@keyframes barRise2 { 0% { height: 10px; opacity: 0; } 100% { height: 60px; opacity: 1; } }",
-            "@keyframes barRise3 { 0% { height: 10px; opacity: 0; } 100% { height: 80px; opacity: 1; } }",
-            "@keyframes formN_Bar1 { 100% { height: 100px; transform: translateX(-30px); } }",
-            "@keyframes formN_Bar3 { 100% { height: 100px; transform: translateX(30px); } }",
-            "@keyframes formN_Bar2 { 100% { height: 130px; transform: rotate(-31deg); } }",
-            "@keyframes flashNeon { 0%, 100% { filter: brightness(1) drop-shadow(0 0 10px rgba(56,189,248,0)); } 50% { filter: brightness(1.5) drop-shadow(0 0 30px rgba(56,189,248,1)); } }",
-            "@keyframes textReveal { 0% { opacity:0; transform: translateY(10px); letter-spacing: 5px; } 100% { opacity:1; transform: translateY(0); letter-spacing: 15px; } }",
+            // 🌟 ELEGANT SPLASH SCREEN
+            "@keyframes pulseRing { 0% { transform: scale(0.8); opacity: 0.5; box-shadow: 0 0 0 0 rgba(56,189,248,0.4); } 70% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 20px rgba(56,189,248,0); } 100% { transform: scale(0.8); opacity: 0.5; box-shadow: 0 0 0 0 rgba(56,189,248,0); } }",
+            "@keyframes textRevealElegant { 0% { opacity:0; transform: translateY(10px); letter-spacing: 5px; } 100% { opacity:1; transform: translateY(0); letter-spacing: 12px; } }",
             
-            ".splash-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #070b14; z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; transition: opacity 0.8s ease; }",
-            ".nexus-logo { position: relative; width: 100px; height: 100px; display: flex; justify-content: center; align-items: center; }",
-            ".nexus-bar { position: absolute; bottom: 10px; width: 15px; background: var(--accent-blue); border-radius: 4px; box-shadow: 0 0 15px rgba(56, 189, 248, 0.5); }",
-            
-            ".bar-1 { left: 20px; height: 10px; opacity:0; animation: barRise1 0.4s ease forwards 0.2s, formN_Bar1 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards 1.2s, flashNeon 1s ease forwards 1.8s; }",
-            ".bar-2 { left: 42px; height: 10px; opacity:0; animation: barRise2 0.4s ease forwards 0.4s, formN_Bar2 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards 1.2s, flashNeon 1s ease forwards 1.8s; z-index:2; }",
-            ".bar-3 { left: 64px; height: 10px; opacity:0; animation: barRise3 0.4s ease forwards 0.6s, formN_Bar3 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards 1.2s, flashNeon 1s ease forwards 1.8s; }",
-            ".splash-text { margin-top: 40px; color: var(--text-main); font-weight: 800; font-size: 1.5em; text-transform: uppercase; opacity: 0; animation: textReveal 0.6s ease forwards 1.5s, flashNeon 1s ease forwards 1.8s; }",
+            ".splash-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle at center, #0f172a 0%, #070b14 100%); z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; transition: opacity 0.8s ease; }",
+            ".loader-ring { width: 60px; height: 60px; border-radius: 50%; border: 2px solid rgba(56, 189, 248, 0.1); border-top-color: var(--accent-blue); animation: spin 1s ease-in-out infinite, pulseRing 2s infinite; margin-bottom: 25px; box-shadow: 0 0 20px rgba(56,189,248,0.2); }",
+            ".splash-text { font-weight: 300; font-size: 1.6em; text-transform: uppercase; color: #fff; animation: textRevealElegant 1.5s ease-out forwards; opacity: 0; text-shadow: 0 0 15px rgba(56,189,248,0.4); }",
             
             ".modal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10000; justify-content:center; align-items:center; animation: fadeInSmooth 0.3s ease-out; backdrop-filter: blur(5px); }",
             ".modal-content { background:var(--bg-main); padding:35px; border-radius:16px; border:1px solid var(--accent-purple); text-align:center; max-width:400px; box-shadow: 0 10px 50px rgba(168,85,247,0.3); animation: zoomIn 0.3s forwards; }",
@@ -1283,13 +1295,9 @@ http.createServer(async (req, res) => {
             "<!-- [ANCHOR: DASHBOARD_MODALS_TOASTS] -->",
             "<div id='toast' style='position:fixed; bottom:-100px; right:20px; background:var(--accent-green); color:white; padding:15px 25px; border-radius:10px; font-weight:bold; transition:all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55); z-index:1000; box-shadow: 0 5px 20px rgba(0,0,0,0.5);'>🎉 Notification!</div>",
             
-            // 🌟 NEW LOADING SCREEN
+            // 🌟 ELEGANT LOADING SCREEN
             "<div id='loading-screen' class='splash-screen'>",
-            "   <div class='nexus-logo'>",
-            "       <div class='nexus-bar bar-1'></div>",
-            "       <div class='nexus-bar bar-2'></div>",
-            "       <div class='nexus-bar bar-3'></div>",
-            "   </div>",
+            "   <div class='loader-ring'></div>",
             "   <div class='splash-text'>Nexus</div>",
             "</div>",
 
@@ -1319,7 +1327,7 @@ http.createServer(async (req, res) => {
             "   <button class='nav-btn' onclick='window.switchTab(\"admin\", this)'>⚙️ Admin Config <span class='nav-badge' id='badge-admin'>0</span></button>",
             "</div>",
             "<!-- [ANCHOR: DASHBOARD_TABS_CONTENT] -->",
-            "<div id='overview' class='tab-content active'><div class='stats-grid'><div class='card green'><h3>Today's Earnings</h3><div class='value money text-green' id='ui-today-rev'>€0</div></div><div class='card blue'><h3>Total Earnings</h3><div class='value money text-blue' id='ui-total-rev'>€0</div></div><div class='card pink'><h3>Conversion Rate</h3><div class='value text-pink' id='ui-conv-rate'>0%</div></div><div class='card orange'><h3>Online / Total</h3><div class='value text-orange' id='ui-online-total'>0</div></div><div class='card purple'><h3>Retention Rate</h3><div class='value text-purple' id='ui-retention'>0%</div></div></div><div class='stats-grid'><div class='card purple'><h3>Tickets Opened</h3><div class='value' id='ui-tickets-opened'>0</div></div><div class='card red'><h3>Drop-off Rate</h3><div class='value text-red' id='ui-dropoff'>0%</div></div><div class='card orange'><h3>Peak Sales Hour</h3><div class='value' id='ui-peak-hour'>N/A</div></div></div>",
+            "<div id='overview' class='tab-content active'><div class='stats-grid'><div class='card green'><h3>Today's Earnings</h3><div class='value money text-green' id='ui-today-rev' style='cursor:pointer; transition:0.3s;' onclick='window.editTodayEarnings()' title='Click to manually edit'>€0</div></div><div class='card blue'><h3>Total Earnings</h3><div class='value money text-blue' id='ui-total-rev'>€0</div></div><div class='card pink'><h3>Conversion Rate</h3><div class='value text-pink' id='ui-conv-rate'>0%</div></div><div class='card orange'><h3>Online / Total</h3><div class='value text-orange' id='ui-online-total'>0</div></div><div class='card purple'><h3>Retention Rate</h3><div class='value text-purple' id='ui-retention'>0%</div></div></div><div class='stats-grid'><div class='card purple'><h3>Tickets Opened</h3><div class='value' id='ui-tickets-opened'>0</div></div><div class='card red'><h3>Drop-off Rate</h3><div class='value text-red' id='ui-dropoff'>0%</div></div><div class='card orange'><h3>Peak Sales Hour</h3><div class='value' id='ui-peak-hour'>N/A</div></div></div>",
             "   <div style='display:grid; grid-template-columns: 2fr 1fr; gap:20px; align-items:stretch;' class='overview-grid'>",
             "       <div class='box' style='margin:0;'><div style='display:flex; justify-content:space-between;'><h2>📈 Revenue Timeline</h2><div class='filter-group'><button class='admin-btn' style='margin:0; padding:5px 10px; background:var(--accent-green); margin-right:10px;' onclick='window.location.href=\"/api/export\"'>📥 Export CSV</button><button class='admin-btn' style='margin:0; padding:5px 10px;' onclick='window.updateSalesChart(7)'>7D</button><button class='admin-btn' style='margin:0; padding:5px 10px; background:rgba(0,0,0,0.5);' onclick='window.updateSalesChart(30)'>30D</button></div></div><div style='height:250px; margin-top:15px;'><canvas id='salesChart'></canvas></div></div>",
             "       <div class='box' style='margin:0; display:flex; flex-direction:column; overflow:hidden;'><div style='display:flex; justify-content:space-between; align-items:center;'><h2 style='margin:0;'>⚡ Live Pulse</h2><div class='status-dot' style='margin:0;'></div></div><div class='feed-container' id='target-feed' style='margin-top:15px; flex:1;'></div></div>",
@@ -1375,6 +1383,7 @@ http.createServer(async (req, res) => {
             "let isMuted = false;",
             "window.toggleMute = function() { isMuted = !isMuted; document.getElementById('audioBtn').innerText = isMuted ? '🔇' : '🔊'; };",
             "const audioCtx = new (window.AudioContext || window.webkitAudioContext)();",
+            "document.body.addEventListener('click', () => { if(audioCtx.state === 'suspended') audioCtx.resume(); }, { once: true });",
             "function playSound(type) {",
             "   if(isMuted) return;",
             "   if(audioCtx.state === 'suspended') audioCtx.resume();",
@@ -1410,6 +1419,8 @@ http.createServer(async (req, res) => {
             "let blHtml=''; if(rawStats.buy_links){ Object.entries(rawStats.buy_links).forEach(([id, l]) => { blHtml += '<tr><td>'+escapeHTML(l.label)+'</td><td><a href=\"'+escapeHTML(l.url)+'\" target=\"_blank\" style=\"color:var(--accent-blue);\">Link</a></td><td><button class=\"admin-btn\" style=\"padding:4px 8px; margin:0 5px 0 0;\" onclick=\"window.editBuyLink(\\''+id+'\\')\">✏️</button><button class=\"admin-btn\" style=\"padding:4px 8px; background:var(--accent-red); margin:0;\" onclick=\"window.deleteBuyLink(\\''+id+'\\')\">🗑️</button></td></tr>'; }); } document.getElementById('target-buy-links').innerHTML=blHtml || '<tr><td colspan=\"3\" class=\"text-muted\">No buy links configured.</td></tr>'; ",
             "let prHtml=''; if(rawStats.pending_reviews && rawStats.pending_reviews.length>0){ rawStats.pending_reviews.forEach(r=>{ prHtml+='<tr><td class=\"text-muted\">'+r.date+'</td><td><strong>'+escapeHTML(r.username)+'</strong></td><td>'+escapeHTML(r.product)+'</td><td style=\"color:var(--accent-orange); font-weight:bold;\">'+r.rating+'/5 ⭐</td><td style=\"max-width:250px; white-space:normal; font-style:italic;\">\"'+escapeHTML(r.text)+'\"</td><td><button class=\"admin-btn\" style=\"padding:4px 8px; margin:0 5px 0 0; background:var(--accent-green);\" onclick=\"window.approveReview(\\''+r.id+'\\')\">✅ Accept</button><button class=\"admin-btn\" style=\"padding:4px 8px; background:var(--accent-red); margin:0;\" onclick=\"window.rejectReview(\\''+r.id+'\\')\">❌ Reject</button></td></tr>'; }); } else { prHtml='<tr><td colspan=\"6\" class=\"text-muted text-center\">No pending reviews to moderate.</td></tr>'; } document.getElementById('target-pending-reviews').innerHTML=prHtml; }",
             
+            "window.editTodayEarnings = async function() { const current = document.getElementById('ui-today-rev').innerText.replace('€', ''); const n = prompt('Manual override for Today\\'s Earnings (€):', current); if(n !== null) { const parsed = parseFloat(n); if(!isNaN(parsed)) { await window.executeAction({action:'edit_today_earnings', value: parsed}); } } };",
+
             "window.approveReview = async function(id) { await window.executeAction({action:'approve_review', id:id}); };",
             "window.rejectReview = async function(id) { if(confirm('Reject and delete this review?')) await window.executeAction({action:'reject_review', id:id}); };",
 
