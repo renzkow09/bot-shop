@@ -397,7 +397,8 @@ client.on('interactionCreate', async (interaction) => {
 
                 if (channel) {
                     addActivity('ticket', `🎫 New shop ticket opened by ${interaction.user.username}`);
-                    channelStates.set(channel.id, { validated: false, processing: false, promo: null });
+                    // 🛡️ FIX 1 : Init redeemed state
+                    channelStates.set(channel.id, { validated: false, processing: false, promo: null, redeemed: false });
                     await channel.send(`👋 Welcome <@${interaction.user.id}>!\n\n**Please paste your Rewarble voucher code or Promo Code below.**`).catch(() => {});
                     await interaction.editReply({ content: `✅ Room ready: <#${channel.id}>` }).catch(() => {});
                 } else { await interaction.editReply({ content: `❌ Error creating the room.` }).catch(() => {}); }
@@ -422,16 +423,31 @@ client.on('interactionCreate', async (interaction) => {
         }
         
         if (interaction.isStringSelectMenu() && interaction.customId === 'product_select') {
-            await interaction.deferUpdate().catch(() => {});
+            const state = interaction.channel ? channelStates.get(interaction.channel.id) : null;
+            
+            // 🛡️ FIX 1 : VERROUILLAGE STRICT (BACKEND REPLAY PROTECTION)
+            if (state) {
+                if (state.redeemed) {
+                    return await interaction.reply({ content: "❌ **SECURITY ALERT:** This code has already been redeemed for a product.", ephemeral: true }).catch(()=>{});
+                }
+                state.redeemed = true; // On verrouille instantanément
+            }
+
+            // 💥 FIX 2 : DESTRUCTION VISUELLE DE L'UI
+            await interaction.update({ content: "📦 **Processing your order... The menu has been locked.**", components: [] }).catch(() => {});
+
             const selected = interaction.values[0]; const product = memoryStats.products[selected]; 
             if (!product) return;
             
-            const state = interaction.channel ? channelStates.get(interaction.channel.id) : null;
             const promo = state ? state.promo : null;
 
             if (product.price === "Custom") {
                 logStat('custom_request', 0, { username: interaction.user.username, productName: product.name });
-                if (interaction.channel) await interaction.channel.send(`📩 **Custom request registered!**`).catch(() => {});
+                if (interaction.channel) {
+                    // ⏱️ FIX 3 : FERMETURE ECLAIR
+                    await interaction.channel.send(`📩 **Custom request registered!** An admin will review it. Closing ticket in 10 seconds...`).catch(() => {});
+                    setTimeout(() => { channelStates.delete(interaction.channel.id); interaction.channel.delete().catch(()=>{}); }, 10000);
+                }
                 try {
                     const admin = await client.users.fetch(ADMIN_DISCORD_ID);
                     if (admin) await admin.send(`🔔 **Custom Request** from <@${interaction.user.id}>: ${product.name}`).catch(() => {});
@@ -482,8 +498,9 @@ client.on('interactionCreate', async (interaction) => {
                     } catch(e) {}
                     
                     if (interaction.channel) {
-                        await interaction.channel.send("✅ **VIP Pass Activated successfully!** You can close this ticket.").catch(()=>{});
-                        setTimeout(() => { channelStates.delete(interaction.channel.id); interaction.channel.delete().catch(()=>{}); }, 15000);
+                        // ⏱️ FIX 3 : FERMETURE ECLAIR
+                        await interaction.channel.send("✅ **VIP Pass Activated successfully!** Closing ticket in 5 seconds...").catch(()=>{});
+                        setTimeout(() => { channelStates.delete(interaction.channel.id); interaction.channel.delete().catch(()=>{}); }, 5000);
                     }
                     return;
                 }
@@ -495,9 +512,16 @@ client.on('interactionCreate', async (interaction) => {
 
                 try {
                     await interaction.user.send({ embeds: [successEmbed], components: [reviewRow] });
-                    if (interaction.channel) setTimeout(() => { channelStates.delete(interaction.channel.id); interaction.channel.delete().catch(()=>{}); }, 45000);
+                    if (interaction.channel) {
+                        // ⏱️ FIX 3 : FERMETURE ECLAIR
+                        await interaction.channel.send("✅ **Product delivered to your DMs!** Closing ticket in 5 seconds...").catch(()=>{});
+                        setTimeout(() => { channelStates.delete(interaction.channel.id); interaction.channel.delete().catch(()=>{}); }, 5000);
+                    }
                 } catch (e) { 
-                    if (interaction.channel) await interaction.channel.send({ embeds: [successEmbed], components: [reviewRow] }).catch(()=>{}); 
+                    if (interaction.channel) {
+                        await interaction.channel.send({ content: "⚠️ **Warning: Could not DM you.** Here is your product. Ticket closes in 15 seconds.", embeds: [successEmbed], components: [reviewRow] }).catch(()=>{}); 
+                        setTimeout(() => { channelStates.delete(interaction.channel.id); interaction.channel.delete().catch(()=>{}); }, 15000);
+                    } 
                 }
             }
         }
@@ -1378,6 +1402,7 @@ http.createServer(async (req, res) => {
 
             "window.triggerShopRefresh = async function() { await window.executeAction({action:'refresh_setup'}, false); };",
             
+            // 🌟 NEW: trigger re-renders on tab switch to see animations
             "window.switchTab = function(tabId, btn) { document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active')); document.querySelectorAll('.nav-btn').forEach(el=>el.classList.remove('active')); document.getElementById(tabId).classList.add('active'); btn.classList.add('active'); if(tabId === 'moderation' && !isMembersLoaded) window.loadAllMembers(); if(tabId === 'livechat'){ window.loadTicketsForChat(); if(activeChatChannel && !chatPollInterval){ chatPollInterval = setInterval(window.fetchChatMessages, 3000); } } else { if(chatPollInterval){ clearInterval(chatPollInterval); chatPollInterval = null; } } if(tabId === 'analytics'){ renderAnalyticsCharts(); } if(tabId === 'overview'){ window.renderSalesChart(7); } };",
             
             "function showToast(msg, type='success') { const t=document.getElementById('toast'); t.innerText=msg; t.style.background = type === 'error' ? 'var(--accent-red)' : 'var(--accent-green)'; t.style.bottom='20px'; setTimeout(()=>{t.style.bottom='-100px';}, 3000); }",
