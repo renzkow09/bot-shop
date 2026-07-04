@@ -48,13 +48,20 @@
         .admin-btn { background: var(--accent-blue); color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; margin-top:10px; transition: all 0.3s ease; text-transform: uppercase; letter-spacing: 0.5px; }
         .admin-btn:hover { filter: brightness(1.2); transform: translateY(-2px); box-shadow: 0 5px 15px rgba(56,189,248,0.4); }
         .text-green { color: var(--accent-green); } .text-muted { color: var(--text-muted); }
-        .product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 15px; }
-        .product-card { background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; position: relative; transition: all 0.3s ease; }
-        .product-card:hover { transform: translateY(-5px); border-color: var(--accent-pink); box-shadow: 0 5px 25px rgba(255,20,147,0.15); }
-        .prod-title { font-size: 1.2em; font-weight: bold; margin-bottom: 5px; color: #fff; }
-        .prod-price { color: var(--accent-green); font-weight: 800; font-size: 1.1em; margin-bottom: 12px; }
-        .prod-actions { display: flex; gap: 8px; margin-top: 15px; }
-        .prod-actions button { flex: 1; padding: 8px; font-size: 0.85em; margin: 0; border-radius: 6px; }
+        
+        /* MODERN PRODUCT GRID */
+        .product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+        .product-card { background: rgba(15, 23, 42, 0.4); border: 1px solid rgba(255,255,255,0.05); border-radius: 16px; padding: 25px; position: relative; transition: all 0.3s ease; display: flex; flex-direction: column; justify-content: space-between; box-shadow: 0 4px 15px rgba(0,0,0,0.2); backdrop-filter: blur(10px); }
+        .product-card:hover { transform: translateY(-8px); border-color: var(--accent-blue); box-shadow: 0 10px 30px rgba(56,189,248,0.15); }
+        .prod-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 15px; }
+        .prod-title { font-size: 1.3em; font-weight: 800; color: #fff; margin: 0; display:flex; align-items:center; gap:8px;}
+        .prod-id { font-size: 0.75em; color: var(--accent-purple); font-weight: bold; background: rgba(168,85,247,0.1); padding: 4px 8px; border-radius: 12px; }
+        .prod-price { color: var(--accent-green); font-weight: 800; font-size: 1.4em; }
+        .prod-stock { font-size: 0.8em; color: var(--text-muted); display: block; margin-top: 5px; }
+        .prod-desc { font-size: 0.9em; color: var(--text-muted); line-height: 1.5; margin-bottom: 15px; flex-grow: 1; }
+        .prod-link { background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; font-size: 0.85em; margin-bottom: 15px; word-break: break-all; border: 1px dashed rgba(255,255,255,0.1); }
+        .prod-actions { display: flex; gap: 10px; }
+        .prod-actions button { flex: 1; padding: 10px; font-size: 0.9em; margin: 0; border-radius: 8px; }
         
         /* CLICKABLE EARNINGS CARD */
         #ui-today-rev:hover { opacity: 0.7; transform: scale(1.02); }
@@ -291,16 +298,22 @@
        <div id='products' class='tab-content'>
            <div class='box'>
                <h2>📝 Add / Edit Product</h2>
-               <div style='display:flex; gap:15px; flex-wrap:wrap; margin-bottom:5px;'>
+               <div style='display:flex; gap:15px; flex-wrap:wrap; margin-bottom:10px;'>
                    <input type='hidden' id='editProdId'>
                    <input type='text' id='newProdName' placeholder='Product Name (e.g. VIP Pack)' style='flex:1; min-width:200px;'>
                    <input type='text' id='newProdPrice' placeholder='Price in €' style='width:120px;'>
                    <input type='text' id='newProdStock' placeholder='Stock (e.g. ∞)' style='width:80px;'>
-                   <input type='text' id='newProdLink' placeholder='Delivery Link (Drive, Mega...)' style='flex:2; min-width:200px;'>
-                   <button class='admin-btn' style='margin:0;' onclick='window.saveProduct()' id='saveProdBtn'>➕ Add</button>
+               </div>
+               <div style='display:flex; gap:15px; flex-wrap:wrap; margin-bottom:5px;'>
+                   <input type='text' id='newProdDesc' placeholder='Description (e.g. Include 5 exclusive HD photos)' style='flex:1; min-width:250px;'>
+                   <input type='text' id='newProdLink' placeholder='Delivery Link (Drive, Mega...)' style='flex:1; min-width:250px;'>
+               </div>
+               <div style='display:flex; gap:10px; margin-top:10px;'>
+                   <button class='admin-btn' style='margin:0;' onclick='window.saveProduct()' id='saveProdBtn'>➕ Add Product</button>
                    <button class='admin-btn' style='margin:0; background:transparent; border:1px solid var(--accent-red); color:var(--accent-red); display:none;' onclick='window.cancelEdit()' id='cancelEditBtn'>Cancel</button>
                </div>
            </div>
+           
            <div class='box'>
                <h2>🔗 Manage Buy Buttons (Shop Menu)</h2>
                <p class='text-muted'>Define the Eneba/Voucher buttons that appear on your Discord Shop Embed.</p>
@@ -529,7 +542,16 @@
         
         function processInitData(data) { 
             rawStats=data.memoryStats; PRODUCT_DATA=data.PRODUCT_DATA; currentMonthRevenue=data.monthRevenue; PIN=data.PIN; lastTxCount=rawStats.total_transactions||0; 
-            document.getElementById('ui-today-rev').innerText='€'+data.todayRevenue; document.getElementById('ui-total-rev').innerText='€'+(rawStats.total_revenue||0); 
+            
+            // 🔥 CORRECTION DU CALCUL TOTAL REVENUE BASÉ SUR L'HISTORIQUE RÉEL 🔥
+            let calcTotalRev = 0;
+            if(rawStats.revenue) {
+                Object.values(rawStats.revenue).forEach(val => calcTotalRev += parseFloat(val));
+            }
+            memoryStats.total_revenue = calcTotalRev;
+
+            document.getElementById('ui-today-rev').innerText='€'+data.todayRevenue; 
+            document.getElementById('ui-total-rev').innerText='€'+calcTotalRev; 
             document.getElementById('ui-conv-rate').innerText=data.conversionRate+'%'; 
             document.getElementById('ui-online-total').innerHTML=`${data.onlineCount} <span style='font-size:0.5em;color:var(--text-muted);'>/ ${data.memberCount}</span>`; 
             document.getElementById('ui-retention').innerText=data.retentionRate+'%'; document.getElementById('ui-tickets-opened').innerText=data.ticketsOpened; 
@@ -594,11 +616,18 @@
                   let pPrice = p.price==='Custom'?'Custom':'€'+p.price; 
                   let pLink = p.link?`<a href="${escapeHTML(p.link)}" target="_blank" style="color:var(--accent-blue);text-decoration:none;">[🔗 Open Delivery Link]</a>`:`<span class="text-muted">No Link</span>`; 
                   let stockDisplay = p.stock === '∞' || !p.stock ? '∞' : p.stock; 
+                  
+                  // Nouveau Design pour les produits avec la description intégrée
+                  let pDesc = p.desc ? `<div class="prod-desc">${escapeHTML(p.desc)}</div>` : `<div class="prod-desc" style="font-style:italic; opacity:0.5;">No description provided.</div>`;
+
                   prodHtml+= `<div class="product-card">
-                                <div style="position:absolute; top:15px; right:15px; color:var(--text-muted); font-size:0.8em; font-weight:bold;">ID: ${id}</div>
-                                <div class="prod-title">${icon} ${escapeHTML(p.name)}</div>
-                                <div class="prod-price">${pPrice} <span style="font-size:0.7em; color:var(--text-muted); font-weight:normal;">| Stock: ${escapeHTML(stockDisplay)}</span></div>
-                                <div style="margin-bottom:10px; font-size:0.9em;">${pLink}</div>
+                                <div class="prod-header">
+                                    <div class="prod-title">${icon} ${escapeHTML(p.name)}</div>
+                                    <div class="prod-id">ID: ${id}</div>
+                                </div>
+                                <div class="prod-price">${pPrice} <span class="prod-stock">Stock: ${escapeHTML(stockDisplay)}</span></div>
+                                ${pDesc}
+                                <div class="prod-link">${pLink}</div>
                                 <div class="prod-actions">
                                     <button class="admin-btn" style="background:rgba(255,255,255,0.1);" onclick="window.editProduct('${id}')">✏️ Edit</button>
                                     <button class="admin-btn" style="background:rgba(239, 68, 68, 0.2); color:var(--accent-red);" onclick="window.deleteProduct('${id}')">🗑️ Delete</button>
@@ -730,9 +759,43 @@
 
         window.toggleMaintenance = async function(state) { const dur = document.getElementById('maint-duration').value; const ch = document.getElementById('maint-channel').value; if(state && !dur) return showToast('Set duration', 'error'); await window.executeAction({action:'toggle_maintenance', state:state, duration:dur, channelId:ch}); };
         window.editReferralCount = async function(id, current) { const n = prompt('Enter the new referral count for this user:', current); if(n !== null) { const parsed = parseInt(n); if(!isNaN(parsed)) { await window.executeAction({action:'edit_referral_count', userId:id, newCount: parsed}); } } };
-        window.editProduct = function(id) { const p = rawStats.products[id]; if(!p) return; document.getElementById('editProdId').value = id; document.getElementById('newProdName').value = p.name; document.getElementById('newProdPrice').value = p.price; document.getElementById('newProdStock').value = p.stock || '∞'; document.getElementById('newProdLink').value = p.link; document.getElementById('saveProdBtn').innerText = '💾 Update'; document.getElementById('cancelEditBtn').style.display = 'block'; window.scrollTo({top:0, behavior:'smooth'}); };
-        window.cancelEdit = function() { document.getElementById('editProdId').value = ''; document.getElementById('newProdName').value = ''; document.getElementById('newProdPrice').value = ''; document.getElementById('newProdStock').value = ''; document.getElementById('newProdLink').value = ''; document.getElementById('saveProdBtn').innerText = '➕ Add'; document.getElementById('cancelEditBtn').style.display = 'none'; };
-        window.saveProduct = async function() { const id = document.getElementById('editProdId').value; const n = document.getElementById('newProdName').value; const p = document.getElementById('newProdPrice').value; const s = document.getElementById('newProdStock').value || '∞'; const l = document.getElementById('newProdLink').value; if(!n||!p) return alert('Name & Price required'); if(id) { await window.executeAction({action:'edit_product', id:id, name:n, price:p, stock:s, link:l}, true); } else { await window.executeAction({action:'add_product', name:n, price:p, stock:s, link:l}, true); } };
+        
+        window.editProduct = function(id) { 
+            const p = rawStats.products[id]; if(!p) return; 
+            document.getElementById('editProdId').value = id; 
+            document.getElementById('newProdName').value = p.name; 
+            document.getElementById('newProdPrice').value = p.price; 
+            document.getElementById('newProdStock').value = p.stock || '∞'; 
+            document.getElementById('newProdLink').value = p.link; 
+            document.getElementById('newProdDesc').value = p.desc || ''; 
+            document.getElementById('saveProdBtn').innerText = '💾 Update Product'; 
+            document.getElementById('cancelEditBtn').style.display = 'block'; 
+            window.scrollTo({top:0, behavior:'smooth'}); 
+        };
+        
+        window.cancelEdit = function() { 
+            document.getElementById('editProdId').value = ''; 
+            document.getElementById('newProdName').value = ''; 
+            document.getElementById('newProdPrice').value = ''; 
+            document.getElementById('newProdStock').value = ''; 
+            document.getElementById('newProdLink').value = ''; 
+            document.getElementById('newProdDesc').value = ''; 
+            document.getElementById('saveProdBtn').innerText = '➕ Add Product'; 
+            document.getElementById('cancelEditBtn').style.display = 'none'; 
+        };
+        
+        window.saveProduct = async function() { 
+            const id = document.getElementById('editProdId').value; 
+            const n = document.getElementById('newProdName').value; 
+            const p = document.getElementById('newProdPrice').value; 
+            const s = document.getElementById('newProdStock').value || '∞'; 
+            const l = document.getElementById('newProdLink').value; 
+            const d = document.getElementById('newProdDesc').value; 
+            if(!n||!p) return alert('Name & Price required'); 
+            if(id) { await window.executeAction({action:'edit_product', id:id, name:n, price:p, stock:s, link:l, desc:d}, true); } 
+            else { await window.executeAction({action:'add_product', name:n, price:p, stock:s, link:l, desc:d}, true); } 
+        };
+        
         window.deleteProduct = async function(id) { if(confirm('Delete product?')) await window.executeAction({action:'delete_product', id:id}, true); };
         
         window.editBuyLink = function(id) { const l = rawStats.buy_links[id]; if(!l) return; document.getElementById('editLinkId').value = id; document.getElementById('newLinkLabel').value = l.label; document.getElementById('newLinkUrl').value = l.url; document.getElementById('saveLinkBtn').innerText = '💾 Update'; document.getElementById('cancelEditLinkBtn').style.display = 'block'; };
@@ -750,7 +813,12 @@
 
         setInterval(() => { if(document.visibilityState === 'visible') window.refreshDataSilently(true); }, 15000);
 
-        window.refreshDataSilently = async function(isAutoSync = false) { try{ const res=await fetch('/api/init-data'); if(res.ok){ const data=await res.json(); rawStats=data.memoryStats; document.getElementById('ui-today-rev').innerText='€'+data.todayRevenue; document.getElementById('ui-total-rev').innerText='€'+(rawStats.total_revenue||0); document.getElementById('ui-conv-rate').innerText=data.conversionRate+'%'; buildStaticTables(); updateMaintenanceBadge(data.maintenance); updateBadgesAndFeed(data); if(data.activeTickets > trackedTickets || data.pendingReviewsCount > trackedReviews) { playSound('notification'); } if((rawStats.total_transactions||0) > trackedSales) { playSound('sale'); } trackedTickets = data.activeTickets || 0; trackedReviews = data.pendingReviewsCount || 0; trackedSales = rawStats.total_transactions || 0; if(isMembersLoaded && !isAutoSync) window.loadAllMembers(); if(!isAutoSync){ try { window.cancelEdit(); window.cancelEditLink(); document.getElementById('promoName').value=''; document.getElementById('promoDiscount').value=''; document.getElementById('promoLimit').value=''; } catch(e) {} } } }catch(e){} };
+        window.refreshDataSilently = async function(isAutoSync = false) { try{ const res=await fetch('/api/init-data'); if(res.ok){ const data=await res.json(); rawStats=data.memoryStats; document.getElementById('ui-today-rev').innerText='€'+data.todayRevenue; 
+        
+        let calcTotalRev = 0; if(rawStats.revenue) { Object.values(rawStats.revenue).forEach(val => calcTotalRev += parseFloat(val)); }
+        document.getElementById('ui-total-rev').innerText='€'+calcTotalRev; 
+        
+        document.getElementById('ui-conv-rate').innerText=data.conversionRate+'%'; buildStaticTables(); updateMaintenanceBadge(data.maintenance); updateBadgesAndFeed(data); if(data.activeTickets > trackedTickets || data.pendingReviewsCount > trackedReviews) { playSound('notification'); } if((rawStats.total_transactions||0) > trackedSales) { playSound('sale'); } trackedTickets = data.activeTickets || 0; trackedReviews = data.pendingReviewsCount || 0; trackedSales = rawStats.total_transactions || 0; if(isMembersLoaded && !isAutoSync) window.loadAllMembers(); if(!isAutoSync){ try { window.cancelEdit(); window.cancelEditLink(); document.getElementById('promoName').value=''; document.getElementById('promoDiscount').value=''; document.getElementById('promoLimit').value=''; } catch(e) {} } } }catch(e){} };
         
         window.executeAction = async function(p, showModal=false) { p.pin=PIN; const res=await fetch('/api/action',{method:'POST',body:JSON.stringify(p)}); if(res.ok) { window.refreshDataSilently(); if(showModal){ document.getElementById('syncModal').style.display='flex'; }else{ showToast('Success!'); } } else { showToast('Error', 'error'); } };
         
@@ -854,7 +922,11 @@
            const prodIds = Object.keys(rawStats.product_sales || {}); const prodLabels = prodIds.map(id => rawStats.products[id] ? rawStats.products[id].name : 'Unknown'); const prodData = Object.values(rawStats.product_sales || {}); const ctxTopProd = document.getElementById('topProductsBarChart').getContext('2d'); if(topProdChart) topProdChart.destroy(); topProdChart = new Chart(ctxTopProd, { type: 'bar', data: { labels: prodLabels.length?prodLabels:['No Data'], datasets: [{ label: 'Sales', data: prodData.length?prodData:[0], backgroundColor: '#38bdf8', hoverBackgroundColor: 'rgba(56, 189, 248, 0.4)', borderRadius: 4 }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, plugins: { legend: { display: false } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' } }, y: { grid: { display: false } } } } });
            const catRevs = {}; Object.entries(rawStats.product_sales || {}).forEach(([id, count]) => { const p = rawStats.products[id]; if(p && p.price !== 'Custom'){ const cat = p.category || 'Other'; if(!catRevs[cat]) catRevs[cat] = 0; catRevs[cat] += (parseInt(p.price) * count); } }); const ctxCat = document.getElementById('categoryRevenueChart').getContext('2d'); if(catChart) catChart.destroy(); catChart = new Chart(ctxCat, { type: 'polarArea', data: { labels: Object.keys(catRevs).length?Object.keys(catRevs):['No Data'], datasets: [{ data: Object.values(catRevs).length?Object.values(catRevs):[0], backgroundColor: ['#FF1493', '#38bdf8', '#10b981', '#f97316', '#a855f7'], hoverBackgroundColor: ['rgba(255, 20, 147, 0.4)', 'rgba(56, 189, 248, 0.4)', 'rgba(16, 185, 129, 0.4)', 'rgba(249, 115, 22, 0.4)', 'rgba(168, 85, 247, 0.4)'], borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { animateScale: true, animateRotate: true, duration: 1500, easing: 'easeOutQuart' }, plugins: { legend: { position: 'right', labels: {color: '#f8fafc'} } } } });
         }
-        initDashboard();
+        
+        // --- ⚙️ ROUTINE DE MISE À JOUR CÔTÉ SERVEUR POST-REFONT (INDEX.JS) ---
+        // Dans index.js, sous la ligne 'else if (data.action === 'edit_product') { ...' 
+        // Ajoute 'desc: data.desc' aux objets memoryStats.products[data.id] et memoryStats.products[newId]
+        
     </script>
 </body>
 </html>
