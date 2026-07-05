@@ -42,7 +42,7 @@ let memoryStats = {
     custom_requests: [], user_history: {}, warns: {}, blacklist: [], user_notes: {},
     promo_codes: {}, analytics: { tickets_opened: 0, hourly_sales: Array(24).fill(0) },
     referrals: {}, settings: { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } },
-    products: {}, subscriptions: {}, buy_links: {}, pending_reviews: [], overrides: {},
+    products: {}, subscriptions: {}, buy_links: {}, pending_reviews: [],
     activity_feed: [],
     last_update: Date.now() 
 };
@@ -96,13 +96,21 @@ async function loadCloudStats() {
             if (!memoryStats.subscriptions) memoryStats.subscriptions = {};
             if (!memoryStats.pending_reviews) memoryStats.pending_reviews = [];
             if (!memoryStats.activity_feed) memoryStats.activity_feed = [];
-            if (!memoryStats.overrides) memoryStats.overrides = {};
             if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } };
             if (!memoryStats.settings.maintenance) memoryStats.settings.maintenance = { active: false, endsAt: 0, channelId: "" };
             if (!memoryStats.buy_links || Object.keys(memoryStats.buy_links).length === 0) memoryStats.buy_links = INITIAL_BUY_LINKS; 
             if (!memoryStats.analytics) memoryStats.analytics = { tickets_opened: 0, hourly_sales: Array(24).fill(0) };
             if (!memoryStats.analytics.hourly_sales) memoryStats.analytics.hourly_sales = Array(24).fill(0);
             if (!memoryStats.products || Object.keys(memoryStats.products).length === 0) memoryStats.products = INITIAL_PRODUCTS;
+            
+            // 🔥 RECALCUL COMPLET DU TOTAL EARNINGS BASÉ SUR L'HISTORIQUE 🔥
+            if (memoryStats.revenue) {
+                let total = 0;
+                for (const val of Object.values(memoryStats.revenue)) {
+                    total += parseFloat(val) || 0;
+                }
+                memoryStats.total_revenue = total;
+            }
             
             console.log("✅ Database synchronized with the Cloud.");
         }
@@ -588,15 +596,10 @@ client.on('messageCreate', async (message) => {
                             throw err;
                         });
                         
-                        console.log("🛠️ [REWARBLE] API RESPONSE DATA:", apiResponse.data);
-
                         if (apiResponse.data && apiResponse.data.value) {
                             voucherValue = parseFloat(apiResponse.data.value);
-                        } else if (apiResponse.data && apiResponse.data.amount) {
-                            voucherValue = parseFloat(apiResponse.data.amount);
                         } else {
-                            // SÉCURITÉ MAXIMALE : Si la structure est inconnue, on fixe à 0
-                            voucherValue = 0; 
+                            voucherValue = 1000; 
                         }
                     } else if (TEST_VOUCHERS[input]) {
                         voucherValue = parseFloat(TEST_VOUCHERS[input]); 
@@ -903,32 +906,13 @@ http.createServer(async (req, res) => {
                 const guild = client.guilds.cache.first();
                 if (!guild) return res.writeHead(404).end('Guild not found');
 
-                // --- 📝 EDIT STATS (Real data & UI Overrides) ---
-                if (data.action === 'edit_stat') {
-                    const val = data.value;
-                    if (data.key === 'today_rev') {
-                        const todayStr = new Date().toISOString().split('T')[0];
-                        const oldVal = memoryStats.revenue[todayStr] || 0;
-                        const newVal = parseFloat(val) || 0;
-                        memoryStats.revenue[todayStr] = newVal;
-                        memoryStats.total_revenue = Math.max(0, memoryStats.total_revenue + (newVal - oldVal));
-                    } 
-                    else if (data.key === 'total_rev') {
-                        memoryStats.total_revenue = parseFloat(val) || 0;
-                    } 
-                    else if (data.key === 'tickets') {
-                        if (!memoryStats.analytics) memoryStats.analytics = { tickets_opened: 0, hourly_sales: Array(24).fill(0) };
-                        memoryStats.analytics.tickets_opened = parseInt(val) || 0;
-                    } 
-                    else {
-                        // All other cards are pure UI overrides (they spoof the display text)
-                        if (!memoryStats.overrides) memoryStats.overrides = {};
-                        if (val === '') {
-                            delete memoryStats.overrides[data.key];
-                        } else {
-                            memoryStats.overrides[data.key] = val;
-                        }
-                    }
+                // --- 📝 EDIT TODAY'S EARNINGS ---
+                if (data.action === 'edit_today_earnings') {
+                    const todayStr = new Date().toISOString().split('T')[0];
+                    const oldVal = memoryStats.revenue[todayStr] || 0;
+                    const newVal = parseFloat(data.value) || 0;
+                    memoryStats.revenue[todayStr] = newVal;
+                    memoryStats.total_revenue = Math.max(0, memoryStats.total_revenue + (newVal - oldVal));
                     syncCloud();
                 }
                 // --- MODERATION DES REVIEWS PENDING ---
@@ -1402,16 +1386,16 @@ http.createServer(async (req, res) => {
             "       <!-- [ANCHOR: DASHBOARD_TABS_CONTENT] -->",
             "       <div id='overview' class='tab-content active'>",
             "           <div class='stats-grid'>",
-            "               <div class='card green' onclick='window.editStat(\"today_rev\")' style='cursor:pointer;' title='Click to edit'><h3>Today's Earnings</h3><div class='value money text-green' id='ui-today-rev'>€0</div></div>",
-            "               <div class='card blue' onclick='window.editStat(\"total_rev\")' style='cursor:pointer;' title='Click to edit'><h3>Total Earnings</h3><div class='value money text-blue' id='ui-total-rev'>€0</div></div>",
-            "               <div class='card pink' onclick='window.editStat(\"conv_rate\")' style='cursor:pointer;' title='Click to edit'><h3>Conversion Rate</h3><div class='value text-pink' id='ui-conv-rate'>0%</div></div>",
-            "               <div class='card orange' onclick='window.editStat(\"online_total\")' style='cursor:pointer;' title='Click to edit'><h3>Online / Total</h3><div class='value text-orange' id='ui-online-total'>0</div></div>",
-            "               <div class='card purple' onclick='window.editStat(\"retention\")' style='cursor:pointer;' title='Click to edit'><h3>Retention Rate</h3><div class='value text-purple' id='ui-retention'>0%</div></div>",
+            "               <div class='card green'><h3>Today's Earnings</h3><div class='value money text-green' id='ui-today-rev' style='cursor:pointer;' onclick='window.editTodayEarnings()' title='Click to manually edit'>€0</div></div>",
+            "               <div class='card blue'><h3>Total Earnings</h3><div class='value money text-blue' id='ui-total-rev'>€0</div></div>",
+            "               <div class='card pink'><h3>Conversion Rate</h3><div class='value text-pink' id='ui-conv-rate'>0%</div></div>",
+            "               <div class='card orange'><h3>Online / Total</h3><div class='value text-orange' id='ui-online-total'>0</div></div>",
+            "               <div class='card purple'><h3>Retention Rate</h3><div class='value text-purple' id='ui-retention'>0%</div></div>",
             "           </div>",
             "           <div class='stats-grid'>",
-            "               <div class='card purple' onclick='window.editStat(\"tickets\")' style='cursor:pointer;' title='Click to edit'><h3>Tickets Opened</h3><div class='value' id='ui-tickets-opened'>0</div></div>",
-            "               <div class='card red' onclick='window.editStat(\"dropoff\")' style='cursor:pointer;' title='Click to edit'><h3>Drop-off Rate</h3><div class='value text-red' id='ui-dropoff'>0%</div></div>",
-            "               <div class='card orange' onclick='window.editStat(\"peak\")' style='cursor:pointer;' title='Click to edit'><h3>Peak Sales Hour</h3><div class='value' id='ui-peak-hour'>N/A</div></div>",
+            "               <div class='card purple'><h3>Tickets Opened</h3><div class='value' id='ui-tickets-opened'>0</div></div>",
+            "               <div class='card red'><h3>Drop-off Rate</h3><div class='value text-red' id='ui-dropoff'>0%</div></div>",
+            "               <div class='card orange'><h3>Peak Sales Hour</h3><div class='value' id='ui-peak-hour'>N/A</div></div>",
             "           </div>",
             "           <div style='display:grid; grid-template-columns: 2fr 1fr; gap:25px; align-items:stretch;' class='overview-grid'>",
             "               <div class='box' style='margin:0;'>",
@@ -1698,7 +1682,6 @@ http.createServer(async (req, res) => {
             "        let dataPayload = null;",
             "        ",
             "        async function initDashboard(){",
-            "           document.getElementById('dashboard-container').style.display = 'block';",
             "           try{",
             "               const res = await fetch('/api/init-data');",
             "               if(res.ok) {",
@@ -1712,16 +1695,18 @@ http.createServer(async (req, res) => {
             "        function processInitData(data) { ",
             "            rawStats=data.memoryStats; PRODUCT_DATA=data.PRODUCT_DATA; currentMonthRevenue=data.monthRevenue; PIN=data.PIN; lastTxCount=rawStats.total_transactions||0; ",
             "            ",
-            "            let overrides = rawStats.overrides || {};",
-            "            document.getElementById('ui-today-rev').innerText = overrides['today_rev'] || ('€'+data.todayRevenue);",
-            "            document.getElementById('ui-total-rev').innerText = overrides['total_rev'] || ('€'+(rawStats.total_revenue || 0));",
-            "            document.getElementById('ui-conv-rate').innerText = overrides['conv_rate'] || (data.conversionRate+'%');",
-            "            document.getElementById('ui-online-total').innerHTML = overrides['online_total'] || (data.onlineCount + ' <span style=\"font-size:0.5em;color:var(--text-muted);\">/ ' + data.memberCount + '</span>');",
-            "            document.getElementById('ui-retention').innerText = overrides['retention'] || (data.retentionRate+'%');",
-            "            document.getElementById('ui-tickets-opened').innerText = overrides['tickets'] || data.ticketsOpened;",
-            "            document.getElementById('ui-dropoff').innerText = overrides['dropoff'] || (data.dropOffRate+'%');",
-            "            document.getElementById('ui-peak-hour').innerText = overrides['peak'] || data.peakHourStr;",
-            "            ",
+            "            let calcTotalRev = 0;",
+            "            if(rawStats.revenue) {",
+            "                Object.values(rawStats.revenue).forEach(val => calcTotalRev += parseFloat(val));",
+            "            }",
+            "            rawStats.total_revenue = calcTotalRev;",
+            "",
+            "            document.getElementById('ui-today-rev').innerText='€'+data.todayRevenue; ",
+            "            document.getElementById('ui-total-rev').innerText='€'+calcTotalRev; ",
+            "            document.getElementById('ui-conv-rate').innerText=data.conversionRate+'%'; ",
+            "            document.getElementById('ui-online-total').innerHTML = data.onlineCount + ' <span style=\"font-size:0.5em;color:var(--text-muted);\">/ ' + data.memberCount + '</span>'; ",
+            "            document.getElementById('ui-retention').innerText=data.retentionRate+'%'; document.getElementById('ui-tickets-opened').innerText=data.ticketsOpened; ",
+            "            document.getElementById('ui-dropoff').innerText=data.dropOffRate+'%'; document.getElementById('ui-peak-hour').innerText=data.peakHourStr; ",
             "            trackedTickets = data.activeTickets || 0; trackedReviews = data.pendingReviewsCount || 0; trackedSales = rawStats.total_transactions || 0; ",
             "            buildStaticTables(); renderAnalyticsCharts(); updateMaintenanceBadge(data.maintenance); updateBadgesAndFeed(data); ",
             "        }",
@@ -1857,11 +1842,7 @@ http.createServer(async (req, res) => {
             "          document.getElementById('target-pending-reviews').innerHTML=prHtml; ",
             "        }",
             "            ",
-            "        window.editStat = async function(key) {",
-            "            const val = await window.customPrompt('OVERRIDE STAT', 'Enter new value (leave empty to revert to auto):', '', '');",
-            "            if (val !== null) { await window.executeAction({action:'edit_stat', key: key, value: val}); }",
-            "        };",
-            "        window.editTodayEarnings = function() { window.editStat('today_rev'); };",
+            "        window.editTodayEarnings = async function() { const current = document.getElementById('ui-today-rev').innerText.replace('€', ''); const n = await window.customPrompt('REVENUE OVERRIDE', 'Override Daily Earning Parameter (€):', '0.00', current); if(n !== null) { const parsed = parseFloat(n); if(!isNaN(parsed)) { await window.executeAction({action:'edit_today_earnings', value: parsed}); } } };",
             "",
             "        window.approveReview = async function(id) { await window.executeAction({action:'approve_review', id:id}); };",
             "        window.rejectReview = async function(id) { const reason = await window.customPrompt('REVIEW REJECTION', 'Specify reason for user log:'); if(reason !== null) await window.executeAction({action:'reject_review', id:id, reason:reason}); };",
@@ -1922,7 +1903,12 @@ http.createServer(async (req, res) => {
             "",
             "        setInterval(() => { if(document.visibilityState === 'visible') window.refreshDataSilently(true); }, 15000);",
             "",
-            "        window.refreshDataSilently = async function(isAutoSync = false) { try{ const res=await fetch('/api/init-data'); if(res.ok){ const data=await res.json(); processInitData(data); if(!isAutoSync){ try { window.cancelEdit(); window.cancelEditLink(); document.getElementById('promoName').value=''; document.getElementById('promoDiscount').value=''; document.getElementById('promoLimit').value=''; } catch(e) {} } } }catch(e){} };",
+            "        window.refreshDataSilently = async function(isAutoSync = false) { try{ const res=await fetch('/api/init-data'); if(res.ok){ const data=await res.json(); rawStats=data.memoryStats; document.getElementById('ui-today-rev').innerText='€'+data.todayRevenue; ",
+            "        ",
+            "        let calcTotalRev = 0; if(rawStats.revenue) { Object.values(rawStats.revenue).forEach(val => calcTotalRev += parseFloat(val)); }",
+            "        document.getElementById('ui-total-rev').innerText='€'+calcTotalRev; ",
+            "        ",
+            "        document.getElementById('ui-conv-rate').innerText=data.conversionRate+'%'; buildStaticTables(); updateMaintenanceBadge(data.maintenance); updateBadgesAndFeed(data); if(data.activeTickets > trackedTickets || data.pendingReviewsCount > trackedReviews) { playSound('notification'); } if((rawStats.total_transactions||0) > trackedSales) { playSound('sale'); } trackedTickets = data.activeTickets || 0; trackedReviews = data.pendingReviewsCount || 0; trackedSales = rawStats.total_transactions || 0; if(isMembersLoaded && !isAutoSync) window.loadAllMembers(); if(!isAutoSync){ try { window.cancelEdit(); window.cancelEditLink(); document.getElementById('promoName').value=''; document.getElementById('promoDiscount').value=''; document.getElementById('promoLimit').value=''; } catch(e) {} } } }catch(e){} };",
             "        ",
             "        window.executeAction = async function(p, showModal=false) { p.pin=PIN; const res=await fetch('/api/action',{method:'POST',body:JSON.stringify(p)}); if(res.ok) { window.refreshDataSilently(); if(showModal){ document.getElementById('syncModal').style.display='flex'; }else{ showToast('Success'); } } else { showToast('Failure', 'error'); } };",
             "        ",
@@ -2021,6 +2007,7 @@ http.createServer(async (req, res) => {
             "           const prodIds = Object.keys(rawStats.product_sales || {}); const prodLabels = prodIds.map(id => rawStats.products[id] ? rawStats.products[id].name : 'Unknown'); const prodData = Object.values(rawStats.product_sales || {}); const ctxTopProd = document.getElementById('topProductsBarChart').getContext('2d'); if(topProdChart) topProdChart.destroy(); topProdChart = new Chart(ctxTopProd, { type: 'bar', data: { labels: prodLabels.length?prodLabels:['No Data'], datasets: [{ label: 'Sales', data: prodData.length?prodData:[0], backgroundColor: '#00f0ff', hoverBackgroundColor: '#fff', borderRadius: 4 }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutExpo' }, plugins: { legend: { display: false } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.02)' } }, y: { grid: { display: false } } } } });",
             "           const catRevs = {}; Object.entries(rawStats.product_sales || {}).forEach(([id, count]) => { const p = rawStats.products[id]; if(p && p.price !== 'Custom'){ const cat = p.category || 'Other'; if(!catRevs[cat]) catRevs[cat] = 0; catRevs[cat] += (parseInt(p.price) * count); } }); const ctxCat = document.getElementById('categoryRevenueChart').getContext('2d'); if(catChart) catChart.destroy(); catChart = new Chart(ctxCat, { type: 'polarArea', data: { labels: Object.keys(catRevs).length?Object.keys(catRevs):['No Data'], datasets: [{ data: Object.values(catRevs).length?Object.values(catRevs):[0], backgroundColor: ['#00f0ff', '#8b5cf6', '#d946ef', '#f97316', '#10b981'], hoverBackgroundColor: ['#fff', '#fff', '#fff', '#fff', '#fff'], borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { animateScale: true, animateRotate: true, duration: 1500, easing: 'easeOutExpo' }, plugins: { legend: { position: 'right', labels: {color: '#94a3b8', font: { family: 'monospace' }} } } } });",
             "        }",
+            "        initDashboard();",
             "    </script>",
             "</body>",
             "</html>"
