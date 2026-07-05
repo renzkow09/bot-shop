@@ -1058,11 +1058,9 @@ http.createServer(async (req, res) => {
                             const tx = memoryStats.recent_transactions[txIndex];
                             memoryStats.recent_transactions.splice(txIndex, 1);
                             
-                            // 🔄 CORRECTION 1: Total Revenue and transactions
                             memoryStats.total_transactions = Math.max(0, memoryStats.total_transactions - 1);
                             memoryStats.total_revenue = Math.max(0, memoryStats.total_revenue - tx.price);
                             
-                            // 🔄 CORRECTION 2: Today's Revenue
                             try {
                                 const revKey = new Date(tx.date).toISOString().split('T')[0];
                                 if (memoryStats.revenue[revKey]) {
@@ -1070,12 +1068,10 @@ http.createServer(async (req, res) => {
                                 }
                             } catch(err) {}
 
-                            // 🔄 CORRECTION 3: User spending
                             if (memoryStats.user_spending && memoryStats.user_spending[tx.username]) {
                                 memoryStats.user_spending[tx.username] = Math.max(0, memoryStats.user_spending[tx.username] - tx.price);
                             }
                             
-                            // 🔄 CORRECTION 4: Remove from Activity Feed (Live Pulse)
                             if (Array.isArray(memoryStats.activity_feed)) {
                                 const feedMsg = `💰 €${tx.price} Sale: ${tx.username} bought ${tx.product}`;
                                 const feedIdx = memoryStats.activity_feed.findIndex(f => f.type === 'sale' && f.message === feedMsg);
@@ -1325,14 +1321,16 @@ http.createServer(async (req, res) => {
             "        .feed-item.sale { border-color: var(--accent-green); } .feed-item.ticket { border-color: var(--accent-orange); } .feed-item.review { border-color: var(--accent-purple); }",
             "        .feed-time { font-size: 0.75em; color: var(--accent-blue); min-width: 60px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; }",
             "        ",
-            "        /* SPLASH SCREEN FAST */",
-            "        .splash-screen { position: fixed; inset: 0; background: #030712; z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; transition: opacity 0.5s ease; overflow: hidden; }",
+            "        /* SPLASH SCREEN FAST (CSS ONLY, NO JS REQUIRED TO HIDE) */",
+            "        .splash-screen { position: fixed; inset: 0; background: #030712; z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; pointer-events: all; animation: fadeOutSplash 0.5s ease forwards 1.5s; }",
+            "        @keyframes fadeOutSplash { 0% { opacity: 1; visibility: visible; } 100% { opacity: 0; visibility: hidden; pointer-events: none; z-index: -1; display: none; } }",
             "        .loader-bar-fast { width: 250px; height: 3px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden; position: relative; margin-top: 20px; }",
-            "        .loader-bar-fast::after { content: ''; position: absolute; left: 0; top: 0; height: 100%; width: 100%; background: var(--accent-blue); animation: loadBarAnim 1s ease-in-out forwards; }",
+            "        .loader-bar-fast::after { content: ''; position: absolute; left: 0; top: 0; height: 100%; width: 100%; background: var(--accent-blue); animation: loadBarAnim 1.5s ease-in-out forwards; }",
             "        @keyframes loadBarAnim { 0% { width: 0%; } 100% { width: 100%; } }",
             "        ",
             "        /* LAYOUT & SIDEBAR */",
-            "        .dashboard-layout { display: flex; height: 100vh; overflow: hidden; }",
+            "        .dashboard-layout { display: flex; height: 100vh; overflow: hidden; animation: showDash 0.5s ease forwards 1.5s; opacity: 0; }",
+            "        @keyframes showDash { to { opacity: 1; } }",
             "        .sidebar { width: 280px; background: rgba(15,23,42,0.8); border-right: 1px solid var(--border-color); padding: 25px 20px; display: flex; flex-direction: column; overflow-y: auto; backdrop-filter: blur(20px); z-index: 10; flex-shrink: 0; }",
             "        .sidebar-header { margin-bottom: 30px; text-align: left; }",
             "        .sidebar-header h2 { margin: 0; font-size: 2em; font-weight: 800; background: linear-gradient(135deg, #fff 0%, #38bdf8 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: 1px; }",
@@ -1382,7 +1380,7 @@ http.createServer(async (req, res) => {
             "<body>",
             "    <div id='toast'></div>",
             "    ",
-            "    <!-- FAST LOADING SCREEN -->",
+            "    <!-- FAST LOADING SCREEN (PURE CSS, NO JS REQUIRED) -->",
             "    <div id='loading-screen' class='splash-screen'>",
             "       <h1 style='color:var(--accent-blue); font-size: 3em; margin-bottom: 20px; letter-spacing: 4px; text-shadow: 0 0 20px rgba(0,240,255,0.5);'>NEXUS CORE</h1>",
             "       <div class='loader-bar-fast'></div>",
@@ -1400,8 +1398,8 @@ http.createServer(async (req, res) => {
             "        </div>",
             "    </div>",
             "",
-            "    <!-- NEW SIDEBAR LAYOUT -->",
-            "    <div class='dashboard-layout' id='dashboard-container' style='display:none;'>",
+            "    <!-- NEW SIDEBAR LAYOUT (ALWAYS IN DOM TO PREVENT CHART.JS CRASH) -->",
+            "    <div class='dashboard-layout' id='dashboard-container'>",
             "       <aside class='sidebar'>",
             "           <div class='sidebar-header'>",
             "               <h2>NEXUS</h2>",
@@ -1739,7 +1737,6 @@ http.createServer(async (req, res) => {
             "        }",
             "",
             "        async function initDashboard(){",
-            "           const ls = document.getElementById('loading-screen');",
             "           try{",
             "               const res = await fetch('/api/init-data');",
             "               if(res.ok) {",
@@ -1747,15 +1744,7 @@ http.createServer(async (req, res) => {
             "                   processInitData(data);",
             "               }",
             "           } catch(e){ console.error('API Error'); }",
-            "           if(ls) {",
-            "               setTimeout(() => {",
-            "                   ls.style.opacity = '0';",
-            "                   setTimeout(() => { ls.style.display = 'none'; document.getElementById('dashboard-container').style.display = 'flex'; window.renderSalesChart(7); }, 500);",
-            "               }, 1000);",
-            "           } else {",
-            "               document.getElementById('dashboard-container').style.display = 'flex';",
-            "               window.renderSalesChart(7);",
-            "           }",
+            "           if(typeof window.renderSalesChart === 'function') window.renderSalesChart(7);",
             "        }",
             "        ",
             "        function processInitData(data) { ",
@@ -2068,17 +2057,21 @@ http.createServer(async (req, res) => {
             "        window.saveUserNote = async function(id) { const note = document.getElementById('note-'+id).value; fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'save_note', userId: id, note: note, pin: PIN }) }).then(r => { if(r.ok) showToast('Saved'); }); };",
             "        window.manageVip = async function(userId, action) { if(action === 'add') { await window.executeAction({action: 'add_vip_days', userId: userId, days: 7}); } else if(action === 'revoke') { if(await window.customConfirm('VIP REVOKE', 'Revoke VIP status for this node?')) { await window.executeAction({action: 'revoke_vip', userId: userId}); } } };",
             "",
-            "        Chart.defaults.color = '#64748b'; Chart.defaults.font.family = 'Inter, monospace';",
-            "        window.renderSalesChart = function(days) { let dates = Object.keys(rawStats.revenue || {}).sort(); let values = dates.map(d => rawStats.revenue[d]); if (days > 0 && dates.length > days) { dates = dates.slice(-days); values = values.slice(-days); } const ctxSales = document.getElementById('salesChart').getContext('2d'); let grad = ctxSales.createLinearGradient(0,0,0,400); grad.addColorStop(0, 'rgba(0, 240, 255, 0.4)'); grad.addColorStop(1, 'transparent'); if(salesChart) salesChart.destroy(); salesChart = new Chart(ctxSales, { type: 'line', data: { labels: dates.length?dates:['No Data'], datasets: [{ data: values.length?values:[0], borderColor: '#00f0ff', backgroundColor: grad, fill: true, tension: 0.4, pointHoverBackgroundColor: '#fff', pointHoverBorderColor: 'rgba(0, 240, 255, 1)', pointHoverBorderWidth: 4, pointRadius: 2, pointHitRadius: 20 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 2000, easing: 'easeOutExpo' }, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { grid: { color: 'rgba(255,255,255,0.02)'}, border: { dash: [4, 4] } } } } }); };",
+            "        if(typeof Chart !== 'undefined') {",
+            "            Chart.defaults.color = '#64748b'; Chart.defaults.font.family = 'Inter, monospace';",
+            "        }",
+            "        window.renderSalesChart = function(days) { if(typeof Chart === 'undefined') return; let dates = Object.keys(rawStats.revenue || {}).sort(); let values = dates.map(d => rawStats.revenue[d]); if (days > 0 && dates.length > days) { dates = dates.slice(-days); values = values.slice(-days); } const ctxSales = document.getElementById('salesChart').getContext('2d'); let grad = ctxSales.createLinearGradient(0,0,0,400); grad.addColorStop(0, 'rgba(56, 189, 248, 0.4)'); grad.addColorStop(1, 'transparent'); if(salesChart) salesChart.destroy(); salesChart = new Chart(ctxSales, { type: 'line', data: { labels: dates.length?dates:['No Data'], datasets: [{ data: values.length?values:[0], borderColor: '#38bdf8', backgroundColor: grad, fill: true, tension: 0.4, pointHoverBackgroundColor: '#fff', pointHoverBorderColor: 'rgba(56, 189, 248, 1)', pointHoverBorderWidth: 4, pointRadius: 2, pointHitRadius: 20 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 2000, easing: 'easeOutExpo' }, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { grid: { color: 'rgba(255,255,255,0.02)'}, border: { dash: [4, 4] } } } } }); };",
             "        window.updateSalesChart = function(days) { window.renderSalesChart(days); };",
             "        function renderAnalyticsCharts() { ",
+            "           if(typeof Chart === 'undefined') return;",
             "           const ctxHourly = document.getElementById('hourlyChart').getContext('2d'); if(hourlyChart) hourlyChart.destroy(); hourlyChart = new Chart(ctxHourly, { type: 'bar', data: { labels: Array.from({length: 24}, (_, i) => i+'h'), datasets: [{ label: 'Sales', data: rawStats.analytics.hourly_sales || Array(24).fill(0), backgroundColor: '#a855f7', hoverBackgroundColor: '#d946ef', borderRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutExpo' }, plugins: { legend: { display: false } }, scales: { y: { grid: { color: 'rgba(255,255,255,0.02)' } }, x: { grid: { display: false } } } } });",
-            "           const prodIds = Object.keys(rawStats.product_sales || {}); const prodLabels = prodIds.map(id => rawStats.products[id] ? rawStats.products[id].name : 'Unknown'); const prodData = Object.values(rawStats.product_sales || {}); const ctxTopProd = document.getElementById('topProductsBarChart').getContext('2d'); if(topProdChart) topProdChart.destroy(); topProdChart = new Chart(ctxTopProd, { type: 'bar', data: { labels: prodLabels.length?prodLabels:['No Data'], datasets: [{ label: 'Sales', data: prodData.length?prodData:[0], backgroundColor: '#00f0ff', hoverBackgroundColor: '#fff', borderRadius: 4 }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutExpo' }, plugins: { legend: { display: false } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.02)' } }, y: { grid: { display: false } } } } });",
-            "           const catRevs = {}; Object.entries(rawStats.product_sales || {}).forEach(([id, count]) => { const p = rawStats.products[id]; if(p && p.price !== 'Custom'){ const cat = p.category || 'Other'; if(!catRevs[cat]) catRevs[cat] = 0; catRevs[cat] += (parseInt(p.price) * count); } }); const ctxCat = document.getElementById('categoryRevenueChart').getContext('2d'); if(catChart) catChart.destroy(); catChart = new Chart(ctxCat, { type: 'polarArea', data: { labels: Object.keys(catRevs).length?Object.keys(catRevs):['No Data'], datasets: [{ data: Object.values(catRevs).length?Object.values(catRevs):[0], backgroundColor: ['#00f0ff', '#8b5cf6', '#d946ef', '#f97316', '#10b981'], hoverBackgroundColor: ['#fff', '#fff', '#fff', '#fff', '#fff'], borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { animateScale: true, animateRotate: true, duration: 1500, easing: 'easeOutExpo' }, plugins: { legend: { position: 'right', labels: {color: '#94a3b8', font: { family: 'monospace' }} } } } });",
+            "           const prodIds = Object.keys(rawStats.product_sales || {}); const prodLabels = prodIds.map(id => rawStats.products[id] ? rawStats.products[id].name : 'Unknown'); const prodData = Object.values(rawStats.product_sales || {}); const ctxTopProd = document.getElementById('topProductsBarChart').getContext('2d'); if(topProdChart) topProdChart.destroy(); topProdChart = new Chart(ctxTopProd, { type: 'bar', data: { labels: prodLabels.length?prodLabels:['No Data'], datasets: [{ label: 'Sales', data: prodData.length?prodData:[0], backgroundColor: '#38bdf8', hoverBackgroundColor: '#fff', borderRadius: 4 }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutExpo' }, plugins: { legend: { display: false } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.02)' } }, y: { grid: { display: false } } } } });",
+            "           const catRevs = {}; Object.entries(rawStats.product_sales || {}).forEach(([id, count]) => { const p = rawStats.products[id]; if(p && p.price !== 'Custom'){ const cat = p.category || 'Other'; if(!catRevs[cat]) catRevs[cat] = 0; catRevs[cat] += (parseInt(p.price) * count); } }); const ctxCat = document.getElementById('categoryRevenueChart').getContext('2d'); if(catChart) catChart.destroy(); catChart = new Chart(ctxCat, { type: 'polarArea', data: { labels: Object.keys(catRevs).length?Object.keys(catRevs):['No Data'], datasets: [{ data: Object.values(catRevs).length?Object.values(catRevs):[0], backgroundColor: ['#FF1493', '#38bdf8', '#10b981', '#f97316', '#a855f7'], hoverBackgroundColor: ['#fff', '#fff', '#fff', '#fff', '#fff'], borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { animateScale: true, animateRotate: true, duration: 1500, easing: 'easeOutExpo' }, plugins: { legend: { position: 'right', labels: {color: '#94a3b8', font: { family: 'monospace' }} } } } });",
             "           ",
             "           const dowSales = { 'Sun':0, 'Mon':0, 'Tue':0, 'Wed':0, 'Thu':0, 'Fri':0, 'Sat':0 }; const daysArr = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']; Object.entries(rawStats.revenue || {}).forEach(([dateStr, val]) => { const d = new Date(dateStr); if(!isNaN(d)) { dowSales[daysArr[d.getDay()]] += parseFloat(val); } }); const ctxDow = document.getElementById('dowChart').getContext('2d'); if(window.dowChartInst) window.dowChartInst.destroy(); window.dowChartInst = new Chart(ctxDow, { type: 'bar', data: { labels: daysArr, datasets: [{ label: 'Revenue (€)', data: daysArr.map(d=>dowSales[d]), backgroundColor: '#10b981', hoverBackgroundColor: '#34d399', borderRadius: 6 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { grid: { color: 'rgba(255,255,255,0.05)' } }, x: { grid: { display: false } } } } });",
             "           const ticketsOpened = rawStats.analytics?.tickets_opened || 0; const salesClosed = rawStats.total_transactions || 0; const ctxFunnel = document.getElementById('funnelChart').getContext('2d'); if(window.funnelChartInst) window.funnelChartInst.destroy(); window.funnelChartInst = new Chart(ctxFunnel, { type: 'doughnut', data: { labels: ['Tickets Opened (No Purchase)', 'Successful Sales'], datasets: [{ data: [Math.max(0, ticketsOpened - salesClosed), salesClosed], backgroundColor: ['rgba(239, 68, 68, 0.8)', 'rgba(56, 189, 248, 0.8)'], hoverOffset: 4, borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8' } } } } });",
             "        }",
+            "        initDashboard();",
             "    </script>",
             "</body>",
             "</html>"
