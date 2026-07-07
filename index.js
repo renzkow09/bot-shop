@@ -31,6 +31,7 @@ const MONTHLY_GOAL = 500;
 const TEST_VOUCHERS = { "GOYAVE5": 5 };
 
 const channelStates = new Map();
+let globalLastTicketMsg = Date.now();
 const STATS_FILE = path.join(__dirname, 'stats.json');
 const guildInvites = new Map(); 
 
@@ -559,6 +560,12 @@ client.on('messageCreate', async (message) => {
     try {
         if (message.author.bot) return;
 
+        if (message.channel?.name?.startsWith('shop-') || message.channel?.name?.startsWith('support-')) {
+            if (message.author.id !== ADMIN_DISCORD_ID) {
+                globalLastTicketMsg = Date.now();
+            }
+        }
+
         if (message.author.id === ADMIN_DISCORD_ID) {
             if (message.content === '!setup') { await sendShopSetup(message.channel); }
             if (message.content.startsWith('!say ')) {
@@ -732,7 +739,7 @@ http.createServer(async (req, res) => {
         const todayStr = new Date().toISOString().split('T')[0];
         let monthRevenue = 0; Object.keys(memoryStats.revenue).forEach(date => { if(date.startsWith(todayStr.substring(0, 7))) monthRevenue += memoryStats.revenue[date]; });
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify({ memoryStats, maintenance: memoryStats.settings?.maintenance, pendingReviewsCount: memoryStats.pending_reviews?.length || 0, activeTickets: activeTickets, todayRevenue: memoryStats.revenue[todayStr] || 0, monthRevenue, ticketsOpened: memoryStats.analytics?.tickets_opened || 0, dropOffRate: memoryStats.analytics?.tickets_opened > 0 ? (100 - (memoryStats.total_transactions / memoryStats.analytics.tickets_opened) * 100).toFixed(1) : 0, peakHourStr: "N/A", conversionRate: ((memoryStats.total_transactions / (memoryStats.total_joins || 1)) * 100).toFixed(1), retentionRate: memberCount !== "N/A" ? ((memberCount / (memberCount + (memoryStats.total_leaves || 0))) * 100).toFixed(1) : "N/A", onlineCount, memberCount, MONTHLY_GOAL, PIN: DASHBOARD_PIN }));
+        return res.end(JSON.stringify({ memoryStats, maintenance: memoryStats.settings?.maintenance, pendingReviewsCount: memoryStats.pending_reviews?.length || 0, activeTickets: activeTickets, todayRevenue: memoryStats.revenue[todayStr] || 0, monthRevenue, ticketsOpened: memoryStats.analytics?.tickets_opened || 0, dropOffRate: memoryStats.analytics?.tickets_opened > 0 ? (100 - (memoryStats.total_transactions / memoryStats.analytics.tickets_opened) * 100).toFixed(1) : 0, peakHourStr: "N/A", conversionRate: ((memoryStats.total_transactions / (memoryStats.total_joins || 1)) * 100).toFixed(1), retentionRate: memberCount !== "N/A" ? ((memberCount / (memberCount + (memoryStats.total_leaves || 0))) * 100).toFixed(1) : "N/A", onlineCount, memberCount, MONTHLY_GOAL, PIN: DASHBOARD_PIN, globalLastTicketMsg: globalLastTicketMsg }));
     }
 
     if (req.url === '/api/export' && req.method === 'GET') {
@@ -1343,7 +1350,7 @@ http.createServer(async (req, res) => {
             "        ",
             "        /* ULTRA PREMIUM TOAST */",
             "        #toast { position:fixed; bottom: 20px; right: 20px; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); color: white; padding: 16px 24px; border-radius: 12px; font-weight: 600; font-size: 0.95em; display: flex; align-items: center; gap: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); transform: translateY(150px) scale(0.9); opacity: 0; transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.5s ease; z-index: 10000; pointer-events: none; }",
-            "        #toast.show { transform: translateY(0) scale(1); opacity: 1; }",
+            "        #toast.show { transform: translateY(0) scale(1); opacity: 1; pointer-events: auto; }",
             "",
             "        .modal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10000; justify-content:center; align-items:center; animation: fadeInSmooth 0.3s ease-out; backdrop-filter: blur(5px); }",
             "        .modal-content { background:var(--bg-main); padding:35px; border-radius:16px; border:1px solid var(--accent-purple); text-align:center; max-width:400px; box-shadow: 0 10px 50px rgba(168,85,247,0.3); animation: zoomIn 0.3s forwards; }",
@@ -1375,6 +1382,12 @@ http.createServer(async (req, res) => {
             "        .chat-attachment-btn:hover { background: rgba(255,255,255,0.15); border-color: var(--accent-blue); }",
             "        .attachment-badge { position: absolute; top: -5px; right: -5px; background: var(--accent-red); color: white; border-radius: 50%; width: 12px; height: 12px; display: none; }",
             "        .chat-attachment-wrapper { position: relative; }",
+            "        ",
+            "        /* NOUVEAU MENU ACTIONS RAPIDES */",
+            "        .toggle-plus { width: 42px; height: 42px; padding: 0; display: flex; justify-content: center; align-items: center; border-radius: 50%; font-size: 1.8em; font-weight: 300; transition: transform 0.3s ease, background 0.3s ease, border-color 0.3s ease; line-height: 1; }",
+            "        .toggle-plus.open { transform: rotate(45deg); background: rgba(239, 68, 68, 0.2); border-color: var(--accent-red); color: var(--accent-red); }",
+            "        .quick-actions-menu { display: flex; flex-wrap: wrap; gap: 10px; max-height: 0; opacity: 0; overflow: hidden; transition: all 0.3s ease; padding: 0 15px; background: rgba(0,0,0,0.3); border-top: 1px solid transparent; justify-content: center; }",
+            "        .quick-actions-menu.open { max-height: 150px; opacity: 1; padding: 10px 15px; border-top-color: var(--border-color); }",
             "        ",
             "        /* PROGRESS BAR FOR SUBSCRIPTIONS */",
             "        .progress-bg { width:100%; background:rgba(255,255,255,0.1); border-radius:4px; height:8px; margin-top:5px; overflow:hidden; }",
@@ -1442,17 +1455,17 @@ http.createServer(async (req, res) => {
             "           </div>",
             "       </div>",
             "       <div class='nav-menu'>",
-            "           <button class='nav-btn active' onclick='window.switchTab(\"overview\", this)'>📊 Overview</button>",
-            "           <button class='nav-btn' onclick='window.switchTab(\"vip\", this)'>👑 VIP Pass</button>",
-            "           <button class='nav-btn' onclick='window.switchTab(\"livechat\", this)'>💬 Live Chat <span class='nav-badge' id='badge-chat'>0</span></button>",
-            "           <button class='nav-btn' onclick='window.switchTab(\"analytics\", this)'>📈 Analytics</button>",
-            "           <button class='nav-btn' onclick='window.switchTab(\"transactions\", this)'>💳 Transactions</button>",
-            "           <button class='nav-btn' onclick='window.switchTab(\"products\", this)'>📦 Products</button>",
-            "           <button class='nav-btn' onclick='window.switchTab(\"audience\", this)'>👥 Audience</button>",
-            "           <button class='nav-btn' onclick='window.switchTab(\"referrals\", this)'>🔗 Referrals</button>",
-            "           <button class='nav-btn' onclick='window.switchTab(\"moderation\", this)'>🛡️ Moderation</button>",
-            "           <button class='nav-btn' onclick='window.switchTab(\"monitoring\", this)'>📡 Monitoring</button>",
-            "           <button class='nav-btn' onclick='window.switchTab(\"admin\", this)'>⚙️ Admin Config <span class='nav-badge' id='badge-admin'>0</span></button>",
+            "           <button class='nav-btn active' onclick='window.switchTab(\"overview\", this)' id='nav-overview'>📊 Overview</button>",
+            "           <button class='nav-btn' onclick='window.switchTab(\"vip\", this)' id='nav-vip'>👑 VIP Pass</button>",
+            "           <button class='nav-btn' onclick='window.switchTab(\"livechat\", this)' id='nav-livechat'>💬 Live Chat <span class='nav-badge' id='badge-chat'>0</span></button>",
+            "           <button class='nav-btn' onclick='window.switchTab(\"analytics\", this)' id='nav-analytics'>📈 Analytics</button>",
+            "           <button class='nav-btn' onclick='window.switchTab(\"transactions\", this)' id='nav-transactions'>💳 Transactions</button>",
+            "           <button class='nav-btn' onclick='window.switchTab(\"products\", this)' id='nav-products'>📦 Products</button>",
+            "           <button class='nav-btn' onclick='window.switchTab(\"audience\", this)' id='nav-audience'>👥 Audience</button>",
+            "           <button class='nav-btn' onclick='window.switchTab(\"referrals\", this)' id='nav-referrals'>🔗 Referrals</button>",
+            "           <button class='nav-btn' onclick='window.switchTab(\"moderation\", this)' id='nav-moderation'>🛡️ Moderation</button>",
+            "           <button class='nav-btn' onclick='window.switchTab(\"monitoring\", this)' id='nav-monitoring'>📡 Monitoring</button>",
+            "           <button class='nav-btn' onclick='window.switchTab(\"admin\", this)' id='nav-admin'>⚙️ Admin Config <span class='nav-badge' id='badge-admin'>0</span></button>",
             "       </div>",
             "",
             "       <!-- [ANCHOR: DASHBOARD_TABS_CONTENT] -->",
@@ -1508,14 +1521,15 @@ http.createServer(async (req, res) => {
             "                       <div class='chat-messages' id='chat-messages-area'>",
             "                           <div style='margin:auto; color:var(--text-muted); text-align:center;'><h2 style='font-size:3em; margin:0;'>👈</h2><p>Select a ticket to view</p></div>",
             "                       </div>",
-            "                       <div style='display:flex; gap:10px; padding: 10px 15px; background: rgba(0,0,0,0.2); border-top: 1px solid var(--border-color); flex-wrap: wrap;'>",
+            "                       <div id='quickActionsMenu' class='quick-actions-menu'>",
             "                           <button class='admin-btn' style='margin:0; padding:6px 12px; font-size:0.85em; background: rgba(255,255,255,0.05);' onclick='window.sendQuickResponse(\"welcome\")'>👋 Welcome</button>",
             "                           <button class='admin-btn' style='margin:0; padding:6px 12px; font-size:0.85em; background: rgba(255,255,255,0.05);' onclick='window.sendQuickResponse(\"wait\")'>⏳ Wait</button>",
             "                           <button class='admin-btn' style='margin:0; padding:6px 12px; font-size:0.85em; background: rgba(255,255,255,0.05);' onclick='window.sendQuickResponse(\"resolved\")'>✅ Resolved?</button>",
             "                           <button class='admin-btn' style='margin:0; padding:6px 12px; font-size:0.85em; background: rgba(168, 85, 247, 0.2); color: #a855f7;' onclick='window.askReviewPrompt()'>⭐ Ask Review</button>",
-            "                           <button class='admin-btn' style='margin:0; padding:6px 12px; font-size:0.85em; background: var(--accent-red);' onclick='window.sendQuickResponse(\"close\")'>🔒 Close Ticket</button>",
+            "                           <button class='admin-btn' style='margin:0; padding:6px 12px; font-size:0.85em; background: rgba(239, 68, 68, 0.2); color: var(--accent-red);' onclick='window.sendQuickResponse(\"close\")'>🔒 Close Ticket</button>",
             "                       </div>",
             "                       <div class='chat-input-area'>",
+            "                           <button id='quickActionsToggle' class='chat-attachment-btn toggle-plus' onclick='document.getElementById(\"quickActionsMenu\").classList.toggle(\"open\"); this.classList.toggle(\"open\");' title='Quick Actions'>+</button>",
             "                           <div class='chat-attachment-wrapper'>",
             "                               <input type='file' id='chat-file-input' style='display:none' accept='image/*' onchange='document.getElementById(\"attach-badge\").style.display=\"block\"'>",
             "                               <button class='chat-attachment-btn' onclick='document.getElementById(\"chat-file-input\").click()' title='Attach Image'>📎</button>",
@@ -1688,6 +1702,7 @@ http.createServer(async (req, res) => {
             "    <script>",
             "        let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, userGoal=500, salesChart, hourlyChart, topProdChart, catChart; ",
             "        let allMembersData = []; let isMembersLoaded = false; let activeChatChannel = null; let chatPollInterval = null;",
+            "        let trackedTickets = 0; let trackedReviews = 0; let trackedSales = 0; let trackedLastTicketMsg = 0;",
             "        ",
             "        // 🌟 AUDIO ENGINE (Premium Chord Generation)",
             "        let isMuted = false;",
@@ -1741,7 +1756,6 @@ http.createServer(async (req, res) => {
             "           } catch(e) {}",
             "        }",
             "",
-            "        let trackedTickets = 0; let trackedReviews = 0; let trackedSales = 0;",
             "        let dataPayload = null;",
             "        ",
             "        // 💎 ULTRA PREMIUM SPLASH SCREEN LOGIC",
@@ -1834,7 +1848,12 @@ http.createServer(async (req, res) => {
             "            document.getElementById('ui-online-total').innerHTML = data.onlineCount + ' <span style=\"font-size:0.5em;color:var(--text-muted);\">/ ' + data.memberCount + '</span>'; ",
             "            document.getElementById('ui-retention').innerText=data.retentionRate+'%'; document.getElementById('ui-tickets-opened').innerText=data.ticketsOpened; ",
             "            document.getElementById('ui-dropoff').innerText=data.dropOffRate+'%'; document.getElementById('ui-peak-hour').innerText=data.peakHourStr; ",
-            "            trackedTickets = data.activeTickets || 0; trackedReviews = data.pendingReviewsCount || 0; trackedSales = rawStats.total_transactions || 0; ",
+            "            ",
+            "            trackedTickets = data.activeTickets || 0; ",
+            "            trackedReviews = data.pendingReviewsCount || 0; ",
+            "            trackedSales = rawStats.total_transactions || 0; ",
+            "            trackedLastTicketMsg = data.globalLastTicketMsg || 0;",
+            "",
             "            buildStaticTables(); renderAnalyticsCharts(); updateMaintenanceBadge(data.maintenance); updateBadgesAndFeed(data); ",
             "        }",
             "        ",
@@ -2029,6 +2048,8 @@ http.createServer(async (req, res) => {
             "        ",
             "        window.switchTab = function(tabId, btn) { document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active')); document.querySelectorAll('.nav-btn').forEach(el=>el.classList.remove('active')); document.getElementById(tabId).classList.add('active'); btn.classList.add('active'); if(tabId === 'moderation' && !isMembersLoaded) window.loadAllMembers(); if(tabId === 'livechat'){ window.loadTicketsForChat(); if(activeChatChannel && !chatPollInterval){ chatPollInterval = setInterval(window.fetchChatMessages, 3000); } } else { if(chatPollInterval){ clearInterval(chatPollInterval); chatPollInterval = null; } } if(tabId === 'analytics'){ renderAnalyticsCharts(); } if(tabId === 'overview'){ window.renderSalesChart(7); } };",
             "        ",
+            "        window.showClickableToast = function(msg, tabId) { const t=document.getElementById('toast'); t.innerHTML = '🔔 <span>' + msg + '</span> <button class=\"admin-btn\" style=\"margin:0 0 0 12px; padding:6px 12px; font-size:0.85em; background:#fff; color:#000; box-shadow:none;\" onclick=\"window.switchTab(\\''+tabId+'\\', document.querySelector(\\'button[onclick*=\\''+tabId+'\\']\\')); this.parentElement.classList.remove(\\'show\\');\">View ➔</button>'; t.style.borderColor = 'var(--accent-blue)'; t.style.boxShadow = '0 10px 30px rgba(56, 189, 248, 0.4)'; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 6000); };",
+            "        ",
             "        function showToast(msg, type='success') { const t=document.getElementById('toast'); t.innerHTML = (type==='error'?'❌':'✅') + ' <span>' + msg + '</span>'; t.style.borderColor = type === 'error' ? 'rgba(239,68,68,0.3)' : 'rgba(16,185,129,0.3)'; t.style.boxShadow = type === 'error' ? '0 10px 30px rgba(239,68,68,0.2)' : '0 10px 30px rgba(16,185,129,0.2)'; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 3000); }",
             "        ",
             "        window.manualRefresh = async function() { const btn = document.getElementById('refreshBtn'); btn.classList.add('spinning'); await window.refreshDataSilently(); setTimeout(()=>btn.classList.remove('spinning'), 1000); showToast('Data Synced!'); };",
@@ -2040,7 +2061,57 @@ http.createServer(async (req, res) => {
             "        let calcTotalRev = 0; if(rawStats.revenue) { Object.values(rawStats.revenue).forEach(val => calcTotalRev += parseFloat(val)); }",
             "        document.getElementById('ui-total-rev').innerText='€'+calcTotalRev; ",
             "        ",
-            "        document.getElementById('ui-conv-rate').innerText=data.conversionRate+'%'; buildStaticTables(); updateMaintenanceBadge(data.maintenance); updateBadgesAndFeed(data); if(data.activeTickets > trackedTickets || data.pendingReviewsCount > trackedReviews) { playSound('notification'); } if((rawStats.total_transactions||0) > trackedSales) { playSound('sale'); } trackedTickets = data.activeTickets || 0; trackedReviews = data.pendingReviewsCount || 0; trackedSales = rawStats.total_transactions || 0; if(isMembersLoaded && !isAutoSync) window.loadAllMembers(); if(!isAutoSync){ try { window.cancelEdit(); window.cancelEditLink(); document.getElementById('promoName').value=''; document.getElementById('promoDiscount').value=''; document.getElementById('promoLimit').value=''; } catch(e) {} } } }catch(e){} };",
+            "        document.getElementById('ui-conv-rate').innerText=data.conversionRate+'%'; buildStaticTables(); updateMaintenanceBadge(data.maintenance); updateBadgesAndFeed(data); ",
+            "",
+            "        // 🛎️ NOTIFICATION ENGINE (GLOBAL)",
+            "        if(data.globalLastTicketMsg > trackedLastTicketMsg) {",
+            "            if(trackedLastTicketMsg !== 0) {",
+            "                const chatTab = document.getElementById('livechat');",
+            "                if(!chatTab.classList.contains('active')) {",
+            "                    window.showClickableToast('💬 New message in Live Chat!', 'livechat');",
+            "                    playSound('notification');",
+            "                } else {",
+            "                    window.fetchChatMessages();",
+            "                    playSound('notification');",
+            "                }",
+            "            }",
+            "            trackedLastTicketMsg = data.globalLastTicketMsg;",
+            "        }",
+            "",
+            "        if(data.activeTickets > trackedTickets) {",
+            "            if(trackedTickets !== 0) {",
+            "                const chatTab = document.getElementById('livechat');",
+            "                if(!chatTab.classList.contains('active')) {",
+            "                    window.showClickableToast('🎫 New Ticket Opened!', 'livechat');",
+            "                    playSound('notification');",
+            "                }",
+            "            }",
+            "            trackedTickets = data.activeTickets;",
+            "        } else {",
+            "            trackedTickets = data.activeTickets;",
+            "        }",
+            "",
+            "        if(data.pendingReviewsCount > trackedReviews) {",
+            "            if(trackedReviews !== 0) {",
+            "                const adminTab = document.getElementById('admin');",
+            "                if(!adminTab.classList.contains('active')) {",
+            "                    window.showClickableToast('⭐ New Pending Review!', 'admin');",
+            "                    playSound('notification');",
+            "                } else {",
+            "                    playSound('notification');",
+            "                }",
+            "            }",
+            "            trackedReviews = data.pendingReviewsCount;",
+            "        } else {",
+            "            trackedReviews = data.pendingReviewsCount;",
+            "        }",
+            "",
+            "        if((rawStats.total_transactions||0) > trackedSales) { ",
+            "            if(trackedSales !== 0) playSound('sale');",
+            "            trackedSales = rawStats.total_transactions || 0;",
+            "        }",
+            "",
+            "        if(isMembersLoaded && !isAutoSync) window.loadAllMembers(); if(!isAutoSync){ try { window.cancelEdit(); window.cancelEditLink(); document.getElementById('promoName').value=''; document.getElementById('promoDiscount').value=''; document.getElementById('promoLimit').value=''; } catch(e) {} } } }catch(e){} };",
             "        ",
             "        window.executeAction = async function(p, showModal=false) { p.pin=PIN; const res=await fetch('/api/action',{method:'POST',body:JSON.stringify(p)}); if(res.ok) { window.refreshDataSilently(); if(showModal){ document.getElementById('syncModal').style.display='flex'; }else{ showToast('Success!'); } } else { showToast('Error', 'error'); } };",
             "        ",
