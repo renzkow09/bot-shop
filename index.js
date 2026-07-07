@@ -1013,6 +1013,17 @@ http.createServer(async (req, res) => {
                         await channel.send(payload);
                     } else throw new Error("Can't find channel");
                 }
+                else if (data.action === 'ask_review') {
+                    const channel = guild.channels.cache.get(data.channelId);
+                    if (channel) {
+                        const product = memoryStats.products[data.productId];
+                        if (!product) throw new Error("Product not found");
+                        const reviewRow = new ActionRowBuilder().addComponents(
+                            new ButtonBuilder().setCustomId(`review_${data.productId}`).setLabel('⭐ Leave a Review').setStyle(ButtonStyle.Secondary)
+                        );
+                        await channel.send({ content: `💬 **[Support Admin]** : How was your experience with **${product.name}**? We'd love to hear your feedback! Click the button below to leave a review.`, components: [reviewRow] });
+                    } else throw new Error("Can't find channel");
+                }
                 else if (data.action === 'react_ticket_message') {
                     const channel = guild.channels.cache.get(data.channelId);
                     if (channel && data.messageId && data.emoji) {
@@ -1501,6 +1512,7 @@ http.createServer(async (req, res) => {
             "                           <button class='admin-btn' style='margin:0; padding:6px 12px; font-size:0.85em; background: rgba(255,255,255,0.05);' onclick='window.sendQuickResponse(\"welcome\")'>👋 Welcome</button>",
             "                           <button class='admin-btn' style='margin:0; padding:6px 12px; font-size:0.85em; background: rgba(255,255,255,0.05);' onclick='window.sendQuickResponse(\"wait\")'>⏳ Wait</button>",
             "                           <button class='admin-btn' style='margin:0; padding:6px 12px; font-size:0.85em; background: rgba(255,255,255,0.05);' onclick='window.sendQuickResponse(\"resolved\")'>✅ Resolved?</button>",
+            "                           <button class='admin-btn' style='margin:0; padding:6px 12px; font-size:0.85em; background: rgba(168, 85, 247, 0.2); color: #a855f7;' onclick='window.askReviewPrompt()'>⭐ Ask Review</button>",
             "                           <button class='admin-btn' style='margin:0; padding:6px 12px; font-size:0.85em; background: var(--accent-red);' onclick='window.sendQuickResponse(\"close\")'>🔒 Close Ticket</button>",
             "                       </div>",
             "                       <div class='chat-input-area'>",
@@ -2111,6 +2123,18 @@ http.createServer(async (req, res) => {
             "        window.sendChatMessage = async function() { if(!activeChatChannel) return showToast('Select a ticket first!', 'error'); const input = document.getElementById('chat-input-text'); const fileInput = document.getElementById('chat-file-input'); const text = input.value.trim(); const file = fileInput.files[0]; if(!text && !file) return; input.value = ''; document.getElementById('attach-badge').style.display='none'; let base64 = null; if (file) { const reader = new FileReader(); reader.readAsDataURL(file); await new Promise(r => reader.onload = r); base64 = reader.result; fileInput.value = ''; } try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'send_ticket_message', channelId: activeChatChannel, message: text, imageBase64: base64, pin: PIN }) }); window.fetchChatMessages(); } catch(e) { showToast('Failed to send', 'error'); } };",
             "        window.reactMessage = async function(msgId, emoji) { if(!activeChatChannel) return; try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'react_ticket_message', channelId: activeChatChannel, messageId: msgId, emoji: emoji, pin: PIN }) }); showToast('Reaction sent!'); } catch (e) { showToast('Failed to react', 'error'); } };",
             "        window.sendQuickResponse = async function(type) { if(!activeChatChannel) return showToast('Select a ticket first!', 'error'); let msg = ''; if(type === 'welcome') msg = '👋 Hello! How can I help you today?'; else if(type === 'wait') { const mins = prompt('How many minutes should the user wait?'); if(!mins) return; msg = '⏳ Please wait for about ' + mins + ' minutes, an admin is looking into it.'; } else if(type === 'resolved') msg = '✅ Did this resolve your issue, or do you have any other questions?'; else if(type === 'close') { if(!confirm('Close this ticket and delete the channel?')) return; msg = '🔒 Closing this ticket. Have a great day!'; await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'send_ticket_message', channelId: activeChatChannel, message: msg, pin: PIN }) }); window.fetchChatMessages(); setTimeout(async () => { await window.executeAction({ action: 'close_channel', channelId: activeChatChannel }, false); activeChatChannel = null; window.loadTicketsForChat(); document.getElementById('chat-messages-area').innerHTML = '<div style=\"margin:auto; color:var(--text-muted); text-align:center;\"><h2 style=\"font-size:3em; margin:0;\">👈</h2><p>Select a ticket to view</p></div>'; }, 2000); return; } if(msg) { try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'send_ticket_message', channelId: activeChatChannel, message: msg, pin: PIN }) }); window.fetchChatMessages(); } catch(e) { showToast('Failed to send', 'error'); } } };",
+            "",
+            "        window.askReviewPrompt = async function() {",
+            "            if(!activeChatChannel) return showToast('Select a ticket first!', 'error');",
+            "            const pId = prompt('Enter the Product ID to request a review for (check Products tab for IDs):');",
+            "            if(!pId) return;",
+            "            if(!rawStats.products[pId]) return showToast('Product ID not found.', 'error');",
+            "            try {",
+            "                await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'ask_review', channelId: activeChatChannel, productId: pId, pin: PIN }) });",
+            "                window.fetchChatMessages();",
+            "                showToast('Review request sent!');",
+            "            } catch(e) { showToast('Failed to send', 'error'); }",
+            "        };",
             "",
             "        window.createPromo = async function() { const name = document.getElementById('promoName').value.trim().toUpperCase(); const discount = parseInt(document.getElementById('promoDiscount').value); const limit = parseInt(document.getElementById('promoLimit').value); if(!name || isNaN(discount) || isNaN(limit)) { return showToast('Please fill all fields correctly', 'error'); } if(discount < 1 || discount > 100) return showToast('Discount must be between 1 and 100', 'error'); await window.executeAction({ action: 'create_promo', name: name, discount: discount, limit: limit }); };",
             "        window.deletePromo = async function(code) { if(confirm('Delete promo code ' + decodeURIComponent(code) + '?')) { await window.executeAction({ action: 'delete_promo', name: decodeURIComponent(code) }); } };",
