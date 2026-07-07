@@ -1254,11 +1254,14 @@ http.createServer(async (req, res) => {
     if (req.url === '/dashboard' || req.url === '/') {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         try {
-            const dashboardHTML = fs.readFileSync(path.join(__dirname, 'dashboard.html'), 'utf8');
+            // On charge ton tableau depuis le nouveau fichier
+            const dashboardData = require('./dashboardTemplate');
+            // On le recolle proprement en texte HTML
+            const dashboardHTML = Array.isArray(dashboardData) ? dashboardData.join('\n') : dashboardData;
             return res.end(dashboardHTML);
         } catch (error) {
             console.error("Dashboard HTML not found:", error);
-            return res.end("<h1>Erreur : Le fichier dashboard.html est introuvable. Avez-vous bien uploade le fichier sur GitHub ?</h1>");
+            return res.end("<h1>Erreur : Le fichier dashboardTemplate.js est introuvable ou mal formaté.</h1>");
         }
     } else { res.writeHead(200, { 'Content-Type': 'text/plain' }); res.end('API Bot'); }
 }).listen(process.env.PORT || 3000);
