@@ -33,8 +33,6 @@ const TEST_VOUCHERS = { "GOYAVE5": 5 };
 const channelStates = new Map();
 let globalLastTicketMsg = Date.now();
 const STATS_FILE = path.join(__dirname, 'stats.json');
-const BACKUP_DIR = path.join(__dirname, 'backups');
-if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR);
 const guildInvites = new Map(); 
 
 // === [ANCHOR: MEMORY_CACHE_AND_DB] ===
@@ -43,8 +41,8 @@ let memoryStats = {
     total_transactions: 0, product_sales: {}, recent_joins: [], recent_leaves: [], 
     total_leaves: 0, total_joins: 0, recent_transactions: [], user_spending: {}, 
     custom_requests: [], user_history: {}, warns: {}, blacklist: [], user_notes: {},
-    promo_codes: {}, ticket_tags: {}, analytics: { tickets_opened: 0, hourly_sales: Array(24).fill(0) },
-    referrals: {}, settings: { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" }, flashSale: { active: false, discount: 0, endsAt: 0 } },
+    promo_codes: {}, analytics: { tickets_opened: 0, hourly_sales: Array(24).fill(0) },
+    referrals: {}, settings: { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } },
     products: {}, subscriptions: {}, buy_links: {}, pending_reviews: [],
     activity_feed: [],
     last_update: Date.now() 
@@ -52,11 +50,18 @@ let memoryStats = {
 
 // 📦 INTEGRATION: Stock initialized to infinity ("∞")
 const INITIAL_PRODUCTS = {
-    "1": { name: "Boobs", price: "5", link: "https://drive.google.com/ton_lien_boobs", category: "✨ PHOTOS", stock: "∞", availability: "always" }, 
-    "2": { name: "Ass", price: "5", link: "https://drive.google.com/ton_lien_ass", category: "✨ PHOTOS", stock: "∞", availability: "always" },
-    "3": { name: "Full Body", price: "5", link: "https://drive.google.com/ton_lien_fullbody", category: "✨ PHOTOS", stock: "∞", availability: "always" }, 
-    "4": { name: "Weekend Special Pack", price: "15", link: "https://drive.google.com/ton_lien_weekend", category: "✨ PHOTOS", stock: "∞", availability: "weekend" },
-    "VIP": { name: "👑 VIP Pass 30 Days", price: "20", link: "Welcome to VIP!", category: "👑 SUBSCRIPTION", stock: "∞", availability: "always" }
+    "1": { name: "Boobs", price: "5", link: "https://drive.google.com/ton_lien_boobs", category: "✨ PHOTOS", stock: "∞" }, 
+    "2": { name: "Ass", price: "5", link: "https://drive.google.com/ton_lien_ass", category: "✨ PHOTOS", stock: "∞" },
+    "3": { name: "Full Body", price: "5", link: "https://drive.google.com/ton_lien_fullbody", category: "✨ PHOTOS", stock: "∞" }, 
+    "4": { name: "Lingerie Try-On", price: "5", link: "https://drive.google.com/ton_lien_lingerie", category: "✨ PHOTOS", stock: "∞" },
+    "5": { name: "Mirror Pic", price: "5", link: "https://drive.google.com/ton_lien_mirror", category: "✨ PHOTOS", stock: "∞" }, 
+    "6": { name: "5-Min Video", price: "10", link: "https://drive.google.com/ton_lien_video5min", category: "🔥 VIDEOS", stock: "∞" },
+    "7": { name: "Shower / Bath", price: "10", link: "https://drive.google.com/ton_lien_shower", category: "🔥 VIDEOS", stock: "∞" }, 
+    "8": { name: "Friends Nude", price: "15", link: "https://drive.google.com/ton_lien_friends", category: "💦 SPECIAL", stock: "∞" },
+    "9": { name: "Surprise Pack", price: "15", link: "https://drive.google.com/ton_lien_surprisepack", category: "💦 SPECIAL", stock: "∞" }, 
+    "10": { name: "Sexting", price: "Custom", link: "", category: "💌 PERSONALIZED", stock: "∞" },
+    "11": { name: "Custom Request", price: "Custom", link: "", category: "💌 PERSONALIZED", stock: "∞" },
+    "VIP": { name: "👑 VIP Pass 30 Days", price: "20", link: "Welcome to VIP!", category: "👑 SUBSCRIPTION", stock: "∞" }
 };
 
 const INITIAL_BUY_LINKS = {
@@ -87,23 +92,27 @@ async function loadCloudStats() {
         if (res.data && res.data.result) {
             memoryStats = { ...memoryStats, ...JSON.parse(res.data.result) };
             if (!memoryStats.promo_codes) memoryStats.promo_codes = {};
-            if (!memoryStats.ticket_tags) memoryStats.ticket_tags = {};
             if (!memoryStats.user_notes) memoryStats.user_notes = {};
             if (!memoryStats.referrals) memoryStats.referrals = {};
             if (!memoryStats.subscriptions) memoryStats.subscriptions = {};
             if (!memoryStats.pending_reviews) memoryStats.pending_reviews = [];
             if (!memoryStats.activity_feed) memoryStats.activity_feed = [];
-            if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" }, flashSale: { active: false, discount: 0, endsAt: 0 } };
-            if (!memoryStats.settings.flashSale) memoryStats.settings.flashSale = { active: false, discount: 0, endsAt: 0 };
+            if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } };
+            if (!memoryStats.settings.maintenance) memoryStats.settings.maintenance = { active: false, endsAt: 0, channelId: "" };
             if (!memoryStats.buy_links || Object.keys(memoryStats.buy_links).length === 0) memoryStats.buy_links = INITIAL_BUY_LINKS; 
             if (!memoryStats.analytics) memoryStats.analytics = { tickets_opened: 0, hourly_sales: Array(24).fill(0) };
+            if (!memoryStats.analytics.hourly_sales) memoryStats.analytics.hourly_sales = Array(24).fill(0);
             if (!memoryStats.products || Object.keys(memoryStats.products).length === 0) memoryStats.products = INITIAL_PRODUCTS;
             
+            // 🔥 RECALCUL COMPLET DU TOTAL EARNINGS BASÉ SUR L'HISTORIQUE 🔥
             if (memoryStats.revenue) {
                 let total = 0;
-                for (const val of Object.values(memoryStats.revenue)) total += parseFloat(val) || 0;
+                for (const val of Object.values(memoryStats.revenue)) {
+                    total += parseFloat(val) || 0;
+                }
                 memoryStats.total_revenue = total;
             }
+            
             console.log("✅ Database synchronized with the Cloud.");
         }
     } catch (e) { console.error("❌ Cloud GET Error :", e.message); }
@@ -119,15 +128,7 @@ async function syncCloud() {
         await axios.post(cleanUrl, ["SET", "bot_stats", JSON.stringify(memoryStats)], { 
             headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } 
         });
-    } catch (err) {}
-}
-
-async function runDailyBackup() {
-    const today = new Date().toISOString().split('T')[0];
-    const backupPath = path.join(BACKUP_DIR, `backup_${today}.json`);
-    if (!fs.existsSync(backupPath)) {
-        try { fs.writeFileSync(backupPath, JSON.stringify(memoryStats)); console.log(`💾 Auto-Backup Saved: ${backupPath}`); } catch(e){}
-    }
+    } catch (err) { console.error("❌ Cloud Sync Error :", err.message); }
 }
 
 async function checkSubscriptions() {
@@ -144,6 +145,7 @@ async function checkSubscriptions() {
                     const codeName = "COMEBACK-" + Math.random().toString(36).substring(2, 6).toUpperCase();
                     if (!memoryStats.promo_codes) memoryStats.promo_codes = {};
                     memoryStats.promo_codes[codeName] = { discount: 50, limit: 1, used: 0, createdAt: new Date().toLocaleDateString('en-US') };
+                    
                     await member.send(`🛑 **Your VIP Pass has expired.** You lost access to exclusive content. To thank you for your past support, here is a **-50% OFF** promo code valid for 1 use: \`${codeName}\`. Renew your pass in the shop!`).catch(() => {});
                 }
             } catch(e) {}
@@ -198,7 +200,10 @@ function logStat(type, value = 1, extraData = null) {
         if (!Array.isArray(memoryStats.recent_leaves)) memoryStats.recent_leaves = [];
         if (extraData && extraData.username) {
             memoryStats.recent_leaves.unshift({ 
-                username: extraData.username, date: new Date().toLocaleString('en-US'), avatar: extraData.avatar || 'https://cdn.discordapp.com/embed/avatars/0.png', duration: extraData.duration || 0
+                username: extraData.username, 
+                date: new Date().toLocaleString('en-US'),
+                avatar: extraData.avatar || 'https://cdn.discordapp.com/embed/avatars/0.png',
+                duration: extraData.duration || 0
             });
             if (memoryStats.recent_leaves.length > 15) memoryStats.recent_leaves.pop();
         }
@@ -218,10 +223,16 @@ async function sendShopSetup(channel) {
     for (const [id, linkObj] of Object.entries(memoryStats.buy_links || {})) {
         try {
             currentComponents.push(new ButtonBuilder().setLabel(linkObj.label).setStyle(ButtonStyle.Link).setURL(linkObj.url));
-            if (currentComponents.length === 5) { buyRows.push(new ActionRowBuilder().addComponents(currentComponents)); currentComponents = []; }
+            if (currentComponents.length === 5) {
+                buyRows.push(new ActionRowBuilder().addComponents(currentComponents));
+                currentComponents = [];
+            }
         } catch(e) {}
     }
-    if (currentComponents.length > 0) { buyRows.push(new ActionRowBuilder().addComponents(currentComponents)); }
+    if (currentComponents.length > 0) {
+        buyRows.push(new ActionRowBuilder().addComponents(currentComponents));
+    }
+    
     buyRows = buyRows.slice(0, 4);
 
     const rowActions = new ActionRowBuilder().addComponents(
@@ -233,11 +244,8 @@ async function sendShopSetup(channel) {
     const componentsToSend = [...buyRows, rowActions];
     
     const groupedProducts = {};
-    const isWeekend = [0, 6].includes(new Date().getDay());
-
     for (const [id, prod] of Object.entries(memoryStats.products)) {
         if (prod.stock && prod.stock !== "∞" && parseInt(prod.stock) <= 0) continue;
-        if (prod.availability === 'weekend' && !isWeekend) continue; // 🛍️ EPHEMERAL SHOP LOGIC
         
         const catName = prod.price === "Custom" ? "💌 PERSONALIZED (On Request)" : `✨ ITEMS (€${prod.price})`;
         if (!groupedProducts[catName]) groupedProducts[catName] = [];
@@ -256,12 +264,7 @@ async function sendShopSetup(channel) {
         isFirst = false;
     }
 
-    let extraInfo = '**STEP 1:** Click a Buy button below to get your voucher.\n**STEP 2:** Click the green **📩 Redeem Code** button.\n**STEP 3:** Paste your code, choose your item, and check your DMs! 🎉\n\n🎁 **FREE PRODUCT:** Click **🔗 Get Referral Link**, invite your friends, and get a 100% OFF code automatically!';
-    if (memoryStats.settings.flashSale && memoryStats.settings.flashSale.active && memoryStats.settings.flashSale.endsAt > Date.now()) {
-        extraInfo = `🔥 **VENTE FLASH EN COURS (-${memoryStats.settings.flashSale.discount}%) !** 🔥\n*La réduction sera appliquée automatiquement lors de la validation du code!*\n\n` + extraInfo;
-    }
-
-    shopEmbed.addFields({ name: '━━━━━━━━━━━━━━━━━━━━━━\n💳 HOW TO BUY ?', value: extraInfo });
+    shopEmbed.addFields({ name: '━━━━━━━━━━━━━━━━━━━━━━\n💳 HOW TO BUY ?', value: '**STEP 1:** Click a Buy button below to get your voucher.\n**STEP 2:** Click the green **📩 Redeem Code** button.\n**STEP 3:** Paste your code, choose your item, and check your DMs! 🎉\n\n🎁 **FREE PRODUCT:** Click **🔗 Get Referral Link**, invite your friends, and get a 100% OFF code automatically!' });
     shopEmbed.setFooter({ text: 'Powered by Nexus Premium • Secure & Automatic 🔒' });
 
     await channel.send({ embeds: [shopEmbed], components: componentsToSend }).catch(() => {});
@@ -276,7 +279,6 @@ const client = new Client({
 client.once('ready', () => {
     console.log(`✅ Bot logged in as ${client.user.tag}`);
     loadCloudStats();
-    runDailyBackup(); // Run backup on startup if new day
     client.guilds.cache.forEach(async guild => {
         try {
             const firstInvites = await guild.invites.fetch();
@@ -285,29 +287,6 @@ client.once('ready', () => {
     });
     
     setInterval(checkSubscriptions, 60 * 60 * 1000); 
-    setInterval(runDailyBackup, 60 * 60 * 1000); // 💾 BACKUPS DAILY CHECK
-
-    // 🛒 ABANDONED CART TRACKER
-    setInterval(async () => {
-        const now = Date.now();
-        for (const [chId, state] of channelStates.entries()) {
-            if (!state.validated && !state.notified && (now - state.createdAt > 2 * 60 * 60 * 1000)) {
-                state.notified = true;
-                try {
-                    const guild = client.guilds.cache.first();
-                    const member = await guild.members.fetch(state.userId);
-                    if (member) {
-                        const code = "COMEBACK-" + Math.random().toString(36).substring(2, 6).toUpperCase();
-                        if (!memoryStats.promo_codes) memoryStats.promo_codes = {};
-                        memoryStats.promo_codes[code] = { discount: 10, limit: 1, used: 0, createdAt: new Date().toLocaleDateString('en-US') };
-                        syncCloud();
-                        const embed = new EmbedBuilder().setColor('#f97316').setTitle('🛒 Panier en attente !').setDescription(`Ton ticket d'achat sur notre serveur est toujours ouvert.\n\nPour t'aider à finaliser ta commande, voici un code promo de **-10%** valable immédiatement :\n\n👉 \`${code}\``);
-                        await member.send({ embeds: [embed] }).catch(()=>{});
-                    }
-                } catch(e) {}
-            }
-        }
-    }, 15 * 60 * 1000);
 
     setInterval(async () => {
         try {
@@ -330,19 +309,26 @@ client.on('inviteDelete', invite => { try { guildInvites.get(invite.guild.id)?.d
 // === [ANCHOR: DISCORD_INTERACTION_HANDLER] ===
 client.on('interactionCreate', async (interaction) => {
     try {
+        // --- MAINTENANCE SHIELD ---
         const mMode = memoryStats.settings?.maintenance;
         if (mMode && mMode.active && (interaction.isButton() || interaction.isStringSelectMenu())) {
             if (Date.now() < mMode.endsAt) {
                 if (interaction.user.id !== ADMIN_DISCORD_ID) {
                     const unixTime = Math.floor(mMode.endsAt / 1000);
-                    const embed = new EmbedBuilder().setColor('#f97316').setTitle('🚧 Shop Under Maintenance').setDescription(`Our system is currently undergoing updates or restocking.\n\n⏳ **Expected return:** <t:${unixTime}:R>.\n\nPlease try again later. Your codes and purchases are perfectly safe!`);
+                    const embed = new EmbedBuilder()
+                        .setColor('#f97316')
+                        .setTitle('🚧 Shop Under Maintenance')
+                        .setDescription(`Our system is currently undergoing updates or restocking.\n\n⏳ **Expected return:** <t:${unixTime}:R>.\n\nPlease try again later. Your codes and purchases are perfectly safe!`);
                     return interaction.reply({ embeds: [embed], ephemeral: true }).catch(()=>{});
                 }
             } else {
-                memoryStats.settings.maintenance.active = false; syncCloud();
+                memoryStats.settings.maintenance.active = false;
+                syncCloud();
             }
         }
+        // -------------------------------
         
+        // --- CUSTOMER REVIEW MODAL SUBMIT ---
         if (interaction.isModalSubmit() && interaction.customId.startsWith('submitreview_')) {
             const productId = interaction.customId.replace('submitreview_', '');
             const rating = interaction.fields.getTextInputValue('rating');
@@ -355,12 +341,21 @@ client.on('interactionCreate', async (interaction) => {
             const productName = product ? product.name : "Purchased Item";
 
             if (!memoryStats.pending_reviews) memoryStats.pending_reviews = [];
-            memoryStats.pending_reviews.push({ id: Date.now().toString() + Math.floor(Math.random() * 1000), userId: interaction.user.id, username: interaction.user.username, product: productName, rating: numRating, text: feedback, date: new Date().toLocaleString('en-US') });
+            memoryStats.pending_reviews.push({
+                id: Date.now().toString() + Math.floor(Math.random() * 1000),
+                userId: interaction.user.id,
+                username: interaction.user.username,
+                product: productName,
+                rating: numRating,
+                text: feedback,
+                date: new Date().toLocaleString('en-US')
+            });
             addActivity('review', `⭐ New ${numRating}/5 review submitted by ${interaction.user.username}`);
             syncCloud();
 
             return await interaction.reply({ content: "✅ **Thank you!** Your review has been submitted to our team for moderation.", ephemeral: true }).catch(()=>{});
         }
+        // ------------------------------------
 
         if (interaction.isButton()) {
             if (memoryStats.blacklist && memoryStats.blacklist.includes(interaction.user.id)) {
@@ -368,6 +363,7 @@ client.on('interactionCreate', async (interaction) => {
                 return await interaction.editReply({ content: "❌ You have been blacklisted from using the shop and support system." }).catch(()=>{});
             }
             
+            // --- CUSTOMER REVIEW BUTTON CLICK ---
             if (interaction.customId.startsWith('review_')) {
                 const productId = interaction.customId.replace('review_', '');
                 const modal = new ModalBuilder().setCustomId(`submitreview_${productId}`).setTitle('Leave a Review');
@@ -400,9 +396,13 @@ client.on('interactionCreate', async (interaction) => {
             
             if (interaction.customId === 'open_shop_channel') {
                 await interaction.deferReply({ flags: 64 }).catch(() => {});
+                
+                // 🛡️ ANTI-SPAM TICKET CHECK
                 const sanitizedName = interaction.user.username.toLowerCase().replace(/[^a-z0-9]/g, '');
                 const existingChannel = interaction.guild.channels.cache.find(c => c.name === `shop-${sanitizedName}` || c.name === `support-${sanitizedName}`);
-                if (existingChannel) { return await interaction.editReply({ content: `❌ You already have an open ticket: <#${existingChannel.id}>` }).catch(() => {}); }
+                if (existingChannel) {
+                    return await interaction.editReply({ content: `❌ You already have an open ticket: <#${existingChannel.id}>` }).catch(() => {});
+                }
 
                 if (!memoryStats.analytics) memoryStats.analytics = { tickets_opened: 0, hourly_sales: Array(24).fill(0) };
                 memoryStats.analytics.tickets_opened = (memoryStats.analytics.tickets_opened || 0) + 1;
@@ -420,16 +420,20 @@ client.on('interactionCreate', async (interaction) => {
 
                 if (channel) {
                     addActivity('ticket', `🎫 New shop ticket opened by ${interaction.user.username}`);
-                    channelStates.set(channel.id, { validated: false, processing: false, promo: null, redeemed: false, createdAt: Date.now(), notified: false, userId: interaction.user.id }); // 🛒 ABANDONED CART INIT
+                    channelStates.set(channel.id, { validated: false, processing: false, promo: null, redeemed: false });
                     await channel.send(`👋 Welcome <@${interaction.user.id}>!\n\n**Please paste your Rewarble voucher code or Promo Code below.**`).catch(() => {});
                     await interaction.editReply({ content: `✅ Room ready: <#${channel.id}>` }).catch(() => {});
                 } else { await interaction.editReply({ content: `❌ Error creating the room.` }).catch(() => {}); }
             
             } else if (interaction.customId === 'open_support_ticket') {
                 await interaction.deferReply({ flags: 64 }).catch(() => {});
+                
+                // 🛡️ ANTI-SPAM TICKET CHECK
                 const sanitizedName = interaction.user.username.toLowerCase().replace(/[^a-z0-9]/g, '');
                 const existingChannel = interaction.guild.channels.cache.find(c => c.name === `shop-${sanitizedName}` || c.name === `support-${sanitizedName}`);
-                if (existingChannel) { return await interaction.editReply({ content: `❌ You already have an open ticket: <#${existingChannel.id}>` }).catch(() => {}); }
+                if (existingChannel) {
+                    return await interaction.editReply({ content: `❌ You already have an open ticket: <#${existingChannel.id}>` }).catch(() => {});
+                }
 
                 const channel = await interaction.guild.channels.create({
                     name: `support-${sanitizedName}`, type: ChannelType.GuildText, parent: CATEGORY_SUPPORT_ID,
@@ -451,14 +455,21 @@ client.on('interactionCreate', async (interaction) => {
         
         if (interaction.isStringSelectMenu() && interaction.customId === 'product_select') {
             const state = interaction.channel ? channelStates.get(interaction.channel.id) : null;
+            
+            // 🛡️ VERROUILLAGE STRICT (BACKEND REPLAY PROTECTION)
             if (state) {
-                if (state.redeemed) { return await interaction.reply({ content: "❌ **SECURITY ALERT:** This code has already been redeemed for a product.", ephemeral: true }).catch(()=>{}); }
+                if (state.redeemed) {
+                    return await interaction.reply({ content: "❌ **SECURITY ALERT:** This code has already been redeemed for a product.", ephemeral: true }).catch(()=>{});
+                }
                 state.redeemed = true; 
             }
+
+            // 💥 DESTRUCTION VISUELLE DE L'UI
             await interaction.update({ content: "📦 **Processing your order... The menu has been locked.**", components: [] }).catch(() => {});
 
             const selected = interaction.values[0]; const product = memoryStats.products[selected]; 
             if (!product) return;
+            
             const promo = state ? state.promo : null;
 
             if (product.price === "Custom") {
@@ -474,18 +485,15 @@ client.on('interactionCreate', async (interaction) => {
             } else {
                 let finalPrice = parseInt(product.price);
                 let isVIPPurchase = selected === "VIP" || (product.category && product.category.includes("SUBSCRIPTION"));
-                
-                // ⏳ FLASH SALE LOGIC IN PURCHASE
-                let isFlashSaleActive = memoryStats.settings.flashSale && memoryStats.settings.flashSale.active && memoryStats.settings.flashSale.endsAt > Date.now();
-                let flashDiscount = isFlashSaleActive ? memoryStats.settings.flashSale.discount : 0;
-                let vipDiscount = (!isVIPPurchase && memoryStats.subscriptions[interaction.user.id]) ? 20 : 0;
-                let promoDiscount = promo ? promo.discount : 0;
+                let appliedDiscount = 0;
 
-                // Max discount application
-                let appliedDiscount = Math.max(vipDiscount, promoDiscount, flashDiscount);
-
-                if (promo && appliedDiscount === promoDiscount) {
-                    if (memoryStats.promo_codes && memoryStats.promo_codes[promo.name]) memoryStats.promo_codes[promo.name].used++;
+                if (!isVIPPurchase && memoryStats.subscriptions[interaction.user.id]) {
+                    appliedDiscount = 20;
+                } else if (promo) {
+                    appliedDiscount = promo.discount;
+                    if (memoryStats.promo_codes && memoryStats.promo_codes[promo.name]) {
+                        memoryStats.promo_codes[promo.name].used++;
+                    }
                 }
 
                 if (appliedDiscount > 0) finalPrice = Math.max(0, finalPrice - (finalPrice * appliedDiscount / 100));
@@ -501,6 +509,7 @@ client.on('interactionCreate', async (interaction) => {
                     const now = Date.now();
                     const thirtyDays = 30 * 24 * 60 * 60 * 1000;
                     if (!memoryStats.subscriptions) memoryStats.subscriptions = {};
+                    
                     if (memoryStats.subscriptions[interaction.user.id]) {
                         memoryStats.subscriptions[interaction.user.id].expiresAt += thirtyDays;
                         memoryStats.subscriptions[interaction.user.id].notified = false;
@@ -512,6 +521,7 @@ client.on('interactionCreate', async (interaction) => {
                     try {
                         const member = await interaction.guild.members.fetch(interaction.user.id);
                         await member.roles.add(VIP_ROLE_ID).catch(()=>{});
+                        
                         const reviewRowVIP = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`review_${selected}`).setLabel('⭐ Leave a Review').setStyle(ButtonStyle.Secondary));
                         await interaction.user.send({ content: "👑 **WELCOME TO VIP!** Your 30-Day pass is now active. Enjoy your exclusive content and 20% off all future purchases in the shop!", components: [reviewRowVIP] }).catch(()=>{});
                     } catch(e) {}
@@ -524,19 +534,12 @@ client.on('interactionCreate', async (interaction) => {
                 }
 
                 const successEmbed = new EmbedBuilder().setColor('#FFD700').setTitle('✨ Purchase Successful!').setDescription(`🔗 ${product.link || 'Link not configured.'}`);
-                const reviewRow = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`review_${selected}`).setLabel('⭐ Leave a Review').setStyle(ButtonStyle.Secondary));
+                const reviewRow = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setCustomId(`review_${selected}`).setLabel('⭐ Leave a Review').setStyle(ButtonStyle.Secondary)
+                );
 
                 try {
                     await interaction.user.send({ embeds: [successEmbed], components: [reviewRow] });
-
-                    // 🎁 POST-PURCHASE UPSELL
-                    const upsellCode = "UPSELL-" + Math.random().toString(36).substring(2, 6).toUpperCase();
-                    if (!memoryStats.promo_codes) memoryStats.promo_codes = {};
-                    memoryStats.promo_codes[upsellCode] = { discount: 30, limit: 1, used: 0, createdAt: new Date().toLocaleDateString('en-US') };
-                    syncCloud();
-                    const upsellEmbed = new EmbedBuilder().setColor('#ec4899').setTitle('🎁 Offre Spéciale Post-Achat !').setDescription(`Merci pour ton achat ! Profite de **-30%** sur ta prochaine commande avec ce code unique (valable 1 fois) :\n\n👉 \`${upsellCode}\``);
-                    await interaction.user.send({ embeds: [upsellEmbed] }).catch(()=>{});
-
                     if (interaction.channel) {
                         await interaction.channel.send("✅ **Product delivered to your DMs!** Closing ticket in 5 seconds...").catch(()=>{});
                         setTimeout(() => { channelStates.delete(interaction.channel.id); interaction.channel.delete().catch(()=>{}); }, 5000);
@@ -598,35 +601,30 @@ client.on('messageCreate', async (message) => {
                     
                     const menu = new StringSelectMenuBuilder().setCustomId('product_select').setPlaceholder('Select your product...');
                     const isUserVIP = memoryStats.subscriptions && memoryStats.subscriptions[message.author.id];
-                    const isWeekend = [0, 6].includes(new Date().getDay());
 
                     for (const [id, prod] of Object.entries(memoryStats.products)) { 
                         if (prod.stock && prod.stock !== "∞" && parseInt(prod.stock) <= 0) continue;
-                        if (prod.availability === 'weekend' && !isWeekend) continue; // 🛍️ EPHEMERAL SHOP LOGIC
 
                         let finalPriceStr = "€" + prod.price;
                         if (prod.price === "Custom") finalPriceStr = "Custom";
                         else {
                             let originalPrice = parseInt(prod.price);
-                            
-                            let isFlashSaleActive = memoryStats.settings.flashSale && memoryStats.settings.flashSale.active && memoryStats.settings.flashSale.endsAt > Date.now();
-                            let flashDiscount = isFlashSaleActive ? memoryStats.settings.flashSale.discount : 0;
+                            let discountToApply = 0;
                             let isVIPItem = id === "VIP" || (prod.category && prod.category.includes("SUBSCRIPTION"));
-                            let vipDiscount = (!isVIPItem && isUserVIP) ? 20 : 0;
-                            let promoDiscount = promoApplied ? promoApplied.discount : 0;
 
-                            let maxDiscountToApply = Math.max(vipDiscount, promoDiscount, flashDiscount);
+                            if (!isVIPItem && isUserVIP) { discountToApply = 20; } 
+                            else if (promoApplied) { discountToApply = promoApplied.discount; }
 
-                            if (maxDiscountToApply > 0) {
-                                const newPrice = Math.max(0, originalPrice - (originalPrice * maxDiscountToApply / 100));
-                                finalPriceStr = `€${newPrice.toFixed(2)} (-${maxDiscountToApply}%)`;
+                            if (discountToApply > 0) {
+                                const newPrice = Math.max(0, originalPrice - (originalPrice * discountToApply / 100));
+                                finalPriceStr = `€${newPrice.toFixed(2)} (-${discountToApply}%)`;
                             }
                         }
                         menu.addOptions(new StringSelectMenuOptionBuilder().setLabel(prod.name).setDescription(`Price: ${finalPriceStr}`).setValue(id)); 
                     }
                     
                     if (menu.options.length === 0) {
-                        return message.reply("❌ All products are currently out of stock or unavailable right now.");
+                        return message.reply("❌ All products are currently out of stock.");
                     }
 
                     let replyMsg = "✅ **Code validated! Select your item below:**";
@@ -756,27 +754,6 @@ http.createServer(async (req, res) => {
         return res.end(csv);
     }
 
-    if (req.url.startsWith('/api/backups') && req.method === 'GET') {
-        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
-        try {
-            const files = fs.readdirSync(BACKUP_DIR).filter(f => f.endsWith('.json')).sort().reverse();
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            return res.end(JSON.stringify(files.map(f => ({ name: f, size: (fs.statSync(path.join(BACKUP_DIR, f)).size / 1024).toFixed(2) + ' KB' }))));
-        } catch(e) { return res.writeHead(500).end("[]"); }
-    }
-
-    if (req.url.startsWith('/api/download_backup') && req.method === 'GET') {
-        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
-        const urlObj = new URL(req.url, `http://${req.headers.host}`);
-        const file = urlObj.searchParams.get('file');
-        const filePath = path.join(BACKUP_DIR, file);
-        if (file && fs.existsSync(filePath)) {
-            res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Disposition': `attachment; filename="${file}"` });
-            return fs.createReadStream(filePath).pipe(res);
-        }
-        return res.writeHead(404).end('File not found');
-    }
-
     if (req.url === '/api/live' && req.method === 'GET') {
         if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         const guild = client.guilds.cache.first(); let activeTickets = 0;
@@ -792,7 +769,7 @@ http.createServer(async (req, res) => {
         if (guild) {
             tickets = guild.channels.cache
                 .filter(c => c.name.startsWith('shop-') || c.name.startsWith('support-'))
-                .map(c => ({ id: c.id, name: c.name, tag: memoryStats.ticket_tags?.[c.id] || null }))
+                .map(c => ({ id: c.id, name: c.name }))
                 .sort((a, b) => a.name.localeCompare(b.name));
         }
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -904,48 +881,15 @@ http.createServer(async (req, res) => {
                 const guild = client.guilds.cache.first();
                 if (!guild) return res.writeHead(404).end('Guild not found');
 
-                // --- 🏷️ TAG TICKET ---
-                if (data.action === 'tag_ticket') {
-                    if (!memoryStats.ticket_tags) memoryStats.ticket_tags = {};
-                    if (data.color) { memoryStats.ticket_tags[data.channelId] = data.color; } 
-                    else { delete memoryStats.ticket_tags[data.channelId]; }
-                    syncCloud();
-                }
-                // --- 💾 FORCE BACKUP ---
-                else if (data.action === 'create_backup') {
-                    const ts = new Date().toISOString().replace(/:/g, '-').split('.')[0];
-                    const backupPath = path.join(BACKUP_DIR, `backup_manual_${ts}.json`);
-                    fs.writeFileSync(backupPath, JSON.stringify(memoryStats));
-                    syncCloud();
-                }
-                // --- 🚀 FLASH SALE ---
-                else if (data.action === 'toggle_flash_sale') {
-                    if (!memoryStats.settings.flashSale) memoryStats.settings.flashSale = {};
-                    if (data.state) {
-                        memoryStats.settings.flashSale.active = true;
-                        memoryStats.settings.flashSale.discount = parseInt(data.discount) || 0;
-                        memoryStats.settings.flashSale.endsAt = Date.now() + ((parseInt(data.durationHours) || 1) * 60 * 60 * 1000);
-                        if (data.channelId) {
-                            const announceChannel = await guild.channels.fetch(data.channelId).catch(() => null);
-                            if (announceChannel) {
-                                const unixTime = Math.floor(memoryStats.settings.flashSale.endsAt / 1000);
-                                const embed = new EmbedBuilder().setColor('#f97316').setTitle('🔥 VENTE FLASH EN COURS ! 🔥').setDescription(`Profitez immédiatement de **-${memoryStats.settings.flashSale.discount}%** sur toute la boutique !\n\n⏳ **Se termine:** <t:${unixTime}:R>\n\n*La réduction est appliquée automatiquement lors de l'achat en ticket.*`);
-                                await announceChannel.send({ embeds: [embed] }).catch(()=>{});
-                            }
-                        }
-                    } else {
-                        memoryStats.settings.flashSale.active = false;
-                        memoryStats.settings.flashSale.endsAt = 0;
-                    }
-                    syncCloud();
-                }
                 // --- 📝 MANUAL TRANSACTION ---
-                else if (data.action === 'create_manual_tx') {
+                if (data.action === 'create_manual_tx') {
                     const price = parseFloat(data.price);
                     if (isNaN(price) || price < 0) throw new Error("Invalid price");
+                    
                     const txDate = data.date ? new Date(data.date) : new Date();
                     const dateStrDisplay = txDate.toLocaleString('en-US');
                     const dateKey = txDate.toISOString().split('T')[0];
+                    
                     const username = (data.username && data.username.trim() !== '') ? data.username.trim() : "Manual Entry";
                     const product = (data.product && data.product.trim() !== '') ? data.product.trim() : "Custom Amount";
 
@@ -955,12 +899,18 @@ http.createServer(async (req, res) => {
                     memoryStats.total_transactions = (memoryStats.total_transactions || 0) + 1;
 
                     if (!Array.isArray(memoryStats.recent_transactions)) memoryStats.recent_transactions = [];
-                    memoryStats.recent_transactions.unshift({ username: username, product: product, price: price, date: dateStrDisplay });
+                    memoryStats.recent_transactions.unshift({
+                        username: username,
+                        product: product,
+                        price: price,
+                        date: dateStrDisplay
+                    });
                     if (memoryStats.recent_transactions.length > 50) memoryStats.recent_transactions.pop();
 
                     if (username !== "Manual Entry") {
                         if(!memoryStats.user_spending) memoryStats.user_spending = {};
                         memoryStats.user_spending[username] = (memoryStats.user_spending[username] || 0) + price;
+                        
                         if(!memoryStats.user_history) memoryStats.user_history = {};
                         if(!memoryStats.user_history[username]) memoryStats.user_history[username] = [];
                         memoryStats.user_history[username].unshift({ product: product, price: price, date: dateStrDisplay });
@@ -973,6 +923,7 @@ http.createServer(async (req, res) => {
 
                     syncCloud();
                 }
+                // --- 📝 EDIT TODAY'S EARNINGS ---
                 else if (data.action === 'edit_today_earnings') {
                     const todayStr = new Date().toISOString().split('T')[0];
                     const oldVal = memoryStats.revenue[todayStr] || 0;
@@ -981,6 +932,7 @@ http.createServer(async (req, res) => {
                     memoryStats.total_revenue = Math.max(0, memoryStats.total_revenue + (newVal - oldVal));
                     syncCloud();
                 }
+                // --- MODERATION DES REVIEWS PENDING ---
                 else if (data.action === 'approve_review') {
                     if (!memoryStats.pending_reviews) memoryStats.pending_reviews = [];
                     const idx = memoryStats.pending_reviews.findIndex(r => r.id === data.id);
@@ -1007,9 +959,11 @@ http.createServer(async (req, res) => {
                         syncCloud();
                     }
                 }
+                // --------------------------------------
                 else if (data.action === 'toggle_maintenance') {
                     if (!memoryStats.settings) memoryStats.settings = {};
                     if (!memoryStats.settings.maintenance) memoryStats.settings.maintenance = { active: false, endsAt: 0, channelId: "" };
+                    
                     const state = data.state;
                     const duration = parseInt(data.duration) || 60;
                     const channelId = data.channelId || "";
@@ -1109,23 +1063,32 @@ http.createServer(async (req, res) => {
                             const tx = memoryStats.recent_transactions[txIndex];
                             memoryStats.recent_transactions.splice(txIndex, 1);
                             
+                            // 🔄 CORRECTION 1: Total Revenue and transactions
                             memoryStats.total_transactions = Math.max(0, memoryStats.total_transactions - 1);
                             memoryStats.total_revenue = Math.max(0, memoryStats.total_revenue - tx.price);
                             
+                            // 🔄 CORRECTION 2: Today's Revenue
                             try {
                                 const revKey = new Date(tx.date).toISOString().split('T')[0];
-                                if (memoryStats.revenue[revKey]) { memoryStats.revenue[revKey] = Math.max(0, memoryStats.revenue[revKey] - tx.price); }
+                                if (memoryStats.revenue[revKey]) {
+                                    memoryStats.revenue[revKey] = Math.max(0, memoryStats.revenue[revKey] - tx.price);
+                                }
                             } catch(err) {}
 
+                            // 🔄 CORRECTION 3: User spending
                             if (memoryStats.user_spending && memoryStats.user_spending[tx.username]) {
                                 memoryStats.user_spending[tx.username] = Math.max(0, memoryStats.user_spending[tx.username] - tx.price);
                             }
                             
+                            // 🔄 CORRECTION 4: Remove from Activity Feed (Live Pulse)
                             if (Array.isArray(memoryStats.activity_feed)) {
                                 const feedMsg = `💰 €${tx.price} Sale: ${tx.username} bought ${tx.product}`;
                                 const feedIdx = memoryStats.activity_feed.findIndex(f => f.type === 'sale' && f.message === feedMsg);
-                                if (feedIdx > -1) { memoryStats.activity_feed.splice(feedIdx, 1); }
+                                if (feedIdx > -1) {
+                                    memoryStats.activity_feed.splice(feedIdx, 1);
+                                }
                             }
+
                             syncCloud();
                         } else throw new Error("Transaction not found");
                     }
@@ -1133,14 +1096,14 @@ http.createServer(async (req, res) => {
                 else if (data.action === 'edit_product') {
                     if (memoryStats.products && memoryStats.products[data.id]) {
                         const oldCat = memoryStats.products[data.id].category || "✨ ITEMS";
-                        memoryStats.products[data.id] = { name: data.name, price: data.price, link: data.link, category: oldCat, stock: data.stock || "∞", availability: data.availability || "always", desc: data.desc };
+                        memoryStats.products[data.id] = { name: data.name, price: data.price, link: data.link, category: oldCat, stock: data.stock || "∞", desc: data.desc };
                         syncCloud();
                     }
                 }
                 else if (data.action === 'add_product') {
                     if (!memoryStats.products) memoryStats.products = {};
                     const newId = (Object.keys(memoryStats.products).length + 1).toString();
-                    memoryStats.products[newId] = { name: data.name, price: data.price, link: data.link, category: "✨ NEW ITEMS", stock: data.stock || "∞", availability: data.availability || "always", desc: data.desc };
+                    memoryStats.products[newId] = { name: data.name, price: data.price, link: data.link, category: "✨ NEW ITEMS", stock: data.stock || "∞", desc: data.desc };
                     syncCloud();
                 }
                 else if (data.action === 'delete_product') {
@@ -1495,7 +1458,6 @@ http.createServer(async (req, res) => {
             "           <button class='nav-btn active' onclick='window.switchTab(\"overview\", this)' id='nav-overview'>📊 Overview</button>",
             "           <button class='nav-btn' onclick='window.switchTab(\"vip\", this)' id='nav-vip'>👑 VIP Pass</button>",
             "           <button class='nav-btn' onclick='window.switchTab(\"livechat\", this)' id='nav-livechat'>💬 Live Chat <span class='nav-badge' id='badge-chat'>0</span></button>",
-            "           <button class='nav-btn' onclick='window.switchTab(\"marketing\", this)' id='nav-marketing'>🚀 Marketing</button>",
             "           <button class='nav-btn' onclick='window.switchTab(\"analytics\", this)' id='nav-analytics'>📈 Analytics</button>",
             "           <button class='nav-btn' onclick='window.switchTab(\"transactions\", this)' id='nav-transactions'>💳 Transactions</button>",
             "           <button class='nav-btn' onclick='window.switchTab(\"products\", this)' id='nav-products'>📦 Products</button>",
@@ -1503,7 +1465,6 @@ http.createServer(async (req, res) => {
             "           <button class='nav-btn' onclick='window.switchTab(\"referrals\", this)' id='nav-referrals'>🔗 Referrals</button>",
             "           <button class='nav-btn' onclick='window.switchTab(\"moderation\", this)' id='nav-moderation'>🛡️ Moderation</button>",
             "           <button class='nav-btn' onclick='window.switchTab(\"monitoring\", this)' id='nav-monitoring'>📡 Monitoring</button>",
-            "           <button class='nav-btn' onclick='window.switchTab(\"backups\", this)' id='nav-backups'>💾 Backups</button>",
             "           <button class='nav-btn' onclick='window.switchTab(\"admin\", this)' id='nav-admin'>⚙️ Admin Config <span class='nav-badge' id='badge-admin'>0</span></button>",
             "       </div>",
             "",
@@ -1550,52 +1511,6 @@ http.createServer(async (req, res) => {
             "           </div>",
             "       </div>",
             "",
-            "       <div id='marketing' class='tab-content'>",
-            "           <div class='box' style='border:1px solid var(--accent-orange); background:linear-gradient(145deg, rgba(249, 115, 22, 0.05), transparent);'>",
-            "               <h2 style='color:var(--accent-orange); margin-top:0;'>🔥 Vente Flash & Promotions (Global)</h2>",
-            "               <p class='text-muted'>Applique une réduction globale temporaire sur l'ensemble de la boutique.</p>",
-            "               <div style='display:flex; gap:10px; flex-wrap:wrap; margin-top:15px; align-items:center;'>",
-            "                   <input type='number' id='flash-discount' placeholder='Réduction (%)' value='15' style='width:120px; border-color:rgba(249,115,22,0.3);'>",
-            "                   <input type='number' id='flash-duration' placeholder='Durée (Heures)' value='3' style='width:120px; border-color:rgba(249,115,22,0.3);'>",
-            "                   <input type='text' id='flash-channel' placeholder='ID Salon Annonce (Optionnel)' style='flex:1; min-width:200px; border-color:rgba(249,115,22,0.3);'>",
-            "                   <button class='admin-btn' style='margin:0; background:var(--accent-orange);' onclick='window.toggleFlashSale(true)'>▶️ Démarrer Vente Flash</button>",
-            "                   <button class='admin-btn' style='margin:0; background:transparent; border:1px solid var(--accent-orange); color:var(--accent-orange);' onclick='window.toggleFlashSale(false)'>🛑 Arrêter</button>",
-            "               </div>",
-            "           </div>",
-            "           <div class='box'>",
-            "               <h2>🎟️ Codes Promo (Manuel)</h2>",
-            "               <p class='text-muted'>Génère des codes personnalisés pour tes clients.</p>",
-            "               <div style='display:flex; gap:10px; flex-wrap:wrap;'><input type='text' id='promoName' placeholder='CODE' style='flex:1; min-width:150px;'><input type='number' id='promoDiscount' placeholder='% Off' style='width:100px;'><input type='number' id='promoLimit' placeholder='Uses' style='width:100px;'><button class='admin-btn' style='margin:0;' onclick='window.createPromo()'>➕ Créer</button></div>",
-            "               <div style='overflow-x:auto; margin-top:20px;'><table><thead><tr><th>Code</th><th>Discount</th><th>Usage</th><th>Action</th></tr></thead><tbody id='target-promos'></tbody></table></div>",
-            "           </div>",
-            "           <div class='box' style='border:1px solid var(--accent-pink); background:linear-gradient(145deg, rgba(236, 72, 153, 0.05), transparent);'>",
-            "               <h2 style='color:var(--accent-pink); margin-top:0;'>🛒 Automatisations (Actives)</h2>",
-            "               <p class='text-muted'>Ces systèmes fonctionnent en tâche de fond pour maximiser tes revenus.</p>",
-            "               <div style='display:grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap:15px; margin-top:15px;'>",
-            "                   <div style='background:rgba(0,0,0,0.3); padding:15px; border-radius:12px; border-left:4px solid var(--accent-green);'>",
-            "                       <h3 style='margin:0 0 5px 0; color:var(--accent-green);'>✅ Paniers Abandonnés</h3>",
-            "                       <p style='font-size:0.85em; color:var(--text-muted); margin:0;'>Relance auto par DM après 2h d'inactivité avec un code -10%.</p>",
-            "                   </div>",
-            "                   <div style='background:rgba(0,0,0,0.3); padding:15px; border-radius:12px; border-left:4px solid var(--accent-purple);'>",
-            "                       <h3 style='margin:0 0 5px 0; color:var(--accent-purple);'>✅ Upsell Post-Achat</h3>",
-            "                       <p style='font-size:0.85em; color:var(--text-muted); margin:0;'>Envoi immédiat d'un code -30% (valable 1 fois) après chaque livraison.</p>",
-            "                   </div>",
-            "               </div>",
-            "           </div>",
-            "       </div>",
-            "",
-            "       <div id='backups' class='tab-content'>",
-            "           <div class='box'>",
-            "               <h2>💾 Sauvegarde Cloud Quotidienne</h2>",
-            "               <p class='text-muted'>Ton système sauvegarde automatiquement ta base de données chaque jour sur le serveur local. La synchro Upstash se fait en temps réel.</p>",
-            "               <button class='admin-btn' onclick='window.forceBackup()' style='background:var(--accent-green);'>💾 Forcer une Sauvegarde Maintenant</button>",
-            "           </div>",
-            "           <div class='box'>",
-            "               <h2>📂 Fichiers de Sauvegarde Locaux</h2>",
-            "               <div style='overflow-x:auto;'><table><thead><tr><th>Nom du Fichier</th><th>Taille</th><th>Action</th></tr></thead><tbody id='target-backups'></tbody></table></div>",
-            "           </div>",
-            "       </div>",
-            "",
             "       <div id='livechat' class='tab-content'>",
             "           <div class='box'>",
             "               <h2>💬 Live Chat Console</h2>",
@@ -1607,11 +1522,6 @@ http.createServer(async (req, res) => {
             "                           <div style='margin:auto; color:var(--text-muted); text-align:center;'><h2 style='font-size:3em; margin:0;'>👈</h2><p>Select a ticket to view</p></div>",
             "                       </div>",
             "                       <div id='quickActionsMenu' class='quick-actions-menu'>",
-            "                           <button class='admin-btn' style='margin:0; padding:6px 12px; font-size:0.85em; background: rgba(239, 68, 68, 0.2); color: var(--accent-red);' onclick='window.tagTicket(\"red\")'>🔴 Urgent</button>",
-            "                           <button class='admin-btn' style='margin:0; padding:6px 12px; font-size:0.85em; background: rgba(16, 185, 129, 0.2); color: var(--accent-green);' onclick='window.tagTicket(\"green\")'>🟢 Solved</button>",
-            "                           <button class='admin-btn' style='margin:0; padding:6px 12px; font-size:0.85em; background: rgba(56, 189, 248, 0.2); color: var(--accent-blue);' onclick='window.tagTicket(\"blue\")'>🔵 Info</button>",
-            "                           <button class='admin-btn' style='margin:0; padding:6px 12px; font-size:0.85em; background: rgba(255, 255, 255, 0.1); color: var(--text-muted);' onclick='window.tagTicket(null)'>⚪ Clear Tag</button>",
-            "                           <span style='width:2px; height:20px; background:rgba(255,255,255,0.1); margin:auto 5px;'></span>",
             "                           <button class='admin-btn' style='margin:0; padding:6px 12px; font-size:0.85em; background: rgba(255,255,255,0.05);' onclick='window.sendQuickResponse(\"welcome\")'>👋 Welcome</button>",
             "                           <button class='admin-btn' style='margin:0; padding:6px 12px; font-size:0.85em; background: rgba(255,255,255,0.05);' onclick='window.sendQuickResponse(\"wait\")'>⏳ Wait</button>",
             "                           <button class='admin-btn' style='margin:0; padding:6px 12px; font-size:0.85em; background: rgba(255,255,255,0.05);' onclick='window.sendQuickResponse(\"resolved\")'>✅ Resolved?</button>",
@@ -1619,7 +1529,7 @@ http.createServer(async (req, res) => {
             "                           <button class='admin-btn' style='margin:0; padding:6px 12px; font-size:0.85em; background: rgba(239, 68, 68, 0.2); color: var(--accent-red);' onclick='window.sendQuickResponse(\"close\")'>🔒 Close Ticket</button>",
             "                       </div>",
             "                       <div class='chat-input-area'>",
-            "                           <button id='quickActionsToggle' class='chat-attachment-btn toggle-plus' onclick='document.getElementById(\"quickActionsMenu\").classList.toggle(\"open\"); this.classList.toggle(\"open\");' title='Quick Actions & Tags'>+</button>",
+            "                           <button id='quickActionsToggle' class='chat-attachment-btn toggle-plus' onclick='document.getElementById(\"quickActionsMenu\").classList.toggle(\"open\"); this.classList.toggle(\"open\");' title='Quick Actions'>+</button>",
             "                           <div class='chat-attachment-wrapper'>",
             "                               <input type='file' id='chat-file-input' style='display:none' accept='image/*' onchange='document.getElementById(\"attach-badge\").style.display=\"block\"'>",
             "                               <button class='chat-attachment-btn' onclick='document.getElementById(\"chat-file-input\").click()' title='Attach Image'>📎</button>",
@@ -1664,7 +1574,6 @@ http.createServer(async (req, res) => {
             "                   <input type='text' id='newProdName' placeholder='Product Name (e.g. VIP Pack)' style='flex:1; min-width:200px;'>",
             "                   <input type='text' id='newProdPrice' placeholder='Price in €' style='width:120px;'>",
             "                   <input type='text' id='newProdStock' placeholder='Stock (e.g. ∞)' style='width:80px;'>",
-            "                   <select id='newProdAvail' style='width:150px;'><option value='always'>Always Open</option><option value='weekend'>Weekend Only</option></select>",
             "               </div>",
             "               <div style='display:flex; gap:15px; flex-wrap:wrap; margin-bottom:5px;'>",
             "                   <input type='text' id='newProdDesc' placeholder='Description (e.g. Include 5 exclusive HD photos)' style='flex:1; min-width:250px;'>",
@@ -1773,6 +1682,12 @@ http.createServer(async (req, res) => {
             "           </div>",
             "            ",
             "           <div class='box'><h2>⚡ 1-Click Shop Setup</h2><p class='text-muted'>Clear the old menu and instantly post the new aesthetic setup in your Discord shop channel.</p><button class='admin-btn' style='background:var(--accent-purple); width:100%; padding:15px;' onclick='window.triggerShopRefresh()'>🔄 Setup and clear old menu</button></div>",
+            "           ",
+            "           <div class='box'>",
+            "               <h2>🎟️ Promo Codes</h2>",
+            "               <div style='display:flex; gap:10px; flex-wrap:wrap;'><input type='text' id='promoName' placeholder='CODE' style='flex:1; min-width:150px;'><input type='number' id='promoDiscount' placeholder='% Off' style='width:100px;'><input type='number' id='promoLimit' placeholder='Uses' style='width:100px;'><button class='admin-btn' style='margin:0;' onclick='window.createPromo()'>➕ Create</button></div>",
+            "               <div style='overflow-x:auto; margin-top:20px;'><table><thead><tr><th>Code</th><th>Discount</th><th>Usage</th><th>Action</th></tr></thead><tbody id='target-promos'></tbody></table></div>",
+            "           </div>",
             "           ",
             "           <div class='box'>",
             "               <h2>🌟 Manual Customer Review</h2>",
@@ -1907,7 +1822,6 @@ http.createServer(async (req, res) => {
             "                               const dash = document.getElementById('dashboard-container');",
             "                               if(dash) dash.style.display = 'block'; ",
             "                               window.renderSalesChart(7);",
-            "                               window.loadBackups();",
             "                           }, 1200);",
             "                       }, 3000);",
             "                   }, 400);",
@@ -1921,6 +1835,7 @@ http.createServer(async (req, res) => {
             "        function processInitData(data) { ",
             "            rawStats=data.memoryStats; PRODUCT_DATA=data.PRODUCT_DATA; currentMonthRevenue=data.monthRevenue; PIN=data.PIN; lastTxCount=rawStats.total_transactions||0; ",
             "            ",
+            "            // 🔥 CORRECTION DU CALCUL TOTAL REVENUE BASÉ SUR L'HISTORIQUE RÉEL 🔥",
             "            let calcTotalRev = 0;",
             "            if(rawStats.revenue) {",
             "                Object.values(rawStats.revenue).forEach(val => calcTotalRev += parseFloat(val));",
@@ -1992,11 +1907,11 @@ http.createServer(async (req, res) => {
             "                  let pPrice = p.price==='Custom'?'Custom':'€'+p.price; ",
             "                  let pLink = p.link ? '<a href=\"' + escapeHTML(p.link) + '\" target=\"_blank\" style=\"color:var(--accent-blue);text-decoration:none;\">[🔗 Open Delivery Link]</a>' : '<span class=\"text-muted\">No Link</span>'; ",
             "                  let stockDisplay = p.stock === '∞' || !p.stock ? '∞' : p.stock; ",
-            "                  let availDisplay = p.availability === 'weekend' ? ' <span style=\"color:#a855f7;font-size:0.75em;font-weight:bold;\">[WEEKEND ONLY]</span>' : '';",
             "                  ",
+            "                  // Nouveau Design pour les produits avec la description intégrée",
             "                  let pDesc = p.desc ? '<div class=\"prod-desc\">' + escapeHTML(p.desc) + '</div>' : '<div class=\"prod-desc\" style=\"font-style:italic; opacity:0.5;\">No description provided.</div>';",
             "",
-            "                  prodHtml+= '<div class=\"product-card\"><div class=\"prod-header\"><div class=\"prod-title\">' + icon + ' ' + escapeHTML(p.name) + availDisplay + '</div><div class=\"prod-id\">ID: ' + id + '</div></div><div class=\"prod-price\">' + pPrice + ' <span class=\"prod-stock\">Stock: ' + escapeHTML(stockDisplay) + '</span></div>' + pDesc + '<div class=\"prod-link\">' + pLink + '</div><div class=\"prod-actions\"><button class=\"admin-btn\" style=\"background:rgba(255,255,255,0.1);\" onclick=\"window.editProduct(\\'' + id + '\\')\">✏️ Edit</button><button class=\"admin-btn\" style=\"background:rgba(239, 68, 68, 0.2); color:var(--accent-red);\" onclick=\"window.deleteProduct(\\'' + id + '\\')\">🗑️ Delete</button></div></div>'; ",
+            "                  prodHtml+= '<div class=\"product-card\"><div class=\"prod-header\"><div class=\"prod-title\">' + icon + ' ' + escapeHTML(p.name) + '</div><div class=\"prod-id\">ID: ' + id + '</div></div><div class=\"prod-price\">' + pPrice + ' <span class=\"prod-stock\">Stock: ' + escapeHTML(stockDisplay) + '</span></div>' + pDesc + '<div class=\"prod-link\">' + pLink + '</div><div class=\"prod-actions\"><button class=\"admin-btn\" style=\"background:rgba(255,255,255,0.1);\" onclick=\"window.editProduct(\\'' + id + '\\')\">✏️ Edit</button><button class=\"admin-btn\" style=\"background:rgba(239, 68, 68, 0.2); color:var(--accent-red);\" onclick=\"window.deleteProduct(\\'' + id + '\\')\">🗑️ Delete</button></div></div>'; ",
             "              }); ",
             "          } ",
             "          document.getElementById('target-products').innerHTML=prodHtml;",
@@ -2076,27 +1991,6 @@ http.createServer(async (req, res) => {
             "          document.getElementById('target-pending-reviews').innerHTML=prHtml; ",
             "        }",
             "            ",
-            "        window.loadBackups = async function() { ",
-            "            try {",
-            "                const res = await fetch('/api/backups');",
-            "                const files = await res.json();",
-            "                let html = '';",
-            "                if (files.length === 0) { html = '<tr><td colspan=\"3\" class=\"text-muted text-center\">Aucune sauvegarde trouvée.</td></tr>'; }",
-            "                else { files.forEach(f => { html += '<tr><td>' + escapeHTML(f.name) + '</td><td>' + f.size + '</td><td><a href=\"/api/download_backup?file=' + encodeURIComponent(f.name) + '\" target=\"_blank\"><button class=\"admin-btn\" style=\"padding:5px 10px; margin:0;\">⬇️ Télécharger</button></a></td></tr>'; }); }",
-            "                document.getElementById('target-backups').innerHTML = html;",
-            "            } catch(e) {}",
-            "        };",
-            "        window.forceBackup = async function() { await window.executeAction({action:'create_backup'}); showToast('Sauvegarde effectuée !'); window.loadBackups(); };",
-            "",
-            "        window.toggleFlashSale = async function(state) { ",
-            "            const discount = document.getElementById('flash-discount').value;",
-            "            const duration = document.getElementById('flash-duration').value;",
-            "            const channel = document.getElementById('flash-channel').value;",
-            "            if(state && !discount) return showToast('Veuillez définir une réduction', 'error');",
-            "            await window.executeAction({action:'toggle_flash_sale', state:state, discount:discount, durationHours:duration, channelId:channel});",
-            "            if(state) showToast('Vente Flash lancée !'); else showToast('Vente Flash arrêtée.');",
-            "        };",
-            "            ",
             "        window.editTodayEarnings = async function() { const current = document.getElementById('ui-today-rev').innerText.replace('€', ''); const n = prompt(\"Manual override for Today's Earnings (€):\", current); if(n !== null) { const parsed = parseFloat(n); if(!isNaN(parsed)) { await window.executeAction({action:'edit_today_earnings', value: parsed}); } } };",
             "",
             "        window.approveReview = async function(id) { await window.executeAction({action:'approve_review', id:id}); };",
@@ -2111,7 +2005,6 @@ http.createServer(async (req, res) => {
             "            document.getElementById('newProdName').value = p.name; ",
             "            document.getElementById('newProdPrice').value = p.price; ",
             "            document.getElementById('newProdStock').value = p.stock || '∞'; ",
-            "            document.getElementById('newProdAvail').value = p.availability || 'always'; ",
             "            document.getElementById('newProdLink').value = p.link; ",
             "            document.getElementById('newProdDesc').value = p.desc || ''; ",
             "            document.getElementById('saveProdBtn').innerText = '💾 Update Product'; ",
@@ -2124,7 +2017,6 @@ http.createServer(async (req, res) => {
             "            document.getElementById('newProdName').value = ''; ",
             "            document.getElementById('newProdPrice').value = ''; ",
             "            document.getElementById('newProdStock').value = ''; ",
-            "            document.getElementById('newProdAvail').value = 'always'; ",
             "            document.getElementById('newProdLink').value = ''; ",
             "            document.getElementById('newProdDesc').value = ''; ",
             "            document.getElementById('saveProdBtn').innerText = '➕ Add Product'; ",
@@ -2138,12 +2030,11 @@ http.createServer(async (req, res) => {
             "            const n = document.getElementById('newProdName').value; ",
             "            const p = document.getElementById('newProdPrice').value; ",
             "            const s = document.getElementById('newProdStock').value || '∞'; ",
-            "            const a = document.getElementById('newProdAvail').value || 'always'; ",
             "            const l = document.getElementById('newProdLink').value; ",
             "            const d = document.getElementById('newProdDesc').value; ",
             "            if(!n||!p) return alert('Name & Price required'); ",
-            "            if(id) { await window.executeAction({action:'edit_product', id:id, name:n, price:p, stock:s, availability:a, link:l, desc:d}, true); } ",
-            "            else { await window.executeAction({action:'add_product', name:n, price:p, stock:s, availability:a, link:l, desc:d}, true); } ",
+            "            if(id) { await window.executeAction({action:'edit_product', id:id, name:n, price:p, stock:s, link:l, desc:d}, true); } ",
+            "            else { await window.executeAction({action:'add_product', name:n, price:p, stock:s, link:l, desc:d}, true); } ",
             "        };",
             "        ",
             "        window.deleteProduct = async function(id) { if(confirm('Delete product?')) await window.executeAction({action:'delete_product', id:id}, true); };",
@@ -2155,9 +2046,9 @@ http.createServer(async (req, res) => {
             "",
             "        window.triggerShopRefresh = async function() { await window.executeAction({action:'refresh_setup'}, false); };",
             "        ",
-            "        window.switchTab = function(tabId, btn) { document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active')); document.querySelectorAll('.nav-btn').forEach(el=>el.classList.remove('active')); document.getElementById(tabId).classList.add('active'); btn.classList.add('active'); if(tabId === 'moderation' && !isMembersLoaded) window.loadAllMembers(); if(tabId === 'livechat'){ window.loadTicketsForChat(); if(activeChatChannel && !chatPollInterval){ chatPollInterval = setInterval(window.fetchChatMessages, 3000); } } else { if(chatPollInterval){ clearInterval(chatPollInterval); chatPollInterval = null; } } if(tabId === 'analytics'){ renderAnalyticsCharts(); } if(tabId === 'overview'){ window.renderSalesChart(7); } if(tabId === 'backups'){ window.loadBackups(); } };",
+            "        window.switchTab = function(tabId, btn) { document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active')); document.querySelectorAll('.nav-btn').forEach(el=>el.classList.remove('active')); document.getElementById(tabId).classList.add('active'); btn.classList.add('active'); if(tabId === 'moderation' && !isMembersLoaded) window.loadAllMembers(); if(tabId === 'livechat'){ window.loadTicketsForChat(); if(activeChatChannel && !chatPollInterval){ chatPollInterval = setInterval(window.fetchChatMessages, 3000); } } else { if(chatPollInterval){ clearInterval(chatPollInterval); chatPollInterval = null; } } if(tabId === 'analytics'){ renderAnalyticsCharts(); } if(tabId === 'overview'){ window.renderSalesChart(7); } };",
             "        ",
-            "        window.showClickableToast = function(msg, tabId) { const t=document.getElementById('toast'); t.innerHTML = '🔔 <span>' + msg + '</span> <button class=\"admin-btn\" style=\"margin:0 0 0 12px; padding:6px 12px; font-size:0.85em; background:#fff; color:#000; box-shadow:none;\" onclick=\"window.switchTab(\\''+tabId+'\\', document.getElementById(\\'nav-'+tabId+'\\')); this.parentElement.classList.remove(\\'show\\');\">View ➔</button>'; t.style.borderColor = 'var(--accent-blue)'; t.style.boxShadow = '0 10px 30px rgba(56, 189, 248, 0.4)'; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 6000); };",
+            "        window.showClickableToast = function(msg, tabId) { const t=document.getElementById('toast'); t.innerHTML = '🔔 <span>' + msg + '</span> <button class=\"admin-btn\" style=\"margin:0 0 0 12px; padding:6px 12px; font-size:0.85em; background:#fff; color:#000; box-shadow:none;\" onclick=\"window.switchTab(\\''+tabId+'\\', document.querySelector(\\'button[onclick*=\\''+tabId+'\\']\\')); this.parentElement.classList.remove(\\'show\\');\">View ➔</button>'; t.style.borderColor = 'var(--accent-blue)'; t.style.boxShadow = '0 10px 30px rgba(56, 189, 248, 0.4)'; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 6000); };",
             "        ",
             "        function showToast(msg, type='success') { const t=document.getElementById('toast'); t.innerHTML = (type==='error'?'❌':'✅') + ' <span>' + msg + '</span>'; t.style.borderColor = type === 'error' ? 'rgba(239,68,68,0.3)' : 'rgba(16,185,129,0.3)'; t.style.boxShadow = type === 'error' ? '0 10px 30px rgba(239,68,68,0.2)' : '0 10px 30px rgba(16,185,129,0.2)'; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 3000); }",
             "        ",
@@ -2172,6 +2063,7 @@ http.createServer(async (req, res) => {
             "        ",
             "        document.getElementById('ui-conv-rate').innerText=data.conversionRate+'%'; buildStaticTables(); updateMaintenanceBadge(data.maintenance); updateBadgesAndFeed(data); ",
             "",
+            "        // 🛎️ NOTIFICATION ENGINE (GLOBAL)",
             "        if(data.globalLastTicketMsg > trackedLastTicketMsg) {",
             "            if(trackedLastTicketMsg !== 0) {",
             "                const chatTab = document.getElementById('livechat');",
@@ -2296,13 +2188,12 @@ http.createServer(async (req, res) => {
             "        window.runDiagnostics = async function() { document.getElementById('ui-upstash-status').innerText = '⏳ Waiting...'; document.getElementById('ui-upstash-status').className = 'value text-muted'; document.getElementById('ui-rewarble-status').innerText = '⏳ Waiting...'; document.getElementById('ui-rewarble-status').className = 'value text-muted'; document.getElementById('ui-discord-ws').innerText = '-- ms'; try { const res = await fetch('/api/monitoring'); const data = await res.json(); const upstashCard = document.getElementById('card-upstash'); const rewarbleCard = document.getElementById('card-rewarble'); if (data.upstash.status === 'online') { document.getElementById('ui-upstash-status').innerHTML = '🟢 Connected'; document.getElementById('ui-upstash-status').className = 'value text-green'; upstashCard.style.borderLeft = '4px solid var(--accent-green)'; } else { document.getElementById('ui-upstash-status').innerHTML = '🔴 Offline'; document.getElementById('ui-upstash-status').className = 'value text-red'; upstashCard.style.borderLeft = '4px solid var(--accent-red)'; } document.getElementById('ui-upstash-ping').innerText = 'Latency: ' + data.upstash.latency + ' ms'; if (data.rewarble.status === 'online') { document.getElementById('ui-rewarble-status').innerHTML = '🟢 Connected'; document.getElementById('ui-rewarble-status').className = 'value text-green'; rewarbleCard.style.borderLeft = '4px solid var(--accent-green)'; } else { document.getElementById('ui-rewarble-status').innerHTML = '🔴 Error/Offline'; document.getElementById('ui-rewarble-status').className = 'value text-red'; rewarbleCard.style.borderLeft = '4px solid var(--accent-red)'; } document.getElementById('ui-rewarble-ping').innerText = 'Latency: ' + data.rewarble.latency + ' ms'; document.getElementById('ui-discord-ws').innerText = data.discord.ws_ping + ' ms'; } catch(e) { showToast('❌ Diagnostics Failed', 'error'); } };",
             "        window.testActionLatency = async function() { const resultDiv = document.getElementById('latency-result'); resultDiv.innerText = 'Testing in progress...'; resultDiv.style.color = 'var(--text-muted)'; const startTime = Date.now(); try { const res = await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'ping_test', pin: PIN }) }); if (res.ok) { const totalTime = Date.now() - startTime; resultDiv.innerText = totalTime + ' ms'; if (totalTime < 500) resultDiv.style.color = 'var(--accent-green)'; else if (totalTime < 1500) resultDiv.style.color = 'var(--accent-orange)'; else resultDiv.style.color = 'var(--accent-red)'; } else { resultDiv.innerText = 'HTTP Error'; resultDiv.style.color = 'var(--accent-red)'; } } catch(e) { resultDiv.innerText = 'Network Error'; resultDiv.style.color = 'var(--accent-red)'; } };",
             "        ",
-            "        window.loadTicketsForChat = async function() { try { const res = await fetch('/api/tickets'); const tickets = await res.json(); let html = ''; if(tickets.length === 0) { html = '<p class=\"text-muted text-center\" style=\"margin-top:20px;\">No active tickets.</p>'; } else { const shopTickets = tickets.filter(t => t.name.startsWith('shop-')); const supportTickets = tickets.filter(t => t.name.startsWith('support-')); if(shopTickets.length > 0) { html += '<div style=\"font-size:0.85em; text-transform:uppercase; color:var(--accent-blue); font-weight:800; margin: 10px 0 5px 5px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom:3px;\">🛒 Shop (' + shopTickets.length + ')</div>'; shopTickets.forEach(t => { const isActive = activeChatChannel === t.id ? 'active' : ''; let tagIcon = t.tag === 'red' ? '🔴 ' : (t.tag === 'green' ? '🟢 ' : (t.tag === 'blue' ? '🔵 ' : '')); html += '<div class=\"ticket-item ' + isActive + '\" onclick=\"window.openTicketChat(\\'' + t.id + '\\')\">' + tagIcon + '🛒 ' + escapeHTML(t.name) + '</div>'; }); } if(supportTickets.length > 0) { html += '<div style=\"font-size:0.85em; text-transform:uppercase; color:var(--accent-orange); font-weight:800; margin: 15px 0 5px 5px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom:3px;\">🎧 Support (' + supportTickets.length + ')</div>'; supportTickets.forEach(t => { const isActive = activeChatChannel === t.id ? 'active' : ''; let tagIcon = t.tag === 'red' ? '🔴 ' : (t.tag === 'green' ? '🟢 ' : (t.tag === 'blue' ? '🔵 ' : '')); html += '<div class=\"ticket-item ' + isActive + '\" onclick=\"window.openTicketChat(\\'' + t.id + '\\')\">' + tagIcon + '🎧 ' + escapeHTML(t.name) + '</div>'; }); } } document.getElementById('chat-ticket-list').innerHTML = html; } catch(e) {} };",
+            "        window.loadTicketsForChat = async function() { try { const res = await fetch('/api/tickets'); const tickets = await res.json(); let html = ''; if(tickets.length === 0) { html = '<p class=\"text-muted text-center\" style=\"margin-top:20px;\">No active tickets.</p>'; } else { const shopTickets = tickets.filter(t => t.name.startsWith('shop-')); const supportTickets = tickets.filter(t => t.name.startsWith('support-')); if(shopTickets.length > 0) { html += '<div style=\"font-size:0.85em; text-transform:uppercase; color:var(--accent-blue); font-weight:800; margin: 10px 0 5px 5px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom:3px;\">🛒 Shop (' + shopTickets.length + ')</div>'; shopTickets.forEach(t => { const isActive = activeChatChannel === t.id ? 'active' : ''; html += '<div class=\"ticket-item ' + isActive + '\" onclick=\"window.openTicketChat(\\'' + t.id + '\\')\">🛒 ' + escapeHTML(t.name) + '</div>'; }); } if(supportTickets.length > 0) { html += '<div style=\"font-size:0.85em; text-transform:uppercase; color:var(--accent-orange); font-weight:800; margin: 15px 0 5px 5px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom:3px;\">🎧 Support (' + supportTickets.length + ')</div>'; supportTickets.forEach(t => { const isActive = activeChatChannel === t.id ? 'active' : ''; html += '<div class=\"ticket-item ' + isActive + '\" onclick=\"window.openTicketChat(\\'' + t.id + '\\')\">🎧 ' + escapeHTML(t.name) + '</div>'; }); } } document.getElementById('chat-ticket-list').innerHTML = html; } catch(e) {} };",
             "        window.openTicketChat = function(channelId) { activeChatChannel = channelId; window.loadTicketsForChat(); document.getElementById('chat-messages-area').innerHTML = '<div style=\"margin:auto; color:var(--accent-blue);\"><div style=\"width:30px; height:30px; border:3px solid rgba(56,189,248,0.2); border-top:3px solid var(--accent-blue); border-radius:50%; animation:spin 1s linear infinite; margin:auto;\"></div></div>'; window.fetchChatMessages(); if(chatPollInterval) clearInterval(chatPollInterval); chatPollInterval = setInterval(window.fetchChatMessages, 3000); };",
             "        window.fetchChatMessages = async function() { if(!activeChatChannel) return; try { const res = await fetch('/api/tickets/messages?channelId=' + activeChatChannel); const msgs = await res.json(); let html = ''; if(msgs.length === 0) html = '<p class=\"text-muted text-center\" style=\"margin:auto;\">No messages yet.</p>'; else { msgs.forEach(m => { const bubbleClass = m.isBot ? 'bot' : 'user'; const imgHtml = m.imageUrl ? '<br><img src=\"' + escapeHTML(m.imageUrl) + '\" class=\"chat-img-preview\" onclick=\"window.open(\\'' + escapeHTML(m.imageUrl) + '\\')\">' : ''; const actionsHtml = '<div class=\"chat-bubble-actions\"><button class=\"chat-reaction-btn\" onclick=\"window.reactMessage(\\'' + m.id + '\\', \\'👍\\')\">👍</button><button class=\"chat-reaction-btn\" onclick=\"window.reactMessage(\\'' + m.id + '\\', \\'❤️\\')\">❤️</button></div>'; html += '<div class=\"chat-bubble ' + bubbleClass + '\"><div class=\"chat-author\">' + escapeHTML(m.author) + '</div>' + escapeHTML(m.content) + imgHtml + actionsHtml + '</div>'; }); } const area = document.getElementById('chat-messages-area'); const isAtBottom = area.scrollHeight - area.scrollTop <= area.clientHeight + 100; area.innerHTML = html; if(isAtBottom) area.scrollTop = area.scrollHeight; } catch(e) {} };",
             "        window.sendChatMessage = async function() { if(!activeChatChannel) return showToast('Select a ticket first!', 'error'); const input = document.getElementById('chat-input-text'); const fileInput = document.getElementById('chat-file-input'); const text = input.value.trim(); const file = fileInput.files[0]; if(!text && !file) return; input.value = ''; document.getElementById('attach-badge').style.display='none'; let base64 = null; if (file) { const reader = new FileReader(); reader.readAsDataURL(file); await new Promise(r => reader.onload = r); base64 = reader.result; fileInput.value = ''; } try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'send_ticket_message', channelId: activeChatChannel, message: text, imageBase64: base64, pin: PIN }) }); window.fetchChatMessages(); } catch(e) { showToast('Failed to send', 'error'); } };",
             "        window.reactMessage = async function(msgId, emoji) { if(!activeChatChannel) return; try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'react_ticket_message', channelId: activeChatChannel, messageId: msgId, emoji: emoji, pin: PIN }) }); showToast('Reaction sent!'); } catch (e) { showToast('Failed to react', 'error'); } };",
             "        window.sendQuickResponse = async function(type) { if(!activeChatChannel) return showToast('Select a ticket first!', 'error'); let msg = ''; if(type === 'welcome') msg = '👋 Hello! How can I help you today?'; else if(type === 'wait') { const mins = prompt('How many minutes should the user wait?'); if(!mins) return; msg = '⏳ Please wait for about ' + mins + ' minutes, an admin is looking into it.'; } else if(type === 'resolved') msg = '✅ Did this resolve your issue, or do you have any other questions?'; else if(type === 'close') { if(!confirm('Close this ticket and delete the channel?')) return; msg = '🔒 Closing this ticket. Have a great day!'; await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'send_ticket_message', channelId: activeChatChannel, message: msg, pin: PIN }) }); window.fetchChatMessages(); setTimeout(async () => { await window.executeAction({ action: 'close_channel', channelId: activeChatChannel }, false); activeChatChannel = null; window.loadTicketsForChat(); document.getElementById('chat-messages-area').innerHTML = '<div style=\"margin:auto; color:var(--text-muted); text-align:center;\"><h2 style=\"font-size:3em; margin:0;\">👈</h2><p>Select a ticket to view</p></div>'; }, 2000); return; } if(msg) { try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'send_ticket_message', channelId: activeChatChannel, message: msg, pin: PIN }) }); window.fetchChatMessages(); } catch(e) { showToast('Failed to send', 'error'); } } };",
-            "        window.tagTicket = async function(color) { if(!activeChatChannel) return showToast('Select a ticket first!', 'error'); try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'tag_ticket', channelId: activeChatChannel, color: color, pin: PIN }) }); window.loadTicketsForChat(); document.getElementById(\"quickActionsMenu\").classList.remove(\"open\"); document.getElementById(\"quickActionsToggle\").classList.remove(\"open\"); showToast('Tag appliqué !'); } catch(e) {} };",
             "",
             "        window.askReviewPrompt = async function() {",
             "            if(!activeChatChannel) return showToast('Select a ticket first!', 'error');",
