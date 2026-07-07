@@ -44,7 +44,7 @@ let memoryStats = {
     total_leaves: 0, total_joins: 0, recent_transactions: [], user_spending: {}, 
     custom_requests: [], user_history: {}, warns: {}, blacklist: [], user_notes: {},
     promo_codes: {}, ticket_tags: {}, analytics: { tickets_opened: 0, hourly_sales: Array(24).fill(0) },
-    referrals: {}, settings: { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" }, flashSale: { active: false, discount: 0, endsAt: 0 } },
+    referrals: {}, settings: { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" }, flashSale: { active: false, discount: 0, endsAt: 0 }, abandonedCart: { active: true, delayHours: 2, discount: 10 }, upsell: { active: true, discount: 30 } },
     products: {}, subscriptions: {}, buy_links: {}, pending_reviews: [],
     activity_feed: [],
     last_update: Date.now() 
@@ -93,8 +93,10 @@ async function loadCloudStats() {
             if (!memoryStats.subscriptions) memoryStats.subscriptions = {};
             if (!memoryStats.pending_reviews) memoryStats.pending_reviews = [];
             if (!memoryStats.activity_feed) memoryStats.activity_feed = [];
-            if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" }, flashSale: { active: false, discount: 0, endsAt: 0 } };
+            if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" }, flashSale: { active: false, discount: 0, endsAt: 0 }, abandonedCart: { active: true, delayHours: 2, discount: 10 }, upsell: { active: true, discount: 30 } };
             if (!memoryStats.settings.flashSale) memoryStats.settings.flashSale = { active: false, discount: 0, endsAt: 0 };
+            if (!memoryStats.settings.abandonedCart) memoryStats.settings.abandonedCart = { active: true, delayHours: 2, discount: 10 };
+            if (!memoryStats.settings.upsell) memoryStats.settings.upsell = { active: true, discount: 30 };
             if (!memoryStats.buy_links || Object.keys(memoryStats.buy_links).length === 0) memoryStats.buy_links = INITIAL_BUY_LINKS; 
             if (!memoryStats.analytics) memoryStats.analytics = { tickets_opened: 0, hourly_sales: Array(24).fill(0) };
             if (!memoryStats.products || Object.keys(memoryStats.products).length === 0) memoryStats.products = INITIAL_PRODUCTS;
@@ -289,9 +291,12 @@ client.once('ready', () => {
 
     // 🛒 ABANDONED CART TRACKER
     setInterval(async () => {
+        const acSet = memoryStats.settings?.abandonedCart || { active: true, delayHours: 2, discount: 10 };
+        if (!acSet.active) return;
+        const delayMs = (acSet.delayHours || 2) * 60 * 60 * 1000;
         const now = Date.now();
         for (const [chId, state] of channelStates.entries()) {
-            if (!state.validated && !state.notified && (now - state.createdAt > 2 * 60 * 60 * 1000)) {
+            if (!state.validated && !state.notified && (now - state.createdAt > delayMs)) {
                 state.notified = true;
                 try {
                     const guild = client.guilds.cache.first();
@@ -299,9 +304,9 @@ client.once('ready', () => {
                     if (member) {
                         const code = "COMEBACK-" + Math.random().toString(36).substring(2, 6).toUpperCase();
                         if (!memoryStats.promo_codes) memoryStats.promo_codes = {};
-                        memoryStats.promo_codes[code] = { discount: 10, limit: 1, used: 0, createdAt: new Date().toLocaleDateString('en-US') };
+                        memoryStats.promo_codes[code] = { discount: acSet.discount, limit: 1, used: 0, createdAt: new Date().toLocaleDateString('en-US') };
                         syncCloud();
-                        const embed = new EmbedBuilder().setColor('#f97316').setTitle('🛒 Panier en attente !').setDescription(`Ton ticket d'achat sur notre serveur est toujours ouvert.\n\nPour t'aider à finaliser ta commande, voici un code promo de **-10%** valable immédiatement :\n\n👉 \`${code}\``);
+                        const embed = new EmbedBuilder().setColor('#f97316').setTitle('🛒 Panier en attente !').setDescription(`Ton ticket d'achat sur notre serveur est toujours ouvert.\n\nPour t'aider à finaliser ta commande, voici un code promo de **-${acSet.discount}%** valable immédiatement :\n\n👉 \`${code}\``);
                         await member.send({ embeds: [embed] }).catch(()=>{});
                     }
                 } catch(e) {}
@@ -530,12 +535,15 @@ client.on('interactionCreate', async (interaction) => {
                     await interaction.user.send({ embeds: [successEmbed], components: [reviewRow] });
 
                     // 🎁 POST-PURCHASE UPSELL
-                    const upsellCode = "UPSELL-" + Math.random().toString(36).substring(2, 6).toUpperCase();
-                    if (!memoryStats.promo_codes) memoryStats.promo_codes = {};
-                    memoryStats.promo_codes[upsellCode] = { discount: 30, limit: 1, used: 0, createdAt: new Date().toLocaleDateString('en-US') };
-                    syncCloud();
-                    const upsellEmbed = new EmbedBuilder().setColor('#ec4899').setTitle('🎁 Offre Spéciale Post-Achat !').setDescription(`Merci pour ton achat ! Profite de **-30%** sur ta prochaine commande avec ce code unique (valable 1 fois) :\n\n👉 \`${upsellCode}\``);
-                    await interaction.user.send({ embeds: [upsellEmbed] }).catch(()=>{});
+                    const upSet = memoryStats.settings?.upsell || { active: true, discount: 30 };
+                    if (upSet.active) {
+                        const upsellCode = "UPSELL-" + Math.random().toString(36).substring(2, 6).toUpperCase();
+                        if (!memoryStats.promo_codes) memoryStats.promo_codes = {};
+                        memoryStats.promo_codes[upsellCode] = { discount: upSet.discount, limit: 1, used: 0, createdAt: new Date().toLocaleDateString('en-US') };
+                        syncCloud();
+                        const upsellEmbed = new EmbedBuilder().setColor('#ec4899').setTitle('🎁 Offre Spéciale Post-Achat !').setDescription(`Merci pour ton achat ! Profite de **-${upSet.discount}%** sur ta prochaine commande avec ce code unique (valable 1 fois) :\n\n👉 \`${upsellCode}\``);
+                        await interaction.user.send({ embeds: [upsellEmbed] }).catch(()=>{});
+                    }
 
                     if (interaction.channel) {
                         await interaction.channel.send("✅ **Product delivered to your DMs!** Closing ticket in 5 seconds...").catch(()=>{});
@@ -909,6 +917,21 @@ http.createServer(async (req, res) => {
                     if (!memoryStats.ticket_tags) memoryStats.ticket_tags = {};
                     if (data.color) { memoryStats.ticket_tags[data.channelId] = data.color; } 
                     else { delete memoryStats.ticket_tags[data.channelId]; }
+                    syncCloud();
+                }
+                // --- ⚙️ AUTOMATIONS CONTROLS ---
+                else if (data.action === 'update_automations') {
+                    if (!memoryStats.settings) memoryStats.settings = {};
+                    if (!memoryStats.settings.abandonedCart) memoryStats.settings.abandonedCart = { active: true, delayHours: 2, discount: 10 };
+                    if (!memoryStats.settings.upsell) memoryStats.settings.upsell = { active: true, discount: 30 };
+                    
+                    memoryStats.settings.abandonedCart.active = data.acActive;
+                    memoryStats.settings.abandonedCart.delayHours = parseFloat(data.acDelay) || 2;
+                    memoryStats.settings.abandonedCart.discount = parseInt(data.acDiscount) || 10;
+                    
+                    memoryStats.settings.upsell.active = data.upActive;
+                    memoryStats.settings.upsell.discount = parseInt(data.upDiscount) || 30;
+                    
                     syncCloud();
                 }
                 // --- 💾 FORCE BACKUP ---
@@ -1569,18 +1592,23 @@ http.createServer(async (req, res) => {
             "               <div style='overflow-x:auto; margin-top:20px;'><table><thead><tr><th>Code</th><th>Discount</th><th>Usage</th><th>Action</th></tr></thead><tbody id='target-promos'></tbody></table></div>",
             "           </div>",
             "           <div class='box' style='border:1px solid var(--accent-pink); background:linear-gradient(145deg, rgba(236, 72, 153, 0.05), transparent);'>",
-            "               <h2 style='color:var(--accent-pink); margin-top:0;'>🛒 Automatisations (Actives)</h2>",
-            "               <p class='text-muted'>Ces systèmes fonctionnent en tâche de fond pour maximiser tes revenus.</p>",
+            "               <h2 style='color:var(--accent-pink); margin-top:0;'>🛒 Automatisations (Paniers & Upsell)</h2>",
+            "               <p class='text-muted'>Contrôle totalement tes relances de paniers abandonnés et offres après achat.</p>",
             "               <div style='display:grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap:15px; margin-top:15px;'>",
             "                   <div style='background:rgba(0,0,0,0.3); padding:15px; border-radius:12px; border-left:4px solid var(--accent-green);'>",
-            "                       <h3 style='margin:0 0 5px 0; color:var(--accent-green);'>✅ Paniers Abandonnés</h3>",
-            "                       <p style='font-size:0.85em; color:var(--text-muted); margin:0;'>Relance auto par DM après 2h d'inactivité avec un code -10%.</p>",
+            "                       <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;'><h3 style='margin:0; color:var(--accent-green); font-size:1.1em;'>Paniers Abandonnés</h3><select id='auto-ac-active' style='width:auto; padding:5px; margin:0;'><option value='true'>🟢 Actif</option><option value='false'>🔴 Inactif</option></select></div>",
+            "                       <label class='text-muted' style='font-size:0.8em;'>Délai d'inactivité avant relance (heures) :</label>",
+            "                       <input type='number' id='auto-ac-delay' placeholder='Heures' style='margin-bottom:10px; margin-top:5px;'>",
+            "                       <label class='text-muted' style='font-size:0.8em;'>Code promo envoyé (%) :</label>",
+            "                       <input type='number' id='auto-ac-discount' placeholder='%' style='margin-top:5px;'>",
             "                   </div>",
             "                   <div style='background:rgba(0,0,0,0.3); padding:15px; border-radius:12px; border-left:4px solid var(--accent-purple);'>",
-            "                       <h3 style='margin:0 0 5px 0; color:var(--accent-purple);'>✅ Upsell Post-Achat</h3>",
-            "                       <p style='font-size:0.85em; color:var(--text-muted); margin:0;'>Envoi immédiat d'un code -30% (valable 1 fois) après chaque livraison.</p>",
+            "                       <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;'><h3 style='margin:0; color:var(--accent-purple); font-size:1.1em;'>Upsell Post-Achat</h3><select id='auto-up-active' style='width:auto; padding:5px; margin:0;'><option value='true'>🟢 Actif</option><option value='false'>🔴 Inactif</option></select></div>",
+            "                       <label class='text-muted' style='font-size:0.8em;'>Code promo envoyé après achat (%) :</label>",
+            "                       <input type='number' id='auto-up-discount' placeholder='%' style='margin-top:5px;'>",
             "                   </div>",
             "               </div>",
+            "               <button class='admin-btn' style='background:var(--accent-pink); width:100%; margin-top:15px;' onclick='window.saveAutomations()'>💾 Sauvegarder les Automatisations</button>",
             "           </div>",
             "       </div>",
             "",
@@ -1934,6 +1962,15 @@ http.createServer(async (req, res) => {
             "            document.getElementById('ui-retention').innerText=data.retentionRate+'%'; document.getElementById('ui-tickets-opened').innerText=data.ticketsOpened; ",
             "            document.getElementById('ui-dropoff').innerText=data.dropOffRate+'%'; document.getElementById('ui-peak-hour').innerText=data.peakHourStr; ",
             "            ",
+            "            const st = data.memoryStats.settings || {};",
+            "            const ac = st.abandonedCart || {active: true, delayHours: 2, discount: 10};",
+            "            const up = st.upsell || {active: true, discount: 30};",
+            "            if(document.getElementById('auto-ac-active')) document.getElementById('auto-ac-active').value = ac.active ? 'true' : 'false';",
+            "            if(document.getElementById('auto-ac-delay')) document.getElementById('auto-ac-delay').value = ac.delayHours;",
+            "            if(document.getElementById('auto-ac-discount')) document.getElementById('auto-ac-discount').value = ac.discount;",
+            "            if(document.getElementById('auto-up-active')) document.getElementById('auto-up-active').value = up.active ? 'true' : 'false';",
+            "            if(document.getElementById('auto-up-discount')) document.getElementById('auto-up-discount').value = up.discount;",
+            "            ",
             "            trackedTickets = data.activeTickets || 0; ",
             "            trackedReviews = data.pendingReviewsCount || 0; ",
             "            trackedSales = rawStats.total_transactions || 0; ",
@@ -2097,6 +2134,16 @@ http.createServer(async (req, res) => {
             "            if(state) showToast('Vente Flash lancée !'); else showToast('Vente Flash arrêtée.');",
             "        };",
             "            ",
+            "        window.saveAutomations = async function() { ",
+            "            const acActive = document.getElementById('auto-ac-active').value === 'true';",
+            "            const acDelay = document.getElementById('auto-ac-delay').value;",
+            "            const acDiscount = document.getElementById('auto-ac-discount').value;",
+            "            const upActive = document.getElementById('auto-up-active').value === 'true';",
+            "            const upDiscount = document.getElementById('auto-up-discount').value;",
+            "            await window.executeAction({ action:'update_automations', acActive:acActive, acDelay:acDelay, acDiscount:acDiscount, upActive:upActive, upDiscount:upDiscount });",
+            "            showToast('Automatisations sauvegardées !');",
+            "        };",
+            "",
             "        window.editTodayEarnings = async function() { const current = document.getElementById('ui-today-rev').innerText.replace('€', ''); const n = prompt(\"Manual override for Today's Earnings (€):\", current); if(n !== null) { const parsed = parseFloat(n); if(!isNaN(parsed)) { await window.executeAction({action:'edit_today_earnings', value: parsed}); } } };",
             "",
             "        window.approveReview = async function(id) { await window.executeAction({action:'approve_review', id:id}); };",
