@@ -874,8 +874,50 @@ http.createServer(async (req, res) => {
                 const guild = client.guilds.cache.first();
                 if (!guild) return res.writeHead(404).end('Guild not found');
 
+                // --- 📝 MANUAL TRANSACTION ---
+                if (data.action === 'create_manual_tx') {
+                    const price = parseFloat(data.price);
+                    if (isNaN(price) || price < 0) throw new Error("Invalid price");
+                    
+                    const txDate = data.date ? new Date(data.date) : new Date();
+                    const dateStrDisplay = txDate.toLocaleString('en-US');
+                    const dateKey = txDate.toISOString().split('T')[0];
+                    
+                    const username = (data.username && data.username.trim() !== '') ? data.username.trim() : "Manual Entry";
+                    const product = (data.product && data.product.trim() !== '') ? data.product.trim() : "Custom Amount";
+
+                    if (!memoryStats.revenue[dateKey]) memoryStats.revenue[dateKey] = 0;
+                    memoryStats.revenue[dateKey] += price;
+                    memoryStats.total_revenue = (memoryStats.total_revenue || 0) + price;
+                    memoryStats.total_transactions = (memoryStats.total_transactions || 0) + 1;
+
+                    if (!Array.isArray(memoryStats.recent_transactions)) memoryStats.recent_transactions = [];
+                    memoryStats.recent_transactions.unshift({
+                        username: username,
+                        product: product,
+                        price: price,
+                        date: dateStrDisplay
+                    });
+                    if (memoryStats.recent_transactions.length > 50) memoryStats.recent_transactions.pop();
+
+                    if (username !== "Manual Entry") {
+                        if(!memoryStats.user_spending) memoryStats.user_spending = {};
+                        memoryStats.user_spending[username] = (memoryStats.user_spending[username] || 0) + price;
+                        
+                        if(!memoryStats.user_history) memoryStats.user_history = {};
+                        if(!memoryStats.user_history[username]) memoryStats.user_history[username] = [];
+                        memoryStats.user_history[username].unshift({ product: product, price: price, date: dateStrDisplay });
+                        if(memoryStats.user_history[username].length > 20) memoryStats.user_history[username].pop();
+                    }
+
+                    if (!memoryStats.activity_feed) memoryStats.activity_feed = [];
+                    memoryStats.activity_feed.unshift({ type: 'sale', message: `💰 €${price} Manual Sale: ${username} bought ${product}`, time: Date.now() });
+                    if (memoryStats.activity_feed.length > 30) memoryStats.activity_feed.pop();
+
+                    syncCloud();
+                }
                 // --- 📝 EDIT TODAY'S EARNINGS ---
-                if (data.action === 'edit_today_earnings') {
+                else if (data.action === 'edit_today_earnings') {
                     const todayStr = new Date().toISOString().split('T')[0];
                     const oldVal = memoryStats.revenue[todayStr] || 0;
                     const newVal = parseFloat(data.value) || 0;
@@ -1484,6 +1526,17 @@ http.createServer(async (req, res) => {
             "       </div>",
             "",
             "       <div id='transactions' class='tab-content'>",
+            "           <div class='box'>",
+            "               <h2>➕ Add Manual Transaction</h2>",
+            "               <p class='text-muted'>Add a missing transaction manually to update your daily/total earnings.</p>",
+            "               <div style='display:flex; gap:15px; flex-wrap:wrap; margin-bottom:10px; align-items:center;'>",
+            "                   <input type='text' id='manTxUser' placeholder='Username (Optional)' style='flex:1; min-width:120px;'>",
+            "                   <input type='text' id='manTxProd' placeholder='Product (Optional)' style='flex:1; min-width:120px;'>",
+            "                   <input type='number' id='manTxPrice' placeholder='Price € (Required)' style='width:120px;'>",
+            "                   <input type='datetime-local' id='manTxDate' style='flex:1; min-width:180px;' title='Date (Leave empty for Now)'>",
+            "                   <button class='admin-btn' style='margin:0;' onclick='window.createManualTx()'>💾 Add</button>",
+            "               </div>",
+            "           </div>",
             "           <div class='box'><h2>🛒 Recent Transactions</h2><div style='overflow-x:auto;'><table><thead><tr><th>Customer</th><th>Product</th><th>Price</th><th>Date</th><th>Action</th></tr></thead><tbody id='target-tx'></tbody></table></div></div>",
             "       </div>",
             "            ",
@@ -1938,6 +1991,8 @@ http.createServer(async (req, res) => {
             "            document.getElementById('saveProdBtn').innerText = '➕ Add Product'; ",
             "            document.getElementById('cancelEditBtn').style.display = 'none'; ",
             "        };",
+            "        ",
+            "        window.createManualTx = async function() { const user = document.getElementById('manTxUser').value; const prod = document.getElementById('manTxProd').value; const price = document.getElementById('manTxPrice').value; const date = document.getElementById('manTxDate').value; if(!price || isNaN(price)) return showToast('Price is required', 'error'); await window.executeAction({ action: 'create_manual_tx', username: user, product: prod, price: parseFloat(price), date: date }); document.getElementById('manTxUser').value = ''; document.getElementById('manTxProd').value = ''; document.getElementById('manTxPrice').value = ''; document.getElementById('manTxDate').value = ''; };",
             "        ",
             "        window.saveProduct = async function() { ",
             "            const id = document.getElementById('editProdId').value; ",
