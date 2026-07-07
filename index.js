@@ -43,7 +43,7 @@ let memoryStats = {
     total_transactions: 0, product_sales: {}, recent_joins: [], recent_leaves: [], 
     total_leaves: 0, total_joins: 0, recent_transactions: [], user_spending: {}, 
     custom_requests: [], user_history: {}, warns: {}, blacklist: [], user_notes: {},
-    promo_codes: {}, ticket_tags: {}, analytics: { tickets_opened: 0, hourly_sales: Array(24).fill(0) },
+    promo_codes: {}, ticket_tags: {}, analytics: { tickets_opened: 0, hourly_sales: Array(24).fill(0), heatmap: {} },
     referrals: {}, settings: { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" }, flashSale: { active: false, discount: 0, endsAt: 0 }, abandonedCart: { active: true, delayHours: 2, discount: 10 }, upsell: { active: true, discount: 30 } },
     products: {}, subscriptions: {}, buy_links: {}, pending_reviews: [],
     activity_feed: [],
@@ -98,7 +98,8 @@ async function loadCloudStats() {
             if (!memoryStats.settings.abandonedCart) memoryStats.settings.abandonedCart = { active: true, delayHours: 2, discount: 10 };
             if (!memoryStats.settings.upsell) memoryStats.settings.upsell = { active: true, discount: 30 };
             if (!memoryStats.buy_links || Object.keys(memoryStats.buy_links).length === 0) memoryStats.buy_links = INITIAL_BUY_LINKS; 
-            if (!memoryStats.analytics) memoryStats.analytics = { tickets_opened: 0, hourly_sales: Array(24).fill(0) };
+            if (!memoryStats.analytics) memoryStats.analytics = { tickets_opened: 0, hourly_sales: Array(24).fill(0), heatmap: {} };
+            if (!memoryStats.analytics.heatmap) memoryStats.analytics.heatmap = {};
             if (!memoryStats.products || Object.keys(memoryStats.products).length === 0) memoryStats.products = INITIAL_PRODUCTS;
             
             if (memoryStats.revenue) {
@@ -171,7 +172,7 @@ function logStat(type, value = 1, extraData = null) {
         memoryStats.total_revenue += value;
         if (!Array.isArray(memoryStats.recent_transactions)) memoryStats.recent_transactions = [];
         memoryStats.total_transactions += 1;
-        if (!memoryStats.analytics) memoryStats.analytics = { tickets_opened: 0, hourly_sales: Array(24).fill(0) };
+        if (!memoryStats.analytics) memoryStats.analytics = { tickets_opened: 0, hourly_sales: Array(24).fill(0), heatmap: {} };
         const currentHour = new Date().getHours();
         memoryStats.analytics.hourly_sales[currentHour]++;
         if (extraData && extraData.username) {
@@ -219,7 +220,8 @@ async function sendShopSetup(channel) {
     
     for (const [id, linkObj] of Object.entries(memoryStats.buy_links || {})) {
         try {
-            currentComponents.push(new ButtonBuilder().setLabel(linkObj.label).setStyle(ButtonStyle.Link).setURL(linkObj.url));
+            // 🔥 CHANGEMENT HEATMAP : Bouton Primaire au lieu de Link pour tracker le clic
+            currentComponents.push(new ButtonBuilder().setLabel(linkObj.label).setStyle(ButtonStyle.Primary).setCustomId(`track_buy_${id}`));
             if (currentComponents.length === 5) { buyRows.push(new ActionRowBuilder().addComponents(currentComponents)); currentComponents = []; }
         } catch(e) {}
     }
@@ -228,7 +230,7 @@ async function sendShopSetup(channel) {
 
     const rowActions = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('open_shop_channel').setLabel('📩 Redeem Code').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId('get_referral_link').setLabel('🔗 Get Referral Link').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId('get_referral_link').setLabel('🔗 Get Referral Link').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId('open_support_ticket').setLabel('🎧 Need Support?').setStyle(ButtonStyle.Secondary)
     );
     
@@ -373,6 +375,23 @@ client.on('interactionCreate', async (interaction) => {
                 return await interaction.editReply({ content: "❌ You have been blacklisted from using the shop and support system." }).catch(()=>{});
             }
             
+            // 🔥 HEATMAP TRACKING : Intercepte le clic, incrémente les stats, et envoie le lien Eneba
+            if (interaction.customId.startsWith('track_buy_')) {
+                const linkId = interaction.customId.replace('track_buy_', '');
+                const linkObj = memoryStats.buy_links[linkId];
+                
+                if (linkObj) {
+                    if (!memoryStats.analytics.heatmap) memoryStats.analytics.heatmap = {};
+                    memoryStats.analytics.heatmap[linkId] = (memoryStats.analytics.heatmap[linkId] || 0) + 1;
+                    syncCloud();
+                    
+                    const row = new ActionRowBuilder().addComponents(
+                        new ButtonBuilder().setLabel(`Acheter sur ${new URL(linkObj.url).hostname}`).setStyle(ButtonStyle.Link).setURL(linkObj.url)
+                    );
+                    return await interaction.reply({ content: `🛒 **Lien sécurisé pour acheter ton voucher :**`, components: [row], ephemeral: true }).catch(()=>{});
+                }
+            }
+
             if (interaction.customId.startsWith('review_')) {
                 const productId = interaction.customId.replace('review_', '');
                 const modal = new ModalBuilder().setCustomId(`submitreview_${productId}`).setTitle('Leave a Review');
@@ -1508,6 +1527,7 @@ http.createServer(async (req, res) => {
             "       <div class='header'>",
             "           <h1>Nexus Dashboard</h1>",
             "           <div class='controls'>",
+            "               <button class='btn-icon' onclick='window.togglePushNotifs()' id='pushNotifBtn' title='Activer les notifications navigateur'>🔕</button>",
             "               <button class='btn-icon' onclick='window.toggleMute()' id='audioBtn' title='Mute/Unmute Alerts'>🔊</button>",
             "               <button class='btn-icon' onclick='window.manualRefresh()' id='refreshBtn' title='Sync Now'>🔄</button>",
             "               <button class='btn-icon' onclick='window.toggleStealth()' id='stealthBtn'>👁️ Stealth</button>",
@@ -1662,10 +1682,13 @@ http.createServer(async (req, res) => {
             "       </div>",
             "",
             "       <div id='analytics' class='tab-content'>",
-            "           <div class='box'><h2>🕒 Peak Hours (Sales per Hour)</h2><div style='height:250px; margin-top:15px;'><canvas id='hourlyChart'></canvas></div></div>",
+            "           <div style='display:grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap:20px; margin-bottom:20px;'>",
+            "               <div class='box' style='margin:0;'><h2>🕒 Peak Hours (Sales per Hour)</h2><div style='height:250px; margin-top:15px;'><canvas id='hourlyChart'></canvas></div></div>",
+            "               <div class='box' style='margin:0;'><h2>🔥 Heatmap (Clics Boutons d'Achat)</h2><div style='height:250px; margin-top:15px;'><canvas id='heatmapChart'></canvas></div></div>",
+            "           </div>",
             "           <div style='display:grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap:20px;'>",
-            "               <div class='box'><h2>🏆 Top Selling Products</h2><div style='height:300px; margin-top:15px;'><canvas id='topProductsBarChart'></canvas></div></div>",
-            "               <div class='box'><h2>🏷️ Revenue by Category</h2><div style='height:300px; margin-top:15px;'><canvas id='categoryRevenueChart'></canvas></div></div>",
+            "               <div class='box' style='margin:0;'><h2>🏆 Top Selling Products</h2><div style='height:300px; margin-top:15px;'><canvas id='topProductsBarChart'></canvas></div></div>",
+            "               <div class='box' style='margin:0;'><h2>🏷️ Revenue by Category</h2><div style='height:300px; margin-top:15px;'><canvas id='categoryRevenueChart'></canvas></div></div>",
             "           </div>",
             "       </div>",
             "",
@@ -1813,9 +1836,46 @@ http.createServer(async (req, res) => {
             "",
             "    <!-- [ANCHOR: DASHBOARD_JS_LOGIC] -->",
             "    <script>",
-            "        let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, userGoal=500, salesChart, hourlyChart, topProdChart, catChart; ",
+            "        let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, userGoal=500, salesChart, hourlyChart, topProdChart, catChart, heatmapChartInst; ",
             "        let allMembersData = []; let isMembersLoaded = false; let activeChatChannel = null; let chatPollInterval = null;",
             "        let trackedTickets = 0; let trackedReviews = 0; let trackedSales = 0; let trackedLastTicketMsg = 0;",
+            "        ",
+            "        // 🌟 NATIVE PUSH NOTIFICATIONS ENGINE",
+            "        let pushEnabled = false;",
+            "        function updatePushIcon() {",
+            "            const btn = document.getElementById('pushNotifBtn');",
+            "            if (('Notification' in window) && Notification.permission === 'granted') {",
+            "                pushEnabled = true;",
+            "                btn.innerText = '🔔';",
+            "                btn.style.color = 'var(--accent-green)';",
+            "                btn.style.borderColor = 'var(--accent-green)';",
+            "            } else {",
+            "                pushEnabled = false;",
+            "                btn.innerText = '🔕';",
+            "                btn.style.color = 'white';",
+            "                btn.style.borderColor = 'var(--border-color)';",
+            "            }",
+            "        }",
+            "        window.togglePushNotifs = async function() {",
+            "            if (!('Notification' in window)) return showToast('Navigateur incompatible avec les notifications push', 'error');",
+            "            if (Notification.permission === 'granted') {",
+            "                showToast('Notifications déjà autorisées ! (Désactivation via paramètres du navigateur uniquement)');",
+            "                pushEnabled = !pushEnabled; // Toggle local state if they just want to mute them temporarily",
+            "                const btn = document.getElementById('pushNotifBtn');",
+            "                btn.innerText = pushEnabled ? '🔔' : '🔕';",
+            "                btn.style.color = pushEnabled ? 'var(--accent-green)' : 'white';",
+            "                btn.style.borderColor = pushEnabled ? 'var(--accent-green)' : 'var(--border-color)';",
+            "            } else if (Notification.permission !== 'denied') {",
+            "                const permission = await Notification.requestPermission();",
+            "                updatePushIcon();",
+            "                if (permission === 'granted') showToast('Notifications activées !');",
+            "            } else { showToast('Notifications bloquées par ton navigateur.', 'error'); }",
+            "        };",
+            "        function sendNativePush(title, body) {",
+            "            if (pushEnabled && Notification.permission === 'granted') {",
+            "                new Notification(title, { body: body, icon: 'https://cdn.discordapp.com/embed/avatars/0.png' });",
+            "            }",
+            "        }",
             "        ",
             "        // 🌟 AUDIO ENGINE (Premium Chord Generation)",
             "        let isMuted = false;",
@@ -1873,6 +1933,7 @@ http.createServer(async (req, res) => {
             "        ",
             "        // 💎 ULTRA PREMIUM SPLASH SCREEN LOGIC",
             "        async function initDashboard(){",
+            "           updatePushIcon();",
             "           let progress = 0;",
             "           const loadBar = document.getElementById('loader-bar');",
             "           const loadTxt = document.getElementById('loader-percentage');",
@@ -2219,12 +2280,14 @@ http.createServer(async (req, res) => {
             "        ",
             "        document.getElementById('ui-conv-rate').innerText=data.conversionRate+'%'; buildStaticTables(); updateMaintenanceBadge(data.maintenance); updateBadgesAndFeed(data); ",
             "",
+            "        // 🛎️ NOTIFICATION ENGINE (GLOBAL & NATIVE)",
             "        if(data.globalLastTicketMsg > trackedLastTicketMsg) {",
             "            if(trackedLastTicketMsg !== 0) {",
             "                const chatTab = document.getElementById('livechat');",
             "                if(!chatTab.classList.contains('active')) {",
-            "                    window.showClickableToast('💬 New message in Live Chat!', 'livechat');",
+            "                    window.showClickableToast('💬 Nouveau message en Live Chat!', 'livechat');",
             "                    playSound('notification');",
+            "                    sendNativePush('💬 Nouveau message !', 'Tu as reçu un nouveau message dans un ticket.');",
             "                } else {",
             "                    window.fetchChatMessages();",
             "                    playSound('notification');",
@@ -2237,8 +2300,9 @@ http.createServer(async (req, res) => {
             "            if(trackedTickets !== 0) {",
             "                const chatTab = document.getElementById('livechat');",
             "                if(!chatTab.classList.contains('active')) {",
-            "                    window.showClickableToast('🎫 New Ticket Opened!', 'livechat');",
+            "                    window.showClickableToast('🎫 Nouveau Ticket!', 'livechat');",
             "                    playSound('notification');",
+            "                    sendNativePush('🎫 Nouveau Ticket !', 'Un client vient de d\\'ouvrir un ticket.');",
             "                }",
             "            }",
             "            trackedTickets = data.activeTickets;",
@@ -2250,8 +2314,9 @@ http.createServer(async (req, res) => {
             "            if(trackedReviews !== 0) {",
             "                const adminTab = document.getElementById('admin');",
             "                if(!adminTab.classList.contains('active')) {",
-            "                    window.showClickableToast('⭐ New Pending Review!', 'admin');",
+            "                    window.showClickableToast('⭐ Nouvel Avis Client!', 'admin');",
             "                    playSound('notification');",
+            "                    sendNativePush('⭐ Nouvel Avis !', 'Un client a soumis un avis en attente de modération.');",
             "                } else {",
             "                    playSound('notification');",
             "                }",
@@ -2262,7 +2327,10 @@ http.createServer(async (req, res) => {
             "        }",
             "",
             "        if((rawStats.total_transactions||0) > trackedSales) { ",
-            "            if(trackedSales !== 0) playSound('sale');",
+            "            if(trackedSales !== 0) {",
+            "                playSound('sale');",
+            "                sendNativePush('💰 Nouvelle Vente !', 'Une transaction vient d\\'être effectuée.');",
+            "            }",
             "            trackedSales = rawStats.total_transactions || 0;",
             "        }",
             "",
@@ -2377,6 +2445,8 @@ http.createServer(async (req, res) => {
             "           const ctxHourly = document.getElementById('hourlyChart').getContext('2d'); if(hourlyChart) hourlyChart.destroy(); hourlyChart = new Chart(ctxHourly, { type: 'bar', data: { labels: Array.from({length: 24}, (_, i) => i+'h'), datasets: [{ label: 'Sales', data: rawStats.analytics.hourly_sales || Array(24).fill(0), backgroundColor: '#a855f7', hoverBackgroundColor: 'rgba(168, 85, 247, 0.4)', borderRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, plugins: { legend: { display: false } }, scales: { y: { grid: { color: 'rgba(255,255,255,0.05)' } }, x: { grid: { display: false } } } } });",
             "           const prodIds = Object.keys(rawStats.product_sales || {}); const prodLabels = prodIds.map(id => rawStats.products[id] ? rawStats.products[id].name : 'Unknown'); const prodData = Object.values(rawStats.product_sales || {}); const ctxTopProd = document.getElementById('topProductsBarChart').getContext('2d'); if(topProdChart) topProdChart.destroy(); topProdChart = new Chart(ctxTopProd, { type: 'bar', data: { labels: prodLabels.length?prodLabels:['No Data'], datasets: [{ label: 'Sales', data: prodData.length?prodData:[0], backgroundColor: '#38bdf8', hoverBackgroundColor: 'rgba(56, 189, 248, 0.4)', borderRadius: 4 }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, plugins: { legend: { display: false } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' } }, y: { grid: { display: false } } } } });",
             "           const catRevs = {}; Object.entries(rawStats.product_sales || {}).forEach(([id, count]) => { const p = rawStats.products[id]; if(p && p.price !== 'Custom'){ const cat = p.category || 'Other'; if(!catRevs[cat]) catRevs[cat] = 0; catRevs[cat] += (parseInt(p.price) * count); } }); const ctxCat = document.getElementById('categoryRevenueChart').getContext('2d'); if(catChart) catChart.destroy(); catChart = new Chart(ctxCat, { type: 'polarArea', data: { labels: Object.keys(catRevs).length?Object.keys(catRevs):['No Data'], datasets: [{ data: Object.values(catRevs).length?Object.values(catRevs):[0], backgroundColor: ['#FF1493', '#38bdf8', '#10b981', '#f97316', '#a855f7'], hoverBackgroundColor: ['rgba(255, 20, 147, 0.4)', 'rgba(56, 189, 248, 0.4)', 'rgba(16, 185, 129, 0.4)', 'rgba(249, 115, 22, 0.4)', 'rgba(168, 85, 247, 0.4)'], borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { animateScale: true, animateRotate: true, duration: 1500, easing: 'easeOutQuart' }, plugins: { legend: { position: 'right', labels: {color: '#f8fafc'} } } } });",
+            "           ",
+            "           const hLabels = []; const hData = []; Object.entries(rawStats.buy_links || {}).forEach(([id, l]) => { hLabels.push(l.label); hData.push(rawStats.analytics?.heatmap?.[id] || 0); }); const ctxHeatmap = document.getElementById('heatmapChart').getContext('2d'); if(window.heatmapChartInst) window.heatmapChartInst.destroy(); window.heatmapChartInst = new Chart(ctxHeatmap, { type: 'bar', data: { labels: hLabels.length ? hLabels : ['No Data'], datasets: [{ label: 'Clics', data: hData.length ? hData : [0], backgroundColor: '#f97316', hoverBackgroundColor: 'rgba(249, 115, 22, 0.6)', borderRadius: 4 }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' } }, y: { grid: { display: false } } } } });",
             "        }",
             "        initDashboard();",
             "    </script>",
