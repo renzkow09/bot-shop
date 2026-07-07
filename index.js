@@ -4,9 +4,57 @@ const axios = require('axios');
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto'); // Feature 1 & 3: Security
 
-process.on('unhandledRejection', (reason, p) => { console.log(' [ANTI-CRASH] Unhandled Rejection/Catch', reason); });
-process.on('uncaughtException', (err, origin) => { console.log(' [ANTI-CRASH] Uncaught Exception/Catch', err); });
+// === [FEATURE 20]: STRICT ENV CHECKS ===
+const REQUIRED_ENVS = ['DISCORD_BOT_TOKEN', 'REWARBLE_API_KEY'];
+for (const env of REQUIRED_ENVS) {
+    if (!process.env[env]) {
+        console.error(`❌ CRITICAL ERROR: Environment variable ${env} is missing!`);
+        process.exit(1);
+    }
+}
+
+// === [FEATURE 23]: WEBHOOK/DM ADMIN ALERTS ===
+const ADMIN_DISCORD_ID = "1520551977854042114";
+let discordClientReady = false;
+
+async function sendAdminAlert(msg) {
+    try {
+        if (!discordClientReady) return;
+        const admin = await client.users.fetch(ADMIN_DISCORD_ID);
+        if (admin) await admin.send(`🚨 **SYSTEM ALERT** 🚨\n${msg}`);
+    } catch (e) {}
+}
+
+// 🛠️ SYSTEM LOGS INTERCEPTOR FOR DASHBOARD
+const sysLogs = [];
+const originalLog = console.log;
+const originalError = console.error;
+function addSysLog(level, ...args) {
+    const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ');
+    sysLogs.push({ time: new Date().toISOString(), level, msg });
+    if (sysLogs.length > 100) sysLogs.shift();
+}
+console.log = (...args) => { addSysLog('INFO', ...args); originalLog(...args); };
+console.error = (...args) => { 
+    addSysLog('ERROR', ...args); 
+    originalError(...args); 
+    sendAdminAlert(`An error occurred:\n\`\`\`js\n${String(args[0]).substring(0, 1500)}\n\`\`\``);
+};
+
+process.on('unhandledRejection', (reason, p) => { console.error('[ANTI-CRASH] Unhandled Rejection/Catch', reason); });
+process.on('uncaughtException', (err, origin) => { console.error('[ANTI-CRASH] Uncaught Exception/Catch', err); });
+
+// === [FEATURE 8]: GRACEFUL SHUTDOWN ===
+async function shutdownSignal(signal) {
+    console.log(`\n🛑 Received ${signal}. Shutting down gracefully...`);
+    await syncCloud();
+    console.log('💾 Data safely synced to cloud. Goodbye!');
+    process.exit(0);
+}
+process.on('SIGTERM', () => shutdownSignal('SIGTERM'));
+process.on('SIGINT', () => shutdownSignal('SIGINT'));
 
 // === [ANCHOR: CONFIG_AND_CONSTANTS] ===
 const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
@@ -16,13 +64,7 @@ const SHOP_CHANNEL_ID = "1520803761130311970";
 // 👑 VIP Role ID
 const VIP_ROLE_ID = "REMPLACE_AVEC_ID_ROLE_VIP"; 
 
-if (!DISCORD_BOT_TOKEN) {
-    console.error("❌ CRITICAL ERROR: DISCORD_BOT_TOKEN is missing!");
-    process.exit(1);
-}
-
 const REWARBLE_API_URL = "https://api.rewarble.com/client/1.00/redeem"; 
-const ADMIN_DISCORD_ID = "1520551977854042114";
 const CATEGORY_CUSTOMER_ID = "1521540733226713249";
 const CATEGORY_SUPPORT_ID = "1521541155005796484";
 const DASHBOARD_PIN = "1206"; 
@@ -33,7 +75,37 @@ const TEST_VOUCHERS = { "GOYAVE5": 5 };
 const channelStates = new Map();
 let globalLastTicketMsg = Date.now();
 const STATS_FILE = path.join(__dirname, 'stats.json');
+const BACKUP_DIR = path.join(__dirname, 'backups');
+if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR);
 const guildInvites = new Map(); 
+
+// === [FEATURE 1 & 3]: CRYPTO SESSION & CSRF ===
+const SESSION_SECRET = crypto.randomBytes(32).toString('hex');
+const SERVER_CSRF_TOKEN = crypto.randomBytes(16).toString('hex');
+
+function generateSecureCookie(pin) {
+    const hash = crypto.createHmac('sha256', SESSION_SECRET).update(pin).digest('hex');
+    return `auth=${pin}.${hash}; Max-Age=2592000; HttpOnly; Path=/; SameSite=Strict`;
+}
+function verifyCookie(cookieStr) {
+    if (!cookieStr) return false;
+    const match = cookieStr.match(/auth=([^;]+)/);
+    if (!match) return false;
+    const parts = match[1].split('.');
+    if (parts.length !== 2) return false;
+    if (parts[0] !== DASHBOARD_PIN) return false;
+    const expectedHash = crypto.createHmac('sha256', SESSION_SECRET).update(parts[0]).digest('hex');
+    return parts[1] === expectedHash;
+}
+
+// === [FEATURE 5]: INPUT SANITIZATION ===
+function sanitizeInput(str) {
+    if (typeof str !== 'string') return str;
+    return str.replace(/[<>]/g, '').trim();
+}
+
+// === [FEATURE 25]: DEBOUNCE CACHE ===
+const userLocks = new Set();
 
 // === [ANCHOR: MEMORY_CACHE_AND_DB] ===
 let memoryStats = { 
@@ -104,7 +176,6 @@ async function loadCloudStats() {
             if (!memoryStats.analytics.hourly_sales) memoryStats.analytics.hourly_sales = Array(24).fill(0);
             if (!memoryStats.products || Object.keys(memoryStats.products).length === 0) memoryStats.products = INITIAL_PRODUCTS;
             
-            // 🔥 RECALCUL COMPLET DU TOTAL EARNINGS BASÉ SUR L'HISTORIQUE 🔥
             if (memoryStats.revenue) {
                 let total = 0;
                 for (const val of Object.values(memoryStats.revenue)) {
@@ -131,36 +202,49 @@ async function syncCloud() {
     } catch (err) { console.error("❌ Cloud Sync Error :", err.message); }
 }
 
-async function checkSubscriptions() {
-    const now = Date.now();
-    const guild = client.guilds.cache.first();
-    if (!guild) return;
-
-    for (const [userId, subData] of Object.entries(memoryStats.subscriptions)) {
-        if (now > subData.expiresAt) {
-            try {
-                const member = await guild.members.fetch(userId).catch(() => null);
-                if (member) {
-                    await member.roles.remove(VIP_ROLE_ID).catch(() => {});
-                    const codeName = "COMEBACK-" + Math.random().toString(36).substring(2, 6).toUpperCase();
-                    if (!memoryStats.promo_codes) memoryStats.promo_codes = {};
-                    memoryStats.promo_codes[codeName] = { discount: 50, limit: 1, used: 0, createdAt: new Date().toLocaleDateString('en-US') };
-                    
-                    await member.send(`🛑 **Your VIP Pass has expired.** You lost access to exclusive content. To thank you for your past support, here is a **-50% OFF** promo code valid for 1 use: \`${codeName}\`. Renew your pass in the shop!`).catch(() => {});
-                }
-            } catch(e) {}
-            delete memoryStats.subscriptions[userId];
-            syncCloud();
-        } 
-        else if (subData.expiresAt - now < 3 * 24 * 60 * 60 * 1000 && !subData.notified) {
-            try {
-                const member = await guild.members.fetch(userId).catch(() => null);
-                if (member) await member.send("⏳ **Your VIP Pass expires in 3 days!** Don't forget to renew it to keep your 20% discount and perks.").catch(() => {});
-            } catch(e) {}
-            memoryStats.subscriptions[userId].notified = true;
-            syncCloud();
+// === [FEATURE 9]: ISOLATED CRONS ===
+async function runDailyBackup() {
+    try {
+        const today = new Date().toISOString().split('T')[0];
+        const backupPath = path.join(BACKUP_DIR, `backup_${today}.json`);
+        if (!fs.existsSync(backupPath)) {
+            fs.writeFileSync(backupPath, JSON.stringify(memoryStats));
+            console.log(`💾 Auto-Backup Saved: ${backupPath}`);
         }
-    }
+    } catch(e) { console.error('Backup Error:', e); }
+}
+
+async function checkSubscriptions() {
+    try {
+        const now = Date.now();
+        const guild = client.guilds.cache.first();
+        if (!guild) return;
+
+        for (const [userId, subData] of Object.entries(memoryStats.subscriptions || {})) {
+            if (now > subData.expiresAt) {
+                try {
+                    const member = await guild.members.fetch(userId).catch(() => null);
+                    if (member) {
+                        await member.roles.remove(VIP_ROLE_ID).catch(() => {});
+                        const codeName = "COMEBACK-" + Math.random().toString(36).substring(2, 6).toUpperCase();
+                        if (!memoryStats.promo_codes) memoryStats.promo_codes = {};
+                        memoryStats.promo_codes[codeName] = { discount: 50, limit: 1, used: 0, createdAt: new Date().toLocaleDateString('en-US') };
+                        await member.send(`🛑 **Your VIP Pass has expired.** You lost access to exclusive content. To thank you for your past support, here is a **-50% OFF** promo code valid for 1 use: \`${codeName}\`. Renew your pass in the shop!`).catch(() => {});
+                    }
+                } catch(e) {}
+                delete memoryStats.subscriptions[userId];
+                syncCloud();
+            } 
+            else if (subData.expiresAt - now < 3 * 24 * 60 * 60 * 1000 && !subData.notified) {
+                try {
+                    const member = await guild.members.fetch(userId).catch(() => null);
+                    if (member) await member.send("⏳ **Your VIP Pass expires in 3 days!** Don't forget to renew it to keep your 20% discount and perks.").catch(() => {});
+                } catch(e) {}
+                memoryStats.subscriptions[userId].notified = true;
+                syncCloud();
+            }
+        }
+    } catch(e) { console.error('Subscription Check Error:', e); }
 }
 
 // === [ANCHOR: BOT_STATISTICS_LOGGER] ===
@@ -278,7 +362,9 @@ const client = new Client({
 
 client.once('ready', () => {
     console.log(`✅ Bot logged in as ${client.user.tag}`);
+    discordClientReady = true;
     loadCloudStats();
+    runDailyBackup(); 
     client.guilds.cache.forEach(async guild => {
         try {
             const firstInvites = await guild.invites.fetch();
@@ -296,8 +382,7 @@ client.once('ready', () => {
                 if (!(e.response && (e.response.status === 400 || e.response.status === 402 || e.response.status === 401))) down = true;
             }
             if (down) {
-                const admin = await client.users.fetch(ADMIN_DISCORD_ID).catch(()=>null);
-                if (admin) admin.send("🚨 **SYSTEM ALERT** 🚨\n- The Rewarble API is currently DOWN or unreachable. Purchases might fail.").catch(()=>{});
+                sendAdminAlert("🚨 **SYSTEM ALERT** 🚨\n- The Rewarble API is currently DOWN or unreachable. Purchases might fail.");
             }
         } catch(e){}
     }, 15 * 60 * 1000);
@@ -309,6 +394,11 @@ client.on('inviteDelete', invite => { try { guildInvites.get(invite.guild.id)?.d
 // === [ANCHOR: DISCORD_INTERACTION_HANDLER] ===
 client.on('interactionCreate', async (interaction) => {
     try {
+        // === [FEATURE 25]: DEBOUNCE CACHE ===
+        if (userLocks.has(interaction.user.id)) return interaction.reply({ content: "⏳ Please wait a moment between actions...", ephemeral: true }).catch(()=>{});
+        userLocks.add(interaction.user.id);
+        setTimeout(() => userLocks.delete(interaction.user.id), 2500);
+
         // --- MAINTENANCE SHIELD ---
         const mMode = memoryStats.settings?.maintenance;
         if (mMode && mMode.active && (interaction.isButton() || interaction.isStringSelectMenu())) {
@@ -326,13 +416,12 @@ client.on('interactionCreate', async (interaction) => {
                 syncCloud();
             }
         }
-        // -------------------------------
         
         // --- CUSTOMER REVIEW MODAL SUBMIT ---
         if (interaction.isModalSubmit() && interaction.customId.startsWith('submitreview_')) {
-            const productId = interaction.customId.replace('submitreview_', '');
+            const productId = sanitizeInput(interaction.customId.replace('submitreview_', ''));
             const rating = interaction.fields.getTextInputValue('rating');
-            const feedback = interaction.fields.getTextInputValue('feedback');
+            const feedback = sanitizeInput(interaction.fields.getTextInputValue('feedback'));
             
             let numRating = parseInt(rating);
             if (isNaN(numRating) || numRating < 1 || numRating > 5) numRating = 5;
@@ -355,7 +444,6 @@ client.on('interactionCreate', async (interaction) => {
 
             return await interaction.reply({ content: "✅ **Thank you!** Your review has been submitted to our team for moderation.", ephemeral: true }).catch(()=>{});
         }
-        // ------------------------------------
 
         if (interaction.isButton()) {
             if (memoryStats.blacklist && memoryStats.blacklist.includes(interaction.user.id)) {
@@ -365,7 +453,7 @@ client.on('interactionCreate', async (interaction) => {
             
             // --- CUSTOMER REVIEW BUTTON CLICK ---
             if (interaction.customId.startsWith('review_')) {
-                const productId = interaction.customId.replace('review_', '');
+                const productId = sanitizeInput(interaction.customId.replace('review_', ''));
                 const modal = new ModalBuilder().setCustomId(`submitreview_${productId}`).setTitle('Leave a Review');
                 const ratingInput = new TextInputBuilder().setCustomId('rating').setLabel('Rating (1 to 5)').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(1);
                 const feedbackInput = new TextInputBuilder().setCustomId('feedback').setLabel('Your Feedback').setStyle(TextInputStyle.Paragraph).setRequired(true);
@@ -374,6 +462,7 @@ client.on('interactionCreate', async (interaction) => {
             }
 
             if (interaction.customId === 'get_referral_link') {
+                // === [FEATURE 21]: AUTO-DEFER ===
                 await interaction.deferReply({ flags: 64 }).catch(() => {});
                 let invite = null;
                 try {
@@ -395,9 +484,9 @@ client.on('interactionCreate', async (interaction) => {
             }
             
             if (interaction.customId === 'open_shop_channel') {
+                // === [FEATURE 21]: AUTO-DEFER ===
                 await interaction.deferReply({ flags: 64 }).catch(() => {});
                 
-                // 🛡️ ANTI-SPAM TICKET CHECK
                 const sanitizedName = interaction.user.username.toLowerCase().replace(/[^a-z0-9]/g, '');
                 const existingChannel = interaction.guild.channels.cache.find(c => c.name === `shop-${sanitizedName}` || c.name === `support-${sanitizedName}`);
                 if (existingChannel) {
@@ -426,9 +515,9 @@ client.on('interactionCreate', async (interaction) => {
                 } else { await interaction.editReply({ content: `❌ Error creating the room.` }).catch(() => {}); }
             
             } else if (interaction.customId === 'open_support_ticket') {
+                // === [FEATURE 21]: AUTO-DEFER ===
                 await interaction.deferReply({ flags: 64 }).catch(() => {});
                 
-                // 🛡️ ANTI-SPAM TICKET CHECK
                 const sanitizedName = interaction.user.username.toLowerCase().replace(/[^a-z0-9]/g, '');
                 const existingChannel = interaction.guild.channels.cache.find(c => c.name === `shop-${sanitizedName}` || c.name === `support-${sanitizedName}`);
                 if (existingChannel) {
@@ -467,7 +556,7 @@ client.on('interactionCreate', async (interaction) => {
             // 💥 DESTRUCTION VISUELLE DE L'UI
             await interaction.update({ content: "📦 **Processing your order... The menu has been locked.**", components: [] }).catch(() => {});
 
-            const selected = interaction.values[0]; const product = memoryStats.products[selected]; 
+            const selected = sanitizeInput(interaction.values[0]); const product = memoryStats.products[selected]; 
             if (!product) return;
             
             const promo = state ? state.promo : null;
@@ -552,7 +641,7 @@ client.on('interactionCreate', async (interaction) => {
                 }
             }
         }
-    } catch (globalError) {}
+    } catch (globalError) { console.error('Interaction Error:', globalError); }
 });
 
 // === [ANCHOR: DISCORD_MESSAGE_HANDLER] ===
@@ -576,8 +665,15 @@ client.on('messageCreate', async (message) => {
         }
 
         if (message.channel?.name?.startsWith('shop-')) {
-            const state = channelStates.get(message.channel.id); if (!state || state.validated || state.processing) return;
-            const input = message.content.trim().toUpperCase();
+            // === BUGFIX: Prevent Ghost Tickets ===
+            let state = channelStates.get(message.channel.id);
+            if (!state) {
+                state = { validated: false, processing: false, promo: null, redeemed: false };
+                channelStates.set(message.channel.id, state);
+            }
+            if (state.validated || state.processing) return;
+            
+            const input = sanitizeInput(message.content.trim().toUpperCase());
 
             state.processing = true; 
             let promoApplied = null;
@@ -636,50 +732,12 @@ client.on('messageCreate', async (message) => {
                     state.processing = false; 
                     if (e.message === "REWARBLE_402_INSUFFICIENT_FUNDS") {
                         message.reply("⚠️ **Rewarble Error (402) :** Insufficient API balance.");
-                        const adminUser = await client.users.fetch(ADMIN_DISCORD_ID).catch(() => null);
-                        if (adminUser) adminUser.send("🚨 **CRITICAL REWARBLE ALERT:** Insufficient balance!").catch(() => {});
+                        sendAdminAlert("🚨 **CRITICAL REWARBLE ALERT:** Insufficient balance!");
                     } else message.reply("❌ Invalid code."); 
                 }
             } else state.processing = false;
         }
-    } catch (globalError) {}
-});
-
-// === [ANCHOR: DISCORD_GUILD_MEMBER_EVENTS] ===
-client.on('guildMemberAdd', async (member) => { 
-    logStat('joins', 1, { username: member.user.username }); 
-    try {
-        const newInvites = await member.guild.invites.fetch();
-        const oldInvites = guildInvites.get(member.guild.id);
-        const invite = newInvites.find(i => oldInvites.get(i.code) && i.uses > oldInvites.get(i.code)) || newInvites.find(i => !oldInvites.has(i.code) && i.uses > 0);
-        guildInvites.set(member.guild.id, new Map(newInvites.map(i => [i.code, i.uses])));
-
-        if (invite && invite.inviter) {
-            const inviterId = invite.inviter.id;
-            if (!memoryStats.referrals) memoryStats.referrals = {};
-            if (!memoryStats.referrals[inviterId]) memoryStats.referrals[inviterId] = { count: 0, total_rewards: 0, invited: [], username: invite.inviter.username };
-            memoryStats.referrals[inviterId].count++;
-            memoryStats.referrals[inviterId].invited.unshift({ username: member.user.username, date: new Date().toLocaleString('en-US') });
-            
-            const threshold = memoryStats.settings?.invite_reward_threshold || 10;
-            if (memoryStats.referrals[inviterId].count >= threshold) {
-                memoryStats.referrals[inviterId].count -= threshold;
-                memoryStats.referrals[inviterId].total_rewards++;
-                const codeName = "REF" + Math.random().toString(36).substring(2, 8).toUpperCase();
-                if (!memoryStats.promo_codes) memoryStats.promo_codes = {};
-                memoryStats.promo_codes[codeName] = { discount: 100, limit: 1, used: 0, createdAt: new Date().toLocaleDateString('en-US') };
-                const inviterUser = await client.users.fetch(inviterId).catch(()=>null);
-                if (inviterUser) inviterUser.send(`🎉 **CONGRATULATIONS!** You invited ${threshold} people and unlocked a FREE product!\n\nHere is your personal 100% OFF Promo Code:\n\`${codeName}\``).catch(()=>{});
-            }
-            syncCloud();
-        }
-    } catch (err) {}
-});
-
-client.on('guildMemberRemove', async (member) => { 
-    const duration = member.joinedTimestamp ? (Date.now() - member.joinedTimestamp) : 0;
-    const avatar = member.user.displayAvatarURL({ size: 64, dynamic: true });
-    logStat('leaves', 1, { username: member.user.username, avatar: avatar, duration: duration }); 
+    } catch (globalError) { console.error('Message Event Error:', globalError); }
 });
 
 // ==========================================
@@ -690,15 +748,28 @@ const rateLimits = new Map();
 const bruteForceLocks = new Map();
 
 http.createServer(async (req, res) => {
+
+    // === [FEATURE 2]: SECURITY HEADERS ===
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+
+    // === [FEATURE 19]: HEALTHCHECK ===
+    if (req.url === '/api/health') return res.writeHead(200).end('OK');
+
     const clientIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '127.0.0.1';
     const now = Date.now();
+    let lock = bruteForceLocks.get(clientIp) || { attempts: 0, lockout: 0 };
+    if (now < lock.lockout) return res.writeHead(429).end('Locked out.');
+
+    // === [FEATURE 4]: DYNAMIC RATE LIMIT ===
     let rl = rateLimits.get(clientIp) || { count: 0, resetTime: now + 60000 };
     if (now > rl.resetTime) rl = { count: 0, resetTime: now + 60000 };
     rl.count++; rateLimits.set(clientIp, rl);
     if (rl.count > 200) return res.writeHead(429).end('Too Many Requests');
 
     const cookie = req.headers.cookie || '';
-    const isAuthenticated = cookie.includes(`auth=${DASHBOARD_PIN}`);
+    const isAuthenticated = verifyCookie(cookie);
 
     if (req.url === '/api/login' && req.method === 'POST') {
         let body = ''; req.on('data', chunk => body += chunk);
@@ -709,7 +780,7 @@ http.createServer(async (req, res) => {
                 const data = JSON.parse(body);
                 if (data.pin === DASHBOARD_PIN) {
                     bruteForceLocks.delete(clientIp);
-                    res.writeHead(200, { 'Set-Cookie': `auth=${DASHBOARD_PIN}; Max-Age=2592000; HttpOnly; Path=/`, 'Content-Type': 'application/json' });
+                    res.writeHead(200, { 'Set-Cookie': generateSecureCookie(DASHBOARD_PIN), 'Content-Type': 'application/json' });
                     return res.end(JSON.stringify({ success: true }));
                 } else {
                     lock.attempts++; if (lock.attempts >= 5) lock.lockout = now + 15 * 60 * 1000;
@@ -737,9 +808,15 @@ http.createServer(async (req, res) => {
             activeTickets = guild.channels.cache.filter(c => c.name.startsWith('shop-') || c.name.startsWith('support-')).size;
         }
         const todayStr = new Date().toISOString().split('T')[0];
-        let monthRevenue = 0; Object.keys(memoryStats.revenue).forEach(date => { if(date.startsWith(todayStr.substring(0, 7))) monthRevenue += memoryStats.revenue[date]; });
+        
+        // === BUGFIX: memoryStats.revenue || {} ===
+        let monthRevenue = 0; 
+        Object.keys(memoryStats.revenue || {}).forEach(date => { 
+            if(date.startsWith(todayStr.substring(0, 7))) monthRevenue += memoryStats.revenue[date]; 
+        });
+        
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify({ memoryStats, maintenance: memoryStats.settings?.maintenance, pendingReviewsCount: memoryStats.pending_reviews?.length || 0, activeTickets: activeTickets, todayRevenue: memoryStats.revenue[todayStr] || 0, monthRevenue, ticketsOpened: memoryStats.analytics?.tickets_opened || 0, dropOffRate: memoryStats.analytics?.tickets_opened > 0 ? (100 - (memoryStats.total_transactions / memoryStats.analytics.tickets_opened) * 100).toFixed(1) : 0, peakHourStr: "N/A", conversionRate: ((memoryStats.total_transactions / (memoryStats.total_joins || 1)) * 100).toFixed(1), retentionRate: memberCount !== "N/A" ? ((memberCount / (memberCount + (memoryStats.total_leaves || 0))) * 100).toFixed(1) : "N/A", onlineCount, memberCount, MONTHLY_GOAL, PIN: DASHBOARD_PIN, globalLastTicketMsg: globalLastTicketMsg }));
+        return res.end(JSON.stringify({ memoryStats, maintenance: memoryStats.settings?.maintenance, pendingReviewsCount: memoryStats.pending_reviews?.length || 0, activeTickets: activeTickets, todayRevenue: memoryStats.revenue?.[todayStr] || 0, monthRevenue, ticketsOpened: memoryStats.analytics?.tickets_opened || 0, dropOffRate: memoryStats.analytics?.tickets_opened > 0 ? (100 - (memoryStats.total_transactions / memoryStats.analytics.tickets_opened) * 100).toFixed(1) : 0, peakHourStr: "N/A", conversionRate: ((memoryStats.total_transactions / (memoryStats.total_joins || 1)) * 100).toFixed(1), retentionRate: memberCount !== "N/A" ? ((memberCount / (memberCount + (memoryStats.total_leaves || 0))) * 100).toFixed(1) : "N/A", onlineCount, memberCount, MONTHLY_GOAL, PIN: DASHBOARD_PIN, CSRF: SERVER_CSRF_TOKEN, globalLastTicketMsg: globalLastTicketMsg }));
     }
 
     if (req.url === '/api/export' && req.method === 'GET') {
@@ -878,11 +955,52 @@ http.createServer(async (req, res) => {
         req.on('end', async () => {
             try {
                 const data = JSON.parse(body);
+
+                // === [FEATURE 3]: VALIDATE CSRF ===
+                if (data.csrf !== SERVER_CSRF_TOKEN && data.action !== 'get_debug_info') throw new Error("Invalid CSRF Token");
+
                 const guild = client.guilds.cache.first();
                 if (!guild) return res.writeHead(404).end('Guild not found');
 
+                // --- 🛠️ DEVTOOLS & DEBUG SYSTEM ---
+                if (data.action === 'get_debug_info') {
+                    const mem = process.memoryUsage();
+                    const dbSize = Buffer.byteLength(JSON.stringify(memoryStats), 'utf8');
+                    res.writeHead(200).end(JSON.stringify({
+                        logs: sysLogs,
+                        ram: (mem.heapUsed / 1024 / 1024).toFixed(2),
+                        uptime: process.uptime(),
+                        dbSize: (dbSize / 1024).toFixed(2) + ' KB',
+                        rawDb: memoryStats
+                    }));
+                    return;
+                }
+                else if (data.action === 'flush_cache') {
+                    if (data.type === 'channels') { channelStates.clear(); }
+                    else if (data.type === 'ratelimits') { rateLimits.clear(); bruteForceLocks.clear(); userLocks.clear(); }
+                    res.writeHead(200).end('OK');
+                    return;
+                }
+                else if (data.action === 'update_raw_db') {
+                    try {
+                        const newStats = JSON.parse(data.json);
+                        memoryStats = newStats;
+                        syncCloud();
+                        res.writeHead(200).end('OK');
+                    } catch(e) {
+                        res.writeHead(400).end('Invalid JSON format');
+                    }
+                    return;
+                }
+                // --- 🏷️ TAG TICKET ---
+                else if (data.action === 'tag_ticket') {
+                    if (!memoryStats.ticket_tags) memoryStats.ticket_tags = {};
+                    if (data.color) { memoryStats.ticket_tags[data.channelId] = sanitizeInput(data.color); } 
+                    else { delete memoryStats.ticket_tags[data.channelId]; }
+                    syncCloud();
+                }
                 // --- 📝 MANUAL TRANSACTION ---
-                if (data.action === 'create_manual_tx') {
+                else if (data.action === 'create_manual_tx') {
                     const price = parseFloat(data.price);
                     if (isNaN(price) || price < 0) throw new Error("Invalid price");
                     
@@ -890,8 +1008,8 @@ http.createServer(async (req, res) => {
                     const dateStrDisplay = txDate.toLocaleString('en-US');
                     const dateKey = txDate.toISOString().split('T')[0];
                     
-                    const username = (data.username && data.username.trim() !== '') ? data.username.trim() : "Manual Entry";
-                    const product = (data.product && data.product.trim() !== '') ? data.product.trim() : "Custom Amount";
+                    const username = (data.username && data.username.trim() !== '') ? sanitizeInput(data.username.trim()) : "Manual Entry";
+                    const product = (data.product && data.product.trim() !== '') ? sanitizeInput(data.product.trim()) : "Custom Amount";
 
                     if (!memoryStats.revenue[dateKey]) memoryStats.revenue[dateKey] = 0;
                     memoryStats.revenue[dateKey] += price;
@@ -1009,7 +1127,7 @@ http.createServer(async (req, res) => {
                     const channel = guild.channels.cache.get(data.channelId);
                     if (channel) {
                         let payload = {};
-                        if (data.message) payload.content = `💬 **[Support Admin]** : ${data.message}`;
+                        if (data.message) payload.content = `💬 **[Support Admin]** : ${sanitizeInput(data.message)}`;
                         if (data.imageBase64) {
                             const base64Data = data.imageBase64.replace(/^data:image\/\w+;base64,/, "");
                             const buffer = Buffer.from(base64Data, 'base64');
@@ -1041,12 +1159,12 @@ http.createServer(async (req, res) => {
                 else if (data.action === 'add_buy_link') {
                     if (!memoryStats.buy_links) memoryStats.buy_links = {};
                     const newId = (Object.keys(memoryStats.buy_links).length + 1).toString() + Date.now();
-                    memoryStats.buy_links[newId] = { label: data.label, url: data.url };
+                    memoryStats.buy_links[newId] = { label: sanitizeInput(data.label), url: data.url };
                     syncCloud();
                 }
                 else if (data.action === 'edit_buy_link') {
                     if (memoryStats.buy_links && memoryStats.buy_links[data.id]) {
-                        memoryStats.buy_links[data.id] = { label: data.label, url: data.url };
+                        memoryStats.buy_links[data.id] = { label: sanitizeInput(data.label), url: data.url };
                         syncCloud();
                     }
                 }
@@ -1096,14 +1214,14 @@ http.createServer(async (req, res) => {
                 else if (data.action === 'edit_product') {
                     if (memoryStats.products && memoryStats.products[data.id]) {
                         const oldCat = memoryStats.products[data.id].category || "✨ ITEMS";
-                        memoryStats.products[data.id] = { name: data.name, price: data.price, link: data.link, category: oldCat, stock: data.stock || "∞", desc: data.desc };
+                        memoryStats.products[data.id] = { name: sanitizeInput(data.name), price: sanitizeInput(data.price), link: data.link, category: oldCat, stock: data.stock || "∞", desc: sanitizeInput(data.desc) };
                         syncCloud();
                     }
                 }
                 else if (data.action === 'add_product') {
                     if (!memoryStats.products) memoryStats.products = {};
                     const newId = (Object.keys(memoryStats.products).length + 1).toString();
-                    memoryStats.products[newId] = { name: data.name, price: data.price, link: data.link, category: "✨ NEW ITEMS", stock: data.stock || "∞", desc: data.desc };
+                    memoryStats.products[newId] = { name: sanitizeInput(data.name), price: sanitizeInput(data.price), link: data.link, category: "✨ NEW ITEMS", stock: data.stock || "∞", desc: sanitizeInput(data.desc) };
                     syncCloud();
                 }
                 else if (data.action === 'delete_product') {
@@ -1133,7 +1251,7 @@ http.createServer(async (req, res) => {
                 else if (data.action === 'post_review') {
                     const reviewChannel = await client.channels.fetch(REVIEW_CHANNEL_ID).catch(() => null);
                     if (!reviewChannel) throw new Error("Review channel not found.");
-                    await reviewChannel.send(`> 🌟 **NEW FEEDBACK** 🌟\n> ━━━━━━━━━━━━━━━━━━━━\n> 📝 » **Feedback:** "${data.text}"\n> 📈 » **Rating:** ${data.rating}/5 ⭐\n> 👤 » **By:** ${data.author}`).catch(() => { throw new Error("Missing permissions to send messages in the channel."); });
+                    await reviewChannel.send(`> 🌟 **NEW FEEDBACK** 🌟\n> ━━━━━━━━━━━━━━━━━━━━\n> 📝 » **Feedback:** "${sanitizeInput(data.text)}"\n> 📈 » **Rating:** ${data.rating}/5 ⭐\n> 👤 » **By:** ${sanitizeInput(data.author)}`).catch(() => { throw new Error("Missing permissions to send messages in the channel."); });
                 }
                 else if (data.action === 'update_ref_threshold') {
                     if (!memoryStats.settings) memoryStats.settings = {};
@@ -1151,7 +1269,7 @@ http.createServer(async (req, res) => {
                 else if (data.action === 'warn') {
                     if (!memoryStats.warns) memoryStats.warns = {};
                     if (!memoryStats.warns[data.userId]) memoryStats.warns[data.userId] = [];
-                    memoryStats.warns[data.userId].push({ reason: data.reason || "Warn", date: new Date().toLocaleString('en-US') });
+                    memoryStats.warns[data.userId].push({ reason: sanitizeInput(data.reason) || "Warn", date: new Date().toLocaleString('en-US') });
                     syncCloud();
                     
                     const targetUser = await client.users.fetch(data.userId).catch(() => null);
@@ -1183,7 +1301,7 @@ http.createServer(async (req, res) => {
                 }
                 else if (data.action === 'announce') {
                     const channel = guild.channels.cache.get(data.channelId);
-                    if(channel) await channel.send(`📢 **Announcement**\n\n${data.message}`);
+                    if(channel) await channel.send(`📢 **Announcement**\n\n${sanitizeInput(data.message)}`);
                 }
                 else if (data.action === 'close_all') {
                     guild.channels.cache.forEach(c => {
@@ -1207,11 +1325,11 @@ http.createServer(async (req, res) => {
                 }
                 else if (data.action === 'save_note') {
                     if (!memoryStats.user_notes) memoryStats.user_notes = {};
-                    memoryStats.user_notes[data.userId] = data.note; syncCloud();
+                    memoryStats.user_notes[data.userId] = sanitizeInput(data.note); syncCloud();
                 }
                 else if (data.action === 'send_dm') {
                     const targetUser = await client.users.fetch(data.userId).catch(() => null);
-                    if (targetUser) await targetUser.send(`📩 **Message from Admin:**\n\n${data.message}`);
+                    if (targetUser) await targetUser.send(`📩 **Message from Admin:**\n\n${sanitizeInput(data.message)}`);
                 }
                 else if (data.action === 'add_vip_days') {
                     if (!memoryStats.subscriptions) memoryStats.subscriptions = {};
@@ -1430,7 +1548,7 @@ http.createServer(async (req, res) => {
             "               <div id='loader-bar' class='loader-bar'></div>",
             "           </div>",
             "           <div id='loader-percentage' class='loader-percentage'>00%</div>",
-            "           <div id='welcome-text' class='premium-welcome'>Welcome Issam</div>",
+            "           <div id='welcome-text' class='premium-welcome'>Welcome Admin</div>",
             "       </div>",
             "    </div>",
             "",
@@ -1448,6 +1566,7 @@ http.createServer(async (req, res) => {
             "       <div class='header'>",
             "           <h1>Nexus Dashboard</h1>",
             "           <div class='controls'>",
+            "               <button class='btn-icon' onclick='window.togglePushNotifs()' id='pushNotifBtn' title='Enable browser notifications'>🔕</button>",
             "               <button class='btn-icon' onclick='window.toggleMute()' id='audioBtn' title='Mute/Unmute Alerts'>🔊</button>",
             "               <button class='btn-icon' onclick='window.manualRefresh()' id='refreshBtn' title='Sync Now'>🔄</button>",
             "               <button class='btn-icon' onclick='window.toggleStealth()' id='stealthBtn'>👁️ Stealth</button>",
@@ -1458,6 +1577,7 @@ http.createServer(async (req, res) => {
             "           <button class='nav-btn active' onclick='window.switchTab(\"overview\", this)' id='nav-overview'>📊 Overview</button>",
             "           <button class='nav-btn' onclick='window.switchTab(\"vip\", this)' id='nav-vip'>👑 VIP Pass</button>",
             "           <button class='nav-btn' onclick='window.switchTab(\"livechat\", this)' id='nav-livechat'>💬 Live Chat <span class='nav-badge' id='badge-chat'>0</span></button>",
+            "           <button class='nav-btn' onclick='window.switchTab(\"marketing\", this)' id='nav-marketing'>🚀 Marketing</button>",
             "           <button class='nav-btn' onclick='window.switchTab(\"analytics\", this)' id='nav-analytics'>📈 Analytics</button>",
             "           <button class='nav-btn' onclick='window.switchTab(\"transactions\", this)' id='nav-transactions'>💳 Transactions</button>",
             "           <button class='nav-btn' onclick='window.switchTab(\"products\", this)' id='nav-products'>📦 Products</button>",
@@ -1465,7 +1585,9 @@ http.createServer(async (req, res) => {
             "           <button class='nav-btn' onclick='window.switchTab(\"referrals\", this)' id='nav-referrals'>🔗 Referrals</button>",
             "           <button class='nav-btn' onclick='window.switchTab(\"moderation\", this)' id='nav-moderation'>🛡️ Moderation</button>",
             "           <button class='nav-btn' onclick='window.switchTab(\"monitoring\", this)' id='nav-monitoring'>📡 Monitoring</button>",
+            "           <button class='nav-btn' onclick='window.switchTab(\"backups\", this)' id='nav-backups'>💾 Backups</button>",
             "           <button class='nav-btn' onclick='window.switchTab(\"admin\", this)' id='nav-admin'>⚙️ Admin Config <span class='nav-badge' id='badge-admin'>0</span></button>",
+            "           <button class='nav-btn' onclick='window.switchTab(\"devtools\", this)' id='nav-devtools'>🛠️ DevTools</button>",
             "       </div>",
             "",
             "       <!-- [ANCHOR: DASHBOARD_TABS_CONTENT] -->",
@@ -1511,6 +1633,57 @@ http.createServer(async (req, res) => {
             "           </div>",
             "       </div>",
             "",
+            "       <div id='marketing' class='tab-content'>",
+            "           <div class='box' style='border:1px solid var(--accent-orange); background:linear-gradient(145deg, rgba(249, 115, 22, 0.05), transparent);'>",
+            "               <h2 style='color:var(--accent-orange); margin-top:0;'>🔥 Flash Sale & Promotions (Global)</h2>",
+            "               <p class='text-muted'>Apply a temporary global discount to the entire store.</p>",
+            "               <div style='display:flex; gap:10px; flex-wrap:wrap; margin-top:15px; align-items:center;'>",
+            "                   <input type='number' id='flash-discount' placeholder='Discount (%)' value='15' style='width:120px; border-color:rgba(249,115,22,0.3);'>",
+            "                   <input type='number' id='flash-duration' placeholder='Duration (Hours)' value='3' style='width:120px; border-color:rgba(249,115,22,0.3);'>",
+            "                   <input type='text' id='flash-channel' placeholder='Announcement Channel ID (Optional)' style='flex:1; min-width:200px; border-color:rgba(249,115,22,0.3);'>",
+            "                   <button class='admin-btn' style='margin:0; background:var(--accent-orange);' onclick='window.toggleFlashSale(true)'>▶️ Start Flash Sale</button>",
+            "                   <button class='admin-btn' style='margin:0; background:transparent; border:1px solid var(--accent-orange); color:var(--accent-orange);' onclick='window.toggleFlashSale(false)'>🛑 Stop</button>",
+            "               </div>",
+            "           </div>",
+            "           <div class='box'>",
+            "               <h2>🎟️ Promo Codes (Manual)</h2>",
+            "               <p class='text-muted'>Generate custom codes for your clients.</p>",
+            "               <div style='display:flex; gap:10px; flex-wrap:wrap;'><input type='text' id='promoName' placeholder='CODE' style='flex:1; min-width:150px;'><input type='number' id='promoDiscount' placeholder='% Off' style='width:100px;'><input type='number' id='promoLimit' placeholder='Uses' style='width:100px;'><button class='admin-btn' style='margin:0;' onclick='window.createPromo()'>➕ Create</button></div>",
+            "               <div style='overflow-x:auto; margin-top:20px;'><table><thead><tr><th>Code</th><th>Discount</th><th>Usage</th><th>Action</th></tr></thead><tbody id='target-promos'></tbody></table></div>",
+            "           </div>",
+            "           <div class='box' style='border:1px solid var(--accent-pink); background:linear-gradient(145deg, rgba(236, 72, 153, 0.05), transparent);'>",
+            "               <h2 style='color:var(--accent-pink); margin-top:0;'>🛒 Automations (Carts & Upsell)</h2>",
+            "               <p class='text-muted'>Fully control your abandoned cart follow-ups and post-purchase offers.</p>",
+            "               <div style='display:grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap:15px; margin-top:15px;'>",
+            "                   <div style='background:rgba(0,0,0,0.3); padding:15px; border-radius:12px; border-left:4px solid var(--accent-green);'>",
+            "                       <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;'><h3 style='margin:0; color:var(--accent-green); font-size:1.1em;'>Abandoned Carts</h3><select id='auto-ac-active' style='width:auto; padding:5px; margin:0;'><option value='true'>🟢 Active</option><option value='false'>🔴 Inactive</option></select></div>",
+            "                       <label class='text-muted' style='font-size:0.8em;'>Inactivity delay before follow-up (hours):</label>",
+            "                       <input type='number' id='auto-ac-delay' placeholder='Hours' style='margin-bottom:10px; margin-top:5px;'>",
+            "                       <label class='text-muted' style='font-size:0.8em;'>Sent promo code (%):</label>",
+            "                       <input type='number' id='auto-ac-discount' placeholder='%' style='margin-top:5px;'>",
+            "                   </div>",
+            "                   <div style='background:rgba(0,0,0,0.3); padding:15px; border-radius:12px; border-left:4px solid var(--accent-purple);'>",
+            "                       <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;'><h3 style='margin:0; color:var(--accent-purple); font-size:1.1em;'>Post-Purchase Upsell</h3><select id='auto-up-active' style='width:auto; padding:5px; margin:0;'><option value='true'>🟢 Active</option><option value='false'>🔴 Inactive</option></select></div>",
+            "                       <label class='text-muted' style='font-size:0.8em;'>Promo code sent after purchase (%):</label>",
+            "                       <input type='number' id='auto-up-discount' placeholder='%' style='margin-top:5px;'>",
+            "                   </div>",
+            "               </div>",
+            "               <button class='admin-btn' style='background:var(--accent-pink); width:100%; margin-top:15px;' onclick='window.saveAutomations()'>💾 Save Automations</button>",
+            "           </div>",
+            "       </div>",
+            "",
+            "       <div id='backups' class='tab-content'>",
+            "           <div class='box'>",
+            "               <h2>💾 Daily Cloud Backup</h2>",
+            "               <p class='text-muted'>Your system automatically backs up your database locally every day. Upstash sync is real-time.</p>",
+            "               <button class='admin-btn' onclick='window.forceBackup()' style='background:var(--accent-green);'>💾 Force Backup Now</button>",
+            "           </div>",
+            "           <div class='box'>",
+            "               <h2>📂 Local Backup Files</h2>",
+            "               <div style='overflow-x:auto;'><table><thead><tr><th>File Name</th><th>Size</th><th>Action</th></tr></thead><tbody id='target-backups'></tbody></table></div>",
+            "           </div>",
+            "       </div>",
+            "",
             "       <div id='livechat' class='tab-content'>",
             "           <div class='box'>",
             "               <h2>💬 Live Chat Console</h2>",
@@ -1522,6 +1695,11 @@ http.createServer(async (req, res) => {
             "                           <div style='margin:auto; color:var(--text-muted); text-align:center;'><h2 style='font-size:3em; margin:0;'>👈</h2><p>Select a ticket to view</p></div>",
             "                       </div>",
             "                       <div id='quickActionsMenu' class='quick-actions-menu'>",
+            "                           <button class='admin-btn' style='margin:0; padding:6px 12px; font-size:0.85em; background: rgba(239, 68, 68, 0.2); color: var(--accent-red);' onclick='window.tagTicket(\"red\")'>🔴 Urgent</button>",
+            "                           <button class='admin-btn' style='margin:0; padding:6px 12px; font-size:0.85em; background: rgba(16, 185, 129, 0.2); color: var(--accent-green);' onclick='window.tagTicket(\"green\")'>🟢 Solved</button>",
+            "                           <button class='admin-btn' style='margin:0; padding:6px 12px; font-size:0.85em; background: rgba(56, 189, 248, 0.2); color: var(--accent-blue);' onclick='window.tagTicket(\"blue\")'>🔵 Info</button>",
+            "                           <button class='admin-btn' style='margin:0; padding:6px 12px; font-size:0.85em; background: rgba(255, 255, 255, 0.1); color: var(--text-muted);' onclick='window.tagTicket(null)'>⚪ Clear Tag</button>",
+            "                           <span style='width:2px; height:20px; background:rgba(255,255,255,0.1); margin:auto 5px;'></span>",
             "                           <button class='admin-btn' style='margin:0; padding:6px 12px; font-size:0.85em; background: rgba(255,255,255,0.05);' onclick='window.sendQuickResponse(\"welcome\")'>👋 Welcome</button>",
             "                           <button class='admin-btn' style='margin:0; padding:6px 12px; font-size:0.85em; background: rgba(255,255,255,0.05);' onclick='window.sendQuickResponse(\"wait\")'>⏳ Wait</button>",
             "                           <button class='admin-btn' style='margin:0; padding:6px 12px; font-size:0.85em; background: rgba(255,255,255,0.05);' onclick='window.sendQuickResponse(\"resolved\")'>✅ Resolved?</button>",
@@ -1529,7 +1707,7 @@ http.createServer(async (req, res) => {
             "                           <button class='admin-btn' style='margin:0; padding:6px 12px; font-size:0.85em; background: rgba(239, 68, 68, 0.2); color: var(--accent-red);' onclick='window.sendQuickResponse(\"close\")'>🔒 Close Ticket</button>",
             "                       </div>",
             "                       <div class='chat-input-area'>",
-            "                           <button id='quickActionsToggle' class='chat-attachment-btn toggle-plus' onclick='document.getElementById(\"quickActionsMenu\").classList.toggle(\"open\"); this.classList.toggle(\"open\");' title='Quick Actions'>+</button>",
+            "                           <button id='quickActionsToggle' class='chat-attachment-btn toggle-plus' onclick='document.getElementById(\"quickActionsMenu\").classList.toggle(\"open\"); this.classList.toggle(\"open\");' title='Quick Actions & Tags'>+</button>",
             "                           <div class='chat-attachment-wrapper'>",
             "                               <input type='file' id='chat-file-input' style='display:none' accept='image/*' onchange='document.getElementById(\"attach-badge\").style.display=\"block\"'>",
             "                               <button class='chat-attachment-btn' onclick='document.getElementById(\"chat-file-input\").click()' title='Attach Image'>📎</button>",
@@ -1544,10 +1722,13 @@ http.createServer(async (req, res) => {
             "       </div>",
             "",
             "       <div id='analytics' class='tab-content'>",
-            "           <div class='box'><h2>🕒 Peak Hours (Sales per Hour)</h2><div style='height:250px; margin-top:15px;'><canvas id='hourlyChart'></canvas></div></div>",
+            "           <div style='display:grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap:20px; margin-bottom:20px;'>",
+            "               <div class='box' style='margin:0;'><h2>🕒 Peak Hours (Sales per Hour)</h2><div style='height:250px; margin-top:15px;'><canvas id='hourlyChart'></canvas></div></div>",
+            "               <div class='box' style='margin:0;'><h2>🔥 Heatmap (Buy Button Clicks)</h2><div style='height:250px; margin-top:15px;'><canvas id='heatmapChart'></canvas></div></div>",
+            "           </div>",
             "           <div style='display:grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap:20px;'>",
-            "               <div class='box'><h2>🏆 Top Selling Products</h2><div style='height:300px; margin-top:15px;'><canvas id='topProductsBarChart'></canvas></div></div>",
-            "               <div class='box'><h2>🏷️ Revenue by Category</h2><div style='height:300px; margin-top:15px;'><canvas id='categoryRevenueChart'></canvas></div></div>",
+            "               <div class='box' style='margin:0;'><h2>🏆 Top Selling Products</h2><div style='height:300px; margin-top:15px;'><canvas id='topProductsBarChart'></canvas></div></div>",
+            "               <div class='box' style='margin:0;'><h2>🏷️ Revenue by Category</h2><div style='height:300px; margin-top:15px;'><canvas id='categoryRevenueChart'></canvas></div></div>",
             "           </div>",
             "       </div>",
             "",
@@ -1574,6 +1755,7 @@ http.createServer(async (req, res) => {
             "                   <input type='text' id='newProdName' placeholder='Product Name (e.g. VIP Pack)' style='flex:1; min-width:200px;'>",
             "                   <input type='text' id='newProdPrice' placeholder='Price in €' style='width:120px;'>",
             "                   <input type='text' id='newProdStock' placeholder='Stock (e.g. ∞)' style='width:80px;'>",
+            "                   <select id='newProdAvail' style='width:150px;'><option value='always'>Always Open</option><option value='weekend'>Weekend Only</option></select>",
             "               </div>",
             "               <div style='display:flex; gap:15px; flex-wrap:wrap; margin-bottom:5px;'>",
             "                   <input type='text' id='newProdDesc' placeholder='Description (e.g. Include 5 exclusive HD photos)' style='flex:1; min-width:250px;'>",
@@ -1648,8 +1830,8 @@ http.createServer(async (req, res) => {
             "               <p class='text-muted'>Check external API status and dashboard-to-Discord latency.</p>",
             "               <button class='admin-btn' onclick='window.runDiagnostics()'>🔄 Run API Diagnostics</button>",
             "               <div class='stats-grid' style='margin-top:20px;'>",
-            "                   <div class='card' id='card-upstash'><h3>Upstash Database</h3><div class='value' id='ui-upstash-status' style='font-size:1.5em;'>⚪ Waiting</div><p class='text-muted' id='ui-upstash-ping'>Latency: -- ms</p></div>",
-            "                   <div class='card' id='card-rewarble'><h3>Rewarble API</h3><div class='value' id='ui-rewarble-status' style='font-size:1.5em;'>⚪ Waiting</div><p class='text-muted' id='ui-rewarble-ping'>Latency: -- ms</p></div>",
+            "                   <div class='card' id='card-upstash'><h3>Upstash Database</h3><div class='value' id='ui-upstash-status' style='font-size:1.5em;'>⚪ Waiting...</div><p class='text-muted' id='ui-upstash-ping'>Latency: -- ms</p></div>",
+            "                   <div class='card' id='card-rewarble'><h3>Rewarble API</h3><div class='value' id='ui-rewarble-status' style='font-size:1.5em;'>⚪ Waiting...</div><p class='text-muted' id='ui-rewarble-ping'>Latency: -- ms</p></div>",
             "                   <div class='card' id='card-discord'><h3>Discord WebSocket</h3><div class='value text-blue' id='ui-discord-ws' style='font-size:1.5em;'>-- ms</div><p class='text-muted'>Global Gateway Ping</p></div>",
             "               </div>",
             "               <div style='margin-top:30px; background:rgba(0,0,0,0.3); padding:20px; border-radius:16px; border:1px solid var(--border-color);'>",
@@ -1684,25 +1866,99 @@ http.createServer(async (req, res) => {
             "           <div class='box'><h2>⚡ 1-Click Shop Setup</h2><p class='text-muted'>Clear the old menu and instantly post the new aesthetic setup in your Discord shop channel.</p><button class='admin-btn' style='background:var(--accent-purple); width:100%; padding:15px;' onclick='window.triggerShopRefresh()'>🔄 Setup and clear old menu</button></div>",
             "           ",
             "           <div class='box'>",
-            "               <h2>🎟️ Promo Codes</h2>",
-            "               <div style='display:flex; gap:10px; flex-wrap:wrap;'><input type='text' id='promoName' placeholder='CODE' style='flex:1; min-width:150px;'><input type='number' id='promoDiscount' placeholder='% Off' style='width:100px;'><input type='number' id='promoLimit' placeholder='Uses' style='width:100px;'><button class='admin-btn' style='margin:0;' onclick='window.createPromo()'>➕ Create</button></div>",
-            "               <div style='overflow-x:auto; margin-top:20px;'><table><thead><tr><th>Code</th><th>Discount</th><th>Usage</th><th>Action</th></tr></thead><tbody id='target-promos'></tbody></table></div>",
-            "           </div>",
-            "           ",
-            "           <div class='box'>",
             "               <h2>🌟 Manual Customer Review</h2>",
             "               <div style='display:flex; gap:10px; margin-bottom:10px;'><input type='text' id='rev-author' placeholder='Author Name' style='flex:1;'><select id='rev-rating' style='flex:1;'><option value='5'>5/5 ⭐ - Excellent</option><option value='4'>4/5 ⭐ - Very Good</option><option value='3'>3/5 ⭐ - Good</option><option value='2'>2/5 ⭐ - Fair</option><option value='1'>1/5 ⭐ - Poor</option></select></div>",
             "               <textarea id='rev-msg' placeholder='Type the review here...' style='margin-bottom:10px; min-height:80px;'></textarea>",
             "               <button class='admin-btn' style='background:var(--accent-green); width:100%;' onclick='window.sendReview()'>📤 Publish Review to Discord</button>",
             "           </div>",
             "       </div>",
+            "",
+            "       <!-- 🛠️ DEVTOOLS TAB -->",
+            "       <div id='devtools' class='tab-content'>",
+            "           <div class='stats-grid'>",
+            "               <div class='card blue'><h3>Process RAM</h3><div class='value' id='dev-ram'>0 MB</div></div>",
+            "               <div class='card green'><h3>Uptime</h3><div class='value' id='dev-uptime'>0s</div></div>",
+            "               <div class='card purple'><h3>Database Size</h3><div class='value' id='dev-db-size'>0 KB</div></div>",
+            "           </div>",
+            "           <div style='display:grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap:20px;'>",
+            "               <div class='box' style='background:rgba(0,0,0,0.5); border-color:var(--accent-blue);'>",
+            "                   <h2 style='color:var(--accent-blue);'>📡 Live Terminal Logs</h2>",
+            "                   <p class='text-muted'>Real-time interception of console outputs (API responses, errors).</p>",
+            "                   <div id='dev-logs' style='background:#000; padding:15px; border-radius:8px; height:300px; overflow-y:auto; font-family:monospace; font-size:0.85em; border:1px solid rgba(255,255,255,0.1); color:#0f0;'>",
+            "                       Loading logs...",
+            "                   </div>",
+            "                   <button class='admin-btn' style='width:100%; margin-top:10px;' onclick='window.fetchDebugInfo()'>🔄 Refresh Logs</button>",
+            "               </div>",
+            "               <div style='display:flex; flex-direction:column; gap:20px;'>",
+            "                   <div class='box' style='margin:0; border-color:var(--accent-orange);'>",
+            "                       <h2 style='color:var(--accent-orange); margin-top:0;'>🧠 Cache & Map Manager</h2>",
+            "                       <p class='text-muted'>Flush temporary memory safely without touching user balances.</p>",
+            "                       <div style='display:flex; gap:10px; margin-top:15px;'>",
+            "                           <button class='admin-btn' style='flex:1; background:var(--accent-orange); margin:0;' onclick='window.executeAction({action:\"flush_cache\", type:\"channels\"})'>🗑️ Flush Channels</button>",
+            "                           <button class='admin-btn' style='flex:1; background:var(--accent-orange); margin:0;' onclick='window.executeAction({action:\"flush_cache\", type:\"ratelimits\"})'>🗑️ Flush RateLimits</button>",
+            "                       </div>",
+            "                   </div>",
+            "                   <div class='box' style='margin:0; border-color:var(--accent-pink);'>",
+            "                       <h2 style='color:var(--accent-pink); margin-top:0;'>🧪 Sandbox Simulators</h2>",
+            "                       <p class='text-muted'>Inject fake data into the system to test dashboard responsiveness.</p>",
+            "                       <button class='admin-btn' style='width:100%; background:var(--accent-pink); margin:0;' onclick='window.simulateSale()'>💸 Simulate €5 Sale</button>",
+            "                   </div>",
+            "               </div>",
+            "           </div>",
+            "           <div class='box' style='border-color:var(--accent-red); margin-top:20px;'>",
+            "               <h2 style='color:var(--accent-red);'>🗄️ Raw Memory State Editor</h2>",
+            "               <p class='text-muted'>Warning: Editing raw JSON can crash the bot if syntax is invalid.</p>",
+            "               <textarea id='dev-raw-db' style='width:100%; height:300px; font-family:monospace; background:rgba(0,0,0,0.8); color:#f8fafc; padding:15px; border-radius:8px;' spellcheck='false'></textarea>",
+            "               <div style='display:flex; gap:15px; margin-top:15px;'>",
+            "                   <button class='admin-btn' style='background:var(--accent-green); flex:1;' onclick='window.saveRawDb()'>💾 Force Override Cloud Data</button>",
+            "                   <button class='admin-btn' style='background:transparent; border:1px solid var(--text-muted); color:var(--text-muted); flex:1;' onclick='window.fetchDebugInfo()'>🔄 Discard Changes & Reload</button>",
+            "               </div>",
+            "           </div>",
+            "       </div>",
             "    </div>",
             "",
             "    <!-- [ANCHOR: DASHBOARD_JS_LOGIC] -->",
             "    <script>",
-            "        let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, userGoal=500, salesChart, hourlyChart, topProdChart, catChart; ",
-            "        let allMembersData = []; let isMembersLoaded = false; let activeChatChannel = null; let chatPollInterval = null;",
+            "        let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, userGoal=500, salesChart, hourlyChart, topProdChart, catChart, heatmapChartInst; ",
+            "        let allMembersData = []; let isMembersLoaded = false; let activeChatChannel = null; let chatPollInterval = null; let debugPollInterval = null;",
             "        let trackedTickets = 0; let trackedReviews = 0; let trackedSales = 0; let trackedLastTicketMsg = 0;",
+            "        ",
+            "        // 🌟 NATIVE PUSH NOTIFICATIONS ENGINE",
+            "        let pushEnabled = false;",
+            "        function updatePushIcon() {",
+            "            const btn = document.getElementById('pushNotifBtn');",
+            "            if (('Notification' in window) && Notification.permission === 'granted') {",
+            "                pushEnabled = true;",
+            "                btn.innerText = '🔔';",
+            "                btn.style.color = 'var(--accent-green)';",
+            "                btn.style.borderColor = 'var(--accent-green)';",
+            "            } else {",
+            "                pushEnabled = false;",
+            "                btn.innerText = '🔕';",
+            "                btn.style.color = 'white';",
+            "                btn.style.borderColor = 'var(--border-color)';",
+            "            }",
+            "        }",
+            "        window.togglePushNotifs = async function() {",
+            "            if (!('Notification' in window)) return showToast('Browser incompatible with push notifications', 'error');",
+            "            if (Notification.permission === 'granted') {",
+            "                showToast('Notifications already authorized! (Disable via browser settings only)');",
+            "                pushEnabled = !pushEnabled; // Toggle local state if they just want to mute them temporarily",
+            "                const btn = document.getElementById('pushNotifBtn');",
+            "                btn.innerText = pushEnabled ? '🔔' : '🔕';",
+            "                btn.style.color = pushEnabled ? 'var(--accent-green)' : 'white';",
+            "                btn.style.borderColor = pushEnabled ? 'var(--accent-green)' : 'var(--border-color)';",
+            "            } else if (Notification.permission !== 'denied') {",
+            "                const permission = await Notification.requestPermission();",
+            "                updatePushIcon();",
+            "                if (permission === 'granted') showToast('Notifications enabled!');",
+            "            } else { showToast('Notifications blocked by your browser.', 'error'); }",
+            "        };",
+            "        function sendNativePush(title, body) {",
+            "            if (pushEnabled && Notification.permission === 'granted') {",
+            "                new Notification(title, { body: body, icon: 'https://cdn.discordapp.com/embed/avatars/0.png' });",
+            "            }",
+            "        }",
             "        ",
             "        // 🌟 AUDIO ENGINE (Premium Chord Generation)",
             "        let isMuted = false;",
@@ -1760,6 +2016,7 @@ http.createServer(async (req, res) => {
             "        ",
             "        // 💎 ULTRA PREMIUM SPLASH SCREEN LOGIC",
             "        async function initDashboard(){",
+            "           updatePushIcon();",
             "           let progress = 0;",
             "           const loadBar = document.getElementById('loader-bar');",
             "           const loadTxt = document.getElementById('loader-percentage');",
@@ -1822,6 +2079,7 @@ http.createServer(async (req, res) => {
             "                               const dash = document.getElementById('dashboard-container');",
             "                               if(dash) dash.style.display = 'block'; ",
             "                               window.renderSalesChart(7);",
+            "                               window.loadBackups();",
             "                           }, 1200);",
             "                       }, 3000);",
             "                   }, 400);",
@@ -1848,6 +2106,15 @@ http.createServer(async (req, res) => {
             "            document.getElementById('ui-online-total').innerHTML = data.onlineCount + ' <span style=\"font-size:0.5em;color:var(--text-muted);\">/ ' + data.memberCount + '</span>'; ",
             "            document.getElementById('ui-retention').innerText=data.retentionRate+'%'; document.getElementById('ui-tickets-opened').innerText=data.ticketsOpened; ",
             "            document.getElementById('ui-dropoff').innerText=data.dropOffRate+'%'; document.getElementById('ui-peak-hour').innerText=data.peakHourStr; ",
+            "            ",
+            "            const st = data.memoryStats.settings || {};",
+            "            const ac = st.abandonedCart || {active: true, delayHours: 2, discount: 10};",
+            "            const up = st.upsell || {active: true, discount: 30};",
+            "            if(document.getElementById('auto-ac-active')) document.getElementById('auto-ac-active').value = ac.active ? 'true' : 'false';",
+            "            if(document.getElementById('auto-ac-delay')) document.getElementById('auto-ac-delay').value = ac.delayHours;",
+            "            if(document.getElementById('auto-ac-discount')) document.getElementById('auto-ac-discount').value = ac.discount;",
+            "            if(document.getElementById('auto-up-active')) document.getElementById('auto-up-active').value = up.active ? 'true' : 'false';",
+            "            if(document.getElementById('auto-up-discount')) document.getElementById('auto-up-discount').value = up.discount;",
             "            ",
             "            trackedTickets = data.activeTickets || 0; ",
             "            trackedReviews = data.pendingReviewsCount || 0; ",
@@ -2005,6 +2272,7 @@ http.createServer(async (req, res) => {
             "            document.getElementById('newProdName').value = p.name; ",
             "            document.getElementById('newProdPrice').value = p.price; ",
             "            document.getElementById('newProdStock').value = p.stock || '∞'; ",
+            "            document.getElementById('newProdAvail').value = p.availability || 'always'; ",
             "            document.getElementById('newProdLink').value = p.link; ",
             "            document.getElementById('newProdDesc').value = p.desc || ''; ",
             "            document.getElementById('saveProdBtn').innerText = '💾 Update Product'; ",
@@ -2017,6 +2285,7 @@ http.createServer(async (req, res) => {
             "            document.getElementById('newProdName').value = ''; ",
             "            document.getElementById('newProdPrice').value = ''; ",
             "            document.getElementById('newProdStock').value = ''; ",
+            "            document.getElementById('newProdAvail').value = 'always'; ",
             "            document.getElementById('newProdLink').value = ''; ",
             "            document.getElementById('newProdDesc').value = ''; ",
             "            document.getElementById('saveProdBtn').innerText = '➕ Add Product'; ",
@@ -2030,11 +2299,12 @@ http.createServer(async (req, res) => {
             "            const n = document.getElementById('newProdName').value; ",
             "            const p = document.getElementById('newProdPrice').value; ",
             "            const s = document.getElementById('newProdStock').value || '∞'; ",
+            "            const a = document.getElementById('newProdAvail').value || 'always'; ",
             "            const l = document.getElementById('newProdLink').value; ",
             "            const d = document.getElementById('newProdDesc').value; ",
             "            if(!n||!p) return alert('Name & Price required'); ",
-            "            if(id) { await window.executeAction({action:'edit_product', id:id, name:n, price:p, stock:s, link:l, desc:d}, true); } ",
-            "            else { await window.executeAction({action:'add_product', name:n, price:p, stock:s, link:l, desc:d}, true); } ",
+            "            if(id) { await window.executeAction({action:'edit_product', id:id, name:n, price:p, stock:s, availability:a, link:l, desc:d}, true); } ",
+            "            else { await window.executeAction({action:'add_product', name:n, price:p, stock:s, availability:a, link:l, desc:d}, true); } ",
             "        };",
             "        ",
             "        window.deleteProduct = async function(id) { if(confirm('Delete product?')) await window.executeAction({action:'delete_product', id:id}, true); };",
@@ -2046,7 +2316,7 @@ http.createServer(async (req, res) => {
             "",
             "        window.triggerShopRefresh = async function() { await window.executeAction({action:'refresh_setup'}, false); };",
             "        ",
-            "        window.switchTab = function(tabId, btn) { document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active')); document.querySelectorAll('.nav-btn').forEach(el=>el.classList.remove('active')); document.getElementById(tabId).classList.add('active'); btn.classList.add('active'); if(tabId === 'moderation' && !isMembersLoaded) window.loadAllMembers(); if(tabId === 'livechat'){ window.loadTicketsForChat(); if(activeChatChannel && !chatPollInterval){ chatPollInterval = setInterval(window.fetchChatMessages, 3000); } } else { if(chatPollInterval){ clearInterval(chatPollInterval); chatPollInterval = null; } } if(tabId === 'analytics'){ renderAnalyticsCharts(); } if(tabId === 'overview'){ window.renderSalesChart(7); } };",
+            "        window.switchTab = function(tabId, btn) { document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active')); document.querySelectorAll('.nav-btn').forEach(el=>el.classList.remove('active')); document.getElementById(tabId).classList.add('active'); btn.classList.add('active'); if(tabId === 'moderation' && !isMembersLoaded) window.loadAllMembers(); if(tabId === 'livechat'){ window.loadTicketsForChat(); if(activeChatChannel && !chatPollInterval){ chatPollInterval = setInterval(window.fetchChatMessages, 3000); } } else { if(chatPollInterval){ clearInterval(chatPollInterval); chatPollInterval = null; } } if(tabId === 'analytics'){ renderAnalyticsCharts(); } if(tabId === 'overview'){ window.renderSalesChart(7); } if(tabId === 'backups'){ window.loadBackups(); } if(tabId === 'devtools'){ window.fetchDebugInfo(); if(!debugPollInterval){ debugPollInterval = setInterval(window.fetchDebugInfo, 5000); } } else { if(debugPollInterval){ clearInterval(debugPollInterval); debugPollInterval = null; } } };",
             "        ",
             "        window.showClickableToast = function(msg, tabId) { const t=document.getElementById('toast'); t.innerHTML = '🔔 <span>' + msg + '</span> <button class=\"admin-btn\" style=\"margin:0 0 0 12px; padding:6px 12px; font-size:0.85em; background:#fff; color:#000; box-shadow:none;\" onclick=\"window.switchTab(\\''+tabId+'\\', document.querySelector(\\'button[onclick*=\\''+tabId+'\\']\\')); this.parentElement.classList.remove(\\'show\\');\">View ➔</button>'; t.style.borderColor = 'var(--accent-blue)'; t.style.boxShadow = '0 10px 30px rgba(56, 189, 248, 0.4)'; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 6000); };",
             "        ",
@@ -2113,7 +2383,7 @@ http.createServer(async (req, res) => {
             "",
             "        if(isMembersLoaded && !isAutoSync) window.loadAllMembers(); if(!isAutoSync){ try { window.cancelEdit(); window.cancelEditLink(); document.getElementById('promoName').value=''; document.getElementById('promoDiscount').value=''; document.getElementById('promoLimit').value=''; } catch(e) {} } } }catch(e){} };",
             "        ",
-            "        window.executeAction = async function(p, showModal=false) { p.pin=PIN; const res=await fetch('/api/action',{method:'POST',body:JSON.stringify(p)}); if(res.ok) { window.refreshDataSilently(); if(showModal){ document.getElementById('syncModal').style.display='flex'; }else{ showToast('Success!'); } } else { showToast('Error', 'error'); } };",
+            "        window.executeAction = async function(p, showModal=false) { p.pin=PIN; p.csrf=SERVER_CSRF_TOKEN; const res=await fetch('/api/action',{method:'POST',body:JSON.stringify(p)}); if(res.ok) { window.refreshDataSilently(); if(showModal){ document.getElementById('syncModal').style.display='flex'; }else{ showToast('Success!'); } } else { showToast('Error', 'error'); } };",
             "        ",
             "        window.sendReview = async function() { const author = document.getElementById('rev-author').value; const rating = document.getElementById('rev-rating').value; const text = document.getElementById('rev-msg').value; if(!author || !text) return alert('Fill both author and feedback fields!'); await window.executeAction({ action: 'post_review', author: author, rating: rating, text: text }); document.getElementById('rev-author').value = ''; document.getElementById('rev-msg').value = ''; };",
             "        window.loadAllMembers = async function() { document.getElementById('memberResults').innerHTML = '<p class=\"text-muted\">Loading directory...</p>'; try { const res = await fetch('/api/members'); if (!res.ok) throw new Error('Error'); allMembersData = await res.json(); isMembersLoaded = true; window.sortMembersLocally(); } catch (e) { document.getElementById('memberResults').innerHTML = '<p class=\"text-pink\">Error fetching data.</p>'; } };",
@@ -2183,46 +2453,90 @@ http.createServer(async (req, res) => {
             "            }); ",
             "            document.getElementById('memberResults').innerHTML = html; ",
             "        }",
-            "        window.modAction = async function(action, userId, extra) { extra = extra || {}; let payload = { action: action, userId: userId, pin: PIN }; if (extra.channelId) payload.channelId = extra.channelId; if (extra.duration) payload.duration = extra.duration; if (action === 'warn') { payload.reason = prompt(\"Reason for warning? (User will be DM'd)\"); if (!payload.reason) return; } else if (action === 'clear_warns') { if (!confirm('Clear all warnings for this user?')) return; } else if (action === 'mute') { if(!payload.duration) payload.duration = prompt('Mute duration in minutes?', '60'); payload.reason = prompt('Reason for mute?'); if (!payload.duration || !payload.reason) return; } else if (action === 'kick' || action === 'ban') { payload.reason = prompt('Reason for ' + action + '?'); if (!payload.reason || !confirm('Execute ' + action + '?')) return; } else if (action === 'toggle_blacklist') { if (!confirm('Toggle shop blacklist for this user?')) return; } else if (action === 'close_channel') { if (!confirm('Force close this ticket?')) return; } try { const res = await fetch('/api/action', { method: 'POST', body: JSON.stringify(payload) }); if (res.ok) { showToast('✅ Action applied successfully'); setTimeout(function() { window.loadAllMembers(); }, 1000); } else showToast('❌ Failed to apply action', 'error'); } catch(e) { showToast('❌ Network Error', 'error'); } };",
+            "        window.modAction = async function(action, userId, extra) { extra = extra || {}; let payload = { action: action, userId: userId, pin: PIN, csrf: SERVER_CSRF_TOKEN }; if (extra.channelId) payload.channelId = extra.channelId; if (extra.duration) payload.duration = extra.duration; if (action === 'warn') { payload.reason = prompt(\"Reason for warning? (User will be DM'd)\"); if (!payload.reason) return; } else if (action === 'clear_warns') { if (!confirm('Clear all warnings for this user?')) return; } else if (action === 'mute') { if(!payload.duration) payload.duration = prompt('Mute duration in minutes?', '60'); payload.reason = prompt('Reason for mute?'); if (!payload.duration || !payload.reason) return; } else if (action === 'kick' || action === 'ban') { payload.reason = prompt('Reason for ' + action + '?'); if (!payload.reason || !confirm('Execute ' + action + '?')) return; } else if (action === 'toggle_blacklist') { if (!confirm('Toggle shop blacklist for this user?')) return; } else if (action === 'close_channel') { if (!confirm('Force close this ticket?')) return; } try { const res = await fetch('/api/action', { method: 'POST', body: JSON.stringify(payload) }); if (res.ok) { showToast('✅ Action applied successfully'); setTimeout(function() { window.loadAllMembers(); }, 1000); } else showToast('❌ Failed to apply action', 'error'); } catch(e) { showToast('❌ Network Error', 'error'); } };",
             "        window.refundTx = async function(date, username) { if(confirm('Are you sure you want to refund this transaction? It will be removed from your revenue.')) { await window.executeAction({action: 'refund_tx', date: date, username: username}); } };",
             "        window.runDiagnostics = async function() { document.getElementById('ui-upstash-status').innerText = '⏳ Waiting...'; document.getElementById('ui-upstash-status').className = 'value text-muted'; document.getElementById('ui-rewarble-status').innerText = '⏳ Waiting...'; document.getElementById('ui-rewarble-status').className = 'value text-muted'; document.getElementById('ui-discord-ws').innerText = '-- ms'; try { const res = await fetch('/api/monitoring'); const data = await res.json(); const upstashCard = document.getElementById('card-upstash'); const rewarbleCard = document.getElementById('card-rewarble'); if (data.upstash.status === 'online') { document.getElementById('ui-upstash-status').innerHTML = '🟢 Connected'; document.getElementById('ui-upstash-status').className = 'value text-green'; upstashCard.style.borderLeft = '4px solid var(--accent-green)'; } else { document.getElementById('ui-upstash-status').innerHTML = '🔴 Offline'; document.getElementById('ui-upstash-status').className = 'value text-red'; upstashCard.style.borderLeft = '4px solid var(--accent-red)'; } document.getElementById('ui-upstash-ping').innerText = 'Latency: ' + data.upstash.latency + ' ms'; if (data.rewarble.status === 'online') { document.getElementById('ui-rewarble-status').innerHTML = '🟢 Connected'; document.getElementById('ui-rewarble-status').className = 'value text-green'; rewarbleCard.style.borderLeft = '4px solid var(--accent-green)'; } else { document.getElementById('ui-rewarble-status').innerHTML = '🔴 Error/Offline'; document.getElementById('ui-rewarble-status').className = 'value text-red'; rewarbleCard.style.borderLeft = '4px solid var(--accent-red)'; } document.getElementById('ui-rewarble-ping').innerText = 'Latency: ' + data.rewarble.latency + ' ms'; document.getElementById('ui-discord-ws').innerText = data.discord.ws_ping + ' ms'; } catch(e) { showToast('❌ Diagnostics Failed', 'error'); } };",
-            "        window.testActionLatency = async function() { const resultDiv = document.getElementById('latency-result'); resultDiv.innerText = 'Testing in progress...'; resultDiv.style.color = 'var(--text-muted)'; const startTime = Date.now(); try { const res = await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'ping_test', pin: PIN }) }); if (res.ok) { const totalTime = Date.now() - startTime; resultDiv.innerText = totalTime + ' ms'; if (totalTime < 500) resultDiv.style.color = 'var(--accent-green)'; else if (totalTime < 1500) resultDiv.style.color = 'var(--accent-orange)'; else resultDiv.style.color = 'var(--accent-red)'; } else { resultDiv.innerText = 'HTTP Error'; resultDiv.style.color = 'var(--accent-red)'; } } catch(e) { resultDiv.innerText = 'Network Error'; resultDiv.style.color = 'var(--accent-red)'; } };",
+            "        window.testActionLatency = async function() { const resultDiv = document.getElementById('latency-result'); resultDiv.innerText = 'Testing in progress...'; resultDiv.style.color = 'var(--text-muted)'; const startTime = Date.now(); try { const res = await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'ping_test', pin: PIN, csrf: SERVER_CSRF_TOKEN }) }); if (res.ok) { const totalTime = Date.now() - startTime; resultDiv.innerText = totalTime + ' ms'; if (totalTime < 500) resultDiv.style.color = 'var(--accent-green)'; else if (totalTime < 1500) resultDiv.style.color = 'var(--accent-orange)'; else resultDiv.style.color = 'var(--accent-red)'; } else { resultDiv.innerText = 'HTTP Error'; resultDiv.style.color = 'var(--accent-red)'; } } catch(e) { resultDiv.innerText = 'Network Error'; resultDiv.style.color = 'var(--accent-red)'; } };",
             "        ",
             "        window.loadTicketsForChat = async function() { try { const res = await fetch('/api/tickets'); const tickets = await res.json(); let html = ''; if(tickets.length === 0) { html = '<p class=\"text-muted text-center\" style=\"margin-top:20px;\">No active tickets.</p>'; } else { const shopTickets = tickets.filter(t => t.name.startsWith('shop-')); const supportTickets = tickets.filter(t => t.name.startsWith('support-')); if(shopTickets.length > 0) { html += '<div style=\"font-size:0.85em; text-transform:uppercase; color:var(--accent-blue); font-weight:800; margin: 10px 0 5px 5px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom:3px;\">🛒 Shop (' + shopTickets.length + ')</div>'; shopTickets.forEach(t => { const isActive = activeChatChannel === t.id ? 'active' : ''; html += '<div class=\"ticket-item ' + isActive + '\" onclick=\"window.openTicketChat(\\'' + t.id + '\\')\">🛒 ' + escapeHTML(t.name) + '</div>'; }); } if(supportTickets.length > 0) { html += '<div style=\"font-size:0.85em; text-transform:uppercase; color:var(--accent-orange); font-weight:800; margin: 15px 0 5px 5px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom:3px;\">🎧 Support (' + supportTickets.length + ')</div>'; supportTickets.forEach(t => { const isActive = activeChatChannel === t.id ? 'active' : ''; html += '<div class=\"ticket-item ' + isActive + '\" onclick=\"window.openTicketChat(\\'' + t.id + '\\')\">🎧 ' + escapeHTML(t.name) + '</div>'; }); } } document.getElementById('chat-ticket-list').innerHTML = html; } catch(e) {} };",
             "        window.openTicketChat = function(channelId) { activeChatChannel = channelId; window.loadTicketsForChat(); document.getElementById('chat-messages-area').innerHTML = '<div style=\"margin:auto; color:var(--accent-blue);\"><div style=\"width:30px; height:30px; border:3px solid rgba(56,189,248,0.2); border-top:3px solid var(--accent-blue); border-radius:50%; animation:spin 1s linear infinite; margin:auto;\"></div></div>'; window.fetchChatMessages(); if(chatPollInterval) clearInterval(chatPollInterval); chatPollInterval = setInterval(window.fetchChatMessages, 3000); };",
             "        window.fetchChatMessages = async function() { if(!activeChatChannel) return; try { const res = await fetch('/api/tickets/messages?channelId=' + activeChatChannel); const msgs = await res.json(); let html = ''; if(msgs.length === 0) html = '<p class=\"text-muted text-center\" style=\"margin:auto;\">No messages yet.</p>'; else { msgs.forEach(m => { const bubbleClass = m.isBot ? 'bot' : 'user'; const imgHtml = m.imageUrl ? '<br><img src=\"' + escapeHTML(m.imageUrl) + '\" class=\"chat-img-preview\" onclick=\"window.open(\\'' + escapeHTML(m.imageUrl) + '\\')\">' : ''; const actionsHtml = '<div class=\"chat-bubble-actions\"><button class=\"chat-reaction-btn\" onclick=\"window.reactMessage(\\'' + m.id + '\\', \\'👍\\')\">👍</button><button class=\"chat-reaction-btn\" onclick=\"window.reactMessage(\\'' + m.id + '\\', \\'❤️\\')\">❤️</button></div>'; html += '<div class=\"chat-bubble ' + bubbleClass + '\"><div class=\"chat-author\">' + escapeHTML(m.author) + '</div>' + escapeHTML(m.content) + imgHtml + actionsHtml + '</div>'; }); } const area = document.getElementById('chat-messages-area'); const isAtBottom = area.scrollHeight - area.scrollTop <= area.clientHeight + 100; area.innerHTML = html; if(isAtBottom) area.scrollTop = area.scrollHeight; } catch(e) {} };",
-            "        window.sendChatMessage = async function() { if(!activeChatChannel) return showToast('Select a ticket first!', 'error'); const input = document.getElementById('chat-input-text'); const fileInput = document.getElementById('chat-file-input'); const text = input.value.trim(); const file = fileInput.files[0]; if(!text && !file) return; input.value = ''; document.getElementById('attach-badge').style.display='none'; let base64 = null; if (file) { const reader = new FileReader(); reader.readAsDataURL(file); await new Promise(r => reader.onload = r); base64 = reader.result; fileInput.value = ''; } try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'send_ticket_message', channelId: activeChatChannel, message: text, imageBase64: base64, pin: PIN }) }); window.fetchChatMessages(); } catch(e) { showToast('Failed to send', 'error'); } };",
-            "        window.reactMessage = async function(msgId, emoji) { if(!activeChatChannel) return; try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'react_ticket_message', channelId: activeChatChannel, messageId: msgId, emoji: emoji, pin: PIN }) }); showToast('Reaction sent!'); } catch (e) { showToast('Failed to react', 'error'); } };",
-            "        window.sendQuickResponse = async function(type) { if(!activeChatChannel) return showToast('Select a ticket first!', 'error'); let msg = ''; if(type === 'welcome') msg = '👋 Hello! How can I help you today?'; else if(type === 'wait') { const mins = prompt('How many minutes should the user wait?'); if(!mins) return; msg = '⏳ Please wait for about ' + mins + ' minutes, an admin is looking into it.'; } else if(type === 'resolved') msg = '✅ Did this resolve your issue, or do you have any other questions?'; else if(type === 'close') { if(!confirm('Close this ticket and delete the channel?')) return; msg = '🔒 Closing this ticket. Have a great day!'; await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'send_ticket_message', channelId: activeChatChannel, message: msg, pin: PIN }) }); window.fetchChatMessages(); setTimeout(async () => { await window.executeAction({ action: 'close_channel', channelId: activeChatChannel }, false); activeChatChannel = null; window.loadTicketsForChat(); document.getElementById('chat-messages-area').innerHTML = '<div style=\"margin:auto; color:var(--text-muted); text-align:center;\"><h2 style=\"font-size:3em; margin:0;\">👈</h2><p>Select a ticket to view</p></div>'; }, 2000); return; } if(msg) { try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'send_ticket_message', channelId: activeChatChannel, message: msg, pin: PIN }) }); window.fetchChatMessages(); } catch(e) { showToast('Failed to send', 'error'); } } };",
-            "",
+            "        window.sendChatMessage = async function() { if(!activeChatChannel) return showToast('Select a ticket first!', 'error'); const input = document.getElementById('chat-input-text'); const fileInput = document.getElementById('chat-file-input'); const text = input.value.trim(); const file = fileInput.files[0]; if(!text && !file) return; input.value = ''; document.getElementById('attach-badge').style.display='none'; let base64 = null; if (file) { const reader = new FileReader(); reader.readAsDataURL(file); await new Promise(r => reader.onload = r); base64 = reader.result; fileInput.value = ''; } try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'send_ticket_message', channelId: activeChatChannel, message: text, imageBase64: base64, pin: PIN, csrf: SERVER_CSRF_TOKEN }) }); window.fetchChatMessages(); } catch(e) { showToast('Failed to send', 'error'); } };",
+            "        window.reactMessage = async function(msgId, emoji) { if(!activeChatChannel) return; try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'react_ticket_message', channelId: activeChatChannel, messageId: msgId, emoji: emoji, pin: PIN, csrf: SERVER_CSRF_TOKEN }) }); showToast('Reaction sent!'); } catch (e) { showToast('Failed to react', 'error'); } };",
+            "        window.sendQuickResponse = async function(type) { if(!activeChatChannel) return showToast('Select a ticket first!', 'error'); let msg = ''; if(type === 'welcome') msg = '👋 Hello! How can I help you today?'; else if(type === 'wait') { const mins = prompt('How many minutes should the user wait?'); if(!mins) return; msg = '⏳ Please wait for about ' + mins + ' minutes, an admin is looking into it.'; } else if(type === 'resolved') msg = '✅ Did this resolve your issue, or do you have any other questions?'; else if(type === 'close') { if(!confirm('Close this ticket and delete the channel?')) return; msg = '🔒 Closing this ticket. Have a great day!'; await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'send_ticket_message', channelId: activeChatChannel, message: msg, pin: PIN, csrf: SERVER_CSRF_TOKEN }) }); window.fetchChatMessages(); setTimeout(async () => { await window.executeAction({ action: 'close_channel', channelId: activeChatChannel }, false); activeChatChannel = null; window.loadTicketsForChat(); document.getElementById('chat-messages-area').innerHTML = '<div style=\"margin:auto; color:var(--text-muted); text-align:center;\"><h2 style=\"font-size:3em; margin:0;\">👈</h2><p>Select a ticket to view</p></div>'; }, 2000); return; } if(msg) { try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'send_ticket_message', channelId: activeChatChannel, message: msg, pin: PIN, csrf: SERVER_CSRF_TOKEN }) }); window.fetchChatMessages(); } catch(e) { showToast('Failed to send', 'error'); } } };",
+            "        ",
             "        window.askReviewPrompt = async function() {",
             "            if(!activeChatChannel) return showToast('Select a ticket first!', 'error');",
             "            const pId = prompt('Enter the Product ID to request a review for (check Products tab for IDs):');",
             "            if(!pId) return;",
             "            if(!rawStats.products[pId]) return showToast('Product ID not found.', 'error');",
             "            try {",
-            "                await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'ask_review', channelId: activeChatChannel, productId: pId, pin: PIN }) });",
+            "                await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'ask_review', channelId: activeChatChannel, productId: pId, pin: PIN, csrf: SERVER_CSRF_TOKEN }) });",
             "                window.fetchChatMessages();",
             "                showToast('Review request sent!');",
             "            } catch(e) { showToast('Failed to send', 'error'); }",
             "        };",
-            "",
+            "        ",
             "        window.createPromo = async function() { const name = document.getElementById('promoName').value.trim().toUpperCase(); const discount = parseInt(document.getElementById('promoDiscount').value); const limit = parseInt(document.getElementById('promoLimit').value); if(!name || isNaN(discount) || isNaN(limit)) { return showToast('Please fill all fields correctly', 'error'); } if(discount < 1 || discount > 100) return showToast('Discount must be between 1 and 100', 'error'); await window.executeAction({ action: 'create_promo', name: name, discount: discount, limit: limit }); };",
             "        window.deletePromo = async function(code) { if(confirm('Delete promo code ' + decodeURIComponent(code) + '?')) { await window.executeAction({ action: 'delete_promo', name: decodeURIComponent(code) }); } };",
             "        window.updateRefThreshold = async function() { const val = document.getElementById('ref-threshold').value; if(val) await window.executeAction({action:'update_ref_threshold', threshold: val}); };",
             "        window.openDirectContact = async function(id) { const msg = prompt('Enter the DM message:'); if(msg) await window.executeAction({action:'send_dm', userId: id, message: msg}); };",
-            "        window.saveUserNote = async function(id) { const note = document.getElementById('note-'+id).value; fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'save_note', userId: id, note: note, pin: PIN }) }).then(r => { if(r.ok) showToast('Note saved!'); }); };",
+            "        window.saveUserNote = async function(id) { const note = document.getElementById('note-'+id).value; fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'save_note', userId: id, note: note, pin: PIN, csrf: SERVER_CSRF_TOKEN }) }).then(r => { if(r.ok) showToast('Note saved!'); }); };",
             "        window.manageVip = async function(userId, action) { if(action === 'add') { await window.executeAction({action: 'add_vip_days', userId: userId, days: 7}); } else if(action === 'revoke') { if(confirm('Are you sure you want to revoke VIP access for this user?')) { await window.executeAction({action: 'revoke_vip', userId: userId}); } } };",
-            "",
-            "        Chart.defaults.color = '#94a3b8'; Chart.defaults.font.family = 'Inter, sans-serif';",
-            "        window.renderSalesChart = function(days) { let dates = Object.keys(rawStats.revenue || {}).sort(); let values = dates.map(d => rawStats.revenue[d]); if (days > 0 && dates.length > days) { dates = dates.slice(-days); values = values.slice(-days); } const ctxSales = document.getElementById('salesChart').getContext('2d'); let grad = ctxSales.createLinearGradient(0,0,0,400); grad.addColorStop(0, 'rgba(56, 189, 248, 0.4)'); grad.addColorStop(1, 'transparent'); if(salesChart) salesChart.destroy(); salesChart = new Chart(ctxSales, { type: 'line', data: { labels: dates.length?dates:['No Data'], datasets: [{ data: values.length?values:[0], borderColor: '#38bdf8', backgroundColor: grad, fill: true, tension: 0.4, pointHoverBackgroundColor: '#fff', pointHoverBorderColor: 'rgba(56, 189, 248, 0.5)', pointHoverBorderWidth: 6, pointHitRadius: 10 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { grid: { color: 'rgba(255,255,255,0.05)'} } } } }); };",
+            "        ",
+            "        window.simulateSale = async function() { await window.executeAction({ action: 'create_manual_tx', username: 'Sandbox Simulator', product: 'Test Item', price: 5.00, date: new Date().toISOString() }); showToast('Simulated sale injected!'); };",
+            "        window.fetchDebugInfo = async function() {",
+            "            try {",
+            "                const res = await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'get_debug_info', pin: PIN, csrf: SERVER_CSRF_TOKEN }) });",
+            "                if (res.ok) {",
+            "                    const data = await res.json();",
+            "                    document.getElementById('dev-ram').innerText = data.ram + ' MB';",
+            "                    document.getElementById('dev-uptime').innerText = Math.floor(data.uptime / 60) + 'm ' + Math.floor(data.uptime % 60) + 's';",
+            "                    document.getElementById('dev-db-size').innerText = data.dbSize;",
+            "                    let logsHtml = '';",
+            "                    data.logs.forEach(l => {",
+            "                        const color = l.level === 'ERROR' ? '#f00' : '#0f0';",
+            "                        logsHtml += `<div style=\"color:\${color}; margin-bottom:4px;\">[\${new Date(l.time).toLocaleTimeString()}] \${escapeHTML(l.msg)}</div>`;",
+            "                    });",
+            "                    const logsArea = document.getElementById('dev-logs');",
+            "                    const isBottom = logsArea.scrollHeight - logsArea.scrollTop <= logsArea.clientHeight + 20;",
+            "                    logsArea.innerHTML = logsHtml || 'No logs yet...';",
+            "                    if (isBottom) logsArea.scrollTop = logsArea.scrollHeight;",
+            "                    ",
+            "                    if (document.activeElement !== document.getElementById('dev-raw-db')) {",
+            "                        document.getElementById('dev-raw-db').value = JSON.stringify(data.rawDb, null, 2);",
+            "                    }",
+            "                }",
+            "            } catch(e) {}",
+            "        };",
+            "        window.saveRawDb = async function() {",
+            "            if(!confirm('DANGER: Saving raw JSON! Are you absolutely sure the syntax is perfect?')) return;",
+            "            const val = document.getElementById('dev-raw-db').value;",
+            "            try { JSON.parse(val); } catch(e) { return showToast('Invalid JSON syntax. Aborted to prevent crash.', 'error'); }",
+            "            await window.executeAction({ action: 'update_raw_db', json: val }, false);",
+            "            showToast('Cloud database forcefully overridden!');",
+            "        };",
+            "        ",
+            "        window.renderSalesChart = function(days) { ",
+            "            Chart.defaults.color = '#94a3b8'; Chart.defaults.font.family = 'Inter, sans-serif';",
+            "            let dates = Object.keys(rawStats.revenue || {}).sort(); ",
+            "            let values = dates.map(d => rawStats.revenue[d]); ",
+            "            if (days > 0 && dates.length > days) { dates = dates.slice(-days); values = values.slice(-days); } ",
+            "            const ctxSales = document.getElementById('salesChart').getContext('2d'); ",
+            "            let grad = ctxSales.createLinearGradient(0,0,0,400); ",
+            "            grad.addColorStop(0, 'rgba(56, 189, 248, 0.4)'); grad.addColorStop(1, 'transparent'); ",
+            "            if(salesChart) salesChart.destroy(); ",
+            "            salesChart = new Chart(ctxSales, { type: 'line', data: { labels: dates.length?dates:['No Data'], datasets: [{ data: values.length?values:[0], borderColor: '#38bdf8', backgroundColor: grad, fill: true, tension: 0.4, pointHoverBackgroundColor: '#fff', pointHoverBorderColor: 'rgba(56, 189, 248, 0.5)', pointHoverBorderWidth: 6, pointHitRadius: 10 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { grid: { color: 'rgba(255,255,255,0.05)'} } } } }); ",
+            "        };",
             "        window.updateSalesChart = function(days) { window.renderSalesChart(days); };",
             "        function renderAnalyticsCharts() { ",
             "           const ctxHourly = document.getElementById('hourlyChart').getContext('2d'); if(hourlyChart) hourlyChart.destroy(); hourlyChart = new Chart(ctxHourly, { type: 'bar', data: { labels: Array.from({length: 24}, (_, i) => i+'h'), datasets: [{ label: 'Sales', data: rawStats.analytics.hourly_sales || Array(24).fill(0), backgroundColor: '#a855f7', hoverBackgroundColor: 'rgba(168, 85, 247, 0.4)', borderRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, plugins: { legend: { display: false } }, scales: { y: { grid: { color: 'rgba(255,255,255,0.05)' } }, x: { grid: { display: false } } } } });",
             "           const prodIds = Object.keys(rawStats.product_sales || {}); const prodLabels = prodIds.map(id => rawStats.products[id] ? rawStats.products[id].name : 'Unknown'); const prodData = Object.values(rawStats.product_sales || {}); const ctxTopProd = document.getElementById('topProductsBarChart').getContext('2d'); if(topProdChart) topProdChart.destroy(); topProdChart = new Chart(ctxTopProd, { type: 'bar', data: { labels: prodLabels.length?prodLabels:['No Data'], datasets: [{ label: 'Sales', data: prodData.length?prodData:[0], backgroundColor: '#38bdf8', hoverBackgroundColor: 'rgba(56, 189, 248, 0.4)', borderRadius: 4 }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, plugins: { legend: { display: false } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' } }, y: { grid: { display: false } } } } });",
             "           const catRevs = {}; Object.entries(rawStats.product_sales || {}).forEach(([id, count]) => { const p = rawStats.products[id]; if(p && p.price !== 'Custom'){ const cat = p.category || 'Other'; if(!catRevs[cat]) catRevs[cat] = 0; catRevs[cat] += (parseInt(p.price) * count); } }); const ctxCat = document.getElementById('categoryRevenueChart').getContext('2d'); if(catChart) catChart.destroy(); catChart = new Chart(ctxCat, { type: 'polarArea', data: { labels: Object.keys(catRevs).length?Object.keys(catRevs):['No Data'], datasets: [{ data: Object.values(catRevs).length?Object.values(catRevs):[0], backgroundColor: ['#FF1493', '#38bdf8', '#10b981', '#f97316', '#a855f7'], hoverBackgroundColor: ['rgba(255, 20, 147, 0.4)', 'rgba(56, 189, 248, 0.4)', 'rgba(16, 185, 129, 0.4)', 'rgba(249, 115, 22, 0.4)', 'rgba(168, 85, 247, 0.4)'], borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { animateScale: true, animateRotate: true, duration: 1500, easing: 'easeOutQuart' }, plugins: { legend: { position: 'right', labels: {color: '#f8fafc'} } } } });",
             "        }",
-            "        initDashboard();",
+            "        let SERVER_CSRF_TOKEN = '';",
+            "        async function getCSRF() { const r = await fetch('/api/init-data'); const d = await r.json(); SERVER_CSRF_TOKEN = d.CSRF; }",
+            "        getCSRF().then(initDashboard);",
             "    </script>",
             "</body>",
             "</html>"
