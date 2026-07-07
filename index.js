@@ -1,5 +1,5 @@
 // === [ANCHOR: IMPORTS_AND_CRASH_HANDLER] ===
-const { Client, GatewayIntentBits, Partials, AttachmentBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, Partials, AttachmentBuilder, ButtonBuilder, ActionRowBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
 const axios = require('axios');
 const http = require('http');
 const fs = require('fs');
@@ -51,24 +51,36 @@ if (!CONFIG.DISCORD_BOT_TOKEN) {
 
 const channelStates = new Map();
 const guildInvites = new Map(); 
-let memoryStats = { joins: {}, leaves: {}, revenue: {}, total_revenue: 0, transactions: {}, total_transactions: 0, product_sales: {}, recent_joins: [], recent_leaves: [], total_leaves: 0, total_joins: 0, recent_transactions: [], user_spending: {}, custom_requests: [], user_history: {}, warns: {}, blacklist: [], user_notes: {}, promo_codes: {}, analytics: { tickets_opened: 0, hourly_sales: Array(24).fill(0) }, referrals: {}, settings: { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } }, products: {}, subscriptions: {}, buy_links: {}, pending_reviews: [], overrides: {}, activity_feed: [], last_update: Date.now() };
 
-const client = new Client({ 
-    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildPresences, GatewayIntentBits.GuildInvites],
-    partials: [Partials.GuildMember, Partials.User, Partials.Message]
-});
+// === [ANCHOR: MEMORY_CACHE_AND_DB] ===
+let memoryStats = { 
+    joins: {}, leaves: {}, revenue: {}, total_revenue: 0, transactions: {}, 
+    total_transactions: 0, product_sales: {}, recent_joins: [], recent_leaves: [], 
+    total_leaves: 0, total_joins: 0, recent_transactions: [], user_spending: {}, 
+    custom_requests: [], user_history: {}, warns: {}, blacklist: [], user_notes: {},
+    promo_codes: {}, analytics: { tickets_opened: 0, hourly_sales: Array(24).fill(0) },
+    referrals: {}, settings: { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } },
+    products: {}, subscriptions: {}, buy_links: {}, pending_reviews: [], overrides: {},
+    activity_feed: [],
+    last_update: Date.now() 
+};
 
-// === [ANCHOR: SHARING_CORE_HELPERS] ===
+// === [ANCHOR: CLOUD_SYNC_FUNCTIONS] ===
 const helpers = {
     async notifyAdminPhone(title, msg) {
-        try { const admin = await client.users.fetch(CONFIG.ADMIN_DISCORD_ID); if (admin) await admin.send(`📱 **NOTIFICATION SYSTÈME**\n**${title}**\n> ${msg}`); } catch(e) {}
+        try {
+            const admin = await client.users.fetch(CONFIG.ADMIN_DISCORD_ID);
+            if (admin) await admin.send(`📱 **NOTIFICATION SYSTÈME**\n**${title}**\n> ${msg}`);
+        } catch(e) {}
     },
+
     addActivity(type, message) {
         if (!memoryStats.activity_feed) memoryStats.activity_feed = [];
         memoryStats.activity_feed.unshift({ type, message, time: Date.now() });
         if (memoryStats.activity_feed.length > 30) memoryStats.activity_feed.pop();
-        helpers.syncCloud();
+        this.syncCloud();
     },
+
     async syncCloud() {
         try { fs.writeFileSync(CONFIG.STATS_FILE, JSON.stringify(memoryStats)); } catch (e) {}
         const url = process.env.UPSTASH_REDIS_REST_URL; const token = process.env.UPSTASH_REDIS_REST_TOKEN;
@@ -78,6 +90,7 @@ const helpers = {
             await axios.post(cleanUrl, ["SET", "bot_stats", JSON.stringify(memoryStats)], { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } });
         } catch (err) { console.error("❌ Cloud Sync Error :", err.message); }
     },
+
     async loadCloudStats() {
         if (fs.existsSync(CONFIG.STATS_FILE)) { try { Object.assign(memoryStats, JSON.parse(fs.readFileSync(CONFIG.STATS_FILE, 'utf8'))); } catch (e) {} }
         const url = process.env.UPSTASH_REDIS_REST_URL; const token = process.env.UPSTASH_REDIS_REST_TOKEN;
@@ -103,11 +116,158 @@ const helpers = {
                 console.log("✅ Database synchronized with the Cloud.");
             }
         } catch (e) { console.error("❌ Cloud GET Error :", e.message); }
+    },
+
+    async checkSubscriptions() {
+        const now = Date.now();
+        const guild = client.guilds.cache.first();
+        if (!guild) return;
+
+        for (const [userId, subData] of Object.entries(memoryStats.subscriptions || {})) {
+            if (now > subData.expiresAt) {
+                try {
+                    const member = await guild.members.fetch(userId).catch(() => null);
+                    if (member) {
+                        await member.roles.remove(CONFIG.VIP_ROLE_ID).catch(() => {});
+                        const codeName = "COMEBACK-" + Math.random().toString(36).substring(2, 6).toUpperCase();
+                        if (!memoryStats.promo_codes) memoryStats.promo_codes = {};
+                        memoryStats.promo_codes[codeName] = { discount: 50, limit: 1, used: 0, createdAt: new Date().toLocaleDateString('en-US') };
+                        
+                        await member.send(`🛑 **Your VIP Pass has expired.** You lost access to exclusive content. Here is a **-50% OFF** promo code to say thank you: \`${codeName}\`. Renew in the shop!`).catch(() => {});
+                    }
+                } catch(e) {}
+                delete memoryStats.subscriptions[userId];
+                helpers.syncCloud();
+            } 
+            else if (subData.expiresAt - now < 3 * 24 * 60 * 60 * 1000 && !subData.notified) {
+                try {
+                    const member = await guild.members.fetch(userId).catch(() => null);
+                    if (member) await member.send("⏳ **Your VIP Pass expires in 3 days!** Don't forget to renew it to keep your discount.").catch(() => {});
+                } catch(e) {}
+                memoryStats.subscriptions[userId].notified = true;
+                helpers.syncCloud();
+            }
+        }
+    },
+
+    logStat(type, value = 1, extraData = null) {
+        const today = new Date().toISOString().split('T')[0];
+        if (type === 'revenue') {
+            memoryStats.revenue[today] = (memoryStats.revenue[today] || 0) + value;
+            memoryStats.total_revenue += value;
+            if (!Array.isArray(memoryStats.recent_transactions)) memoryStats.recent_transactions = [];
+            memoryStats.total_transactions += 1;
+            if (!memoryStats.analytics) memoryStats.analytics = { tickets_opened: 0, hourly_sales: Array(24).fill(0) };
+            const currentHour = new Date().getHours();
+            memoryStats.analytics.hourly_sales[currentHour]++;
+            if (extraData && extraData.username) {
+                memoryStats.user_spending[extraData.username] = (memoryStats.user_spending[extraData.username] || 0) + value;
+                memoryStats.product_sales[extraData.productId] = (memoryStats.product_sales[extraData.productId] || 0) + 1;
+                if (!memoryStats.user_history[extraData.username]) memoryStats.user_history[extraData.username] = [];
+                memoryStats.user_history[extraData.username].unshift({ product: extraData.productName, price: value, date: new Date().toLocaleString('en-US') });
+                if (memoryStats.user_history[extraData.username].length > 20) memoryStats.user_history[extraData.username].pop();
+                memoryStats.recent_transactions.unshift({ username: extraData.username, product: extraData.productName, price: value, date: new Date().toLocaleString('en-US') });
+                if (memoryStats.recent_transactions.length > 50) memoryStats.recent_transactions.pop();
+                
+                helpers.addActivity('sale', `💰 €${value} Sale: ${extraData.username} bought ${extraData.productName}`);
+                helpers.notifyAdminPhone('NOUVELLE VENTE', `💰 +${value}€\n👤 Client: ${extraData.username}\n📦 Produit: ${extraData.productName}`);
+            }
+        } else if (type === 'joins') {
+            memoryStats.joins[today] = (memoryStats.joins[today] || 0) + value;
+            memoryStats.total_joins += 1;
+            if (!Array.isArray(memoryStats.recent_joins)) memoryStats.recent_joins = [];
+            if (extraData && extraData.username) {
+                memoryStats.recent_joins.unshift({ username: extraData.username, date: new Date().toLocaleString('en-US') });
+                if (memoryStats.recent_joins.length > 15) memoryStats.recent_joins.pop();
+                helpers.addActivity('join', `👋 ${extraData.username} joined the server`);
+            }
+        } else if (type === 'leaves') {
+            memoryStats.leaves[today] = (memoryStats.leaves[today] || 0) + value;
+            memoryStats.total_leaves += 1;
+            if (!Array.isArray(memoryStats.recent_leaves)) memoryStats.recent_leaves = [];
+            if (extraData && extraData.username) {
+                memoryStats.recent_leaves.unshift({ 
+                    username: extraData.username, 
+                    date: new Date().toLocaleString('en-US'),
+                    avatar: extraData.avatar || 'https://cdn.discordapp.com/embed/avatars/0.png',
+                    duration: extraData.duration || 0
+                });
+                if (memoryStats.recent_leaves.length > 15) memoryStats.recent_leaves.pop();
+            }
+        } else if (type === 'custom_request') {
+            if (!Array.isArray(memoryStats.custom_requests)) memoryStats.custom_requests = [];
+            memoryStats.custom_requests.unshift({ id: Date.now().toString(), username: extraData.username, userId: extraData.userId, product: extraData.productName, date: new Date().toLocaleString('en-US'), status: 'pending' });
+            helpers.notifyAdminPhone('NOUVELLE CUSTOM REQUEST', `💌 ${extraData.username} a demandé: ${extraData.productName}\n➡️ Commandes personnalisées sur le Kanban.`);
+        }
+        memoryStats.last_update = Date.now();
+        helpers.syncCloud(); 
+    },
+
+    async sendShopSetup(channel) {
+        let buyRows = [];
+        let currentComponents = [];
+        
+        for (const [id, linkObj] of Object.entries(memoryStats.buy_links || {})) {
+            try {
+                currentComponents.push(new ButtonBuilder().setLabel(linkObj.label).setStyle(ButtonStyle.Link).setURL(linkObj.url));
+                if (currentComponents.length === 5) {
+                    buyRows.push(new ActionRowBuilder().addComponents(currentComponents));
+                    currentComponents = [];
+                }
+            } catch(e) {}
+        }
+        if (currentComponents.length > 0) {
+            buyRows.push(new ActionRowBuilder().addComponents(currentComponents));
+        }
+        
+        buyRows = buyRows.slice(0, 4);
+
+        const rowActions = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('open_shop_channel').setLabel('📩 Redeem Code').setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId('get_referral_link').setLabel('🔗 Get Referral Link').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId('open_support_ticket').setLabel('🎧 Need Support?').setStyle(ButtonStyle.Secondary)
+        );
+        
+        const componentsToSend = [...buyRows, rowActions];
+        
+        const groupedProducts = {};
+        for (const [id, prod] of Object.entries(memoryStats.products)) {
+            if (prod.stock && prod.stock !== "∞" && parseInt(prod.stock) <= 0) continue;
+            
+            const catName = prod.price === "Custom" ? "💌 PERSONALIZED (On Request)" : `✨ ITEMS (€${prod.price})`;
+            if (!groupedProducts[catName]) groupedProducts[catName] = [];
+            groupedProducts[catName].push(`**${id}.** ${prod.name}`);
+        }
+
+        const shopEmbed = new EmbedBuilder()
+            .setColor('#FF1493')
+            .setTitle('💎 VIP EXCLUSIVE MENU & PRICES 💎')
+            .setDescription('> *Instant automatic delivery directly in your DMs!* 🚀\n\n━━━━━━━━━━━━━━━━━━━━━━');
+        
+        let isFirst = true;
+        for (const [catName, items] of Object.entries(groupedProducts)) {
+            if (!isFirst && items.length > 0) shopEmbed.addFields({ name: '\u200B', value: '\u200B' });
+            shopEmbed.addFields({ name: catName, value: '> ' + items.join('\n> '), inline: true });
+            isFirst = false;
+        }
+
+        shopEmbed.addFields({ name: '━━━━━━━━━━━━━━━━━━━━━━\n💳 HOW TO BUY ?', value: '**STEP 1:** Click a Buy button below to get your voucher.\n**STEP 2:** Click the green **📩 Redeem Code** button.\n**STEP 3:** Paste your code, choose your item, and check your DMs! 🎉\n\n🎁 **FREE PRODUCT:** Click **🔗 Get Referral Link**, invite your friends, and get a 100% OFF code automatically!' });
+        shopEmbed.setFooter({ text: 'Powered by Nexus Premium • Secure & Automatic 🔒' });
+
+        await channel.send({ embeds: [shopEmbed], components: componentsToSend }).catch(() => {});
     }
 };
 
+const client = new Client({ 
+    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildPresences, GatewayIntentBits.GuildInvites],
+    partials: [Partials.GuildMember, Partials.User, Partials.Message]
+});
+
 // INITIALISATION ET BRANCHEMENT DU MODULE BOT D'ÉCOUTE DISCORD
 require('./bot.js')(client, memoryStats, channelStates, guildInvites, CONFIG, helpers);
+
+// Chargement initial immédiat de la base de données Upstash / local
+helpers.loadCloudStats();
 
 // ==========================================
 // PANNEAU WEB DE CONTRÔLE (ROUTES API REST)
@@ -144,7 +304,7 @@ http.createServer(async (req, res) => {
 
     if ((req.url === '/dashboard' || req.url === '/') && !isAuthenticated) {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        return res.end("<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Nexus Security</title></head><body style=\"background:#030712;color:#fff;display:flex;justify-content:center;align-items:center;height:100vh;font-family:sans-serif\"><div style=\"text-align:center;background:rgba(15,23,42,0.4);padding:40px;border-radius:24px;border:1px solid rgba(56,189,248,0.1)\"><h2>NEXUS CORE</h2><input type='password' id='pin' maxlength='4' placeholder='••••' style=\"background:#000;color:#fff;border:1px solid #38bdf8;padding:15px;text-align:center;font-size:22px;border-radius:12px;margin:20px 0;width:100%;max-width:200px;outline:none\"><br><button style=\"background:linear-gradient(135deg,#38bdf8 0%,#8b5cf6 100%);color:#fff;border:none;padding:12px 30px;font-weight:bold;border-radius:12px;cursor:pointer\" onclick='login()'>Authenticate</button></div><script>async function login(){const res=await fetch('/api/login',{method:'POST',body:JSON.stringify({pin:document.getElementById('pin').value})});if(res.ok)location.reload();else alert('Access Denied');}document.getElementById('pin').addEventListener('keypress',e=>{if(e.key==='Enter')login();});</script></body></html>");
+        return res.end("<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no'><title>Nexus Security</title><style>body{font-family:'Inter',sans-serif;background:#030712;color:#f8fafc;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;}.login-box{background:rgba(15,23,42,0.4);backdrop-filter:blur(24px);padding:50px;border-radius:24px;border:1px solid rgba(56,189,248,0.1);text-align:center;box-shadow:0 20px 50px rgba(0,0,0,0.8), inset 0 0 20px rgba(56,189,248,0.05);width:90%;max-width:420px;box-sizing:border-box;}h2{font-weight:800;letter-spacing:2px;background:linear-gradient(135deg,#fff 0%,#38bdf8 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}input{background:rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.05);color:white;padding:18px;border-radius:12px;font-size:20px!important;text-align:center;letter-spacing:15px;width:100%;max-width:200px;outline:none}input:focus{border-color:#38bdf8;box-shadow:0 0 25px rgba(56,189,248,0.2);transform:scale(1.05);}button{background:linear-gradient(135deg,#38bdf8 0%,#8b5cf6 100%);color:white;border:none;padding:15px 40px;font-size:1.1em;border-radius:12px;cursor:pointer;font-weight:800;width:100%;transition:all 0.3s;text-transform:uppercase;letter-spacing:2px;box-shadow:0 10px 30px rgba(56,189,248,0.3);}button:hover{transform:translateY(-3px);box-shadow:0 15px 40px rgba(139,92,246,0.4);}</style></head><body><div class='login-box'><h2>NEXUS CORE</h2><input type='password' id='pin' maxlength='4' placeholder='••••'><button onclick='login()'>Authenticate</button><p id='err' style='color:#ec4899;display:none;margin-top:20px;font-weight:bold;letter-spacing:1px;'>Access Denied</p></div><script>async function login(){const res=await fetch('/api/login',{method:'POST',body:JSON.stringify({pin:document.getElementById('pin').value})});if(res.ok)location.reload();else document.getElementById('err').style.display='block';} document.getElementById('pin').addEventListener('keypress', e=>{if(e.key==='Enter')login();});</script></body></html>");
     }
 
     if ((req.url === '/dashboard' || req.url === '/') && isAuthenticated) {
@@ -272,6 +432,47 @@ http.createServer(async (req, res) => {
                 else if (data.action === 'edit_product') { if (memoryStats.products && memoryStats.products[data.id]) { memoryStats.products[data.id] = { name: data.name, price: data.price, link: data.link, category: data.category || "✨ ITEMS", stock: data.stock || "∞", desc: data.desc, upsellId: data.upsellId, upsellDiscount: data.upsellDiscount }; helpers.syncCloud(); } }
                 else if (data.action === 'add_product') { if (!memoryStats.products) memoryStats.products = {}; const newId = (Object.keys(memoryStats.products).length + 1).toString(); memoryStats.products[newId] = { name: data.name, price: data.price, link: data.link, category: data.category || "✨ ITEMS", stock: data.stock || "∞", desc: data.desc, upsellId: data.upsellId, upsellDiscount: data.upsellDiscount }; helpers.syncCloud(); }
                 else if (data.action === 'delete_product') { if (memoryStats.products && memoryStats.products[data.id]) { delete memoryStats.products[data.id]; const newProducts = {}; let counter = 1; for (const key in memoryStats.products) { newProducts[counter.toString()] = memoryStats.products[key]; counter++; } memoryStats.products = newProducts; helpers.syncCloud(); } }
+                else if (data.action === 'rename_category') {
+                    const oldCat = data.oldCategory; const newCat = data.newCategory;
+                    if (oldCat && newCat && memoryStats.products) {
+                        for (const [id, p] of Object.entries(memoryStats.products)) { if (p.category === oldCat) p.category = newCat; }
+                        helpers.syncCloud();
+                    }
+                }
+                else if (data.action === 'delete_category') {
+                    const catToDelete = data.category;
+                    if (catToDelete && memoryStats.products) {
+                        for (const [id, p] of Object.entries(memoryStats.products)) { if (p.category === catToDelete) p.category = "✨ ITEMS"; }
+                        helpers.syncCloud();
+                    }
+                }
+                else if (data.action === 'refund_tx') {
+                    if (Array.isArray(memoryStats.recent_transactions)) {
+                        const txIndex = memoryStats.recent_transactions.findIndex(t => t.date === data.date && t.username === data.username);
+                        if (txIndex > -1) {
+                            const tx = memoryStats.recent_transactions[txIndex];
+                            memoryStats.recent_transactions.splice(txIndex, 1);
+                            memoryStats.total_transactions = Math.max(0, memoryStats.total_transactions - 1);
+                            memoryStats.total_revenue = Math.max(0, memoryStats.total_revenue - tx.price);
+                            
+                            try {
+                                const revKey = new Date(tx.date).toISOString().split('T')[0];
+                                if (memoryStats.revenue[revKey]) { memoryStats.revenue[revKey] = Math.max(0, memoryStats.revenue[revKey] - tx.price); }
+                            } catch(err) {}
+
+                            if (memoryStats.user_spending && memoryStats.user_spending[tx.username]) {
+                                memoryStats.user_spending[tx.username] = Math.max(0, memoryStats.user_spending[tx.username] - tx.price);
+                            }
+                            
+                            if (Array.isArray(memoryStats.activity_feed)) {
+                                const feedMsg = `💰 €${tx.price} Sale: ${tx.username} bought ${tx.product}`;
+                                const feedIdx = memoryStats.activity_feed.findIndex(f => f.type === 'sale' && f.message === feedMsg);
+                                if (feedIdx > -1) { memoryStats.activity_feed.splice(feedIdx, 1); }
+                            }
+                            helpers.syncCloud();
+                        } else throw new Error("Transaction not found");
+                    }
+                }
                 else if (data.action === 'refresh_setup') { const targetChannel = await client.channels.fetch(CONFIG.SHOP_CHANNEL_ID).catch(() => null); if (targetChannel) { const messages = await targetChannel.messages.fetch({ limit: 50 }); const botMessages = messages.filter(m => m.author.id === client.user.id); for (const m of botMessages.values()) { await m.delete().catch(() => {}); } const coreBot = require('./bot.js')(client, memoryStats, channelStates, guildInvites, CONFIG, helpers); await coreBot.sendShopSetup(targetChannel); } }
                 else if (data.action === 'ping_test') { const targetChannel = await client.channels.fetch(CONFIG.SHOP_CHANNEL_ID).catch(() => null); if (targetChannel) { const msg = await targetChannel.send("⚡ *System latency test...*").catch(() => null); if (msg) await msg.delete().catch(() => {}); } }
                 else if (data.action === 'post_review') { const reviewChannel = await client.channels.fetch(CONFIG.REVIEW_CHANNEL_ID).catch(() => null); if (reviewChannel) await reviewChannel.send(`> 🌟 **NEW FEEDBACK** 🌟\n> ━━━━━━━━━━━━━━━━━━━━\n> 📝 » **Feedback:** "${data.text}"\n> 📈 » **Rating:** ${data.rating}/5 ⭐\n> 👤 » **By:** ${data.author}`).catch(() => {}); }
