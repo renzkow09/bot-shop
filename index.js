@@ -1,7 +1,6 @@
 // === [ANCHOR: IMPORTS_AND_CRASH_HANDLER] ===
 const { Client, GatewayIntentBits, Partials, ButtonBuilder, ActionRowBuilder, ButtonStyle, ChannelType, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, EmbedBuilder, AttachmentBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const axios = require('axios');
-const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
@@ -25,13 +24,11 @@ const REWARBLE_API_URL = "https://api.rewarble.com/client/1.00/redeem";
 const ADMIN_DISCORD_ID = "1520551977854042114";
 const CATEGORY_CUSTOMER_ID = "1521540733226713249";
 const CATEGORY_SUPPORT_ID = "1521541155005796484";
-const DASHBOARD_PIN = "1206"; 
 const MONTHLY_GOAL = 500; 
 
 const TEST_VOUCHERS = { "GOYAVE5": 5 };
 
 const channelStates = new Map();
-let globalLastTicketMsg = Date.now();
 const STATS_FILE = path.join(__dirname, 'stats.json');
 const guildInvites = new Map(); 
 
@@ -72,13 +69,6 @@ const INITIAL_BUY_LINKS = {
 };
 
 // === [ANCHOR: CLOUD_SYNC_FUNCTIONS] ===
-function addActivity(type, message) {
-    if (!memoryStats.activity_feed) memoryStats.activity_feed = [];
-    memoryStats.activity_feed.unshift({ type, message, time: Date.now() });
-    if (memoryStats.activity_feed.length > 30) memoryStats.activity_feed.pop();
-    syncCloud();
-}
-
 async function loadCloudStats() {
     if (fs.existsSync(STATS_FILE)) {
         try { memoryStats = { ...memoryStats, ...JSON.parse(fs.readFileSync(STATS_FILE, 'utf8')) }; } catch (e) {}
@@ -98,13 +88,10 @@ async function loadCloudStats() {
             if (!memoryStats.pending_reviews) memoryStats.pending_reviews = [];
             if (!memoryStats.activity_feed) memoryStats.activity_feed = [];
             if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } };
-            if (!memoryStats.settings.maintenance) memoryStats.settings.maintenance = { active: false, endsAt: 0, channelId: "" };
             if (!memoryStats.buy_links || Object.keys(memoryStats.buy_links).length === 0) memoryStats.buy_links = INITIAL_BUY_LINKS; 
             if (!memoryStats.analytics) memoryStats.analytics = { tickets_opened: 0, hourly_sales: Array(24).fill(0) };
-            if (!memoryStats.analytics.hourly_sales) memoryStats.analytics.hourly_sales = Array(24).fill(0);
             if (!memoryStats.products || Object.keys(memoryStats.products).length === 0) memoryStats.products = INITIAL_PRODUCTS;
             
-            // 🔥 RECALCUL COMPLET DU TOTAL EARNINGS BASÉ SUR L'HISTORIQUE 🔥
             if (memoryStats.revenue) {
                 let total = 0;
                 for (const val of Object.values(memoryStats.revenue)) {
@@ -112,7 +99,6 @@ async function loadCloudStats() {
                 }
                 memoryStats.total_revenue = total;
             }
-            
             console.log("✅ Database synchronized with the Cloud.");
         }
     } catch (e) { console.error("❌ Cloud GET Error :", e.message); }
@@ -182,8 +168,6 @@ function logStat(type, value = 1, extraData = null) {
             if (memoryStats.user_history[extraData.username].length > 20) memoryStats.user_history[extraData.username].pop();
             memoryStats.recent_transactions.unshift({ username: extraData.username, product: extraData.productName, price: value, date: new Date().toLocaleString('en-US') });
             if (memoryStats.recent_transactions.length > 50) memoryStats.recent_transactions.pop();
-            
-            addActivity('sale', `💰 €${value} Sale: ${extraData.username} bought ${extraData.productName}`);
         }
     } else if (type === 'joins') {
         memoryStats.joins[today] = (memoryStats.joins[today] || 0) + value;
@@ -192,7 +176,6 @@ function logStat(type, value = 1, extraData = null) {
         if (extraData && extraData.username) {
             memoryStats.recent_joins.unshift({ username: extraData.username, date: new Date().toLocaleString('en-US') });
             if (memoryStats.recent_joins.length > 15) memoryStats.recent_joins.pop();
-            addActivity('join', `👋 ${extraData.username} joined the server`);
         }
     } else if (type === 'leaves') {
         memoryStats.leaves[today] = (memoryStats.leaves[today] || 0) + value;
@@ -350,7 +333,6 @@ client.on('interactionCreate', async (interaction) => {
                 text: feedback,
                 date: new Date().toLocaleString('en-US')
             });
-            addActivity('review', `⭐ New ${numRating}/5 review submitted by ${interaction.user.username}`);
             syncCloud();
 
             return await interaction.reply({ content: "✅ **Thank you!** Your review has been submitted to our team for moderation.", ephemeral: true }).catch(()=>{});
@@ -419,7 +401,6 @@ client.on('interactionCreate', async (interaction) => {
                 }).catch(() => null);
 
                 if (channel) {
-                    addActivity('ticket', `🎫 New shop ticket opened by ${interaction.user.username}`);
                     channelStates.set(channel.id, { validated: false, processing: false, promo: null, redeemed: false });
                     await channel.send(`👋 Welcome <@${interaction.user.id}>!\n\n**Please paste your Rewarble voucher code or Promo Code below.**`).catch(() => {});
                     await interaction.editReply({ content: `✅ Room ready: <#${channel.id}>` }).catch(() => {});
@@ -446,7 +427,6 @@ client.on('interactionCreate', async (interaction) => {
                 }).catch(() => null);
 
                 if (channel) {
-                    addActivity('ticket', `🎧 New support ticket opened by ${interaction.user.username}`);
                     await channel.send(`🎧 **Support Ticket for <@${interaction.user.id}>**`).catch(() => {});
                     await interaction.editReply({ content: `✅ Support room created: <#${channel.id}>` }).catch(() => {});
                 }
@@ -559,12 +539,6 @@ client.on('interactionCreate', async (interaction) => {
 client.on('messageCreate', async (message) => {
     try {
         if (message.author.bot) return;
-
-        if (message.channel?.name?.startsWith('shop-') || message.channel?.name?.startsWith('support-')) {
-            if (message.author.id !== ADMIN_DISCORD_ID) {
-                globalLastTicketMsg = Date.now();
-            }
-        }
 
         if (message.author.id === ADMIN_DISCORD_ID) {
             if (message.content === '!setup') { await sendShopSetup(message.channel); }
@@ -681,589 +655,5 @@ client.on('guildMemberRemove', async (member) => {
     const avatar = member.user.displayAvatarURL({ size: 64, dynamic: true });
     logStat('leaves', 1, { username: member.user.username, avatar: avatar, duration: duration }); 
 });
-
-// ==========================================
-// WEB SERVER API & DASHBOARD HTML
-// ==========================================
-// === [ANCHOR: HTTP_SERVER_AND_AUTH] ===
-const rateLimits = new Map();
-const bruteForceLocks = new Map();
-
-http.createServer(async (req, res) => {
-    const clientIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '127.0.0.1';
-    const now = Date.now();
-    let rl = rateLimits.get(clientIp) || { count: 0, resetTime: now + 60000 };
-    if (now > rl.resetTime) rl = { count: 0, resetTime: now + 60000 };
-    rl.count++; rateLimits.set(clientIp, rl);
-    if (rl.count > 200) return res.writeHead(429).end('Too Many Requests');
-
-    const cookie = req.headers.cookie || '';
-    const isAuthenticated = cookie.includes(`auth=${DASHBOARD_PIN}`);
-
-    if (req.url === '/api/login' && req.method === 'POST') {
-        let body = ''; req.on('data', chunk => body += chunk);
-        req.on('end', () => {
-            let lock = bruteForceLocks.get(clientIp) || { attempts: 0, lockout: 0 };
-            if (now < lock.lockout) return res.writeHead(429).end('Locked out.');
-            try {
-                const data = JSON.parse(body);
-                if (data.pin === DASHBOARD_PIN) {
-                    bruteForceLocks.delete(clientIp);
-                    res.writeHead(200, { 'Set-Cookie': `auth=${DASHBOARD_PIN}; Max-Age=2592000; HttpOnly; Path=/`, 'Content-Type': 'application/json' });
-                    return res.end(JSON.stringify({ success: true }));
-                } else {
-                    lock.attempts++; if (lock.attempts >= 5) lock.lockout = now + 15 * 60 * 1000;
-                    bruteForceLocks.set(clientIp, lock); res.writeHead(401).end(JSON.stringify({ success: false }));
-                }
-            } catch(e) { res.writeHead(400).end('Bad Request'); }
-        }); return;
-    }
-
-    if ((req.url === '/dashboard' || req.url === '/') && !isAuthenticated) {
-        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        return res.end("<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no'><meta name='apple-mobile-web-app-capable' content='yes'><meta name='apple-mobile-web-app-status-bar-style' content='black-translucent'><title>Nexus Login</title><style>body{font-family:'Inter',sans-serif;background:#0b0f19;color:#f8fafc;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;}.login-box{background:rgba(15, 23, 42, 0.6);backdrop-filter:blur(16px);padding:40px;border-radius:16px;border:1px solid rgba(56,189,248,0.2);text-align:center;box-shadow:0 10px 40px rgba(0,0,0,0.5);width:90%;max-width:400px;box-sizing:border-box;}input{background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.1);color:white;padding:15px;border-radius:8px;font-size:16px!important;text-align:center;letter-spacing:10px;width:100%;max-width:200px;margin:20px auto;outline:none;transition:0.3s;display:block;}input:focus{border-color:#38bdf8;box-shadow:0 0 15px rgba(56,189,248,0.3);}button{background:#38bdf8;color:white;border:none;padding:12px 30px;font-size:1.1em;border-radius:8px;cursor:pointer;font-weight:bold;width:100%;transition:0.2s;}button:hover{filter:brightness(1.2);}</style></head><body><div class='login-box'><h2>🔒 Restricted Area</h2><input type='password' id='pin' maxlength='4' placeholder='••••'><button onclick='login()'>Unlock Dashboard</button><p id='err' style='color:#ec4899;display:none;margin-top:10px;'>Invalid PIN</p></div><script>async function login(){const res=await fetch('/api/login',{method:'POST',body:JSON.stringify({pin:document.getElementById('pin').value})});if(res.ok)location.reload();else document.getElementById('err').style.display='block';} document.getElementById('pin').addEventListener('keypress', e=>{if(e.key==='Enter')login();});</script></body></html>");
-    }
-
-    // === [ANCHOR: API_ROUTES_GET] ===
-    if (req.url === '/api/init-data' && req.method === 'GET') {
-        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
-        let memberCount = "N/A"; let onlineCount = "N/A"; let activeTickets = 0;
-        const guild = client.guilds.cache.first();
-        if (guild) {
-            try {
-                const response = await axios.get("https://discord.com/api/v10/guilds/" + guild.id + "?with_counts=true", { headers: { Authorization: "Bot " + DISCORD_BOT_TOKEN } });
-                memberCount = response.data.approximate_member_count; onlineCount = response.data.approximate_presence_count;
-            } catch (err) { memberCount = guild.memberCount; }
-            activeTickets = guild.channels.cache.filter(c => c.name.startsWith('shop-') || c.name.startsWith('support-')).size;
-        }
-        const todayStr = new Date().toISOString().split('T')[0];
-        let monthRevenue = 0; Object.keys(memoryStats.revenue).forEach(date => { if(date.startsWith(todayStr.substring(0, 7))) monthRevenue += memoryStats.revenue[date]; });
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify({ memoryStats, maintenance: memoryStats.settings?.maintenance, pendingReviewsCount: memoryStats.pending_reviews?.length || 0, activeTickets: activeTickets, todayRevenue: memoryStats.revenue[todayStr] || 0, monthRevenue, ticketsOpened: memoryStats.analytics?.tickets_opened || 0, dropOffRate: memoryStats.analytics?.tickets_opened > 0 ? (100 - (memoryStats.total_transactions / memoryStats.analytics.tickets_opened) * 100).toFixed(1) : 0, peakHourStr: "N/A", conversionRate: ((memoryStats.total_transactions / (memoryStats.total_joins || 1)) * 100).toFixed(1), retentionRate: memberCount !== "N/A" ? ((memberCount / (memberCount + (memoryStats.total_leaves || 0))) * 100).toFixed(1) : "N/A", onlineCount, memberCount, MONTHLY_GOAL, PIN: DASHBOARD_PIN, globalLastTicketMsg: globalLastTicketMsg }));
-    }
-
-    if (req.url === '/api/export' && req.method === 'GET') {
-        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
-        let csv = "\uFEFFDate,Customer,Product,Price\n"; 
-        if (Array.isArray(memoryStats.recent_transactions)) {
-            memoryStats.recent_transactions.forEach(tx => {
-                csv += `"${tx.date}","${tx.username}","${tx.product}","€${tx.price}"\n`;
-            });
-        }
-        res.writeHead(200, { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="nexus_transactions.csv"' });
-        return res.end(csv);
-    }
-
-    if (req.url === '/api/live' && req.method === 'GET') {
-        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
-        const guild = client.guilds.cache.first(); let activeTickets = 0;
-        if(guild) activeTickets = guild.channels.cache.filter(c => c.name.startsWith('shop-') || c.name.startsWith('support-')).size;
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify({ txCount: memoryStats.total_transactions, lastTx: Array.isArray(memoryStats.recent_transactions) ? memoryStats.recent_transactions[0] : null, liveTickets: activeTickets }));
-    }
-
-    if (req.url === '/api/tickets' && req.method === 'GET') {
-        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
-        const guild = client.guilds.cache.first();
-        let tickets = [];
-        if (guild) {
-            tickets = guild.channels.cache
-                .filter(c => c.name.startsWith('shop-') || c.name.startsWith('support-'))
-                .map(c => ({ id: c.id, name: c.name }))
-                .sort((a, b) => a.name.localeCompare(b.name));
-        }
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify(tickets));
-    }
-
-    if (req.url.startsWith('/api/tickets/messages') && req.method === 'GET') {
-        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
-        const urlObj = new URL(req.url, `http://${req.headers.host}`);
-        const channelId = urlObj.searchParams.get('channelId');
-        const guild = client.guilds.cache.first();
-        let msgs = [];
-        if (guild && channelId) {
-            const channel = guild.channels.cache.get(channelId);
-            if (channel) {
-                try {
-                    const fetched = await channel.messages.fetch({ limit: 50 });
-                    msgs = fetched.map(m => {
-                        const attachment = m.attachments.first();
-                        return { 
-                            id: m.id, 
-                            author: m.author.username, 
-                            isBot: m.author.id === client.user.id, 
-                            content: m.content, 
-                            timestamp: m.createdTimestamp,
-                            imageUrl: attachment ? attachment.url : null
-                        };
-                    }).sort((a, b) => a.timestamp - b.timestamp);
-                } catch (e) { console.error("Fetch msg error:", e.message); }
-            }
-        }
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify(msgs));
-    }
-
-    if (req.url === '/api/monitoring' && req.method === 'GET') {
-        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
-        
-        let upstashStatus = 'offline', upstashLatency = 0;
-        let rewarbleStatus = 'offline', rewarbleLatency = 0;
-
-        if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
-            const startUpstash = Date.now();
-            try {
-                const cleanUrl = process.env.UPSTASH_REDIS_REST_URL.endsWith('/') ? process.env.UPSTASH_REDIS_REST_URL.slice(0, -1) : process.env.UPSTASH_REDIS_REST_URL;
-                await axios.get(`${cleanUrl}/get/ping_check`, { headers: { Authorization: `Bearer ${process.env.UPSTASH_REDIS_REST_TOKEN}` }, timeout: 5000 });
-                upstashStatus = 'online';
-                upstashLatency = Date.now() - startUpstash;
-            } catch (e) {
-                upstashStatus = e.response ? 'online' : 'offline';
-                upstashLatency = Date.now() - startUpstash;
-            }
-        }
-
-        const startRewarble = Date.now();
-        try {
-            await axios.post(REWARBLE_API_URL, {}, { timeout: 5000, headers: { 'Authorization': `Bearer ${REWARBLE_API_KEY}` } });
-        } catch (e) {
-            if (e.response && (e.response.status === 400 || e.response.status === 402 || e.response.status === 401)) rewarbleStatus = 'online';
-            else rewarbleStatus = 'offline';
-            rewarbleLatency = Date.now() - startRewarble;
-        }
-
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify({
-            upstash: { status: upstashStatus, latency: upstashLatency },
-            rewarble: { status: rewarbleStatus, latency: rewarbleLatency },
-            discord: { ws_ping: client.ws.ping || 0 }
-        }));
-    }
-
-    if (req.url.startsWith('/api/members') && req.method === 'GET') {
-        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
-        const guild = client.guilds.cache.first();
-        if(!guild) return res.writeHead(400).end('[]');
-        try {
-            const fetchedMembers = await guild.members.fetch({ limit: 1000 });
-            const list = fetchedMembers.map(m => {
-                const userTickets = guild.channels.cache.filter(c => c.name.includes(m.user.username.toLowerCase())).map(c => ({ id: c.id, name: c.name }));
-                return { 
-                    id: m.id, 
-                    username: m.user.username, 
-                    joinedAt: m.joinedAt ? m.joinedAt.toLocaleDateString('en-US') : 'Unknown', 
-                    joinedTimestamp: m.joinedTimestamp || 0, 
-                    createdAt: m.user.createdAt ? m.user.createdAt.toLocaleDateString('en-US') : 'Unknown', 
-                    avatar: m.user.displayAvatarURL({ size: 128, dynamic: true }), 
-                    totalSpent: memoryStats.user_spending[m.user.username] || 0, 
-                    history: memoryStats.user_history[m.user.username] || [], 
-                    warns: memoryStats.warns[m.id] || [], 
-                    isBlacklisted: (memoryStats.blacklist || []).includes(m.id), 
-                    activeTickets: userTickets, 
-                    note: memoryStats.user_notes?.[m.id] || '',
-                    status: m.presence?.status || 'offline'
-                };
-            });
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            return res.end(JSON.stringify(list));
-        } catch(e) { res.writeHead(500).end(e.message); }
-        return;
-    }
-
-    // === [ANCHOR: API_ROUTES_POST_ACTIONS] ===
-    if (req.url === '/api/action' && req.method === 'POST') {
-        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
-        let body = ''; req.on('data', chunk => body += chunk.toString());
-        req.on('end', async () => {
-            try {
-                const data = JSON.parse(body);
-                const guild = client.guilds.cache.first();
-                if (!guild) return res.writeHead(404).end('Guild not found');
-
-                // --- 📝 MANUAL TRANSACTION ---
-                if (data.action === 'create_manual_tx') {
-                    const price = parseFloat(data.price);
-                    if (isNaN(price) || price < 0) throw new Error("Invalid price");
-                    
-                    const txDate = data.date ? new Date(data.date) : new Date();
-                    const dateStrDisplay = txDate.toLocaleString('en-US');
-                    const dateKey = txDate.toISOString().split('T')[0];
-                    
-                    const username = (data.username && data.username.trim() !== '') ? data.username.trim() : "Manual Entry";
-                    const product = (data.product && data.product.trim() !== '') ? data.product.trim() : "Custom Amount";
-
-                    if (!memoryStats.revenue[dateKey]) memoryStats.revenue[dateKey] = 0;
-                    memoryStats.revenue[dateKey] += price;
-                    memoryStats.total_revenue = (memoryStats.total_revenue || 0) + price;
-                    memoryStats.total_transactions = (memoryStats.total_transactions || 0) + 1;
-
-                    if (!Array.isArray(memoryStats.recent_transactions)) memoryStats.recent_transactions = [];
-                    memoryStats.recent_transactions.unshift({
-                        username: username,
-                        product: product,
-                        price: price,
-                        date: dateStrDisplay
-                    });
-                    if (memoryStats.recent_transactions.length > 50) memoryStats.recent_transactions.pop();
-
-                    if (username !== "Manual Entry") {
-                        if(!memoryStats.user_spending) memoryStats.user_spending = {};
-                        memoryStats.user_spending[username] = (memoryStats.user_spending[username] || 0) + price;
-                        
-                        if(!memoryStats.user_history) memoryStats.user_history = {};
-                        if(!memoryStats.user_history[username]) memoryStats.user_history[username] = [];
-                        memoryStats.user_history[username].unshift({ product: product, price: price, date: dateStrDisplay });
-                        if(memoryStats.user_history[username].length > 20) memoryStats.user_history[username].pop();
-                    }
-
-                    if (!memoryStats.activity_feed) memoryStats.activity_feed = [];
-                    memoryStats.activity_feed.unshift({ type: 'sale', message: `💰 €${price} Manual Sale: ${username} bought ${product}`, time: Date.now() });
-                    if (memoryStats.activity_feed.length > 30) memoryStats.activity_feed.pop();
-
-                    syncCloud();
-                }
-                // --- 📝 EDIT TODAY'S EARNINGS ---
-                else if (data.action === 'edit_today_earnings') {
-                    const todayStr = new Date().toISOString().split('T')[0];
-                    const oldVal = memoryStats.revenue[todayStr] || 0;
-                    const newVal = parseFloat(data.value) || 0;
-                    memoryStats.revenue[todayStr] = newVal;
-                    memoryStats.total_revenue = Math.max(0, memoryStats.total_revenue + (newVal - oldVal));
-                    syncCloud();
-                }
-                // --- MODERATION DES REVIEWS PENDING ---
-                else if (data.action === 'approve_review') {
-                    if (!memoryStats.pending_reviews) memoryStats.pending_reviews = [];
-                    const idx = memoryStats.pending_reviews.findIndex(r => r.id === data.id);
-                    if (idx > -1) {
-                        const review = memoryStats.pending_reviews[idx];
-                        memoryStats.pending_reviews.splice(idx, 1);
-                        syncCloud();
-                        const reviewChannel = await guild.channels.fetch(REVIEW_CHANNEL_ID).catch(() => null);
-                        if (reviewChannel) {
-                            await reviewChannel.send(`> 🌟 **NEW CUSTOMER REVIEW** 🌟\n> ━━━━━━━━━━━━━━━━━━━━\n> 📦 » **Product:** ${review.product}\n> 📝 » **Feedback:** "${review.text}"\n> 📈 » **Rating:** ${review.rating}/5 ⭐\n> 👤 » **By:** ${review.username}`).catch(() => {});
-                        }
-                        const memberToDM = await guild.members.fetch(review.userId).catch(()=>null);
-                        if(memberToDM) await memberToDM.send(`🎉 **Good news!** Your review for **${review.product}** has been approved and published.\nThank you for your feedback!`).catch(()=>{});
-                    }
-                }
-                else if (data.action === 'reject_review') {
-                    if (memoryStats.pending_reviews) {
-                        const reviewItem = memoryStats.pending_reviews.find(r => r.id === data.id);
-                        if (reviewItem) {
-                            const memberToDM = await guild.members.fetch(reviewItem.userId).catch(()=>null);
-                            if(memberToDM) await memberToDM.send(`📝 **Update on your review for ${reviewItem.product}:**\nUnfortunately, your review was not approved by our moderation team.\n\n**Reason:** ${data.reason || "Not specified."}`).catch(()=>{});
-                        }
-                        memoryStats.pending_reviews = memoryStats.pending_reviews.filter(r => r.id !== data.id);
-                        syncCloud();
-                    }
-                }
-                // --------------------------------------
-                else if (data.action === 'toggle_maintenance') {
-                    if (!memoryStats.settings) memoryStats.settings = {};
-                    if (!memoryStats.settings.maintenance) memoryStats.settings.maintenance = { active: false, endsAt: 0, channelId: "" };
-                    
-                    const state = data.state;
-                    const duration = parseInt(data.duration) || 60;
-                    const channelId = data.channelId || "";
-                    
-                    memoryStats.settings.maintenance.active = state;
-                    memoryStats.settings.maintenance.channelId = channelId;
-                    
-                    let announceChannel = null;
-                    if (channelId) { announceChannel = await guild.channels.fetch(channelId).catch(() => null); }
-
-                    if (state) {
-                        memoryStats.settings.maintenance.endsAt = Date.now() + (duration * 60000);
-                        if (announceChannel) {
-                            const unixTime = Math.floor(memoryStats.settings.maintenance.endsAt / 1000);
-                            const mEmbed = new EmbedBuilder()
-                                .setColor('#f97316')
-                                .setTitle('🚧 Maintenance in Progress')
-                                .setDescription(`The shop is temporarily suspended for stock updates or optimization.\n\n⏳ **Estimated return:** <t:${unixTime}:R>\n\nThank you for your patience, your codes and orders are perfectly safe.`);
-                            await announceChannel.send({ embeds: [mEmbed] }).catch(()=>{});
-                        }
-                    } else {
-                        memoryStats.settings.maintenance.endsAt = 0;
-                        if (announceChannel) {
-                            const mEmbed = new EmbedBuilder()
-                                .setColor('#10b981')
-                                .setTitle('✅ Maintenance Completed')
-                                .setDescription(`The system is operational again!\nThe shop is open and ready to take your orders.`);
-                            await announceChannel.send({ embeds: [mEmbed] }).catch(()=>{});
-                        }
-                    }
-                    syncCloud();
-                }
-                else if (data.action === 'edit_referral_count') {
-                    if (!memoryStats.referrals) memoryStats.referrals = {};
-                    if (!memoryStats.referrals[data.userId]) {
-                        const targetUser = await client.users.fetch(data.userId).catch(() => null);
-                        memoryStats.referrals[data.userId] = { count: 0, total_rewards: 0, invited: [], username: targetUser ? targetUser.username : 'Unknown' };
-                    }
-                    memoryStats.referrals[data.userId].count = parseInt(data.newCount) || 0;
-                    syncCloud();
-                }
-                else if (data.action === 'send_ticket_message') {
-                    const channel = guild.channels.cache.get(data.channelId);
-                    if (channel) {
-                        let payload = {};
-                        if (data.message) payload.content = `💬 **[Support Admin]** : ${data.message}`;
-                        if (data.imageBase64) {
-                            const base64Data = data.imageBase64.replace(/^data:image\/\w+;base64,/, "");
-                            const buffer = Buffer.from(base64Data, 'base64');
-                            const attachment = new AttachmentBuilder(buffer, { name: 'upload.png' });
-                            payload.files = [attachment];
-                        }
-                        if (!payload.content && !payload.files) throw new Error("Empty message");
-                        await channel.send(payload);
-                    } else throw new Error("Can't find channel");
-                }
-                else if (data.action === 'ask_review') {
-                    const channel = guild.channels.cache.get(data.channelId);
-                    if (channel) {
-                        const product = memoryStats.products[data.productId];
-                        if (!product) throw new Error("Product not found");
-                        const reviewRow = new ActionRowBuilder().addComponents(
-                            new ButtonBuilder().setCustomId(`review_${data.productId}`).setLabel('⭐ Leave a Review').setStyle(ButtonStyle.Secondary)
-                        );
-                        await channel.send({ content: `💬 **[Support Admin]** : How was your experience with **${product.name}**? We'd love to hear your feedback! Click the button below to leave a review.`, components: [reviewRow] });
-                    } else throw new Error("Can't find channel");
-                }
-                else if (data.action === 'react_ticket_message') {
-                    const channel = guild.channels.cache.get(data.channelId);
-                    if (channel && data.messageId && data.emoji) {
-                        const msgToReact = await channel.messages.fetch(data.messageId).catch(() => null);
-                        if (msgToReact) await msgToReact.react(data.emoji).catch(()=>{});
-                    }
-                }
-                else if (data.action === 'add_buy_link') {
-                    if (!memoryStats.buy_links) memoryStats.buy_links = {};
-                    const newId = (Object.keys(memoryStats.buy_links).length + 1).toString() + Date.now();
-                    memoryStats.buy_links[newId] = { label: data.label, url: data.url };
-                    syncCloud();
-                }
-                else if (data.action === 'edit_buy_link') {
-                    if (memoryStats.buy_links && memoryStats.buy_links[data.id]) {
-                        memoryStats.buy_links[data.id] = { label: data.label, url: data.url };
-                        syncCloud();
-                    }
-                }
-                else if (data.action === 'delete_buy_link') {
-                    if (memoryStats.buy_links && memoryStats.buy_links[data.id]) {
-                        delete memoryStats.buy_links[data.id];
-                        syncCloud();
-                    }
-                }
-                else if (data.action === 'refund_tx') {
-                    if (Array.isArray(memoryStats.recent_transactions)) {
-                        const txIndex = memoryStats.recent_transactions.findIndex(t => t.date === data.date && t.username === data.username);
-                        if (txIndex > -1) {
-                            const tx = memoryStats.recent_transactions[txIndex];
-                            memoryStats.recent_transactions.splice(txIndex, 1);
-                            
-                            // 🔄 CORRECTION 1: Total Revenue and transactions
-                            memoryStats.total_transactions = Math.max(0, memoryStats.total_transactions - 1);
-                            memoryStats.total_revenue = Math.max(0, memoryStats.total_revenue - tx.price);
-                            
-                            // 🔄 CORRECTION 2: Today's Revenue
-                            try {
-                                const revKey = new Date(tx.date).toISOString().split('T')[0];
-                                if (memoryStats.revenue[revKey]) {
-                                    memoryStats.revenue[revKey] = Math.max(0, memoryStats.revenue[revKey] - tx.price);
-                                }
-                            } catch(err) {}
-
-                            // 🔄 CORRECTION 3: User spending
-                            if (memoryStats.user_spending && memoryStats.user_spending[tx.username]) {
-                                memoryStats.user_spending[tx.username] = Math.max(0, memoryStats.user_spending[tx.username] - tx.price);
-                            }
-                            
-                            // 🔄 CORRECTION 4: Remove from Activity Feed (Live Pulse)
-                            if (Array.isArray(memoryStats.activity_feed)) {
-                                const feedMsg = `💰 €${tx.price} Sale: ${tx.username} bought ${tx.product}`;
-                                const feedIdx = memoryStats.activity_feed.findIndex(f => f.type === 'sale' && f.message === feedMsg);
-                                if (feedIdx > -1) {
-                                    memoryStats.activity_feed.splice(feedIdx, 1);
-                                }
-                            }
-
-                            syncCloud();
-                        } else throw new Error("Transaction not found");
-                    }
-                }
-                else if (data.action === 'edit_product') {
-                    if (memoryStats.products && memoryStats.products[data.id]) {
-                        const oldCat = memoryStats.products[data.id].category || "✨ ITEMS";
-                        memoryStats.products[data.id] = { name: data.name, price: data.price, link: data.link, category: oldCat, stock: data.stock || "∞", desc: data.desc };
-                        syncCloud();
-                    }
-                }
-                else if (data.action === 'add_product') {
-                    if (!memoryStats.products) memoryStats.products = {};
-                    const newId = (Object.keys(memoryStats.products).length + 1).toString();
-                    memoryStats.products[newId] = { name: data.name, price: data.price, link: data.link, category: "✨ NEW ITEMS", stock: data.stock || "∞", desc: data.desc };
-                    syncCloud();
-                }
-                else if (data.action === 'delete_product') {
-                    if (memoryStats.products && memoryStats.products[data.id]) {
-                        delete memoryStats.products[data.id];
-                        const newProducts = {}; let counter = 1;
-                        for (const key in memoryStats.products) { newProducts[counter.toString()] = memoryStats.products[key]; counter++; }
-                        memoryStats.products = newProducts;
-                        syncCloud();
-                    }
-                }
-                else if (data.action === 'refresh_setup') {
-                    const targetChannel = await client.channels.fetch(SHOP_CHANNEL_ID).catch(() => null);
-                    if (!targetChannel) throw new Error("Shop channel not found.");
-                    const messages = await targetChannel.messages.fetch({ limit: 50 });
-                    const botMessages = messages.filter(m => m.author.id === client.user.id);
-                    for (const m of botMessages.values()) { await m.delete().catch(() => {}); }
-                    await sendShopSetup(targetChannel);
-                }
-                else if (data.action === 'ping_test') {
-                    const targetChannel = await client.channels.fetch(SHOP_CHANNEL_ID).catch(() => null);
-                    if (targetChannel) {
-                        const msg = await targetChannel.send("⚡ *System latency test...*").catch(() => null);
-                        if (msg) await msg.delete().catch(() => {});
-                    }
-                }
-                else if (data.action === 'post_review') {
-                    const reviewChannel = await client.channels.fetch(REVIEW_CHANNEL_ID).catch(() => null);
-                    if (!reviewChannel) throw new Error("Review channel not found.");
-                    await reviewChannel.send(`> 🌟 **NEW FEEDBACK** 🌟\n> ━━━━━━━━━━━━━━━━━━━━\n> 📝 » **Feedback:** "${data.text}"\n> 📈 » **Rating:** ${data.rating}/5 ⭐\n> 👤 » **By:** ${data.author}`).catch(() => { throw new Error("Missing permissions to send messages in the channel."); });
-                }
-                else if (data.action === 'update_ref_threshold') {
-                    if (!memoryStats.settings) memoryStats.settings = {};
-                    memoryStats.settings.invite_reward_threshold = parseInt(data.threshold) || 10;
-                    syncCloud();
-                }
-                else if (['ban', 'kick', 'mute'].includes(data.action)) {
-                    const target = await guild.members.fetch(data.userId).catch(() => null);
-                    if (data.action === 'ban') await guild.members.ban(data.userId, { reason: data.reason });
-                    else if (target) {
-                        if (data.action === 'kick') await target.kick(data.reason);
-                        if (data.action === 'mute') await target.timeout(parseInt(data.duration) * 60 * 1000, data.reason);
-                    }
-                }
-                else if (data.action === 'warn') {
-                    if (!memoryStats.warns) memoryStats.warns = {};
-                    if (!memoryStats.warns[data.userId]) memoryStats.warns[data.userId] = [];
-                    memoryStats.warns[data.userId].push({ reason: data.reason || "Warn", date: new Date().toLocaleString('en-US') });
-                    syncCloud();
-                    
-                    const targetUser = await client.users.fetch(data.userId).catch(() => null);
-                    if (targetUser) {
-                        await targetUser.send(`⚠️ **Warning:**\n\n**Reason:** ${data.reason || "Not specified"}`).catch(() => {});
-                    }
-                }
-                else if (data.action === 'clear_warns') {
-                    if (memoryStats.warns && memoryStats.warns[data.userId]) {
-                        delete memoryStats.warns[data.userId];
-                        syncCloud();
-                    }
-                }
-                else if (data.action === 'toggle_blacklist') {
-                    if (!memoryStats.blacklist) memoryStats.blacklist = [];
-                    if (memoryStats.blacklist.includes(data.userId)) { memoryStats.blacklist = memoryStats.blacklist.filter(id => id !== data.userId); } 
-                    else { memoryStats.blacklist.push(data.userId); }
-                    syncCloud();
-                }
-                else if (data.action === 'close_channel') {
-                    const c = guild.channels.cache.get(data.channelId);
-                    if (c) { channelStates.delete(c.id); await c.delete().catch(()=>{}); }
-                }
-                else if (data.action === 'resolve_req') {
-                    if (Array.isArray(memoryStats.custom_requests)) {
-                        const reqItem = memoryStats.custom_requests.find(r => r.id === data.id);
-                        if(reqItem) { reqItem.status = 'done'; syncCloud(); }
-                    }
-                }
-                else if (data.action === 'announce') {
-                    const channel = guild.channels.cache.get(data.channelId);
-                    if(channel) await channel.send(`📢 **Announcement**\n\n${data.message}`);
-                }
-                else if (data.action === 'close_all') {
-                    guild.channels.cache.forEach(c => {
-                        if(c.name.startsWith('shop-') || c.name.startsWith('support-')) { channelStates.delete(c.id); c.delete().catch(()=>{}); }
-                    });
-                }
-                else if (data.action === 'create_promo') {
-                    if (!memoryStats.promo_codes) memoryStats.promo_codes = {};
-                    const codeName = (data.name || "").trim().toUpperCase();
-                    if (!codeName) throw new Error("Invalid code name");
-                    const discount = parseInt(data.discount);
-                    const limit = parseInt(data.limit);
-                    if (isNaN(discount) || discount < 1 || discount > 100) throw new Error("Discount must be between 1 and 100%");
-                    if (isNaN(limit) || limit < 1) throw new Error("Limit must be at least 1");
-                    
-                    memoryStats.promo_codes[codeName] = { discount: discount, limit: limit, used: 0, createdAt: new Date().toLocaleDateString('en-US') };
-                    syncCloud();
-                }
-                else if (data.action === 'delete_promo') {
-                    if (memoryStats.promo_codes && memoryStats.promo_codes[data.name]) { delete memoryStats.promo_codes[data.name]; syncCloud(); }
-                }
-                else if (data.action === 'save_note') {
-                    if (!memoryStats.user_notes) memoryStats.user_notes = {};
-                    memoryStats.user_notes[data.userId] = data.note; syncCloud();
-                }
-                else if (data.action === 'send_dm') {
-                    const targetUser = await client.users.fetch(data.userId).catch(() => null);
-                    if (targetUser) await targetUser.send(`📩 **Message from Admin:**\n\n${data.message}`);
-                }
-                else if (data.action === 'add_vip_days') {
-                    if (!memoryStats.subscriptions) memoryStats.subscriptions = {};
-                    const days = parseInt(data.days) || 0;
-                    if (days > 0) {
-                        const now = Date.now();
-                        if (memoryStats.subscriptions[data.userId]) {
-                            memoryStats.subscriptions[data.userId].expiresAt += (days * 24 * 60 * 60 * 1000);
-                        } else {
-                            const user = await client.users.fetch(data.userId).catch(()=>null);
-                            memoryStats.subscriptions[data.userId] = {
-                                username: user ? user.username : 'Unknown',
-                                expiresAt: now + (days * 24 * 60 * 60 * 1000),
-                                notified: false
-                            };
-                            try {
-                                const member = await guild.members.fetch(data.userId);
-                                await member.roles.add(VIP_ROLE_ID);
-                            } catch(e) {}
-                        }
-                        syncCloud();
-                    }
-                }
-                else if (data.action === 'revoke_vip') {
-                    if (memoryStats.subscriptions && memoryStats.subscriptions[data.userId]) {
-                        delete memoryStats.subscriptions[data.userId];
-                        try {
-                            const member = await guild.members.fetch(data.userId);
-                            await member.roles.remove(VIP_ROLE_ID);
-                        } catch(e) {}
-                        syncCloud();
-                    }
-                }
-                res.writeHead(200).end('OK');
-            } catch(e) { res.writeHead(500).end(e.message); }
-        }); return;
-    }
-
-    // === [ANCHOR: DASHBOARD_HTML_INJECTION] ===
-    if (req.url === '/dashboard' || req.url === '/') {
-        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        try {
-            // On charge ton tableau depuis le nouveau fichier
-            const dashboardData = require('./dashboardTemplate');
-            // On le recolle proprement en texte HTML
-            const dashboardHTML = Array.isArray(dashboardData) ? dashboardData.join('\n') : dashboardData;
-            return res.end(dashboardHTML);
-        } catch (error) {
-            console.error("Dashboard HTML not found:", error);
-            return res.end("<h1>Erreur : Le fichier dashboardTemplate.js est introuvable ou mal formaté.</h1>");
-        }
-    } else { res.writeHead(200, { 'Content-Type': 'text/plain' }); res.end('API Bot'); }
-}).listen(process.env.PORT || 3000);
 
 client.login(DISCORD_BOT_TOKEN);
