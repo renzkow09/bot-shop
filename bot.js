@@ -3,7 +3,7 @@ const axios = require('axios');
 
 module.exports = function(client, memoryStats, channelStates, guildInvites, CONFIG, helpers) {
 
-    // HANDSHAKE INITIAL ET ENREGISTREMENT DE READY
+    // Handshake INITIAL ET ENREGISTREMENT DE READY
     client.once('ready', () => {
         console.log(`✅ Bot logged in as ${client.user.tag}`);
         helpers.loadCloudStats().then(() => {
@@ -15,10 +15,10 @@ module.exports = function(client, memoryStats, channelStates, guildInvites, CONF
             });
         });
 
-        // Intervalle de vérification des abonnements VIP
+        // Activation de la vérification périodique des abonnements VIP
         setInterval(helpers.checkSubscriptions, 60 * 60 * 1000);
 
-        // Surveillance de l'état de la passerelle Rewarble
+        // Analyseur de latence et santé de la passerelle Rewarble
         setInterval(async () => {
             try {
                 let down = false;
@@ -111,7 +111,7 @@ module.exports = function(client, memoryStats, channelStates, guildInvites, CONF
 
             if (interaction.isStringSelectMenu() && interaction.customId === 'product_select') {
                 const state = channelStates.get(interaction.channel.id); if (state && state.redeemed) return await interaction.reply({ content: "❌ Security lockout: Node code already processed.", ephemeral: true }).catch(()=>{});
-                if (state) state.redeemed = true; await interaction.update({ content: "📦 **Processing node order... interface secured.**", components: [] }).catch(() => {});
+                if (state) state.redeemed = true; await interaction.update({ content: "📦 **Processing your order... The menu has been locked.**", components: [] }).catch(() => {});
                 const selected = interaction.values[0]; const product = memoryStats.products[selected]; if (!product) return;
                 const promo = state ? state.promo : null;
 
@@ -150,7 +150,8 @@ module.exports = function(client, memoryStats, channelStates, guildInvites, CONF
                     const reviewRow = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`review_${selected}`).setLabel('⭐ Review Delivery').setStyle(ButtonStyle.Secondary));
                     try {
                         await interaction.user.send({ embeds: [successEmbed], components: [reviewRow] }); if (upsellEmbed) await interaction.user.send({ embeds: [upsellEmbed] });
-                        await interaction.channel.send("✅ **Product fully transmitted to your secure DMs.**"); setTimeout(() => { channelStates.delete(interaction.channel.id); interaction.channel.delete().catch(()=>{}); }, 4000);
+                        await interaction.channel.send("✅ **Product delivered to your DMs!** Closing ticket in 5 seconds...").catch(()=>{});
+                        setTimeout(() => { channelStates.delete(interaction.channel.id); interaction.channel.delete().catch(()=>{}); }, 5000);
                     } catch(e) {
                         await interaction.channel.send({ content: "⚠️ DMs blocked. Safe extraction terminal open for 30s :", embeds: [successEmbed], components: [reviewRow] });
                         if(upsellEmbed) await interaction.channel.send({ embeds: [upsellEmbed] }).catch(()=>{}); setTimeout(() => { channelStates.delete(interaction.channel.id); interaction.channel.delete().catch(()=>{}); }, 30000);
