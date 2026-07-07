@@ -1,5 +1,5 @@
 // === [ANCHOR: IMPORTS_AND_CRASH_HANDLER] ===
-const { Client, GatewayIntentBits, Partials, ButtonBuilder, ActionRowBuilder, ButtonStyle, ChannelType, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, EmbedBuilder, AttachmentBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
+const { Client, GatewayIntentBits, Partials, AttachmentBuilder } = require('discord.js');
 const axios = require('axios');
 const http = require('http');
 const fs = require('fs');
@@ -14,15 +14,34 @@ const CONFIG = {
     REWARBLE_API_KEY: process.env.REWARBLE_API_KEY,
     REVIEW_CHANNEL_ID: "1521625370929922078",
     SHOP_CHANNEL_ID: "1520803761130311970",
-    VIP_ROLE_ID: "REMPLACE_AVEC_ID_ROLE_VIP",
+    VIP_ROLE_ID: "REMPLACE_AVEC_ID_ROLE_VIP", 
     ADMIN_DISCORD_ID: "1520551977854042114",
     CATEGORY_CUSTOMER_ID: "1521540733226713249",
     CATEGORY_SUPPORT_ID: "1521541155005796484",
     DASHBOARD_PIN: "1206",
     MONTHLY_GOAL: 500,
     STATS_FILE: path.join(__dirname, 'stats.json'),
-    INITIAL_PRODUCTS: { "1": { name: "Photo Pack 1", price: "5", link: "https://drive.google.com/ton_lien", category: "✨ PHOTOS", stock: "∞" } },
-    INITIAL_BUY_LINKS: { "1": { label: "💳 Buy €5", url: "https://www.eneba.com" } }
+    REWARBLE_API_URL: "https://api.rewarble.com/client/1.00/redeem",
+    INITIAL_PRODUCTS: {
+        "1": { name: "Photo Pack 1", price: "5", link: "https://drive.google.com/ton_lien", category: "✨ PHOTOS", stock: "∞", upsellId: "6", upsellDiscount: 20 }, 
+        "2": { name: "Photo Pack 2", price: "5", link: "https://drive.google.com/ton_lien", category: "✨ PHOTOS", stock: "∞" },
+        "3": { name: "Full Body", price: "5", link: "https://drive.google.com/ton_lien", category: "✨ PHOTOS", stock: "∞" }, 
+        "4": { name: "Try-On Pack", price: "5", link: "https://drive.google.com/ton_lien", category: "✨ PHOTOS", stock: "∞" },
+        "5": { name: "Mirror Pic", price: "5", link: "https://drive.google.com/ton_lien", category: "✨ PHOTOS", stock: "∞" }, 
+        "6": { name: "5-Min Video", price: "10", link: "https://drive.google.com/ton_lien", category: "🔥 VIDEOS", stock: "∞" },
+        "7": { name: "Shower / Bath", price: "10", link: "https://drive.google.com/ton_lien", category: "🔥 VIDEOS", stock: "∞" }, 
+        "8": { name: "Friends Pack", price: "15", link: "https://drive.google.com/ton_lien", category: "💦 SPECIAL", stock: "∞" },
+        "9": { name: "Surprise Pack", price: "15", link: "https://drive.google.com/ton_lien", category: "💦 SPECIAL", stock: "∞" }, 
+        "10": { name: "Sexting", price: "Custom", link: "", category: "💌 PERSONALIZED", stock: "∞" },
+        "11": { name: "Custom Request", price: "Custom", link: "", category: "💌 PERSONALIZED", stock: "∞" },
+        "VIP": { name: "👑 VIP Pass 30 Days", price: "20", link: "Welcome to VIP!", category: "👑 SUBSCRIPTION", stock: "∞" }
+    },
+    INITIAL_BUY_LINKS: {
+        "1": { label: "💳 Buy €5", url: "https://www.eneba.com/rewarble-rewarble-revolut-5-gbp-voucher-global" },
+        "2": { label: "💳 Buy €10", url: "https://www.eneba.com/rewarble-rewarble-revolut-10-gbp-voucher-global" },
+        "3": { label: "💳 Buy €15", url: "https://www.eneba.com/rewarble-rewarble-revolut-15-gbp-voucher-global" },
+        "4": { label: "💳 Buy €20", url: "https://www.eneba.com/rewarble-rewarble-revolut-20-gbp-voucher-global" }
+    }
 };
 
 if (!CONFIG.DISCORD_BOT_TOKEN) {
@@ -30,11 +49,8 @@ if (!CONFIG.DISCORD_BOT_TOKEN) {
     process.exit(1);
 }
 
-const REWARBLE_API_URL = "https://api.rewarble.com/client/1.00/redeem";
-const TEST_VOUCHERS = { "GOYAVE5": 5 };
 const channelStates = new Map();
-const guildInvites = new Map();
-
+const guildInvites = new Map(); 
 let memoryStats = { joins: {}, leaves: {}, revenue: {}, total_revenue: 0, transactions: {}, total_transactions: 0, product_sales: {}, recent_joins: [], recent_leaves: [], total_leaves: 0, total_joins: 0, recent_transactions: [], user_spending: {}, custom_requests: [], user_history: {}, warns: {}, blacklist: [], user_notes: {}, promo_codes: {}, analytics: { tickets_opened: 0, hourly_sales: Array(24).fill(0) }, referrals: {}, settings: { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } }, products: {}, subscriptions: {}, buy_links: {}, pending_reviews: [], overrides: {}, activity_feed: [], last_update: Date.now() };
 
 const client = new Client({ 
@@ -42,18 +58,59 @@ const client = new Client({
     partials: [Partials.GuildMember, Partials.User, Partials.Message]
 });
 
-// CHARGEMENT DU MODULE DE FONCTIONS EXTERNES
-const core = require('./fonctions.js')(client, memoryStats, channelStates, guildInvites, CONFIG);
+// === [ANCHOR: SHARING_CORE_HELPERS] ===
+const helpers = {
+    async notifyAdminPhone(title, msg) {
+        try { const admin = await client.users.fetch(CONFIG.ADMIN_DISCORD_ID); if (admin) await admin.send(`📱 **NOTIFICATION SYSTÈME**\n**${title}**\n> ${msg}`); } catch(e) {}
+    },
+    addActivity(type, message) {
+        if (!memoryStats.activity_feed) memoryStats.activity_feed = [];
+        memoryStats.activity_feed.unshift({ type, message, time: Date.now() });
+        if (memoryStats.activity_feed.length > 30) memoryStats.activity_feed.pop();
+        helpers.syncCloud();
+    },
+    async syncCloud() {
+        try { fs.writeFileSync(CONFIG.STATS_FILE, JSON.stringify(memoryStats)); } catch (e) {}
+        const url = process.env.UPSTASH_REDIS_REST_URL; const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+        if (!url || !token) return;
+        try {
+            const cleanUrl = url.endsWith('/') ? url.slice(0, -1) : url;
+            await axios.post(cleanUrl, ["SET", "bot_stats", JSON.stringify(memoryStats)], { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } });
+        } catch (err) { console.error("❌ Cloud Sync Error :", err.message); }
+    },
+    async loadCloudStats() {
+        if (fs.existsSync(CONFIG.STATS_FILE)) { try { Object.assign(memoryStats, JSON.parse(fs.readFileSync(CONFIG.STATS_FILE, 'utf8'))); } catch (e) {} }
+        const url = process.env.UPSTASH_REDIS_REST_URL; const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+        if (!url || !token) return console.log("⚠️ Upstash variables missing.");
+        try {
+            const cleanUrl = url.endsWith('/') ? url.slice(0, -1) : url;
+            const res = await axios.get(`${cleanUrl}/get/bot_stats`, { headers: { Authorization: `Bearer ${token}` } });
+            if (res.data && res.data.result) {
+                Object.assign(memoryStats, JSON.parse(res.data.result));
+                if (!memoryStats.promo_codes) memoryStats.promo_codes = {};
+                if (!memoryStats.user_notes) memoryStats.user_notes = {};
+                if (!memoryStats.referrals) memoryStats.referrals = {};
+                if (!memoryStats.subscriptions) memoryStats.subscriptions = {};
+                if (!memoryStats.pending_reviews) memoryStats.pending_reviews = [];
+                if (!memoryStats.activity_feed) memoryStats.activity_feed = [];
+                if (!memoryStats.custom_requests) memoryStats.custom_requests = [];
+                if (!memoryStats.overrides) memoryStats.overrides = {};
+                if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } };
+                if (!memoryStats.buy_links || Object.keys(memoryStats.buy_links).length === 0) memoryStats.buy_links = CONFIG.INITIAL_BUY_LINKS; 
+                if (!memoryStats.analytics) memoryStats.analytics = { tickets_opened: 0, hourly_sales: Array(24).fill(0) };
+                if (!memoryStats.products || Object.keys(memoryStats.products).length === 0) memoryStats.products = CONFIG.INITIAL_PRODUCTS;
+                if (memoryStats.revenue) { let total = 0; for (const val of Object.values(memoryStats.revenue)) { total += parseFloat(val) || 0; } memoryStats.total_revenue = total; }
+                console.log("✅ Database synchronized with the Cloud.");
+            }
+        } catch (e) { console.error("❌ Cloud GET Error :", e.message); }
+    }
+};
 
-client.once('ready', () => {
-    console.log(`✅ Bot logged in as ${client.user.tag}`);
-    core.loadCloudStats();
-    client.guilds.cache.forEach(async g => { try { const invs = await g.invites.fetch(); guildInvites.set(g.id, new Map(invs.map(i => [i.code, i.uses]))); } catch(e){} });
-    setInterval(core.checkSubscriptions, 60 * 60 * 1000);
-});
+// INITIALISATION ET BRANCHEMENT DU MODULE BOT D'ÉCOUTE DISCORD
+require('./bot.js')(client, memoryStats, channelStates, guildInvites, CONFIG, helpers);
 
 // ==========================================
-// SERVEUR WEB HTTP & INTERFACE GRAPHIQUE
+// PANNEAU WEB DE CONTRÔLE (ROUTES API REST)
 // ==========================================
 const rateLimits = new Map();
 const bruteForceLocks = new Map();
@@ -69,9 +126,8 @@ http.createServer(async (req, res) => {
     const cookie = req.headers.cookie || '';
     const isAuthenticated = cookie.includes(`auth=${CONFIG.DASHBOARD_PIN}`);
 
-    // ROUTE D'CONNEXION AUTH
     if (req.url === '/api/login' && req.method === 'POST') {
-        let body = ''; req.on('data', c => body += c);
+        let body = ''; req.on('data', chunk => body += chunk);
         req.on('end', () => {
             let lock = bruteForceLocks.get(clientIp) || { attempts: 0, lockout: 0 };
             if (now < lock.lockout) return res.writeHead(429).end('Locked out.');
@@ -81,38 +137,161 @@ http.createServer(async (req, res) => {
                     bruteForceLocks.delete(clientIp);
                     res.writeHead(200, { 'Set-Cookie': `auth=${CONFIG.DASHBOARD_PIN}; Max-Age=2592000; HttpOnly; Path=/`, 'Content-Type': 'application/json' });
                     return res.end(JSON.stringify({ success: true }));
-                } else {
-                    lock.attempts++; if (lock.attempts >= 5) lock.lockout = now + 15 * 60 * 1000;
-                    bruteForceLocks.set(clientIp, lock); res.writeHead(401).end(JSON.stringify({ success: false }));
-                }
+                } else { lock.attempts++; if (lock.attempts >= 5) lock.lockout = now + 15 * 60 * 1000; bruteForceLocks.set(clientIp, lock); res.writeHead(401).end(JSON.stringify({ success: false })); }
             } catch(e) { res.writeHead(400).end('Bad Request'); }
         }); return;
     }
 
-    // INTERFACE DE SÉCURITÉ (PIN CODE ÉCRAN ACCUEIL)
     if ((req.url === '/dashboard' || req.url === '/') && !isAuthenticated) {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        return res.end("<!DOCTYPE html><html><head><title>Nexus Security</title></head><body style=\"background:#030712;color:#fff;display:flex;justify-content:center;align-items:center;height:100vh;font-family:sans-serif\"><div style=\"text-align:center\"><h2>NEXUS CORE</h2><input type=\"password\" id=\"pin\" maxlength=\"4\" placeholder=\"••••\" style=\"background:#000;color:#fff;border:1px solid #38bdf8;padding:10px;text-align:center;font-size:20px;border-radius:8px;margin-bottom:20px\"><br><button style=\"background:#38bdf8;color:#000;border:none;padding:10px 20px;border-radius:8px;cursor:pointer\" onclick=\"login()\">Authenticate</button></div><script>async function login(){const res=await fetch('/api/login',{method:'POST',body:JSON.stringify({pin:document.getElementById('pin').value})});if(res.ok)location.reload();else alert('Access Denied');}</script></body></html>");
+        return res.end("<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Nexus Security</title></head><body style=\"background:#030712;color:#fff;display:flex;justify-content:center;align-items:center;height:100vh;font-family:sans-serif\"><div style=\"text-align:center;background:rgba(15,23,42,0.4);padding:40px;border-radius:24px;border:1px solid rgba(56,189,248,0.1)\"><h2>NEXUS CORE</h2><input type='password' id='pin' maxlength='4' placeholder='••••' style=\"background:#000;color:#fff;border:1px solid #38bdf8;padding:15px;text-align:center;font-size:22px;border-radius:12px;margin:20px 0;width:100%;max-width:200px;outline:none\"><br><button style=\"background:linear-gradient(135deg,#38bdf8 0%,#8b5cf6 100%);color:#fff;border:none;padding:12px 30px;font-weight:bold;border-radius:12px;cursor:pointer\" onclick='login()'>Authenticate</button></div><script>async function login(){const res=await fetch('/api/login',{method:'POST',body:JSON.stringify({pin:document.getElementById('pin').value})});if(res.ok)location.reload();else alert('Access Denied');}document.getElementById('pin').addEventListener('keypress',e=>{if(e.key==='Enter')login();});</script></body></html>");
     }
 
-    // INJECTION DYNAMIQUE DE DASHBOARD.HTML
     if ((req.url === '/dashboard' || req.url === '/') && isAuthenticated) {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        try {
-            const dashboardHTML = fs.readFileSync(path.join(__dirname, 'dashboard.html'), 'utf8');
-            return res.end(dashboardHTML);
-        } catch(err) {
-            return res.end("❌ ERROR: dashboard.html is missing in your repository directory.");
-        }
+        try { const html = fs.readFileSync(path.join(__dirname, 'dashboard.html'), 'utf8'); return res.end(html); } 
+        catch (e) { return res.end("❌ SYSTEM ERROR: `dashboard.html` file cannot be located on this node repository."); }
     }
 
-    // DATA INITIALISATION ENDPOINT
     if (req.url === '/api/init-data' && req.method === 'GET') {
         if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
+        let memberCount = "N/A"; let onlineCount = "N/A"; let activeTickets = 0;
+        const guild = client.guilds.cache.first();
+        if (guild) {
+            try { const response = await axios.get("https://discord.com/api/v10/guilds/" + guild.id + "?with_counts=true", { headers: { Authorization: "Bot " + CONFIG.DISCORD_BOT_TOKEN } }); memberCount = response.data.approximate_member_count; onlineCount = response.data.approximate_presence_count; } catch (err) { memberCount = guild.memberCount; }
+            activeTickets = guild.channels.cache.filter(c => c.name.startsWith('shop-') || c.name.startsWith('support-')).size;
+        }
+        const todayStr = new Date().toISOString().split('T')[0]; let monthRevenue = 0; Object.keys(memoryStats.revenue).forEach(date => { if(date.startsWith(todayStr.substring(0, 7))) monthRevenue += memoryStats.revenue[date]; });
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify({ memoryStats, PIN: CONFIG.DASHBOARD_PIN }));
+        return res.end(JSON.stringify({ memoryStats, maintenance: memoryStats.settings?.maintenance, pendingReviewsCount: memoryStats.pending_reviews?.length || 0, activeTickets, todayRevenue: memoryStats.revenue[todayStr] || 0, monthRevenue, ticketsOpened: memoryStats.analytics?.tickets_opened || 0, dropOffRate: memoryStats.analytics?.tickets_opened > 0 ? (100 - (memoryStats.total_transactions / memoryStats.analytics.tickets_opened) * 100).toFixed(1) : 0, peakHourStr: "N/A", conversionRate: ((memoryStats.total_transactions / (memoryStats.total_joins || 1)) * 100).toFixed(1), retentionRate: memberCount !== "N/A" ? ((memberCount / (memberCount + (memoryStats.total_leaves || 0))) * 100).toFixed(1) : "N/A", onlineCount, memberCount, MONTHLY_GOAL: CONFIG.MONTHLY_GOAL, PIN: CONFIG.DASHBOARD_PIN }));
     }
 
+    if (req.url === '/api/export' && req.method === 'GET') {
+        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
+        let csv = "\uFEFFDate,Customer,Product,Price\n"; if (Array.isArray(memoryStats.recent_transactions)) { memoryStats.recent_transactions.forEach(tx => { csv += `"${tx.date}","${tx.username}","${tx.product}","€${tx.price}"\n`; }); }
+        res.writeHead(200, { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="nexus_transactions.csv"' }); return res.end(csv);
+    }
+
+    if (req.url === '/api/tickets' && req.method === 'GET') {
+        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
+        const guild = client.guilds.cache.first(); let tickets = [];
+        if (guild) { tickets = guild.channels.cache.filter(c => c.name.startsWith('shop-') || c.name.startsWith('support-')).map(c => ({ id: c.id, name: c.name })).sort((a, b) => a.name.localeCompare(b.name)); }
+        res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify(tickets));
+    }
+
+    if (req.url.startsWith('/api/tickets/messages') && req.method === 'GET') {
+        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
+        const urlObj = new URL(req.url, `http://${req.headers.host}`); const channelId = urlObj.searchParams.get('channelId'); const guild = client.guilds.cache.first(); let msgs = [];
+        if (guild && channelId) {
+            const channel = guild.channels.cache.get(channelId);
+            if (channel) { try { const fetched = await channel.messages.fetch({ limit: 50 }); msgs = fetched.map(m => { const attachment = m.attachments.first(); return { id: m.id, author: m.author.username, isBot: m.author.id === client.user.id, content: m.content, timestamp: m.createdTimestamp, imageUrl: attachment ? attachment.url : null }; }).sort((a, b) => a.timestamp - b.timestamp); } catch (e) {} }
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify(msgs));
+    }
+
+    if (req.url === '/api/monitoring' && req.method === 'GET') {
+        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
+        let upstashStatus = 'offline', upstashLatency = 0, rewarbleStatus = 'offline', rewarbleLatency = 0;
+        if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
+            const startUpstash = Date.now(); try { const cleanUrl = process.env.UPSTASH_REDIS_REST_URL.endsWith('/') ? process.env.UPSTASH_REDIS_REST_URL.slice(0, -1) : process.env.UPSTASH_REDIS_REST_URL; await axios.get(`${cleanUrl}/get/ping_check`, { headers: { Authorization: `Bearer ${process.env.UPSTASH_REDIS_REST_TOKEN}` }, timeout: 5000 }); upstashStatus = 'online'; upstashLatency = Date.now() - startUpstash; } catch (e) { upstashStatus = e.response ? 'online' : 'offline'; upstashLatency = Date.now() - startUpstash; }
+        }
+        const startRewarble = Date.now(); try { await axios.post(CONFIG.REWARBLE_API_URL, {}, { timeout: 5000, headers: { 'Authorization': `Bearer ${CONFIG.REWARBLE_API_KEY}` } }); } catch (e) { if (e.response && (e.response.status === 400 || e.response.status === 402 || e.response.status === 401)) rewarbleStatus = 'online'; else rewarbleStatus = 'offline'; rewarbleLatency = Date.now() - startRewarble; }
+        res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ upstash: { status: upstashStatus, latency: upstashLatency }, rewarble: { status: rewarbleStatus, latency: rewarbleLatency }, discord: { ws_ping: client.ws.ping || 0 } }));
+    }
+
+    if (req.url.startsWith('/api/members') && req.method === 'GET') {
+        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
+        const guild = client.guilds.cache.first(); if(!guild) return res.writeHead(400).end('[]');
+        try {
+            const fetchedMembers = await guild.members.fetch({ limit: 1000 });
+            const list = fetchedMembers.map(m => {
+                const userTickets = guild.channels.cache.filter(c => c.name.includes(m.user.username.toLowerCase())).map(c => ({ id: c.id, name: c.name }));
+                return { id: m.id, username: m.user.username, joinedAt: m.joinedAt ? m.joinedAt.toLocaleDateString('en-US') : 'Unknown', joinedTimestamp: m.joinedTimestamp || 0, createdAt: m.user.createdAt ? m.user.createdAt.toLocaleDateString('en-US') : 'Unknown', avatar: m.user.displayAvatarURL({ size: 128, dynamic: true }), totalSpent: memoryStats.user_spending[m.user.username] || 0, history: memoryStats.user_history[m.user.username] || [], warns: memoryStats.warns[m.id] || [], isBlacklisted: (memoryStats.blacklist || []).includes(m.id), activeTickets: userTickets, note: memoryStats.user_notes?.[m.id] || '', status: m.presence?.status || 'offline' };
+            });
+            res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify(list));
+        } catch(e) { res.writeHead(500).end(e.message); } return;
+    }
+
+    if (req.url === '/api/action' && req.method === 'POST') {
+        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
+        let body = ''; req.on('data', chunk => body += chunk.toString());
+        req.on('end', async () => {
+            try {
+                const data = JSON.parse(body); const guild = client.guilds.cache.first(); if (!guild) return res.writeHead(404).end('Guild not found');
+                if (data.action === 'edit_stat') {
+                    const val = data.value;
+                    if (data.key === 'today_rev') { const todayStr = new Date().toISOString().split('T')[0]; const oldVal = memoryStats.revenue[todayStr] || 0; const newVal = parseFloat(val) || 0; memoryStats.revenue[todayStr] = newVal; memoryStats.total_revenue = Math.max(0, memoryStats.total_revenue + (newVal - oldVal)); } 
+                    else if (data.key === 'total_rev') { memoryStats.total_revenue = parseFloat(val) || 0; } 
+                    else if (data.key === 'tickets') { if (!memoryStats.analytics) memoryStats.analytics = { tickets_opened: 0, hourly_sales: Array(24).fill(0) }; memoryStats.analytics.tickets_opened = parseInt(val) || 0; } 
+                    else { if (!memoryStats.overrides) memoryStats.overrides = {}; if (val === '') delete memoryStats.overrides[data.key]; else memoryStats.overrides[data.key] = val; }
+                    helpers.syncCloud();
+                }
+                else if (data.action === 'approve_review') {
+                    if (!memoryStats.pending_reviews) memoryStats.pending_reviews = []; const idx = memoryStats.pending_reviews.findIndex(r => r.id === data.id);
+                    if (idx > -1) {
+                        const review = memoryStats.pending_reviews[idx]; memoryStats.pending_reviews.splice(idx, 1); helpers.syncCloud();
+                        const reviewChannel = await guild.channels.fetch(CONFIG.REVIEW_CHANNEL_ID).catch(() => null);
+                        if (reviewChannel) await reviewChannel.send(`> 🌟 **NEW CUSTOMER REVIEW** 🌟\n> ━━━━━━━━━━━━━━━━━━━━\n> 📦 » **Product:** ${review.product}\n> 📝 » **Feedback:** "${review.text}"\n> 📈 » **Rating:** ${review.rating}/5 ⭐\n> 👤 » **By:** ${review.username}`).catch(() => {});
+                        const memberToDM = await guild.members.fetch(review.userId).catch(()=>null); if(memberToDM) await memberToDM.send(`🎉 **Good news!** Your review for **${review.product}** has been approved and published!`).catch(()=>{});
+                    }
+                }
+                else if (data.action === 'reject_review') {
+                    if (memoryStats.pending_reviews) {
+                        const reviewItem = memoryStats.pending_reviews.find(r => r.id === data.id); if (reviewItem) { const memberToDM = await guild.members.fetch(reviewItem.userId).catch(()=>null); if(memberToDM) await memberToDM.send(`📝 **Review status update:** Unfortunately, your review was not approved.\n**Reason:** ${data.reason || "Not specified."}`).catch(()=>{}); }
+                        memoryStats.pending_reviews = memoryStats.pending_reviews.filter(r => r.id !== data.id); helpers.syncCloud();
+                    }
+                }
+                else if (data.action === 'toggle_maintenance') {
+                    if (!memoryStats.settings) memoryStats.settings = {}; if (!memoryStats.settings.maintenance) memoryStats.settings.maintenance = { active: false, endsAt: 0, channelId: "" };
+                    const state = data.state; const duration = parseInt(data.duration) || 60; const channelId = data.channelId || "";
+                    memoryStats.settings.maintenance.active = state; memoryStats.settings.maintenance.channelId = channelId;
+                    let announceChannel = channelId ? await guild.channels.fetch(channelId).catch(() => null) : null;
+                    if (state) {
+                        memoryStats.settings.maintenance.endsAt = Date.now() + (duration * 60000);
+                        if (announceChannel) { const unixTime = Math.floor(memoryStats.settings.maintenance.endsAt / 1000); const mEmbed = new EmbedBuilder().setColor('#f97316').setTitle('🚧 Maintenance in Progress').setDescription(`The shop is temporarily suspended for stock updates.\n\n⏳ **Estimated return:** <t:${unixTime}:R>`); await announceChannel.send({ embeds: [mEmbed] }).catch(()=>{}); }
+                    } else {
+                        memoryStats.settings.maintenance.endsAt = 0;
+                        if (announceChannel) { const mEmbed = new EmbedBuilder().setColor('#10b981').setTitle('✅ Maintenance Completed').setDescription(`The shop is open and ready to take your orders!`); await announceChannel.send({ embeds: [mEmbed] }).catch(()=>{}); }
+                    }
+                    helpers.syncCloud();
+                }
+                else if (data.action === 'send_ticket_message') {
+                    const channel = guild.channels.cache.get(data.channelId);
+                    if (channel) {
+                        let payload = {}; if (data.message) payload.content = `💬 **[Support Admin]** : ${data.message}`;
+                        if (data.imageBase64) { const base64Data = data.imageBase64.replace(/^data:image\/\w+;base64,/, ""); const buffer = Buffer.from(base64Data, 'base64'); const attachment = new AttachmentBuilder(buffer, { name: 'upload.png' }); payload.files = [attachment]; }
+                        await channel.send(payload);
+                    }
+                }
+                else if (data.action === 'react_ticket_message') {
+                    const channel = guild.channels.cache.get(data.channelId); if (channel && data.messageId && data.emoji) { const msgToReact = await channel.messages.fetch(data.messageId).catch(() => null); if (msgToReact) await msgToReact.react(data.emoji).catch(()=>{}); }
+                }
+                else if (data.action === 'add_buy_link') { if (!memoryStats.buy_links) memoryStats.buy_links = {}; const newId = (Object.keys(memoryStats.buy_links).length + 1).toString() + Date.now(); memoryStats.buy_links[newId] = { label: data.label, url: data.url }; helpers.syncCloud(); }
+                else if (data.action === 'edit_buy_link') { if (memoryStats.buy_links && memoryStats.buy_links[data.id]) { memoryStats.buy_links[data.id] = { label: data.label, url: data.url }; helpers.syncCloud(); } }
+                else if (data.action === 'delete_buy_link') { if (memoryStats.buy_links && memoryStats.buy_links[data.id]) { delete memoryStats.buy_links[data.id]; helpers.syncCloud(); } }
+                else if (data.action === 'edit_product') { if (memoryStats.products && memoryStats.products[data.id]) { memoryStats.products[data.id] = { name: data.name, price: data.price, link: data.link, category: data.category || "✨ ITEMS", stock: data.stock || "∞", desc: data.desc, upsellId: data.upsellId, upsellDiscount: data.upsellDiscount }; helpers.syncCloud(); } }
+                else if (data.action === 'add_product') { if (!memoryStats.products) memoryStats.products = {}; const newId = (Object.keys(memoryStats.products).length + 1).toString(); memoryStats.products[newId] = { name: data.name, price: data.price, link: data.link, category: data.category || "✨ ITEMS", stock: data.stock || "∞", desc: data.desc, upsellId: data.upsellId, upsellDiscount: data.upsellDiscount }; helpers.syncCloud(); }
+                else if (data.action === 'delete_product') { if (memoryStats.products && memoryStats.products[data.id]) { delete memoryStats.products[data.id]; const newProducts = {}; let counter = 1; for (const key in memoryStats.products) { newProducts[counter.toString()] = memoryStats.products[key]; counter++; } memoryStats.products = newProducts; helpers.syncCloud(); } }
+                else if (data.action === 'refresh_setup') { const targetChannel = await client.channels.fetch(CONFIG.SHOP_CHANNEL_ID).catch(() => null); if (targetChannel) { const messages = await targetChannel.messages.fetch({ limit: 50 }); const botMessages = messages.filter(m => m.author.id === client.user.id); for (const m of botMessages.values()) { await m.delete().catch(() => {}); } const coreBot = require('./bot.js')(client, memoryStats, channelStates, guildInvites, CONFIG, helpers); await coreBot.sendShopSetup(targetChannel); } }
+                else if (data.action === 'ping_test') { const targetChannel = await client.channels.fetch(CONFIG.SHOP_CHANNEL_ID).catch(() => null); if (targetChannel) { const msg = await targetChannel.send("⚡ *System latency test...*").catch(() => null); if (msg) await msg.delete().catch(() => {}); } }
+                else if (data.action === 'post_review') { const reviewChannel = await client.channels.fetch(CONFIG.REVIEW_CHANNEL_ID).catch(() => null); if (reviewChannel) await reviewChannel.send(`> 🌟 **NEW FEEDBACK** 🌟\n> ━━━━━━━━━━━━━━━━━━━━\n> 📝 » **Feedback:** "${data.text}"\n> 📈 » **Rating:** ${data.rating}/5 ⭐\n> 👤 » **By:** ${data.author}`).catch(() => {}); }
+                else if (data.action === 'update_ref_threshold') { if (!memoryStats.settings) memoryStats.settings = {}; memoryStats.settings.invite_reward_threshold = parseInt(data.threshold) || 10; helpers.syncCloud(); }
+                else if (['ban', 'kick', 'mute'].includes(data.action)) { const target = await guild.members.fetch(data.userId).catch(() => null); if (data.action === 'ban') await guild.members.ban(data.userId, { reason: data.reason }); else if (target) { if (data.action === 'kick') await target.kick(data.reason); if (data.action === 'mute') await target.timeout(parseInt(data.duration) * 60 * 1000, data.reason); } }
+                else if (data.action === 'warn') { if (!memoryStats.warns) memoryStats.warns = {}; if (!memoryStats.warns[data.userId]) memoryStats.warns[data.userId] = []; memoryStats.warns[data.userId].push({ reason: data.reason || "Warn", date: new Date().toLocaleString('en-US') }); helpers.syncCloud(); const targetUser = await client.users.fetch(data.userId).catch(() => null); if (targetUser) await targetUser.send(`⚠️ **Warning Node alert:**\n\n**Reason:** ${data.reason || "Not specified"}`).catch(() => {}); }
+                else if (data.action === 'clear_warns') { if (memoryStats.warns && memoryStats.warns[data.userId]) { delete memoryStats.warns[data.userId]; helpers.syncCloud(); } }
+                else if (data.action === 'toggle_blacklist') { if (!memoryStats.blacklist) memoryStats.blacklist = []; if (memoryStats.blacklist.includes(data.userId)) memoryStats.blacklist = memoryStats.blacklist.filter(id => id !== data.userId); else memoryStats.blacklist.push(data.userId); helpers.syncCloud(); }
+                else if (data.action === 'close_channel') { const c = guild.channels.cache.get(data.channelId); if (c) { channelStates.delete(c.id); await c.delete().catch(()=>{}); } }
+                else if (data.action === 'move_custom_req') { if (Array.isArray(memoryStats.custom_requests)) { const reqItem = memoryStats.custom_requests.find(r => r.id === data.id); if(reqItem) { reqItem.status = data.status; helpers.syncCloud(); try { const targetUser = await client.users.fetch(reqItem.userId).catch(() => null); if (targetUser && data.status !== 'pending') { let statusFr = data.status === 'recording' ? '🎥 Enregistrement en cours' : data.status === 'editing' ? '✂️ Montage en cours' : '✅ Commande Terminée'; await targetUser.send(`🔔 **Mise à jour de ta commande personnalisée (${reqItem.product}):**\nNouveau statut : **${statusFr}** !`).catch(()=>{}); } } catch(e){} } } }
+                else if (data.action === 'create_promo') { if (!memoryStats.promo_codes) memoryStats.promo_codes = {}; const codeName = (data.name || "").trim().toUpperCase(); if (codeName) { memoryStats.promo_codes[codeName] = { discount: parseInt(data.discount) || 10, limit: parseInt(data.limit) || 1, used: 0, createdAt: new Date().toLocaleDateString('en-US') }; helpers.syncCloud(); } }
+                else if (data.action === 'delete_promo') { if (memoryStats.promo_codes && memoryStats.promo_codes[data.name]) { delete memoryStats.promo_codes[data.name]; helpers.syncCloud(); } }
+                else if (data.action === 'save_note') { if (!memoryStats.user_notes) memoryStats.user_notes = {}; memoryStats.user_notes[data.userId] = data.note; helpers.syncCloud(); }
+                else if (data.action === 'send_dm') { const targetUser = await client.users.fetch(data.userId).catch(() => null); if (targetUser) await targetUser.send(`📩 **Message from Admin:**\n\n${data.message}`).catch(()=>{}); }
+                else if (data.action === 'add_vip_days') { if (!memoryStats.subscriptions) memoryStats.subscriptions = {}; const days = parseInt(data.days) || 0; if (days > 0) { const now = Date.now(); if (memoryStats.subscriptions[data.userId]) memoryStats.subscriptions[data.userId].expiresAt += (days * 24 * 60 * 60 * 1000); else { const user = await client.users.fetch(data.userId).catch(()=>null); memoryStats.subscriptions[data.userId] = { username: user ? user.username : 'Unknown', expiresAt: now + (days * 24 * 60 * 60 * 1000), notified: false }; try { const member = await guild.members.fetch(data.userId); await member.roles.add(CONFIG.VIP_ROLE_ID); } catch(e) {} } helpers.syncCloud(); } }
+                else if (data.action === 'revoke_vip') { if (memoryStats.subscriptions && memoryStats.subscriptions[data.userId]) { delete memoryStats.subscriptions[data.userId]; try { const member = await guild.members.fetch(data.userId); await member.roles.remove(CONFIG.VIP_ROLE_ID); } catch(e) {} helpers.syncCloud(); } }
+                res.writeHead(200).end('OK');
+            } catch(e) { res.writeHead(500).end(e.message); }
+        }); return;
+    }
     res.writeHead(404).end('Not Found');
 }).listen(process.env.PORT || 3000);
 
