@@ -4,26 +4,6 @@ const axios = require('axios');
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const crypto = require('crypto');
-
-// === [FEATURE 20]: STRICT ENV CHECKS ===
-const REQUIRED_ENVS = ['DISCORD_BOT_TOKEN', 'REWARBLE_API_KEY'];
-for (const env of REQUIRED_ENVS) {
-    if (!process.env[env]) {
-        console.error(`❌ CRITICAL ERROR: Environment variable ${env} is missing!`);
-        process.exit(1);
-    }
-}
-
-// === [FEATURE 23]: WEBHOOK/DM ADMIN ALERTS ===
-const ADMIN_DISCORD_ID = "1520551977854042114";
-async function sendAdminAlert(msg) {
-    try {
-        if (!client || !client.isReady()) return;
-        const admin = await client.users.fetch(ADMIN_DISCORD_ID);
-        if (admin) await admin.send(`🚨 **SYSTEM ALERT** 🚨\n${msg}`);
-    } catch (e) {}
-}
 
 // 🛠️ SYSTEM LOGS INTERCEPTOR FOR DASHBOARD
 const sysLogs = [];
@@ -35,24 +15,10 @@ function addSysLog(level, ...args) {
     if (sysLogs.length > 100) sysLogs.shift();
 }
 console.log = (...args) => { addSysLog('INFO', ...args); originalLog(...args); };
-console.error = (...args) => { 
-    addSysLog('ERROR', ...args); 
-    originalError(...args); 
-    sendAdminAlert(`An error occurred:\n\`\`\`js\n${String(args[0]).substring(0, 1500)}\n\`\`\``);
-};
+console.error = (...args) => { addSysLog('ERROR', ...args); originalError(...args); };
 
-process.on('unhandledRejection', (reason) => { console.error('[ANTI-CRASH] Unhandled Rejection', reason); });
-process.on('uncaughtException', (err) => { console.error('[ANTI-CRASH] Uncaught Exception', err); });
-
-// === [FEATURE 8]: GRACEFUL SHUTDOWN ===
-async function shutdownSignal(signal) {
-    console.log(`\n🛑 Received ${signal}. Shutting down gracefully...`);
-    await syncCloud();
-    console.log('💾 Data safely synced to cloud. Goodbye!');
-    process.exit(0);
-}
-process.on('SIGTERM', () => shutdownSignal('SIGTERM'));
-process.on('SIGINT', () => shutdownSignal('SIGINT'));
+process.on('unhandledRejection', (reason, p) => { console.error('[ANTI-CRASH] Unhandled Rejection', reason); });
+process.on('uncaughtException', (err, origin) => { console.error('[ANTI-CRASH] Uncaught Exception', err); });
 
 // === [ANCHOR: CONFIG_AND_CONSTANTS] ===
 const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
@@ -62,47 +28,26 @@ const SHOP_CHANNEL_ID = "1520803761130311970";
 // 👑 VIP Role ID
 const VIP_ROLE_ID = "REMPLACE_AVEC_ID_ROLE_VIP"; 
 
+if (!DISCORD_BOT_TOKEN) {
+    console.error("❌ CRITICAL ERROR: DISCORD_BOT_TOKEN is missing!");
+    process.exit(1);
+}
+
 const REWARBLE_API_URL = "https://api.rewarble.com/client/1.00/redeem"; 
+const ADMIN_DISCORD_ID = "1520551977854042114";
 const CATEGORY_CUSTOMER_ID = "1521540733226713249";
 const CATEGORY_SUPPORT_ID = "1521541155005796484";
 const DASHBOARD_PIN = "1206"; 
 const MONTHLY_GOAL = 500; 
 
-// === [FEATURE 1 & 3]: CRYPTO SESSION & CSRF ===
-const SESSION_SECRET = crypto.randomBytes(32).toString('hex');
-const SERVER_CSRF_TOKEN = crypto.randomBytes(16).toString('hex');
-
-function generateSecureCookie(pin) {
-    const hash = crypto.createHmac('sha256', SESSION_SECRET).update(pin).digest('hex');
-    return `auth=${pin}.${hash}; Max-Age=2592000; HttpOnly; Path=/; SameSite=Strict`;
-}
-function verifyCookie(cookieStr) {
-    if (!cookieStr) return false;
-    const match = cookieStr.match(/auth=([^;]+)/);
-    if (!match) return false;
-    const parts = match[1].split('.');
-    if (parts.length !== 2) return false;
-    if (parts[0] !== DASHBOARD_PIN) return false;
-    const expectedHash = crypto.createHmac('sha256', SESSION_SECRET).update(parts[0]).digest('hex');
-    return parts[1] === expectedHash;
-}
-
-// === [FEATURE 5]: INPUT SANITIZATION ===
-function sanitizeInput(str) {
-    if (typeof str !== 'string') return str;
-    return str.replace(/[<>]/g, '').trim();
-}
-
 const TEST_VOUCHERS = { "GOYAVE5": 5 };
+
 let channelStates = new Map();
 let globalLastTicketMsg = Date.now();
 const STATS_FILE = path.join(__dirname, 'stats.json');
 const BACKUP_DIR = path.join(__dirname, 'backups');
 if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR);
 const guildInvites = new Map(); 
-
-// === [FEATURE 25]: DEBOUNCE CACHE ===
-const userLocks = new Set();
 
 // === [ANCHOR: MEMORY_CACHE_AND_DB] ===
 let memoryStats = { 
@@ -354,22 +299,21 @@ client.once('ready', () => {
         } catch (err) {}
     });
     
-    // === [FEATURE 9]: ISOLATED CRONS ===
-    setInterval(() => { try { checkSubscriptions(); } catch(e) { console.error('Cron Error', e); } }, 60 * 60 * 1000); 
-    setInterval(() => { try { runDailyBackup(); } catch(e) { console.error('Cron Error', e); } }, 60 * 60 * 1000); 
+    setInterval(checkSubscriptions, 60 * 60 * 1000); 
+    setInterval(runDailyBackup, 60 * 60 * 1000); 
 
     // 🛒 ABANDONED CART TRACKER
     setInterval(async () => {
-        try {
-            const acSet = memoryStats.settings?.abandonedCart || { active: true, delayHours: 2, discount: 10 };
-            if (!acSet.active) return;
-            const delayMs = (acSet.delayHours || 2) * 60 * 60 * 1000;
-            const now = Date.now();
-            for (const [chId, state] of channelStates.entries()) {
-                if (!state.validated && !state.notified && (now - state.createdAt > delayMs)) {
-                    state.notified = true;
+        const acSet = memoryStats.settings?.abandonedCart || { active: true, delayHours: 2, discount: 10 };
+        if (!acSet.active) return;
+        const delayMs = (acSet.delayHours || 2) * 60 * 60 * 1000;
+        const now = Date.now();
+        for (const [chId, state] of channelStates.entries()) {
+            if (!state.validated && !state.notified && (now - state.createdAt > delayMs)) {
+                state.notified = true;
+                try {
                     const guild = client.guilds.cache.first();
-                    const member = await guild.members.fetch(state.userId).catch(()=>null);
+                    const member = await guild.members.fetch(state.userId);
                     if (member) {
                         const code = "COMEBACK-" + Math.random().toString(36).substring(2, 6).toUpperCase();
                         if (!memoryStats.promo_codes) memoryStats.promo_codes = {};
@@ -378,9 +322,9 @@ client.once('ready', () => {
                         const embed = new EmbedBuilder().setColor('#f97316').setTitle('🛒 Pending Cart!').setDescription(`Your purchase ticket on our server is still open.\n\nTo help you finalize your order, here is a **-${acSet.discount}%** promo code valid immediately:\n\n👉 \`${code}\``);
                         await member.send({ embeds: [embed] }).catch(()=>{});
                     }
-                }
+                } catch(e) {}
             }
-        } catch(e) {}
+        }
     }, 15 * 60 * 1000);
 
     setInterval(async () => {
@@ -404,11 +348,6 @@ client.on('inviteDelete', invite => { try { guildInvites.get(invite.guild.id)?.d
 // === [ANCHOR: DISCORD_INTERACTION_HANDLER] ===
 client.on('interactionCreate', async (interaction) => {
     try {
-        // === [FEATURE 25]: DEBOUNCE CACHE ===
-        if (userLocks.has(interaction.user.id)) return interaction.reply({ content: "⏳ Please wait a moment between actions...", ephemeral: true }).catch(()=>{});
-        userLocks.add(interaction.user.id);
-        setTimeout(() => userLocks.delete(interaction.user.id), 2500);
-
         const mMode = memoryStats.settings?.maintenance;
         if (mMode && mMode.active && (interaction.isButton() || interaction.isStringSelectMenu())) {
             if (Date.now() < mMode.endsAt) {
@@ -423,9 +362,9 @@ client.on('interactionCreate', async (interaction) => {
         }
         
         if (interaction.isModalSubmit() && interaction.customId.startsWith('submitreview_')) {
-            const productId = sanitizeInput(interaction.customId.replace('submitreview_', ''));
+            const productId = interaction.customId.replace('submitreview_', '');
             const rating = interaction.fields.getTextInputValue('rating');
-            const feedback = sanitizeInput(interaction.fields.getTextInputValue('feedback'));
+            const feedback = interaction.fields.getTextInputValue('feedback');
             
             let numRating = parseInt(rating);
             if (isNaN(numRating) || numRating < 1 || numRating > 5) numRating = 5;
@@ -474,7 +413,6 @@ client.on('interactionCreate', async (interaction) => {
             }
 
             if (interaction.customId === 'get_referral_link') {
-                // === [FEATURE 21]: AUTO-DEFER ===
                 await interaction.deferReply({ flags: 64 }).catch(() => {});
                 let invite = null;
                 try {
@@ -496,7 +434,6 @@ client.on('interactionCreate', async (interaction) => {
             }
             
             if (interaction.customId === 'open_shop_channel') {
-                // === [FEATURE 21]: AUTO-DEFER ===
                 await interaction.deferReply({ flags: 64 }).catch(() => {});
                 const sanitizedName = interaction.user.username.toLowerCase().replace(/[^a-z0-9]/g, '');
                 const existingChannel = interaction.guild.channels.cache.find(c => c.name === `shop-${sanitizedName}` || c.name === `support-${sanitizedName}`);
@@ -524,7 +461,6 @@ client.on('interactionCreate', async (interaction) => {
                 } else { await interaction.editReply({ content: `❌ Error creating the room.` }).catch(() => {}); }
             
             } else if (interaction.customId === 'open_support_ticket') {
-                // === [FEATURE 21]: AUTO-DEFER ===
                 await interaction.deferReply({ flags: 64 }).catch(() => {});
                 const sanitizedName = interaction.user.username.toLowerCase().replace(/[^a-z0-9]/g, '');
                 const existingChannel = interaction.guild.channels.cache.find(c => c.name === `shop-${sanitizedName}` || c.name === `support-${sanitizedName}`);
@@ -643,14 +579,13 @@ client.on('interactionCreate', async (interaction) => {
                     }
                 } catch (e) { 
                     if (interaction.channel) {
-                        // === [FEATURE 10]: ANTI-SILENT FAIL (DM BLOCKED) ===
-                        await interaction.channel.send({ content: `⚠️ <@${interaction.user.id}> **Warning: Could not DM you. Please open your privacy settings!**\nHere is your product anyway. Ticket closes in 15 seconds.`, embeds: [successEmbed], components: [reviewRow] }).catch(()=>{}); 
+                        await interaction.channel.send({ content: "⚠️ **Warning: Could not DM you.** Here is your product. Ticket closes in 15 seconds.", embeds: [successEmbed], components: [reviewRow] }).catch(()=>{}); 
                         setTimeout(() => { channelStates.delete(interaction.channel.id); interaction.channel.delete().catch(()=>{}); }, 15000);
                     } 
                 }
             }
         }
-    } catch (globalError) { console.error('Interaction Error', globalError); }
+    } catch (globalError) {}
 });
 
 // === [ANCHOR: DISCORD_MESSAGE_HANDLER] ===
@@ -675,7 +610,7 @@ client.on('messageCreate', async (message) => {
 
         if (message.channel?.name?.startsWith('shop-')) {
             const state = channelStates.get(message.channel.id); if (!state || state.validated || state.processing) return;
-            const input = sanitizeInput(message.content.trim().toUpperCase());
+            const input = message.content.trim().toUpperCase();
 
             state.processing = true; 
             let promoApplied = null;
@@ -748,6 +683,43 @@ client.on('messageCreate', async (message) => {
     } catch (globalError) {}
 });
 
+// === [ANCHOR: DISCORD_GUILD_MEMBER_EVENTS] ===
+client.on('guildMemberAdd', async (member) => { 
+    logStat('joins', 1, { username: member.user.username }); 
+    try {
+        const newInvites = await member.guild.invites.fetch();
+        const oldInvites = guildInvites.get(member.guild.id);
+        const invite = newInvites.find(i => oldInvites.get(i.code) && i.uses > oldInvites.get(i.code)) || newInvites.find(i => !oldInvites.has(i.code) && i.uses > 0);
+        guildInvites.set(member.guild.id, new Map(newInvites.map(i => [i.code, i.uses])));
+
+        if (invite && invite.inviter) {
+            const inviterId = invite.inviter.id;
+            if (!memoryStats.referrals) memoryStats.referrals = {};
+            if (!memoryStats.referrals[inviterId]) memoryStats.referrals[inviterId] = { count: 0, total_rewards: 0, invited: [], username: invite.inviter.username };
+            memoryStats.referrals[inviterId].count++;
+            memoryStats.referrals[inviterId].invited.unshift({ username: member.user.username, date: new Date().toLocaleString('en-US') });
+            
+            const threshold = memoryStats.settings?.invite_reward_threshold || 10;
+            if (memoryStats.referrals[inviterId].count >= threshold) {
+                memoryStats.referrals[inviterId].count -= threshold;
+                memoryStats.referrals[inviterId].total_rewards++;
+                const codeName = "REF" + Math.random().toString(36).substring(2, 8).toUpperCase();
+                if (!memoryStats.promo_codes) memoryStats.promo_codes = {};
+                memoryStats.promo_codes[codeName] = { discount: 100, limit: 1, used: 0, createdAt: new Date().toLocaleDateString('en-US') };
+                const inviterUser = await client.users.fetch(inviterId).catch(()=>null);
+                if (inviterUser) inviterUser.send(`🎉 **CONGRATULATIONS!** You invited ${threshold} people and unlocked a FREE product!\n\nHere is your personal 100% OFF Promo Code:\n\`${codeName}\``).catch(()=>{});
+            }
+            syncCloud();
+        }
+    } catch (err) {}
+});
+
+client.on('guildMemberRemove', async (member) => { 
+    const duration = member.joinedTimestamp ? (Date.now() - member.joinedTimestamp) : 0;
+    const avatar = member.user.displayAvatarURL({ size: 64, dynamic: true });
+    logStat('leaves', 1, { username: member.user.username, avatar: avatar, duration: duration }); 
+});
+
 // ==========================================
 // WEB SERVER API & DASHBOARD HTML
 // ==========================================
@@ -756,37 +728,26 @@ const rateLimits = new Map();
 const bruteForceLocks = new Map();
 
 http.createServer(async (req, res) => {
-
-    // === [FEATURE 2]: SECURITY HEADERS ===
-    res.setHeader('X-Frame-Options', 'DENY');
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
-
-    // === [FEATURE 19]: HEALTHCHECK ===
-    if (req.url === '/api/health') return res.writeHead(200).end('OK');
-
     const clientIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '127.0.0.1';
     const now = Date.now();
-    let lock = bruteForceLocks.get(clientIp) || { attempts: 0, lockout: 0 };
-    if (now < lock.lockout) return res.writeHead(429).end('Locked out.');
-
-    // === [FEATURE 4]: DYNAMIC RATE LIMIT ===
     let rl = rateLimits.get(clientIp) || { count: 0, resetTime: now + 60000 };
     if (now > rl.resetTime) rl = { count: 0, resetTime: now + 60000 };
     rl.count++; rateLimits.set(clientIp, rl);
     if (rl.count > 200) return res.writeHead(429).end('Too Many Requests');
 
     const cookie = req.headers.cookie || '';
-    const isAuthenticated = verifyCookie(cookie);
+    const isAuthenticated = cookie.includes(`auth=${DASHBOARD_PIN}`);
 
     if (req.url === '/api/login' && req.method === 'POST') {
         let body = ''; req.on('data', chunk => body += chunk);
         req.on('end', () => {
+            let lock = bruteForceLocks.get(clientIp) || { attempts: 0, lockout: 0 };
+            if (now < lock.lockout) return res.writeHead(429).end('Locked out.');
             try {
                 const data = JSON.parse(body);
                 if (data.pin === DASHBOARD_PIN) {
                     bruteForceLocks.delete(clientIp);
-                    res.writeHead(200, { 'Set-Cookie': generateSecureCookie(DASHBOARD_PIN), 'Content-Type': 'application/json' });
+                    res.writeHead(200, { 'Set-Cookie': `auth=${DASHBOARD_PIN}; Max-Age=2592000; HttpOnly; Path=/`, 'Content-Type': 'application/json' });
                     return res.end(JSON.stringify({ success: true }));
                 } else {
                     lock.attempts++; if (lock.attempts >= 5) lock.lockout = now + 15 * 60 * 1000;
@@ -798,7 +759,7 @@ http.createServer(async (req, res) => {
 
     if ((req.url === '/dashboard' || req.url === '/') && !isAuthenticated) {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        return res.end("<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'><title>Nexus Login</title><style>body{font-family:'Inter',sans-serif;background:#0b0f19;color:#f8fafc;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;}.login-box{background:rgba(15, 23, 42, 0.6);backdrop-filter:blur(16px);padding:40px;border-radius:16px;border:1px solid rgba(56,189,248,0.2);text-align:center;}input{background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.1);color:white;padding:15px;border-radius:8px;font-size:16px!important;text-align:center;letter-spacing:10px;width:100%;max-width:200px;margin:20px auto;display:block;}input:focus{border-color:#38bdf8;outline:none;}button{background:#38bdf8;color:white;border:none;padding:12px 30px;font-size:1.1em;border-radius:8px;cursor:pointer;width:100%;}</style></head><body><div class='login-box'><h2>🔒 Restricted Area</h2><input type='password' id='pin' maxlength='4' placeholder='••••'><button onclick='login()'>Unlock Dashboard</button><p id='err' style='color:#ec4899;display:none;margin-top:10px;'>Invalid PIN</p></div><script>async function login(){const res=await fetch('/api/login',{method:'POST',body:JSON.stringify({pin:document.getElementById('pin').value})});if(res.ok)location.reload();else document.getElementById('err').style.display='block';} document.getElementById('pin').addEventListener('keypress', e=>{if(e.key==='Enter')login();});</script></body></html>");
+        return res.end("<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no'><meta name='apple-mobile-web-app-capable' content='yes'><meta name='apple-mobile-web-app-status-bar-style' content='black-translucent'><title>Nexus Login</title><style>body{font-family:'Inter',sans-serif;background:#0b0f19;color:#f8fafc;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;}.login-box{background:rgba(15, 23, 42, 0.6);backdrop-filter:blur(16px);padding:40px;border-radius:16px;border:1px solid rgba(56,189,248,0.2);text-align:center;box-shadow:0 10px 40px rgba(0,0,0,0.5);width:90%;max-width:400px;box-sizing:border-box;}input{background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.1);color:white;padding:15px;border-radius:8px;font-size:16px!important;text-align:center;letter-spacing:10px;width:100%;max-width:200px;margin:20px auto;outline:none;transition:0.3s;display:block;}input:focus{border-color:#38bdf8;box-shadow:0 0 15px rgba(56,189,248,0.3);}button{background:#38bdf8;color:white;border:none;padding:12px 30px;font-size:1.1em;border-radius:8px;cursor:pointer;font-weight:bold;width:100%;transition:0.2s;}button:hover{filter:brightness(1.2);}</style></head><body><div class='login-box'><h2>🔒 Restricted Area</h2><input type='password' id='pin' maxlength='4' placeholder='••••'><button onclick='login()'>Unlock Dashboard</button><p id='err' style='color:#ec4899;display:none;margin-top:10px;'>Invalid PIN</p></div><script>async function login(){const res=await fetch('/api/login',{method:'POST',body:JSON.stringify({pin:document.getElementById('pin').value})});if(res.ok)location.reload();else document.getElementById('err').style.display='block';} document.getElementById('pin').addEventListener('keypress', e=>{if(e.key==='Enter')login();});</script></body></html>");
     }
 
     // === [ANCHOR: API_ROUTES_GET] ===
@@ -816,7 +777,7 @@ http.createServer(async (req, res) => {
         const todayStr = new Date().toISOString().split('T')[0];
         let monthRevenue = 0; Object.keys(memoryStats.revenue).forEach(date => { if(date.startsWith(todayStr.substring(0, 7))) monthRevenue += memoryStats.revenue[date]; });
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify({ memoryStats, maintenance: memoryStats.settings?.maintenance, pendingReviewsCount: memoryStats.pending_reviews?.length || 0, activeTickets: activeTickets, todayRevenue: memoryStats.revenue[todayStr] || 0, monthRevenue, ticketsOpened: memoryStats.analytics?.tickets_opened || 0, dropOffRate: memoryStats.analytics?.tickets_opened > 0 ? (100 - (memoryStats.total_transactions / memoryStats.analytics.tickets_opened) * 100).toFixed(1) : 0, peakHourStr: "N/A", conversionRate: ((memoryStats.total_transactions / (memoryStats.total_joins || 1)) * 100).toFixed(1), retentionRate: memberCount !== "N/A" ? ((memberCount / (memberCount + (memoryStats.total_leaves || 0))) * 100).toFixed(1) : "N/A", onlineCount, memberCount, MONTHLY_GOAL, PIN: DASHBOARD_PIN, CSRF: SERVER_CSRF_TOKEN, globalLastTicketMsg: globalLastTicketMsg }));
+        return res.end(JSON.stringify({ memoryStats, maintenance: memoryStats.settings?.maintenance, pendingReviewsCount: memoryStats.pending_reviews?.length || 0, activeTickets: activeTickets, todayRevenue: memoryStats.revenue[todayStr] || 0, monthRevenue, ticketsOpened: memoryStats.analytics?.tickets_opened || 0, dropOffRate: memoryStats.analytics?.tickets_opened > 0 ? (100 - (memoryStats.total_transactions / memoryStats.analytics.tickets_opened) * 100).toFixed(1) : 0, peakHourStr: "N/A", conversionRate: ((memoryStats.total_transactions / (memoryStats.total_joins || 1)) * 100).toFixed(1), retentionRate: memberCount !== "N/A" ? ((memberCount / (memberCount + (memoryStats.total_leaves || 0))) * 100).toFixed(1) : "N/A", onlineCount, memberCount, MONTHLY_GOAL, PIN: DASHBOARD_PIN, globalLastTicketMsg: globalLastTicketMsg }));
     }
 
     if (req.url === '/api/export' && req.method === 'GET') {
@@ -976,10 +937,6 @@ http.createServer(async (req, res) => {
         req.on('end', async () => {
             try {
                 const data = JSON.parse(body);
-
-                // === [FEATURE 3]: VALIDATE CSRF ===
-                if (data.csrf !== SERVER_CSRF_TOKEN && data.action !== 'get_debug_info') throw new Error("Invalid CSRF Token");
-
                 const guild = client.guilds.cache.first();
                 if (!guild) return res.writeHead(404).end('Guild not found');
 
@@ -998,7 +955,7 @@ http.createServer(async (req, res) => {
                 }
                 else if (data.action === 'flush_cache') {
                     if (data.type === 'channels') { channelStates.clear(); }
-                    else if (data.type === 'ratelimits') { rateLimits.clear(); bruteForceLocks.clear(); userLocks.clear(); }
+                    else if (data.type === 'ratelimits') { rateLimits.clear(); bruteForceLocks.clear(); }
                     res.writeHead(200).end('OK');
                     return;
                 }
@@ -1016,7 +973,7 @@ http.createServer(async (req, res) => {
                 // --- 🏷️ TAG TICKET ---
                 else if (data.action === 'tag_ticket') {
                     if (!memoryStats.ticket_tags) memoryStats.ticket_tags = {};
-                    if (data.color) { memoryStats.ticket_tags[data.channelId] = sanitizeInput(data.color); } 
+                    if (data.color) { memoryStats.ticket_tags[data.channelId] = data.color; } 
                     else { delete memoryStats.ticket_tags[data.channelId]; }
                     syncCloud();
                 }
@@ -1070,8 +1027,8 @@ http.createServer(async (req, res) => {
                     const txDate = data.date ? new Date(data.date) : new Date();
                     const dateStrDisplay = txDate.toLocaleString('en-US');
                     const dateKey = txDate.toISOString().split('T')[0];
-                    const username = (data.username && data.username.trim() !== '') ? sanitizeInput(data.username.trim()) : "Manual Entry";
-                    const product = (data.product && data.product.trim() !== '') ? sanitizeInput(data.product.trim()) : "Custom Amount";
+                    const username = (data.username && data.username.trim() !== '') ? data.username.trim() : "Manual Entry";
+                    const product = (data.product && data.product.trim() !== '') ? data.product.trim() : "Custom Amount";
 
                     if (!memoryStats.revenue[dateKey]) memoryStats.revenue[dateKey] = 0;
                     memoryStats.revenue[dateKey] += price;
@@ -1179,7 +1136,7 @@ http.createServer(async (req, res) => {
                     const channel = guild.channels.cache.get(data.channelId);
                     if (channel) {
                         let payload = {};
-                        if (data.message) payload.content = `💬 **[Support Admin]** : ${sanitizeInput(data.message)}`;
+                        if (data.message) payload.content = `💬 **[Support Admin]** : ${data.message}`;
                         if (data.imageBase64) {
                             const base64Data = data.imageBase64.replace(/^data:image\/\w+;base64,/, "");
                             const buffer = Buffer.from(base64Data, 'base64');
@@ -1211,12 +1168,12 @@ http.createServer(async (req, res) => {
                 else if (data.action === 'add_buy_link') {
                     if (!memoryStats.buy_links) memoryStats.buy_links = {};
                     const newId = (Object.keys(memoryStats.buy_links).length + 1).toString() + Date.now();
-                    memoryStats.buy_links[newId] = { label: sanitizeInput(data.label), url: data.url };
+                    memoryStats.buy_links[newId] = { label: data.label, url: data.url };
                     syncCloud();
                 }
                 else if (data.action === 'edit_buy_link') {
                     if (memoryStats.buy_links && memoryStats.buy_links[data.id]) {
-                        memoryStats.buy_links[data.id] = { label: sanitizeInput(data.label), url: data.url };
+                        memoryStats.buy_links[data.id] = { label: data.label, url: data.url };
                         syncCloud();
                     }
                 }
@@ -1257,14 +1214,14 @@ http.createServer(async (req, res) => {
                 else if (data.action === 'edit_product') {
                     if (memoryStats.products && memoryStats.products[data.id]) {
                         const oldCat = memoryStats.products[data.id].category || "✨ ITEMS";
-                        memoryStats.products[data.id] = { name: sanitizeInput(data.name), price: sanitizeInput(data.price), link: data.link, category: oldCat, stock: data.stock || "∞", availability: data.availability || "always", desc: sanitizeInput(data.desc) };
+                        memoryStats.products[data.id] = { name: data.name, price: data.price, link: data.link, category: oldCat, stock: data.stock || "∞", availability: data.availability || "always", desc: data.desc };
                         syncCloud();
                     }
                 }
                 else if (data.action === 'add_product') {
                     if (!memoryStats.products) memoryStats.products = {};
                     const newId = (Object.keys(memoryStats.products).length + 1).toString();
-                    memoryStats.products[newId] = { name: sanitizeInput(data.name), price: sanitizeInput(data.price), link: data.link, category: "✨ NEW ITEMS", stock: data.stock || "∞", availability: data.availability || "always", desc: sanitizeInput(data.desc) };
+                    memoryStats.products[newId] = { name: data.name, price: data.price, link: data.link, category: "✨ NEW ITEMS", stock: data.stock || "∞", availability: data.availability || "always", desc: data.desc };
                     syncCloud();
                 }
                 else if (data.action === 'delete_product') {
@@ -1294,7 +1251,7 @@ http.createServer(async (req, res) => {
                 else if (data.action === 'post_review') {
                     const reviewChannel = await client.channels.fetch(REVIEW_CHANNEL_ID).catch(() => null);
                     if (!reviewChannel) throw new Error("Review channel not found.");
-                    await reviewChannel.send(`> 🌟 **NEW FEEDBACK** 🌟\n> ━━━━━━━━━━━━━━━━━━━━\n> 📝 » **Feedback:** "${sanitizeInput(data.text)}"\n> 📈 » **Rating:** ${data.rating}/5 ⭐\n> 👤 » **By:** ${sanitizeInput(data.author)}`).catch(() => { throw new Error("Missing permissions to send messages in the channel."); });
+                    await reviewChannel.send(`> 🌟 **NEW FEEDBACK** 🌟\n> ━━━━━━━━━━━━━━━━━━━━\n> 📝 » **Feedback:** "${data.text}"\n> 📈 » **Rating:** ${data.rating}/5 ⭐\n> 👤 » **By:** ${data.author}`).catch(() => { throw new Error("Missing permissions to send messages in the channel."); });
                 }
                 else if (data.action === 'update_ref_threshold') {
                     if (!memoryStats.settings) memoryStats.settings = {};
@@ -1312,7 +1269,7 @@ http.createServer(async (req, res) => {
                 else if (data.action === 'warn') {
                     if (!memoryStats.warns) memoryStats.warns = {};
                     if (!memoryStats.warns[data.userId]) memoryStats.warns[data.userId] = [];
-                    memoryStats.warns[data.userId].push({ reason: sanitizeInput(data.reason) || "Warn", date: new Date().toLocaleString('en-US') });
+                    memoryStats.warns[data.userId].push({ reason: data.reason || "Warn", date: new Date().toLocaleString('en-US') });
                     syncCloud();
                     
                     const targetUser = await client.users.fetch(data.userId).catch(() => null);
@@ -1344,7 +1301,7 @@ http.createServer(async (req, res) => {
                 }
                 else if (data.action === 'announce') {
                     const channel = guild.channels.cache.get(data.channelId);
-                    if(channel) await channel.send(`📢 **Announcement**\n\n${sanitizeInput(data.message)}`);
+                    if(channel) await channel.send(`📢 **Announcement**\n\n${data.message}`);
                 }
                 else if (data.action === 'close_all') {
                     guild.channels.cache.forEach(c => {
@@ -1368,11 +1325,11 @@ http.createServer(async (req, res) => {
                 }
                 else if (data.action === 'save_note') {
                     if (!memoryStats.user_notes) memoryStats.user_notes = {};
-                    memoryStats.user_notes[data.userId] = sanitizeInput(data.note); syncCloud();
+                    memoryStats.user_notes[data.userId] = data.note; syncCloud();
                 }
                 else if (data.action === 'send_dm') {
                     const targetUser = await client.users.fetch(data.userId).catch(() => null);
-                    if (targetUser) await targetUser.send(`📩 **Message from Admin:**\n\n${sanitizeInput(data.message)}`);
+                    if (targetUser) await targetUser.send(`📩 **Message from Admin:**\n\n${data.message}`);
                 }
                 else if (data.action === 'add_vip_days') {
                     if (!memoryStats.subscriptions) memoryStats.subscriptions = {};
@@ -1411,34 +1368,581 @@ http.createServer(async (req, res) => {
         }); return;
     }
 
+    // === [ANCHOR: DASHBOARD_HTML_INJECTION] ===
     if (req.url === '/dashboard' || req.url === '/') {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Nexus Dashboard</title><script src="https://cdn.jsdelivr.net/npm/chart.js"></script><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet"><style>:root{--bg-main:#070b14;--bg-card:rgba(15,23,42,0.6);--border-color:rgba(56,189,248,0.15);--text-main:#f8fafc;--text-muted:#94a3b8;--accent-blue:#38bdf8;--accent-green:#10b981;--accent-purple:#a855f7;--accent-orange:#f97316;--accent-pink:#ec4899;--accent-red:#ef4444}*{box-sizing:border-box}body{font-family:'Inter',sans-serif;background-color:var(--bg-main);color:var(--text-main);margin:0;padding:20px;overflow-x:hidden}@keyframes fadeIn{from{opacity:0}to{opacity:1}}.container{max-width:1300px;margin:0 auto;animation:fadeIn .5s}.header{display:flex;justify-content:space-between;margin-bottom:20px;padding-bottom:15px;border-bottom:1px solid var(--border-color)}.header h1{font-size:2em;margin:0;color:var(--accent-blue)}.nav-menu{display:flex;gap:10px;margin-bottom:30px;background:var(--bg-card);padding:10px;border-radius:12px;overflow-x:auto}.nav-btn{background:0 0;border:none;color:var(--text-muted);font-weight:600;padding:10px 20px;border-radius:8px;cursor:pointer}.nav-btn.active{color:#fff;background:var(--accent-blue)}.tab-content{display:none}.tab-content.active{display:block}.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:15px;margin-bottom:25px}.card,.box{background:var(--bg-card);padding:20px;border-radius:16px;border:1px solid var(--border-color);margin-bottom:20px}table{width:100%;border-collapse:collapse}th,td{padding:12px;text-align:left;border-bottom:1px solid rgba(255,255,255,.05)}input,textarea,select{width:100%;background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.1);color:#fff;padding:12px;border-radius:8px}.admin-btn{background:var(--accent-blue);color:#fff;border:none;padding:12px 20px;border-radius:8px;cursor:pointer;margin-top:10px;font-weight:700}.text-green{color:var(--accent-green)}.text-muted{color:var(--text-muted)}#toast{position:fixed;bottom:20px;right:20px;background:rgba(15,23,42,.9);color:#fff;padding:16px 24px;border-radius:12px;transform:translateY(150px);transition:.3s;z-index:9999}#toast.show{transform:translateY(0)}.chat-container{display:flex;height:600px;gap:20px}.chat-window{flex:3;display:flex;flex-direction:column;background:rgba(0,0,0,.3);border-radius:12px;border:1px solid var(--border-color)}.chat-messages{flex:1;padding:20px;overflow-y:auto;display:flex;flex-direction:column;gap:15px}.chat-bubble{max-width:75%;padding:12px 18px;border-radius:16px}.chat-bubble.bot{align-self:flex-end;background:var(--accent-blue)}.chat-bubble.user{align-self:flex-start;background:rgba(255,255,255,.1)}</style></head><body>
-        <div id="toast"></div><div class="container"><div class="header"><h1>Nexus Admin</h1><div><button class="nav-btn" onclick="manualRefresh()">🔄 Sync</button></div></div>
-        <div class="nav-menu"><button class="nav-btn active" onclick="sw('overview',this)">📊 Overview</button><button class="nav-btn" onclick="sw('livechat',this)">💬 Chat</button><button class="nav-btn" onclick="sw('admin',this)">⚙️ Admin</button><button class="nav-btn" onclick="sw('devtools',this)">🛠️ DevTools</button></div>
-        <div id="overview" class="tab-content active"><div class="stats-grid"><div class="card"><h3>Today</h3><div id="ui-today-rev" class="text-green">€0</div></div><div class="card"><h3>Total</h3><div id="ui-total-rev">€0</div></div><div class="card"><h3>Tickets</h3><div id="ui-tickets-opened">0</div></div></div><div class="box"><h2>Sales</h2><div style="height:250px"><canvas id="salesChart"></canvas></div></div></div>
-        <div id="livechat" class="tab-content"><div class="box chat-container"><div id="chat-ticket-list" style="flex:1;overflow-y:auto;border-right:1px solid #333;padding-right:10px"></div><div class="chat-window"><div id="chat-messages-area" class="chat-messages"></div><div style="display:flex;padding:10px;gap:10px"><input type="text" id="chat-input-text" placeholder="Reply..."><button class="admin-btn" style="margin:0" onclick="sendChat()">Send</button></div></div></div></div>
-        <div id="admin" class="tab-content"><div class="box"><h2>Manage Products</h2><input type="text" id="p-id" placeholder="ID (Optional)"><input type="text" id="p-name" placeholder="Name"><input type="text" id="p-price" placeholder="Price"><button class="admin-btn" onclick="saveP()">Save Product</button></div><div class="box" id="target-products"></div></div>
-        <div id="devtools" class="tab-content"><div class="box"><h2>DevTools</h2><button class="admin-btn" onclick="fetchDev()">Load Logs</button><pre id="dev-logs" style="background:#000;color:#0f0;padding:10px;height:300px;overflow:auto"></pre><textarea id="dev-raw-db" style="width:100%;height:300px;background:#000;color:#fff"></textarea><button class="admin-btn" onclick="saveRaw()">Force Save DB</button></div></div>
-        </div><script>
-        let PIN="${DASHBOARD_PIN}", CSRF="${SERVER_CSRF_TOKEN}", activeChat=null;
-        async function req(action, extra={}){ try{ const r=await fetch('/api/action',{method:'POST',body:JSON.stringify({action, pin:PIN, csrf:CSRF, ...extra})}); if(r.ok){ showT('Success'); init(); }else showT('Error','e'); }catch(e){} }
-        function sw(id,btn){ document.querySelectorAll('.tab-content').forEach(e=>e.classList.remove('active')); document.querySelectorAll('.nav-btn').forEach(e=>e.classList.remove('active')); document.getElementById(id).classList.add('active'); btn.classList.add('active'); if(id==='livechat') loadT(); if(id==='devtools') fetchDev(); }
-        function showT(m,t='s'){ const el=document.getElementById('toast'); el.innerHTML=m; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),3000); }
-        async function init(){ const r=await fetch('/api/init-data'); const d=await res(r); document.getElementById('ui-today-rev').innerText='€'+d.todayRevenue; document.getElementById('ui-total-rev').innerText='€'+d.memoryStats.total_revenue; document.getElementById('ui-tickets-opened').innerText=d.ticketsOpened; renderP(d.memoryStats.products); }
-        async function res(r){ return await r.json(); }
-        function renderP(p){ let h=''; for(let i in p){ h+='<div>['+i+'] '+p[i].name+' - €'+p[i].price+' <button onclick="req(\\'delete_product\\',{id:\\''+i+'\\'})">X</button></div>'; } document.getElementById('target-products').innerHTML=h; }
-        function saveP(){ req('add_product',{id:document.getElementById('p-id').value, name:document.getElementById('p-name').value, price:document.getElementById('p-price').value}); }
-        async function loadT(){ const r=await fetch('/api/tickets'); const t=await res(r); let h=''; t.forEach(x=>h+='<div onclick="openC(\\''+x.id+'\\')" style="cursor:pointer;padding:10px;border-bottom:1px solid #333">'+x.name+'</div>'); document.getElementById('chat-ticket-list').innerHTML=h; }
-        async function openC(id){ activeChat=id; const r=await fetch('/api/tickets/messages?channelId='+id); const m=await res(r); let h=''; m.forEach(x=>h+='<div class="chat-bubble '+(x.isBot?'bot':'user')+'"><b>'+x.author+'</b><br>'+x.content+'</div>'); document.getElementById('chat-messages-area').innerHTML=h; }
-        function sendChat(){ const v=document.getElementById('chat-input-text').value; if(!v||!activeChat)return; req('send_ticket_message',{channelId:activeChat, message:v}); document.getElementById('chat-input-text').value=''; setTimeout(()=>openC(activeChat),1000); }
-        async function fetchDev(){ const r=await fetch('/api/action',{method:'POST',body:JSON.stringify({action:'get_debug_info',pin:PIN,csrf:CSRF})}); const d=await res(r); document.getElementById('dev-logs').innerText=d.logs.map(l=>'['+l.level+'] '+l.msg).join('\\n'); document.getElementById('dev-raw-db').value=JSON.stringify(d.rawDb,null,2); }
-        function saveRaw(){ req('update_raw_db',{json:document.getElementById('dev-raw-db').value}); }
-        function manualRefresh(){ init(); }
-        setInterval(init, 15000); init();
-        </script></body></html>`;
-        return res.end(html);
-    } else { res.writeHead(200).end('API Bot'); }
+        const dashboardHTML = [
+            "<!DOCTYPE html>",
+            "<html lang='en'>",
+            "<head>",
+            "    <meta charset='UTF-8'>",
+            "    <meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no'>",
+            "    <meta name='apple-mobile-web-app-capable' content='yes'>",
+            "    <meta name='apple-mobile-web-app-status-bar-style' content='black-translucent'>",
+            "    <title>Nexus Premium Dashboard</title>",
+            "    <script src='https://cdn.jsdelivr.net/npm/chart.js'></script>",
+            "    <link href='https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap' rel='stylesheet'>",
+            "    <style>",
+            "        :root { --bg-main: #070b14; --bg-card: rgba(15, 23, 42, 0.6); --border-color: rgba(56, 189, 248, 0.15); --text-main: #f8fafc; --text-muted: #94a3b8; --accent-blue: #38bdf8; --accent-green: #10b981; --accent-purple: #a855f7; --accent-orange: #f97316; --accent-pink: #ec4899; --accent-red: #ef4444; }",
+            "        * { box-sizing: border-box; } ",
+            "        body { font-family: 'Inter', sans-serif; background-color: var(--bg-main); background-image: radial-gradient(circle at 15% 50%, rgba(56, 189, 248, 0.05), transparent 25%), radial-gradient(circle at 85% 30%, rgba(255, 20, 147, 0.05), transparent 25%); color: var(--text-main); margin: 0; padding: 20px; min-height: 100vh; overflow-x: hidden; }",
+            "        @keyframes fadeInSmooth { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }",
+            "        @keyframes slideIn { from { opacity: 0; transform: translateX(-20px); } to { opacity: 1; transform: translateX(0); } }",
+            "        @keyframes slideDownMenu { from { opacity: 0; transform: translateY(-15px); } to { opacity: 1; transform: translateY(0); } }",
+            "        @keyframes pulseGreen { 0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); } 70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); } 100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); } }",
+            "        @keyframes pulseRed { 0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); } 70% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); } 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } }",
+            "        @keyframes spin { 100% { transform: rotate(360deg); } }",
+            "        .spinning { animation: spin 1s cubic-bezier(0.4, 0, 0.2, 1); }",
+            "        .status-dot { width: 12px; height: 12px; background-color: var(--accent-green); border-radius: 50%; display: inline-block; animation: pulseGreen 2s infinite; margin-right: 8px; transition: 0.3s; }",
+            "        .bot-status { display: flex; align-items: center; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); padding: 8px 15px; border-radius: 8px; font-weight: bold; color: var(--accent-green); font-size: 0.9em; transition: 0.3s; }",
+            "        .container { max-width: 1300px; margin: 0 auto; animation: fadeInSmooth 0.6s ease-out; }",
+            "        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid var(--border-color); animation: slideIn 0.5s ease-out; }",
+            "        .header h1 { font-size: 2em; margin: 0; background: linear-gradient(to right, #38bdf8, #a855f7); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }",
+            "        .controls { display: flex; gap: 15px; align-items: center; }",
+            "        .btn-icon { background: var(--bg-card); border: 1px solid var(--border-color); color: white; padding: 8px 15px; border-radius: 8px; cursor: pointer; transition: all 0.3s ease; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);}",
+            "        .btn-icon:hover { background: rgba(255,255,255,0.1); transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.3); }",
+            "        .nav-menu { display: flex; gap: 10px; margin-bottom: 30px; background: var(--bg-card); padding: 10px; border-radius: 12px; border: 1px solid var(--border-color); overflow-x: auto; scrollbar-width: none; animation: slideDownMenu 0.5s ease-out forwards; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);}",
+            "        .nav-menu::-webkit-scrollbar { display: none; }",
+            "        .nav-btn { background: transparent; border: none; color: var(--text-muted); font-size: 1em; font-weight: 600; padding: 10px 20px; border-radius: 8px; cursor: pointer; transition: all 0.3s ease; display: flex; align-items: center; }",
+            "        .nav-btn:hover { color: #fff; background: rgba(255,255,255,0.05); transform: scale(1.03); }",
+            "        .nav-btn.active { color: #fff; background: var(--accent-blue); box-shadow: 0 4px 15px rgba(56, 189, 248, 0.4); transform: scale(1.05); }",
+            "        .nav-badge { background: var(--accent-red); color: white; border-radius: 10px; padding: 2px 6px; font-size: 0.75em; margin-left: 8px; animation: pulseRed 2s infinite; display: none; }",
+            "        .tab-content { display: none; animation: fadeInSmooth 0.4s ease-out; } .tab-content.active { display: block; }",
+            "        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 25px; }",
+            "        .card { background: var(--bg-card); padding: 20px; border-radius: 16px; border: 1px solid var(--border-color); transition: all 0.3s ease; position: relative; overflow: hidden; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: 0 4px 20px rgba(0,0,0,0.2); }",
+            "        .card:hover { transform: translateY(-5px); box-shadow: 0 8px 25px rgba(0,0,0,0.4); border-color: rgba(255,255,255,0.3); }",
+            "        .card::before { content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%; background: var(--accent-blue); transition: width 0.3s ease; }",
+            "        .card:hover::before { width: 6px; }",
+            "        .card.green::before{background:var(--accent-green)} .card.pink::before{background:var(--accent-pink)} .card.orange::before{background:var(--accent-orange)} .card.purple::before{background:var(--accent-purple)} .card.red::before{background:var(--accent-red)} .card.yellow::before{background:#f1c40f;}",
+            "        .box { background: var(--bg-card); padding: 20px; border-radius: 16px; border: 1px solid var(--border-color); margin-bottom:20px; transition: all 0.3s ease; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: 0 4px 20px rgba(0,0,0,0.2); }",
+            "        .box:hover { box-shadow: 0 6px 25px rgba(0,0,0,0.3); }",
+            "        table { width: 100%; border-collapse: collapse; } th, td { padding: 12px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.05); } tr { transition: transform 0.2s ease, background 0.2s ease; } tr:hover { transform: translateX(4px); background: rgba(255,255,255,0.03); box-shadow: -2px 0 0 var(--accent-blue); }",
+            "        input, textarea, select { width: 100%; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); color: white; padding: 12px; border-radius: 8px; transition: all 0.3s ease; font-family: 'Inter', sans-serif; }",
+            "        input:focus, textarea:focus, select:focus { border-color: var(--accent-blue); box-shadow: 0 0 15px rgba(56,189,248,0.2); outline: none; }",
+            "        .admin-btn { background: var(--accent-blue); color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; margin-top:10px; transition: all 0.3s ease; text-transform: uppercase; letter-spacing: 0.5px; }",
+            "        .admin-btn:hover { filter: brightness(1.2); transform: translateY(-2px); box-shadow: 0 5px 15px rgba(56,189,248,0.4); }",
+            "        .text-green { color: var(--accent-green); } .text-muted { color: var(--text-muted); }",
+            "        .product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }",
+            "        .product-card { background: rgba(15, 23, 42, 0.4); border: 1px solid rgba(255,255,255,0.05); border-radius: 16px; padding: 25px; position: relative; transition: all 0.3s ease; display: flex; flex-direction: column; justify-content: space-between; box-shadow: 0 4px 15px rgba(0,0,0,0.2); backdrop-filter: blur(10px); }",
+            "        .product-card:hover { transform: translateY(-8px); border-color: var(--accent-blue); box-shadow: 0 10px 30px rgba(56,189,248,0.15); }",
+            "        .prod-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 15px; }",
+            "        .prod-title { font-size: 1.3em; font-weight: 800; color: #fff; margin: 0; display:flex; align-items:center; gap:8px;}",
+            "        .prod-id { font-size: 0.75em; color: var(--accent-purple); font-weight: bold; background: rgba(168,85,247,0.1); padding: 4px 8px; border-radius: 12px; }",
+            "        .prod-price { color: var(--accent-green); font-weight: 800; font-size: 1.4em; }",
+            "        .prod-stock { font-size: 0.8em; color: var(--text-muted); display: block; margin-top: 5px; }",
+            "        .prod-desc { font-size: 0.9em; color: var(--text-muted); line-height: 1.5; margin-bottom: 15px; flex-grow: 1; }",
+            "        .prod-link { background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; font-size: 0.85em; margin-bottom: 15px; word-break: break-all; border: 1px dashed rgba(255,255,255,0.1); }",
+            "        .prod-actions { display: flex; gap: 10px; }",
+            "        .prod-actions button { flex: 1; padding: 10px; font-size: 0.9em; margin: 0; border-radius: 8px; }",
+            "        #ui-today-rev:hover { opacity: 0.7; transform: scale(1.02); }",
+            "        .feed-container { max-height: 300px; overflow-y: auto; padding-right: 5px; }",
+            "        .feed-container::-webkit-scrollbar { width: 5px; } .feed-container::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 5px; }",
+            "        .feed-item { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 12px; padding: 12px; background: rgba(255,255,255,0.02); border-left: 3px solid var(--accent-blue); border-radius: 0 8px 8px 0; font-size: 0.9em; transition: 0.3s; }",
+            "        .feed-item:hover { background: rgba(255,255,255,0.05); transform: translateX(3px); }",
+            "        .feed-item.sale { border-color: var(--accent-green); }",
+            "        .feed-item.ticket { border-color: var(--accent-orange); }",
+            "        .feed-item.review { border-color: var(--accent-purple); }",
+            "        .feed-time { font-size: 0.8em; color: var(--text-muted); min-width: 50px; font-weight: bold; }",
+            "        .splash-screen { position: fixed; inset: 0; background: #030712; z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; transition: opacity 1.2s ease, transform 1.2s ease; overflow: hidden; }",
+            "        .splash-glow { position: absolute; width: 80vw; height: 80vw; background: radial-gradient(circle, rgba(56, 189, 248, 0.1) 0%, transparent 60%); top: 50%; left: 50%; transform: translate(-50%, -50%); animation: pulseGlow 4s ease-in-out infinite alternate; pointer-events: none; }",
+            "        @keyframes pulseGlow { 0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0.5; } 100% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; } }",
+            "        .premium-logo-container { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; }",
+            "        .premium-logo { font-size: 4rem; font-weight: 800; background: linear-gradient(135deg, #fff 0%, #38bdf8 50%, #a855f7 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; opacity: 0; transform: translateY(30px) scale(0.95); transition: all 1.5s ease 0.2s; }",
+            "        .premium-logo.show { opacity: 1; transform: translateY(0) scale(1); letter-spacing: 4px; }",
+            "        .premium-subtitle { font-size: 0.9rem; color: #94a3b8; font-weight: 400; letter-spacing: 12px; text-transform: uppercase; margin-top: -5px; opacity: 0; transition: all 1.5s ease 0.8s; }",
+            "        .premium-subtitle.show { opacity: 1; }",
+            "        .loader-wrapper { position: relative; width: 240px; height: 1px; background: rgba(255,255,255,0.05); border-radius: 2px; margin-top: 50px; overflow: hidden; opacity: 0; transition: opacity 1s ease 1.2s; }",
+            "        .loader-wrapper.show { opacity: 1; }",
+            "        .loader-bar { position: absolute; top: 0; left: 0; height: 100%; width: 0%; background: linear-gradient(90deg, transparent, #38bdf8, #fff); box-shadow: 0 0 20px #38bdf8, 0 0 10px #a855f7; transition: width 0.1s ease; }",
+            "        .loader-percentage { position: absolute; right: 0; top: 15px; color: #64748b; font-family: monospace; font-size: 0.75rem; font-weight: 600; }",
+            "        .premium-welcome { position: absolute; top: 180px; font-size: 1.8rem; font-weight: 300; color: #fff; letter-spacing: 6px; opacity: 0; transition: all 1.5s ease; text-transform: uppercase; }",
+            "        .premium-welcome.show { opacity: 1; }",
+            "        #toast { position:fixed; bottom: 20px; right: 20px; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(16px); color: white; padding: 16px 24px; border-radius: 12px; font-weight: 600; font-size: 0.95em; display: flex; align-items: center; gap: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); transform: translateY(150px) scale(0.9); opacity: 0; transition: all 0.5s ease; z-index: 10000; pointer-events: none; }",
+            "        #toast.show { transform: translateY(0) scale(1); opacity: 1; pointer-events: auto; }",
+            "        .modal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10000; justify-content:center; align-items:center; }",
+            "        .modal-content { background:var(--bg-main); padding:35px; border-radius:16px; border:1px solid var(--accent-purple); text-align:center; max-width:400px; }",
+            "        .chat-container { display: flex; height: 600px; gap: 20px; }",
+            "        .ticket-list { flex: 1; background: rgba(0,0,0,0.3); border-radius: 12px; border: 1px solid var(--border-color); overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }",
+            "        .ticket-item { padding: 12px; background: rgba(255,255,255,0.05); border-radius: 8px; cursor: pointer; transition: all 0.2s; font-weight: bold; font-size: 0.9em; }",
+            "        .ticket-item:hover, .ticket-item.active { background: var(--accent-blue); color: white; transform: translateX(5px); }",
+            "        .chat-window { flex: 3; display: flex; flex-direction: column; background: rgba(0,0,0,0.3); border-radius: 12px; border: 1px solid var(--border-color); overflow: hidden; }",
+            "        .chat-messages { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; }",
+            "        .chat-bubble { max-width: 75%; padding: 12px 18px; border-radius: 16px; line-height: 1.4; word-wrap: break-word; font-size: 0.95em; position: relative; }",
+            "        .chat-bubble.bot { align-self: flex-end; background: var(--accent-blue); color: white; border-bottom-right-radius: 4px; }",
+            "        .chat-bubble.user { align-self: flex-start; background: rgba(255,255,255,0.1); color: white; border-bottom-left-radius: 4px; }",
+            "        .chat-author { font-size: 0.75em; opacity: 0.7; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.5px; }",
+            "        .chat-input-area { display: flex; padding: 15px; background: rgba(0,0,0,0.5); border-top: 1px solid var(--border-color); gap: 10px; align-items: center; }",
+            "        .chat-input-area input[type='text'] { flex: 1; margin: 0; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 12px 15px; }",
+            "        .chat-bubble-actions { display: none; position: absolute; top: -15px; background: rgba(15,23,42,0.9); border-radius: 20px; padding: 4px 8px; gap: 8px; border: 1px solid var(--accent-blue); }",
+            "        .chat-bubble.user .chat-bubble-actions { right: 15px; } .chat-bubble.bot .chat-bubble-actions { left: 15px; }",
+            "        .chat-bubble:hover .chat-bubble-actions { display: flex; }",
+            "        .chat-reaction-btn { background: none; border: none; font-size: 1.2em; cursor: pointer; padding:0; }",
+            "        .chat-img-preview { max-width: 250px; max-height: 250px; border-radius: 8px; margin-top: 10px; cursor: pointer; border: 1px solid rgba(255,255,255,0.1); }",
+            "        .chat-attachment-btn { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: white; padding: 12px; border-radius: 8px; cursor: pointer; display:flex; align-items:center; }",
+            "        .attachment-badge { position: absolute; top: -5px; right: -5px; background: var(--accent-red); color: white; border-radius: 50%; width: 12px; height: 12px; display: none; }",
+            "        .chat-attachment-wrapper { position: relative; }",
+            "        .toggle-plus { width: 42px; height: 42px; padding: 0; display: flex; justify-content: center; align-items: center; border-radius: 50%; font-size: 1.8em; }",
+            "        .toggle-plus.open { transform: rotate(45deg); background: rgba(239, 68, 68, 0.2); color: var(--accent-red); }",
+            "        .quick-actions-menu { display: flex; flex-wrap: wrap; gap: 10px; max-height: 0; opacity: 0; overflow: hidden; transition: all 0.3s ease; padding: 0 15px; background: rgba(0,0,0,0.3); border-top: 1px solid transparent; justify-content: center; }",
+            "        .quick-actions-menu.open { max-height: 150px; opacity: 1; padding: 10px 15px; border-top-color: var(--border-color); }",
+            "        .progress-bg { width:100%; background:rgba(255,255,255,0.1); border-radius:4px; height:8px; margin-top:5px; overflow:hidden; }",
+            "        .progress-fill { height:100%; background:var(--accent-purple); }",
+            "        @media screen and (max-width: 768px) { body { padding: 10px; } .chat-container { flex-direction: column; height: 80vh; } }",
+            "    </style>",
+            "</head>",
+            "<body>",
+            "    <div id='toast'></div>",
+            "    <div id='loading-screen' class='splash-screen'>",
+            "       <div class='splash-glow'></div>",
+            "       <div class='premium-logo-container'>",
+            "           <div id='premium-logo' class='premium-logo'>NEXUS</div>",
+            "           <div id='premium-subtitle' class='premium-subtitle'>Executive</div>",
+            "           <div id='loader-wrapper' class='loader-wrapper'>",
+            "               <div id='loader-bar' class='loader-bar'></div>",
+            "           </div>",
+            "           <div id='loader-percentage' class='loader-percentage'>00%</div>",
+            "           <div id='welcome-text' class='premium-welcome'>Welcome Admin</div>",
+            "       </div>",
+            "    </div>",
+            "    <div class='modal' id='syncModal'>",
+            "        <div class='modal-content'>",
+            "            <h2>📦 Catalog Saved!</h2>",
+            "            <p class='text-muted' style='margin-bottom:20px;'>Apply these changes to your Discord shop channel right now?</p>",
+            "            <button class='admin-btn' style='background:var(--accent-purple); width:100%; margin-bottom:10px;' onclick='window.triggerShopRefresh(); document.getElementById(\"syncModal\").style.display=\"none\";'>🔄 Setup & Clear Old Menu</button>",
+            "            <button class='admin-btn' style='background:transparent; border:1px solid rgba(255,255,255,0.2); width:100%; color:var(--text-muted);' onclick='document.getElementById(\"syncModal\").style.display=\"none\";'>Skip for now</button>",
+            "        </div>",
+            "    </div>",
+            "    <div class='container' id='dashboard-container' style='display:none;'>",
+            "       <div class='header'>",
+            "           <h1>Nexus Dashboard</h1>",
+            "           <div class='controls'>",
+            "               <button class='btn-icon' onclick='window.togglePushNotifs()' id='pushNotifBtn' title='Enable browser notifications'>🔕</button>",
+            "               <button class='btn-icon' onclick='window.toggleMute()' id='audioBtn' title='Mute/Unmute Alerts'>🔊</button>",
+            "               <button class='btn-icon' onclick='window.manualRefresh()' id='refreshBtn' title='Sync Now'>🔄</button>",
+            "               <button class='btn-icon' onclick='window.toggleStealth()' id='stealthBtn'>👁️ Stealth</button>",
+            "               <div class='bot-status'><div class='status-dot'></div> System Online</div>",
+            "           </div>",
+            "       </div>",
+            "       <div class='nav-menu'>",
+            "           <button class='nav-btn active' onclick='window.switchTab(\"overview\", this)' id='nav-overview'>📊 Overview</button>",
+            "           <button class='nav-btn' onclick='window.switchTab(\"vip\", this)' id='nav-vip'>👑 VIP Pass</button>",
+            "           <button class='nav-btn' onclick='window.switchTab(\"livechat\", this)' id='nav-livechat'>💬 Live Chat <span class='nav-badge' id='badge-chat'>0</span></button>",
+            "           <button class='nav-btn' onclick='window.switchTab(\"marketing\", this)' id='nav-marketing'>🚀 Marketing</button>",
+            "           <button class='nav-btn' onclick='window.switchTab(\"analytics\", this)' id='nav-analytics'>📈 Analytics</button>",
+            "           <button class='nav-btn' onclick='window.switchTab(\"transactions\", this)' id='nav-transactions'>💳 Transactions</button>",
+            "           <button class='nav-btn' onclick='window.switchTab(\"products\", this)' id='nav-products'>📦 Products</button>",
+            "           <button class='nav-btn' onclick='window.switchTab(\"audience\", this)' id='nav-audience'>👥 Audience</button>",
+            "           <button class='nav-btn' onclick='window.switchTab(\"referrals\", this)' id='nav-referrals'>🔗 Referrals</button>",
+            "           <button class='nav-btn' onclick='window.switchTab(\"moderation\", this)' id='nav-moderation'>🛡️ Moderation</button>",
+            "           <button class='nav-btn' onclick='window.switchTab(\"monitoring\", this)' id='nav-monitoring'>📡 Monitoring</button>",
+            "           <button class='nav-btn' onclick='window.switchTab(\"backups\", this)' id='nav-backups'>💾 Backups</button>",
+            "           <button class='nav-btn' onclick='window.switchTab(\"admin\", this)' id='nav-admin'>⚙️ Admin Config <span class='nav-badge' id='badge-admin'>0</span></button>",
+            "           <button class='nav-btn' onclick='window.switchTab(\"devtools\", this)' id='nav-devtools'>🛠️ DevTools</button>",
+            "       </div>",
+            "       <div id='overview' class='tab-content active'>",
+            "           <div class='stats-grid'>",
+            "               <div class='card green'><h3>Today's Earnings</h3><div class='value money text-green' id='ui-today-rev' style='cursor:pointer; transition:0.3s;' onclick='window.editTodayEarnings()' title='Click to manually edit'>€0</div></div>",
+            "               <div class='card blue'><h3>Total Earnings</h3><div class='value money text-blue' id='ui-total-rev'>€0</div></div>",
+            "               <div class='card pink'><h3>Conversion Rate</h3><div class='value text-pink' id='ui-conv-rate'>0%</div></div>",
+            "               <div class='card orange'><h3>Online / Total</h3><div class='value text-orange' id='ui-online-total'>0</div></div>",
+            "               <div class='card purple'><h3>Retention Rate</h3><div class='value text-purple' id='ui-retention'>0%</div></div>",
+            "           </div>",
+            "           <div class='stats-grid'>",
+            "               <div class='card purple'><h3>Tickets Opened</h3><div class='value' id='ui-tickets-opened'>0</div></div>",
+            "               <div class='card red'><h3>Drop-off Rate</h3><div class='value text-red' id='ui-dropoff'>0%</div></div>",
+            "               <div class='card orange'><h3>Peak Sales Hour</h3><div class='value' id='ui-peak-hour'>N/A</div></div>",
+            "           </div>",
+            "           <div style='display:grid; grid-template-columns: 2fr 1fr; gap:20px; align-items:stretch;' class='overview-grid'>",
+            "               <div class='box' style='margin:0;'>",
+            "                   <div style='display:flex; justify-content:space-between;'>",
+            "                       <h2>📈 Revenue Timeline</h2>",
+            "                       <div class='filter-group'>",
+            "                           <button class='admin-btn' style='margin:0; padding:5px 10px; background:var(--accent-green); margin-right:10px;' onclick='window.location.href=\"/api/export\"'>📥 Export CSV</button>",
+            "                           <button class='admin-btn' style='margin:0; padding:5px 10px;' onclick='window.updateSalesChart(7)'>7D</button>",
+            "                           <button class='admin-btn' style='margin:0; padding:5px 10px; background:rgba(0,0,0,0.5);' onclick='window.updateSalesChart(30)'>30D</button>",
+            "                       </div>",
+            "                   </div>",
+            "                   <div style='height:250px; margin-top:15px;'><canvas id='salesChart'></canvas></div>",
+            "               </div>",
+            "               <div class='box' style='margin:0; display:flex; flex-direction:column; overflow:hidden;'>",
+            "                   <div style='display:flex; justify-content:space-between; align-items:center;'><h2 style='margin:0;'>⚡ Live Pulse</h2><div class='status-dot' style='margin:0;'></div></div>",
+            "                   <div class='feed-container' id='target-feed' style='margin-top:15px; flex:1;'></div>",
+            "               </div>",
+            "           </div>",
+            "       </div>",
+            "       <div id='vip' class='tab-content'>",
+            "           <div class='box' style='background:rgba(168, 85, 247, 0.1); border-color:var(--accent-purple);'>",
+            "               <h2>👑 VIP Subscriptions</h2>",
+            "               <p class='text-muted'>Active subscriptions. VIPs get a 20% discount on all shop items automatically.</p>",
+            "               <div style='overflow-x:auto; margin-top:15px;'>",
+            "                   <table><thead><tr><th>Username</th><th>Expires On</th><th>Time Left</th><th>Actions</th></tr></thead><tbody id='target-vips'></tbody></table>",
+            "               </div>",
+            "           </div>",
+            "       </div>",
+            "       <div id='marketing' class='tab-content'>",
+            "           <div class='box' style='border:1px solid var(--accent-orange); background:linear-gradient(145deg, rgba(249, 115, 22, 0.05), transparent);'>",
+            "               <h2 style='color:var(--accent-orange); margin-top:0;'>🔥 Flash Sale & Promotions (Global)</h2>",
+            "               <p class='text-muted'>Apply a temporary global discount to the entire store.</p>",
+            "               <div style='display:flex; gap:10px; flex-wrap:wrap; margin-top:15px; align-items:center;'>",
+            "                   <input type='number' id='flash-discount' placeholder='Discount (%)' value='15' style='width:120px; border-color:rgba(249,115,22,0.3);'>",
+            "                   <input type='number' id='flash-duration' placeholder='Duration (Hours)' value='3' style='width:120px; border-color:rgba(249,115,22,0.3);'>",
+            "                   <input type='text' id='flash-channel' placeholder='Announcement Channel ID (Optional)' style='flex:1; min-width:200px; border-color:rgba(249,115,22,0.3);'>",
+            "                   <button class='admin-btn' style='margin:0; background:var(--accent-orange);' onclick='window.toggleFlashSale(true)'>▶️ Start Flash Sale</button>",
+            "                   <button class='admin-btn' style='margin:0; background:transparent; border:1px solid var(--accent-orange); color:var(--accent-orange);' onclick='window.toggleFlashSale(false)'>🛑 Stop</button>",
+            "               </div>",
+            "           </div>",
+            "           <div class='box'>",
+            "               <h2>🎟️ Promo Codes (Manual)</h2>",
+            "               <p class='text-muted'>Generate custom codes for your clients.</p>",
+            "               <div style='display:flex; gap:10px; flex-wrap:wrap;'><input type='text' id='promoName' placeholder='CODE' style='flex:1; min-width:150px;'><input type='number' id='promoDiscount' placeholder='% Off' style='width:100px;'><input type='number' id='promoLimit' placeholder='Uses' style='width:100px;'><button class='admin-btn' style='margin:0;' onclick='window.createPromo()'>➕ Create</button></div>",
+            "               <div style='overflow-x:auto; margin-top:20px;'><table><thead><tr><th>Code</th><th>Discount</th><th>Usage</th><th>Action</th></tr></thead><tbody id='target-promos'></tbody></table></div>",
+            "           </div>",
+            "           <div class='box' style='border:1px solid var(--accent-pink); background:linear-gradient(145deg, rgba(236, 72, 153, 0.05), transparent);'>",
+            "               <h2 style='color:var(--accent-pink); margin-top:0;'>🛒 Automations (Carts & Upsell)</h2>",
+            "               <p class='text-muted'>Fully control your abandoned cart follow-ups and post-purchase offers.</p>",
+            "               <div style='display:grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap:15px; margin-top:15px;'>",
+            "                   <div style='background:rgba(0,0,0,0.3); padding:15px; border-radius:12px; border-left:4px solid var(--accent-green);'>",
+            "                       <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;'><h3 style='margin:0; color:var(--accent-green); font-size:1.1em;'>Abandoned Carts</h3><select id='auto-ac-active' style='width:auto; padding:5px; margin:0;'><option value='true'>🟢 Active</option><option value='false'>🔴 Inactive</option></select></div>",
+            "                       <label class='text-muted' style='font-size:0.8em;'>Inactivity delay before follow-up (hours):</label>",
+            "                       <input type='number' id='auto-ac-delay' placeholder='Hours' style='margin-bottom:10px; margin-top:5px;'>",
+            "                       <label class='text-muted' style='font-size:0.8em;'>Sent promo code (%):</label>",
+            "                       <input type='number' id='auto-ac-discount' placeholder='%' style='margin-top:5px;'>",
+            "                   </div>",
+            "                   <div style='background:rgba(0,0,0,0.3); padding:15px; border-radius:12px; border-left:4px solid var(--accent-purple);'>",
+            "                       <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;'><h3 style='margin:0; color:var(--accent-purple); font-size:1.1em;'>Post-Purchase Upsell</h3><select id='auto-up-active' style='width:auto; padding:5px; margin:0;'><option value='true'>🟢 Active</option><option value='false'>🔴 Inactive</option></select></div>",
+            "                       <label class='text-muted' style='font-size:0.8em;'>Promo code sent after purchase (%):</label>",
+            "                       <input type='number' id='auto-up-discount' placeholder='%' style='margin-top:5px;'>",
+            "                   </div>",
+            "               </div>",
+            "               <button class='admin-btn' style='background:var(--accent-pink); width:100%; margin-top:15px;' onclick='window.saveAutomations()'>💾 Save Automations</button>",
+            "           </div>",
+            "       </div>",
+            "       <div id='backups' class='tab-content'>",
+            "           <div class='box'>",
+            "               <h2>💾 Daily Cloud Backup</h2>",
+            "               <p class='text-muted'>Your system automatically backs up your database locally every day. Upstash sync is real-time.</p>",
+            "               <button class='admin-btn' onclick='window.forceBackup()' style='background:var(--accent-green);'>💾 Force Backup Now</button>",
+            "           </div>",
+            "           <div class='box'>",
+            "               <h2>📂 Local Backup Files</h2>",
+            "               <div style='overflow-x:auto;'><table><thead><tr><th>File Name</th><th>Size</th><th>Action</th></tr></thead><tbody id='target-backups'></tbody></table></div>",
+            "           </div>",
+            "       </div>",
+            "       <div id='livechat' class='tab-content'>",
+            "           <div class='box'>",
+            "               <h2>💬 Live Chat Console</h2>",
+            "               <p class='text-muted' style='margin-bottom:15px;'>Read and reply to Shop and Support tickets without opening Discord.</p>",
+            "               <div class='chat-container'>",
+            "                   <div class='ticket-list' id='chat-ticket-list'><p class='text-muted text-center' style='margin-top:20px;'>Loading tickets...</p></div>",
+            "                   <div class='chat-window'>",
+            "                       <div class='chat-messages' id='chat-messages-area'>",
+            "                           <div style='margin:auto; color:var(--text-muted); text-align:center;'><h2 style='font-size:3em; margin:0;'>👈</h2><p>Select a ticket to view</p></div>",
+            "                       </div>",
+            "                       <div id='quickActionsMenu' class='quick-actions-menu'>",
+            "                           <button class='admin-btn' style='margin:0; padding:6px 12px; font-size:0.85em; background: rgba(239, 68, 68, 0.2); color: var(--accent-red);' onclick='window.tagTicket(\"red\")'>🔴 Urgent</button>",
+            "                           <button class='admin-btn' style='margin:0; padding:6px 12px; font-size:0.85em; background: rgba(16, 185, 129, 0.2); color: var(--accent-green);' onclick='window.tagTicket(\"green\")'>🟢 Solved</button>",
+            "                           <button class='admin-btn' style='margin:0; padding:6px 12px; font-size:0.85em; background: rgba(56, 189, 248, 0.2); color: var(--accent-blue);' onclick='window.tagTicket(\"blue\")'>🔵 Info</button>",
+            "                           <button class='admin-btn' style='margin:0; padding:6px 12px; font-size:0.85em; background: rgba(255, 255, 255, 0.1); color: var(--text-muted);' onclick='window.tagTicket(null)'>⚪ Clear Tag</button>",
+            "                           <span style='width:2px; height:20px; background:rgba(255,255,255,0.1); margin:auto 5px;'></span>",
+            "                           <button class='admin-btn' style='margin:0; padding:6px 12px; font-size:0.85em; background: rgba(255,255,255,0.05);' onclick='window.sendQuickResponse(\"welcome\")'>👋 Welcome</button>",
+            "                           <button class='admin-btn' style='margin:0; padding:6px 12px; font-size:0.85em; background: rgba(255,255,255,0.05);' onclick='window.sendQuickResponse(\"wait\")'>⏳ Wait</button>",
+            "                           <button class='admin-btn' style='margin:0; padding:6px 12px; font-size:0.85em; background: rgba(255,255,255,0.05);' onclick='window.sendQuickResponse(\"resolved\")'>✅ Resolved?</button>",
+            "                           <button class='admin-btn' style='margin:0; padding:6px 12px; font-size:0.85em; background: rgba(168, 85, 247, 0.2); color: #a855f7;' onclick='window.askReviewPrompt()'>⭐ Ask Review</button>",
+            "                           <button class='admin-btn' style='margin:0; padding:6px 12px; font-size:0.85em; background: rgba(239, 68, 68, 0.2); color: var(--accent-red);' onclick='window.sendQuickResponse(\"close\")'>🔒 Close Ticket</button>",
+            "                       </div>",
+            "                       <div class='chat-input-area'>",
+            "                           <button id='quickActionsToggle' class='chat-attachment-btn toggle-plus' onclick='document.getElementById(\"quickActionsMenu\").classList.toggle(\"open\"); this.classList.toggle(\"open\");' title='Quick Actions & Tags'>+</button>",
+            "                           <div class='chat-attachment-wrapper'>",
+            "                               <input type='file' id='chat-file-input' style='display:none' accept='image/*' onchange='document.getElementById(\"attach-badge\").style.display=\"block\"'>",
+            "                               <button class='chat-attachment-btn' onclick='document.getElementById(\"chat-file-input\").click()' title='Attach Image'>📎</button>",
+            "                               <div id='attach-badge' class='attachment-badge'></div>",
+            "                           </div>",
+            "                           <input type='text' id='chat-input-text' placeholder='Type your reply here...' onkeypress='if(event.key===\"Enter\") window.sendChatMessage()'>",
+            "                           <button class='admin-btn' style='margin:0; padding:12px 25px;' onclick='window.sendChatMessage()'>Send 🚀</button>",
+            "                       </div>",
+            "                   </div>",
+            "               </div>",
+            "           </div>",
+            "       </div>",
+            "       <div id='analytics' class='tab-content'>",
+            "           <div style='display:grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap:20px; margin-bottom:20px;'>",
+            "               <div class='box' style='margin:0;'><h2>🕒 Peak Hours (Sales per Hour)</h2><div style='height:250px; margin-top:15px;'><canvas id='hourlyChart'></canvas></div></div>",
+            "               <div class='box' style='margin:0;'><h2>🔥 Heatmap (Buy Button Clicks)</h2><div style='height:250px; margin-top:15px;'><canvas id='heatmapChart'></canvas></div></div>",
+            "           </div>",
+            "           <div style='display:grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap:20px;'>",
+            "               <div class='box' style='margin:0;'><h2>🏆 Top Selling Products</h2><div style='height:300px; margin-top:15px;'><canvas id='topProductsBarChart'></canvas></div></div>",
+            "               <div class='box' style='margin:0;'><h2>🏷️ Revenue by Category</h2><div style='height:300px; margin-top:15px;'><canvas id='categoryRevenueChart'></canvas></div></div>",
+            "           </div>",
+            "       </div>",
+            "       <div id='transactions' class='tab-content'>",
+            "           <div class='box'>",
+            "               <h2>➕ Add Manual Transaction</h2>",
+            "               <p class='text-muted'>Add a missing transaction manually to update your daily/total earnings.</p>",
+            "               <div style='display:flex; gap:15px; flex-wrap:wrap; margin-bottom:10px; align-items:center;'>",
+            "                   <input type='text' id='manTxUser' placeholder='Username (Optional)' style='flex:1; min-width:120px;'>",
+            "                   <input type='text' id='manTxProd' placeholder='Product (Optional)' style='flex:1; min-width:120px;'>",
+            "                   <input type='number' id='manTxPrice' placeholder='Price € (Required)' style='width:120px;'>",
+            "                   <input type='datetime-local' id='manTxDate' style='flex:1; min-width:180px;' title='Date (Leave empty for Now)'>",
+            "                   <button class='admin-btn' style='margin:0;' onclick='window.createManualTx()'>💾 Add</button>",
+            "               </div>",
+            "           </div>",
+            "           <div class='box'><h2>🛒 Recent Transactions</h2><div style='overflow-x:auto;'><table><thead><tr><th>Customer</th><th>Product</th><th>Price</th><th>Date</th><th>Action</th></tr></thead><tbody id='target-tx'></tbody></table></div></div>",
+            "       </div>",
+            "       <div id='products' class='tab-content'>",
+            "           <div class='box'>",
+            "               <h2>📝 Add / Edit Product</h2>",
+            "               <div style='display:flex; gap:15px; flex-wrap:wrap; margin-bottom:10px;'>",
+            "                   <input type='hidden' id='editProdId'>",
+            "                   <input type='text' id='newProdName' placeholder='Product Name (e.g. VIP Pack)' style='flex:1; min-width:200px;'>",
+            "                   <input type='text' id='newProdPrice' placeholder='Price in €' style='width:120px;'>",
+            "                   <input type='text' id='newProdStock' placeholder='Stock (e.g. ∞)' style='width:80px;'>",
+            "                   <select id='newProdAvail' style='width:150px;'><option value='always'>Always Open</option><option value='weekend'>Weekend Only</option></select>",
+            "               </div>",
+            "               <div style='display:flex; gap:15px; flex-wrap:wrap; margin-bottom:5px;'>",
+            "                   <input type='text' id='newProdDesc' placeholder='Description (e.g. Include 5 exclusive photos)' style='flex:1; min-width:250px;'>",
+            "                   <input type='text' id='newProdLink' placeholder='Delivery Link (Drive, Mega...)' style='flex:1; min-width:250px;'>",
+            "               </div>",
+            "               <div style='display:flex; gap:10px; margin-top:10px;'>",
+            "                   <button class='admin-btn' style='margin:0;' onclick='window.saveProduct()' id='saveProdBtn'>➕ Add Product</button>",
+            "                   <button class='admin-btn' style='margin:0; background:transparent; border:1px solid var(--accent-red); color:var(--accent-red); display:none;' onclick='window.cancelEdit()' id='cancelEditBtn'>Cancel</button>",
+            "               </div>",
+            "           </div>",
+            "           <div class='box'>",
+            "               <h2>🔗 Manage Buy Buttons (Shop Menu)</h2>",
+            "               <p class='text-muted'>Define the Eneba/Voucher buttons that appear on your Discord Shop Embed.</p>",
+            "               <div style='display:flex; gap:15px; flex-wrap:wrap; margin-bottom:5px;'>",
+            "                   <input type='hidden' id='editLinkId'>",
+            "                   <input type='text' id='newLinkLabel' placeholder='Button Label (e.g. 💳 Buy €5)' style='flex:1; min-width:150px;'>",
+            "                   <input type='text' id='newLinkUrl' placeholder='Voucher URL (https://...)' style='flex:2; min-width:200px;'>",
+            "                   <button class='admin-btn' style='margin:0;' onclick='window.saveBuyLink()' id='saveLinkBtn'>➕ Add Link</button>",
+            "                   <button class='admin-btn' style='margin:0; background:transparent; border:1px solid var(--accent-red); color:var(--accent-red); display:none;' onclick='window.cancelEditLink()' id='cancelEditLinkBtn'>Cancel</button>",
+            "               </div>",
+            "               <div style='overflow-x:auto; margin-top:15px;'><table><thead><tr><th>Label</th><th>URL</th><th>Actions</th></tr></thead><tbody id='target-buy-links'></tbody></table></div>",
+            "           </div>",
+            "           <div class='box'><h2>📦 Current Catalog</h2><div class='product-grid' id='target-products'></div></div>",
+            "       </div>",
+            "       <div id='audience' class='tab-content'>",
+            "           <div style='display:grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap:20px;'>",
+            "               <div class='box'><h2>📥 Latest Joins</h2><div style='overflow-x:auto;'><table><thead><tr><th>Username</th><th>Date</th></tr></thead><tbody id='target-joins'></tbody></table></div></div>",
+            "               <div class='box'><h2>👋 Latest Leaves (Attrition)</h2><div style='overflow-x:auto;'><table><thead><tr><th>User</th><th>Retention Time</th><th>Date Left</th></tr></thead><tbody id='target-leaves'></tbody></table></div></div>",
+            "           </div>",
+            "       </div>",
+            "       <div id='referrals' class='tab-content'>",
+            "           <div class='box'>",
+            "               <h2>🔗 Referral Threshold</h2>",
+            "               <p class='text-muted'>Number of invites required to get a free product code.</p>",
+            "               <div style='display:flex; gap:10px; align-items:center;'><input type='number' id='ref-threshold' style='width:100px;'><button class='admin-btn' style='margin:0;' onclick='window.updateRefThreshold()'>💾 Save Settings</button></div>",
+            "           </div>",
+            "           <div class='box'>",
+            "               <h2>🏆 Top Inviters</h2>",
+            "               <div style='overflow-x:auto;'><table><thead><tr><th>User</th><th>Invites</th><th>Rewards Claimed</th><th>Recently Invited Users</th><th>Actions</th></tr></thead><tbody id='target-referrals'></tbody></table></div>",
+            "           </div>",
+            "       </div>",
+            "       <div id='moderation' class='tab-content'>",
+            "           <div class='box'>",
+            "               <h2>🔎 Member Directory</h2>",
+            "               <p class='text-muted'>Search and manage users (Mute, Ban, Warn, Blacklist).</p>",
+            "               <div style='display:flex; flex-wrap:wrap; gap:10px; margin-top:10px; align-items:center;'>",
+            "                   <input type='text' id='memberSearchInput' placeholder='Filter by username or ID...' style='margin-top:0; flex:1; min-width:200px;' oninput='window.sortMembersLocally()'>",
+            "                   <select id='memberStatusSelect' style='margin-top:0; width:auto;' onchange='window.sortMembersLocally()'>",
+            "                       <option value='all'>🌍 All Status</option>",
+            "                       <option value='online'>🟢 Online Only</option>",
+            "                   </select>",
+            "                   <select id='memberSortSelect' style='margin-top:0; width:auto;' onchange='window.sortMembersLocally()'>",
+            "                       <option value='recent'>🔽 Newest (Join)</option>",
+            "                       <option value='oldest'>🔼 Oldest (Join)</option>",
+            "                       <option value='spent_desc'>💰 Top Spenders</option>",
+            "                       <option value='spent_asc'>💸 Least Spenders</option>",
+            "                       <option value='warns'>⚠️ Most Warns</option>",
+            "                   </select>",
+            "                   <button class='admin-btn' style='margin:0; height:42px;' onclick='window.loadAllMembers()'>🔄 Load Database</button>",
+            "               </div>",
+            "               <div id='memberResults' style='margin-top:20px;'></div>",
+            "           </div>",
+            "       </div>",
+            "       <div id='monitoring' class='tab-content'>",
+            "           <div class='box'>",
+            "               <h2>📡 System Diagnostics & Latency</h2>",
+            "               <p class='text-muted'>Check external API status and dashboard-to-Discord latency.</p>",
+            "               <button class='admin-btn' onclick='window.runDiagnostics()'>🔄 Run API Diagnostics</button>",
+            "               <div class='stats-grid' style='margin-top:20px;'>",
+            "                   <div class='card' id='card-upstash'><h3>Upstash Database</h3><div class='value' id='ui-upstash-status' style='font-size:1.5em;'>⚪ Waiting...</div><p class='text-muted' id='ui-upstash-ping'>Latency: -- ms</p></div>",
+            "                   <div class='card' id='card-rewarble'><h3>Rewarble API</h3><div class='value' id='ui-rewarble-status' style='font-size:1.5em;'>⚪ Waiting...</div><p class='text-muted' id='ui-rewarble-ping'>Latency: -- ms</p></div>",
+            "                   <div class='card' id='card-discord'><h3>Discord WebSocket</h3><div class='value text-blue' id='ui-discord-ws' style='font-size:1.5em;'>-- ms</div><p class='text-muted'>Global Gateway Ping</p></div>",
+            "               </div>",
+            "               <div style='margin-top:30px; background:rgba(0,0,0,0.3); padding:20px; border-radius:16px; border:1px solid var(--border-color);'>",
+            "                   <h3>⚡ Dashboard ➔ Discord Reactivity Test</h3>",
+            "                   <p class='text-muted' style='font-size:0.9em;'>Calculates the exact time between your click, server processing, ghost message creation on Discord, and final display here.</p>",
+            "                   <div style='display:flex; align-items:center; gap:20px; margin-top:15px;'><button class='admin-btn' style='margin:0; background:var(--accent-orange);' onclick='window.testActionLatency()'>⚡ Test Action Speed</button><div id='latency-result' style='font-size:1.5em; font-weight:bold; color:var(--text-muted);'>-- ms</div></div>",
+            "               </div>",
+            "           </div>",
+            "       </div>",
+            "       <!-- 🌟 ADMIN CONFIG TAB -->",
+            "       <div id='admin' class='tab-content'>",
+            "           <div class='box' style='border:1px solid var(--accent-blue); background:linear-gradient(145deg, rgba(56, 189, 248, 0.05), transparent);'>",
+            "               <h2 style='color:var(--accent-blue); margin-top:0;'>⏳ Pending Reviews (Moderation)</h2>",
+            "               <p class='text-muted'>Reviews submitted by clients after their purchase. Accept them to auto-post to Discord.</p>",
+            "               <div style='overflow-x:auto; margin-top:15px;'>",
+            "                   <table><thead><tr><th>Date</th><th>Customer</th><th>Product</th><th>Rating</th><th>Feedback</th><th>Actions</th></tr></thead><tbody id='target-pending-reviews'></tbody></table>",
+            "               </div>",
+            "           </div>",
+            "           <div class='box' style='border:1px solid var(--accent-orange); background:linear-gradient(145deg, rgba(249, 115, 22, 0.05), transparent);'>",
+            "               <h2 style='color:var(--accent-orange); margin-top:0;'>🚧 Maintenance Mode (Kill Switch)</h2>",
+            "               <p class='text-muted'>Temporarily freeze all shop purchases and support tickets for clients. Useful for stock updates or breaks.</p>",
+            "               <div style='display:flex; gap:10px; flex-wrap:wrap; margin-top:15px; align-items:center;'>",
+            "                   <input type='number' id='maint-duration' placeholder='Duration (Minutes)' value='60' style='width:160px; border-color:rgba(249,115,22,0.3);'>",
+            "                   <input type='text' id='maint-channel' placeholder='Announcement Channel ID (Optional)' style='flex:1; min-width:200px; border-color:rgba(249,115,22,0.3);'>",
+            "                   <button class='admin-btn' style='margin:0; background:var(--accent-orange);' onclick='window.toggleMaintenance(true)'>⏸️ Enable</button>",
+            "                   <button class='admin-btn' style='margin:0; background:var(--accent-green);' onclick='window.toggleMaintenance(false)'>▶️ Disable</button>",
+            "               </div>",
+            "           </div>",
+            "           <div class='box'><h2>⚡ 1-Click Shop Setup</h2><p class='text-muted'>Clear the old menu and instantly post the new aesthetic setup in your Discord shop channel.</p><button class='admin-btn' style='background:var(--accent-purple); width:100%; padding:15px;' onclick='window.triggerShopRefresh()'>🔄 Setup and clear old menu</button></div>",
+            "           <div class='box'>",
+            "               <h2>🌟 Manual Customer Review</h2>",
+            "               <div style='display:flex; gap:10px; margin-bottom:10px;'><input type='text' id='rev-author' placeholder='Author Name' style='flex:1;'><select id='rev-rating' style='flex:1;'><option value='5'>5/5 ⭐ - Excellent</option><option value='4'>4/5 ⭐ - Very Good</option><option value='3'>3/5 ⭐ - Good</option><option value='2'>2/5 ⭐ - Fair</option><option value='1'>1/5 ⭐ - Poor</option></select></div>",
+            "               <textarea id='rev-msg' placeholder='Type the review here...' style='margin-bottom:10px; min-height:80px;'></textarea>",
+            "               <button class='admin-btn' style='background:var(--accent-green); width:100%;' onclick='window.sendReview()'>📤 Publish Review to Discord</button>",
+            "           </div>",
+            "       </div>",
+            "       <!-- 🛠️ DEVTOOLS TAB -->",
+            "       <div id='devtools' class='tab-content'>",
+            "           <div class='stats-grid'>",
+            "               <div class='card blue'><h3>Process RAM</h3><div class='value' id='dev-ram'>0 MB</div></div>",
+            "               <div class='card green'><h3>Uptime</h3><div class='value' id='dev-uptime'>0s</div></div>",
+            "               <div class='card purple'><h3>Database Size</h3><div class='value' id='dev-db-size'>0 KB</div></div>",
+            "           </div>",
+            "           <div style='display:grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap:20px;'>",
+            "               <div class='box' style='background:rgba(0,0,0,0.5); border-color:var(--accent-blue);'>",
+            "                   <h2 style='color:var(--accent-blue);'>📡 Live Terminal Logs</h2>",
+            "                   <p class='text-muted'>Real-time interception of console outputs (API responses, errors).</p>",
+            "                   <div id='dev-logs' style='background:#000; padding:15px; border-radius:8px; height:300px; overflow-y:auto; font-family:monospace; font-size:0.85em; border:1px solid rgba(255,255,255,0.1); color:#0f0;'>Loading logs...</div>",
+            "                   <button class='admin-btn' style='width:100%; margin-top:10px;' onclick='window.fetchDebugInfo()'>🔄 Refresh Logs</button>",
+            "               </div>",
+            "               <div style='display:flex; flex-direction:column; gap:20px;'>",
+            "                   <div class='box' style='margin:0; border-color:var(--accent-orange);'>",
+            "                       <h2 style='color:var(--accent-orange); margin-top:0;'>🧠 Cache & Map Manager</h2>",
+            "                       <p class='text-muted'>Flush temporary memory safely without touching user balances.</p>",
+            "                       <div style='display:flex; gap:10px; margin-top:15px;'>",
+            "                           <button class='admin-btn' style='flex:1; background:var(--accent-orange); margin:0;' onclick='window.executeAction({action:\"flush_cache\", type:\"channels\"})'>🗑️ Flush Channels</button>",
+            "                           <button class='admin-btn' style='flex:1; background:var(--accent-orange); margin:0;' onclick='window.executeAction({action:\"flush_cache\", type:\"ratelimits\"})'>🗑️ Flush RateLimits</button>",
+            "                       </div>",
+            "                   </div>",
+            "                   <div class='box' style='margin:0; border-color:var(--accent-pink);'>",
+            "                       <h2 style='color:var(--accent-pink); margin-top:0;'>🧪 Sandbox Simulators</h2>",
+            "                       <p class='text-muted'>Inject fake data into the system to test dashboard responsiveness.</p>",
+            "                       <button class='admin-btn' style='width:100%; background:var(--accent-pink); margin:0;' onclick='window.simulateSale()'>💸 Simulate €5 Sale</button>",
+            "                   </div>",
+            "               </div>",
+            "           </div>",
+            "           <div class='box' style='border-color:var(--accent-red); margin-top:20px;'>",
+            "               <h2 style='color:var(--accent-red);'>🗄️ Raw Memory State Editor</h2>",
+            "               <p class='text-muted'>Warning: Editing raw JSON can crash the bot if syntax is invalid.</p>",
+            "               <textarea id='dev-raw-db' style='width:100%; height:300px; font-family:monospace; background:rgba(0,0,0,0.8); color:#f8fafc; padding:15px; border-radius:8px;' spellcheck='false'></textarea>",
+            "               <div style='display:flex; gap:15px; margin-top:15px;'>",
+            "                   <button class='admin-btn' style='background:var(--accent-green); flex:1;' onclick='window.saveRawDb()'>💾 Force Override Cloud Data</button>",
+            "                   <button class='admin-btn' style='background:transparent; border:1px solid var(--text-muted); color:var(--text-muted); flex:1;' onclick='window.fetchDebugInfo()'>🔄 Discard Changes & Reload</button>",
+            "               </div>",
+            "           </div>",
+            "       </div>",
+            "    </div>",
+            "    <!-- [ANCHOR: DASHBOARD_JS_LOGIC] -->",
+            "    <script>",
+            "        let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, userGoal=500, salesChart, hourlyChart, topProdChart, catChart, heatmapChartInst; ",
+            "        let allMembersData = []; let isMembersLoaded = false; let activeChatChannel = null; let chatPollInterval = null; let debugPollInterval = null;",
+            "        let trackedTickets = 0; let trackedReviews = 0; let trackedSales = 0; let trackedLastTicketMsg = 0;",
+            "        let pushEnabled = false;",
+            "        function updatePushIcon() {",
+            "            const btn = document.getElementById('pushNotifBtn');",
+            "            if (('Notification' in window) && Notification.permission === 'granted') { pushEnabled = true; btn.innerText = '🔔'; btn.style.color = 'var(--accent-green)'; btn.style.borderColor = 'var(--accent-green)'; }",
+            "            else { pushEnabled = false; btn.innerText = '🔕'; btn.style.color = 'white'; btn.style.borderColor = 'var(--border-color)'; }",
+            "        }",
+            "        window.togglePushNotifs = async function() {",
+            "            if (!('Notification' in window)) return showToast('Browser incompatible with push notifications', 'error');",
+            "            if (Notification.permission === 'granted') { showToast('Notifications already authorized! (Disable via browser settings only)'); pushEnabled = !pushEnabled; const btn = document.getElementById('pushNotifBtn'); btn.innerText = pushEnabled ? '🔔' : '🔕'; btn.style.color = pushEnabled ? 'var(--accent-green)' : 'white'; btn.style.borderColor = pushEnabled ? 'var(--accent-green)' : 'var(--border-color)'; }",
+            "            else if (Notification.permission !== 'denied') { const permission = await Notification.requestPermission(); updatePushIcon(); if (permission === 'granted') showToast('Notifications enabled!'); } else { showToast('Notifications blocked by your browser.', 'error'); }",
+            "        };",
+            "        function sendNativePush(title, body) { if (pushEnabled && Notification.permission === 'granted') { new Notification(title, { body: body, icon: 'https://cdn.discordapp.com/embed/avatars/0.png' }); } }",
+            "        let isMuted = false;",
+            "        window.toggleMute = function() { isMuted = !isMuted; document.getElementById('audioBtn').innerText = isMuted ? '🔇' : '🔊'; };",
+            "        let audioCtx = null;",
+            "        function initAudio() { try { if(!audioCtx && (window.AudioContext || window.webkitAudioContext)) { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume(); } catch(e) {} }",
+            "        document.body.addEventListener('click', initAudio, { once: true });",
+            "        function playPremiumIntro() { if(isMuted) return; try { initAudio(); if(!audioCtx) return; const now = audioCtx.currentTime; const oscBase = audioCtx.createOscillator(); const gainBase = audioCtx.createGain(); oscBase.type = 'sine'; oscBase.frequency.setValueAtTime(100, now); oscBase.frequency.exponentialRampToValueAtTime(50, now + 3); gainBase.gain.setValueAtTime(0, now); gainBase.gain.linearRampToValueAtTime(0.4, now + 1); gainBase.gain.exponentialRampToValueAtTime(0.01, now + 4); oscBase.connect(gainBase); gainBase.connect(audioCtx.destination); oscBase.start(now); oscBase.stop(now + 4); [440, 554.37, 659.25].forEach((freq, i) => { const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain(); osc.type = 'sine'; osc.frequency.setValueAtTime(freq, now + 0.2 + (i * 0.15)); gain.gain.setValueAtTime(0, now + 0.2 + (i * 0.15)); gain.gain.linearRampToValueAtTime(0.15, now + 0.5 + (i * 0.15)); gain.gain.exponentialRampToValueAtTime(0.01, now + 3.5); osc.connect(gain); gain.connect(audioCtx.destination); osc.start(now + 0.2 + (i * 0.15)); osc.stop(now + 4); }); } catch(e) {} }",
+            "        function playSound(type) { if(isMuted) return; try { initAudio(); if(!audioCtx) return; const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain(); osc.connect(gain); gain.connect(audioCtx.destination); if(type === 'sale') { osc.type = 'sine'; osc.frequency.setValueAtTime(800, audioCtx.currentTime); osc.frequency.exponentialRampToValueAtTime(1200, audioCtx.currentTime + 0.1); gain.gain.setValueAtTime(0, audioCtx.currentTime); gain.gain.linearRampToValueAtTime(0.3, audioCtx.currentTime + 0.05); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3); osc.start(audioCtx.currentTime); osc.stop(audioCtx.currentTime + 0.3); setTimeout(() => { const osc2 = audioCtx.createOscillator(); const gain2 = audioCtx.createGain(); osc2.connect(gain2); gain2.connect(audioCtx.destination); osc2.type = 'sine'; osc2.frequency.setValueAtTime(1200, audioCtx.currentTime); gain2.gain.setValueAtTime(0.3, audioCtx.currentTime); gain2.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4); osc2.start(audioCtx.currentTime); osc2.stop(audioCtx.currentTime + 0.4); }, 100); } else if(type === 'notification') { osc.type = 'sine'; osc.frequency.setValueAtTime(400, audioCtx.currentTime); gain.gain.setValueAtTime(0.2, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2); osc.start(audioCtx.currentTime); osc.stop(audioCtx.currentTime + 0.2); } } catch(e) {} }",
+            "        async function initDashboard(){ updatePushIcon(); let progress = 0; const loadBar = document.getElementById('loader-bar'); const loadTxt = document.getElementById('loader-percentage'); setTimeout(() => { const logo = document.getElementById('premium-logo'); const sub = document.getElementById('premium-subtitle'); const wrap = document.getElementById('loader-wrapper'); if(logo) logo.classList.add('show'); if(sub) sub.classList.add('show'); if(wrap) wrap.classList.add('show'); }, 100); const loadInterval = setInterval(() => { if(progress < 90) { progress += Math.random() * 3; if(progress > 90) progress = 90; if(loadBar) loadBar.style.width = progress + '%'; if(loadTxt) loadTxt.innerText = Math.floor(progress).toString().padStart(2, '0') + '%'; } }, 40); try{ const res = await fetch('/api/init-data'); if(res.ok) dataPayload = await res.json(); } catch(e){ console.error('API Error'); } clearInterval(loadInterval); let finishInterval = setInterval(() => { progress += 4; if(progress >= 100) { progress = 100; clearInterval(finishInterval); if(loadBar) loadBar.style.width = '100%'; if(loadTxt) loadTxt.innerText = '100%'; setTimeout(() => { const wrap = document.getElementById('loader-wrapper'); const txt = document.getElementById('loader-percentage'); if(wrap) wrap.style.opacity = '0'; if(txt) txt.style.opacity = '0'; setTimeout(() => { const welcome = document.getElementById('welcome-text'); if(welcome) welcome.classList.add('show'); playPremiumIntro(); }, 600); if(dataPayload) processInitData(dataPayload); setTimeout(() => { const splash = document.getElementById('loading-screen'); if(splash) { splash.style.transform = 'scale(1.1) translateY(-20px)'; splash.style.opacity = '0'; splash.style.pointerEvents = 'none'; } setTimeout(() => { if(splash) splash.style.display = 'none'; const dash = document.getElementById('dashboard-container'); if(dash) dash.style.display = 'block'; window.renderSalesChart(7); window.loadBackups(); }, 1200); }, 3000); }, 400); } else { if(loadBar) loadBar.style.width = progress + '%'; if(loadTxt) loadTxt.innerText = Math.floor(progress).toString().padStart(2, '0') + '%'; } }, 25); }",
+            "        function processInitData(data) { rawStats=data.memoryStats; PRODUCT_DATA=data.PRODUCT_DATA; currentMonthRevenue=data.monthRevenue; PIN=data.PIN; lastTxCount=rawStats.total_transactions||0; let calcTotalRev = 0; if(rawStats.revenue) { Object.values(rawStats.revenue).forEach(val => calcTotalRev += parseFloat(val)); } rawStats.total_revenue = calcTotalRev; document.getElementById('ui-today-rev').innerText='€'+data.todayRevenue; document.getElementById('ui-total-rev').innerText='€'+calcTotalRev; document.getElementById('ui-conv-rate').innerText=data.conversionRate+'%'; document.getElementById('ui-online-total').innerHTML = data.onlineCount + ' <span style=\"font-size:0.5em;color:var(--text-muted);\">/ ' + data.memberCount + '</span>'; document.getElementById('ui-retention').innerText=data.retentionRate+'%'; document.getElementById('ui-tickets-opened').innerText=data.ticketsOpened; document.getElementById('ui-dropoff').innerText=data.dropOffRate+'%'; document.getElementById('ui-peak-hour').innerText=data.peakHourStr; const st = data.memoryStats.settings || {}; const ac = st.abandonedCart || {active: true, delayHours: 2, discount: 10}; const up = st.upsell || {active: true, discount: 30}; if(document.getElementById('auto-ac-active')) document.getElementById('auto-ac-active').value = ac.active ? 'true' : 'false'; if(document.getElementById('auto-ac-delay')) document.getElementById('auto-ac-delay').value = ac.delayHours; if(document.getElementById('auto-ac-discount')) document.getElementById('auto-ac-discount').value = ac.discount; if(document.getElementById('auto-up-active')) document.getElementById('auto-up-active').value = up.active ? 'true' : 'false'; if(document.getElementById('auto-up-discount')) document.getElementById('auto-up-discount').value = up.discount; trackedTickets = data.activeTickets || 0; trackedReviews = data.pendingReviewsCount || 0; trackedSales = rawStats.total_transactions || 0; trackedLastTicketMsg = data.globalLastTicketMsg || 0; buildStaticTables(); renderAnalyticsCharts(); updateMaintenanceBadge(data.maintenance); updateBadgesAndFeed(data); }",
+            "        function escapeHTML(str){ return str ? String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') : ''; }",
+            "        function updateMaintenanceBadge(m) { const botStatus = document.querySelector('.bot-status'); if(m && m.active && Date.now() < m.endsAt) { const minsLeft = Math.ceil((m.endsAt - Date.now())/60000); botStatus.innerHTML = '<div class=\"status-dot\" style=\"background:var(--accent-orange); animation:none; box-shadow:0 0 10px var(--accent-orange);\"></div> <span style=\"color:var(--accent-orange);\">Maintenance (' + minsLeft + 'm)</span>'; botStatus.style.background = 'rgba(249, 115, 22, 0.1)'; botStatus.style.borderColor = 'rgba(249, 115, 22, 0.3)'; } else { botStatus.innerHTML = '<div class=\"status-dot\"></div> <span style=\"color:var(--accent-green);\">System Online</span>'; botStatus.style.background = 'rgba(16, 185, 129, 0.1)'; botStatus.style.borderColor = 'rgba(16, 185, 129, 0.2)'; } }",
+            "        function updateBadgesAndFeed(data) { const bChat = document.getElementById('badge-chat'); const bAdmin = document.getElementById('badge-admin'); if(data.activeTickets > 0) { bChat.innerText = data.activeTickets; bChat.style.display = 'inline-block'; } else { bChat.style.display = 'none'; } if(data.pendingReviewsCount > 0) { bAdmin.innerText = data.pendingReviewsCount; bAdmin.style.display = 'inline-block'; } else { bAdmin.style.display = 'none'; } let feedHtml = ''; if(data.memoryStats.activity_feed && data.memoryStats.activity_feed.length > 0) { data.memoryStats.activity_feed.forEach(f => { const mins = Math.max(0, Math.floor((Date.now() - f.time) / 60000)); let timeStr = mins === 0 ? 'Just now' : mins + 'm ago'; feedHtml += '<div class=\"feed-item ' + f.type + '\"><div class=\"feed-time\">' + timeStr + '</div><div>' + escapeHTML(f.message) + '</div></div>'; }); } else { feedHtml = '<p class=\"text-muted text-center\" style=\"margin-top:20px;\">No recent activity.</p>'; } document.getElementById('target-feed').innerHTML = feedHtml; }",
+            "        function buildStaticTables(){ let txHtml=''; if(rawStats.recent_transactions && rawStats.recent_transactions.length>0){ rawStats.recent_transactions.forEach(tx=>{ txHtml+= '<tr><td>' + escapeHTML(tx.username) + '</td><td>' + escapeHTML(tx.product) + '</td><td class=\"text-green font-bold\">€' + tx.price + '</td><td class=\"text-muted\">' + tx.date + '</td><td><button class=\"admin-btn\" style=\"padding:4px 8px; background:var(--accent-red); margin:0;\" onclick=\"window.refundTx(\\'' + tx.date + '\\', \\'' + escapeHTML(tx.username).replace(/'/g, \"\\\\'\") + '\\')\">Refund</button></td></tr>'; }); } document.getElementById('target-tx').innerHTML=txHtml; let prodHtml=''; if(rawStats.products){ Object.entries(rawStats.products).forEach(([id,p])=>{ let icon='📦'; let cat = p.category||''; if(cat.includes('PHOTOS')) icon='📸'; else if(cat.includes('VIDEOS')) icon='🎥'; else if(cat.includes('SPECIAL')) icon='💦'; else if(cat.includes('PERSONALIZED')) icon='💌'; else if(cat.includes('SUBSCRIPTION')) icon='👑'; let pPrice = p.price==='Custom'?'Custom':'€'+p.price; let pLink = p.link ? '<a href=\"' + escapeHTML(p.link) + '\" target=\"_blank\" style=\"color:var(--accent-blue);text-decoration:none;\">[🔗 Open Delivery Link]</a>' : '<span class=\"text-muted\">No Link</span>'; let stockDisplay = p.stock === '∞' || !p.stock ? '∞' : p.stock; let availDisplay = p.availability === 'weekend' ? ' <span style=\"color:#a855f7;font-size:0.75em;font-weight:bold;\">[WEEKEND ONLY]</span>' : ''; let pDesc = p.desc ? '<div class=\"prod-desc\">' + escapeHTML(p.desc) + '</div>' : '<div class=\"prod-desc\" style=\"font-style:italic; opacity:0.5;\">No description provided.</div>'; prodHtml+= '<div class=\"product-card\"><div class=\"prod-header\"><div class=\"prod-title\">' + icon + ' ' + escapeHTML(p.name) + availDisplay + '</div><div class=\"prod-id\">ID: ' + id + '</div></div><div class=\"prod-price\">' + pPrice + ' <span class=\"prod-stock\">Stock: ' + escapeHTML(stockDisplay) + '</span></div>' + pDesc + '<div class=\"prod-link\">' + pLink + '</div><div class=\"prod-actions\"><button class=\"admin-btn\" style=\"background:rgba(255,255,255,0.1);\" onclick=\"window.editProduct(\\'' + id + '\\')\">✏️ Edit</button><button class=\"admin-btn\" style=\"background:rgba(239, 68, 68, 0.2); color:var(--accent-red);\" onclick=\"window.deleteProduct(\\'' + id + '\\')\">🗑️ Delete</button></div></div>'; }); } document.getElementById('target-products').innerHTML=prodHtml; let jHtml=''; if(rawStats.recent_joins){ rawStats.recent_joins.forEach(u=>{ jHtml+='<tr><td>' + escapeHTML(u.username) + '</td><td class=\"text-muted\">' + u.date + '</td></tr>'; }); } document.getElementById('target-joins').innerHTML=jHtml; let lHtml=''; if(rawStats.recent_leaves){ rawStats.recent_leaves.forEach(u=>{ let durStr='Unknown'; if(u.duration){ let d=Math.floor(u.duration/(1000*60*60*24)); let h=Math.floor((u.duration/(1000*60*60))%24); durStr=d>0?d+'d '+h+'h':h+'h'; } lHtml+='<tr><td><div style=\"display:flex; align-items:center; gap:10px;\"><img src=\"' + escapeHTML(u.avatar) + '\" style=\"width:30px; height:30px; border-radius:50%;\"/><span>' + escapeHTML(u.username) + '</span></div></td><td class=\"text-muted\">' + escapeHTML(durStr) + '</td><td class=\"text-muted\">' + escapeHTML(u.date) + '</td></tr>'; }); } document.getElementById('target-leaves').innerHTML=lHtml||'<tr><td colspan=\"3\" class=\"text-muted text-center\">No leaves recorded.</td></tr>'; let promHtml=''; if(rawStats.promo_codes){ for(const code in rawStats.promo_codes){ const info=rawStats.promo_codes[code]; const isExhausted = info.used >= info.limit; const statusColor = isExhausted ? 'var(--accent-red)' : 'var(--accent-green)'; promHtml+= '<tr style=\"opacity:' + (isExhausted?'0.5':'1') + '\"><td><strong>' + escapeHTML(code) + '</strong></td><td style=\"color:' + statusColor + '; font-weight:bold;\">-' + info.discount + '%</td><td>' + info.used + ' / ' + info.limit + '</td><td><button class=\"admin-btn\" style=\"margin:0; padding:5px 10px; background:var(--accent-red);\" onclick=\"window.deletePromo(\\'' + encodeURIComponent(code) + '\\')\">🗑️</button></td></tr>'; } } document.getElementById('target-promos').innerHTML=promHtml; document.getElementById('ref-threshold').value=rawStats.settings?.invite_reward_threshold||10; let refHtml=''; if(rawStats.referrals){ Object.entries(rawStats.referrals).forEach(([id,r])=>{ let list=r.invited.slice(0,3).map(u=>escapeHTML(u.username)).join(', '); if(r.invited.length>3) list+='...'; refHtml+= '<tr><td>' + escapeHTML(r.username||id) + '<br><span class=\"text-muted\" style=\"font-size:0.8em;\">' + id + '</span></td><td class=\"text-green font-bold\">' + r.count + '</td><td>' + r.total_rewards + '</td><td class=\"text-muted\">' + (list||'None') + '</td><td><button class=\"admin-btn\" style=\"padding:4px 8px; margin:0;\" onclick=\"window.editReferralCount(\\'' + id + '\\', ' + r.count + ')\">✏️ Edit</button></td></tr>'; }); } document.getElementById('target-referrals').innerHTML=refHtml; let vipHtml = ''; const now = Date.now(); if(rawStats.subscriptions) { Object.entries(rawStats.subscriptions).forEach(([id, sub]) => { const dEnd = new Date(sub.expiresAt); const diffDays = Math.max(0, Math.ceil((sub.expiresAt - now)/(1000*60*60*24))); const pct = Math.min(100, Math.max(0, (diffDays/30)*100)); vipHtml += '<tr><td><strong>' + escapeHTML(sub.username) + '</strong><br><span class=\"text-muted\" style=\"font-size:0.8em;\">' + id + '</span></td><td>' + dEnd.toLocaleDateString('en-US') + '</td><td><div style=\"font-weight:bold;\">' + diffDays + ' Days Left</div><div class=\"progress-bg\"><div class=\"progress-fill\" style=\"width:' + pct + '%\"></div></div></td><td><button class=\"admin-btn\" style=\"padding:5px 10px; margin-right:5px; background:var(--accent-blue);\" onclick=\"window.manageVip(\\'' + id + '\\', \\'add\\')\">🎁 +7D</button><button class=\"admin-btn\" style=\"padding:5px 10px; background:var(--accent-red);\" onclick=\"window.manageVip(\\'' + id + '\\', \\'revoke\\')\">🛑 Revoke</button></td></tr>'; }); } document.getElementById('target-vips').innerHTML = vipHtml || '<tr><td colspan=\"4\" class=\"text-muted text-center\">No active VIP subscriptions.</td></tr>'; let blHtml=''; if(rawStats.buy_links){ Object.entries(rawStats.buy_links).forEach(([id, l]) => { blHtml += '<tr><td>' + escapeHTML(l.label) + '</td><td><a href=\"' + escapeHTML(l.url) + '\" target=\"_blank\" style=\"color:var(--accent-blue);\">Link</a></td><td><button class=\"admin-btn\" style=\"padding:4px 8px; margin:0 5px 0 0;\" onclick=\"window.editBuyLink(\\'' + id + '\\')\">✏️</button><button class=\"admin-btn\" style=\"padding:4px 8px; background:var(--accent-red); margin:0;\" onclick=\"window.deleteBuyLink(\\'' + id + '\\')\">🗑️</button></td></tr>'; }); } document.getElementById('target-buy-links').innerHTML=blHtml || '<tr><td colspan=\"3\" class=\"text-muted\">No buy links configured.</td></tr>'; let prHtml=''; if(rawStats.pending_reviews && rawStats.pending_reviews.length>0){ rawStats.pending_reviews.forEach(r=>{ prHtml+= '<tr><td class=\"text-muted\">' + r.date + '</td><td><strong>' + escapeHTML(r.username) + '</strong></td><td>' + escapeHTML(r.product) + '</td><td style=\"color:var(--accent-orange); font-weight:bold;\">' + r.rating + '/5 ⭐</td><td style=\"max-width:250px; white-space:normal; font-style:italic;\">\"' + escapeHTML(r.text) + '\"</td><td><button class=\"admin-btn\" style=\"padding:4px 8px; margin:0 5px 0 0; background:var(--accent-green);\" onclick=\"window.approveReview(\\'' + r.id + '\\')\">✅ Accept</button><button class=\"admin-btn\" style=\"padding:4px 8px; background:var(--accent-red); margin:0;\" onclick=\"window.rejectReview(\\'' + r.id + '\\')\">❌ Reject</button></td></tr>'; }); } else { prHtml='<tr><td colspan=\"6\" class=\"text-muted text-center\">No pending reviews to moderate.</td></tr>'; } document.getElementById('target-pending-reviews').innerHTML=prHtml; }",
+            "        window.loadBackups = async function() { try { const res = await fetch('/api/backups'); const files = await res.json(); let html = ''; if (files.length === 0) { html = '<tr><td colspan=\"3\" class=\"text-muted text-center\">No backups found.</td></tr>'; } else { files.forEach(f => { html += '<tr><td>' + escapeHTML(f.name) + '</td><td>' + f.size + '</td><td><a href=\"/api/download_backup?file=' + encodeURIComponent(f.name) + '\" target=\"_blank\"><button class=\"admin-btn\" style=\"padding:5px 10px; margin:0;\">⬇️ Download</button></a></td></tr>'; }); } document.getElementById('target-backups').innerHTML = html; } catch(e) {} };",
+            "        window.forceBackup = async function() { await window.executeAction({action:'create_backup'}); showToast('Backup completed!'); window.loadBackups(); };",
+            "        window.toggleFlashSale = async function(state) { const discount = document.getElementById('flash-discount').value; const duration = document.getElementById('flash-duration').value; const channel = document.getElementById('flash-channel').value; if(state && !discount) return showToast('Please set a discount', 'error'); await window.executeAction({action:'toggle_flash_sale', state:state, discount:discount, durationHours:duration, channelId:channel}); if(state) showToast('Flash Sale started!'); else showToast('Flash Sale stopped.'); };",
+            "        window.saveAutomations = async function() { const acActive = document.getElementById('auto-ac-active').value === 'true'; const acDelay = document.getElementById('auto-ac-delay').value; const acDiscount = document.getElementById('auto-ac-discount').value; const upActive = document.getElementById('auto-up-active').value === 'true'; const upDiscount = document.getElementById('auto-up-discount').value; await window.executeAction({ action:'update_automations', acActive:acActive, acDelay:acDelay, acDiscount:acDiscount, upActive:upActive, upDiscount:upDiscount }); showToast('Automations saved!'); };",
+            "        window.editTodayEarnings = async function() { const current = document.getElementById('ui-today-rev').innerText.replace('€', ''); const n = prompt(\"Manual override for Today's Earnings (€):\", current); if(n !== null) { const parsed = parseFloat(n); if(!isNaN(parsed)) { await window.executeAction({action:'edit_today_earnings', value: parsed}); } } };",
+            "        window.approveReview = async function(id) { await window.executeAction({action:'approve_review', id:id}); };",
+            "        window.rejectReview = async function(id) { const reason = prompt('Rejecting review. Please specify the reason (sent to user):'); if(reason !== null) await window.executeAction({action:'reject_review', id:id, reason:reason}); };",
+            "        window.toggleMaintenance = async function(state) { const dur = document.getElementById('maint-duration').value; const ch = document.getElementById('maint-channel').value; if(state && !dur) return showToast('Set duration', 'error'); await window.executeAction({action:'toggle_maintenance', state:state, duration:dur, channelId:ch}); };",
+            "        window.editReferralCount = async function(id, current) { const n = prompt('Enter the new referral count for this user:', current); if(n !== null) { const parsed = parseInt(n); if(!isNaN(parsed)) { await window.executeAction({action:'edit_referral_count', userId:id, newCount: parsed}); } } };",
+            "        window.editProduct = function(id) { const p = rawStats.products[id]; if(!p) return; document.getElementById('editProdId').value = id; document.getElementById('newProdName').value = p.name; document.getElementById('newProdPrice').value = p.price; document.getElementById('newProdStock').value = p.stock || '∞'; document.getElementById('newProdAvail').value = p.availability || 'always'; document.getElementById('newProdLink').value = p.link; document.getElementById('newProdDesc').value = p.desc || ''; document.getElementById('saveProdBtn').innerText = '💾 Update Product'; document.getElementById('cancelEditBtn').style.display = 'block'; window.scrollTo({top:0, behavior:'smooth'}); };",
+            "        window.cancelEdit = function() { document.getElementById('editProdId').value = ''; document.getElementById('newProdName').value = ''; document.getElementById('newProdPrice').value = ''; document.getElementById('newProdStock').value = ''; document.getElementById('newProdAvail').value = 'always'; document.getElementById('newProdLink').value = ''; document.getElementById('newProdDesc').value = ''; document.getElementById('saveProdBtn').innerText = '➕ Add Product'; document.getElementById('cancelEditBtn').style.display = 'none'; };",
+            "        window.createManualTx = async function() { const user = document.getElementById('manTxUser').value; const prod = document.getElementById('manTxProd').value; const price = document.getElementById('manTxPrice').value; const date = document.getElementById('manTxDate').value; if(!price || isNaN(price)) return showToast('Price is required', 'error'); await window.executeAction({ action: 'create_manual_tx', username: user, product: prod, price: parseFloat(price), date: date }); document.getElementById('manTxUser').value = ''; document.getElementById('manTxProd').value = ''; document.getElementById('manTxPrice').value = ''; document.getElementById('manTxDate').value = ''; };",
+            "        window.saveProduct = async function() { const id = document.getElementById('editProdId').value; const n = document.getElementById('newProdName').value; const p = document.getElementById('newProdPrice').value; const s = document.getElementById('newProdStock').value || '∞'; const a = document.getElementById('newProdAvail').value || 'always'; const l = document.getElementById('newProdLink').value; const d = document.getElementById('newProdDesc').value; if(!n||!p) return alert('Name & Price required'); if(id) { await window.executeAction({action:'edit_product', id:id, name:n, price:p, stock:s, availability:a, link:l, desc:d}, true); } else { await window.executeAction({action:'add_product', name:n, price:p, stock:s, availability:a, link:l, desc:d}, true); } };",
+            "        window.deleteProduct = async function(id) { if(confirm('Delete product?')) await window.executeAction({action:'delete_product', id:id}, true); };",
+            "        window.editBuyLink = function(id) { const l = rawStats.buy_links[id]; if(!l) return; document.getElementById('editLinkId').value = id; document.getElementById('newLinkLabel').value = l.label; document.getElementById('newLinkUrl').value = l.url; document.getElementById('saveLinkBtn').innerText = '💾 Update'; document.getElementById('cancelEditLinkBtn').style.display = 'block'; };",
+            "        window.cancelEditLink = function() { document.getElementById('editLinkId').value = ''; document.getElementById('newLinkLabel').value = ''; document.getElementById('newLinkUrl').value = ''; document.getElementById('saveLinkBtn').innerText = '➕ Add Link'; document.getElementById('cancelEditLinkBtn').style.display = 'none'; };",
+            "        window.saveBuyLink = async function() { const id = document.getElementById('editLinkId').value; const label = document.getElementById('newLinkLabel').value; const url = document.getElementById('newLinkUrl').value; if(!label || !url) return showToast('Label & URL required', 'error'); if(id) { await window.executeAction({action:'edit_buy_link', id:id, label:label, url:url}, true); } else { await window.executeAction({action:'add_buy_link', label:label, url:url}, true); } };",
+            "        window.deleteBuyLink = async function(id) { if(confirm('Delete this buy button?')) await window.executeAction({action:'delete_buy_link', id:id}, true); };",
+            "        window.triggerShopRefresh = async function() { await window.executeAction({action:'refresh_setup'}, false); };",
+            "        window.switchTab = function(tabId, btn) { document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active')); document.querySelectorAll('.nav-btn').forEach(el=>el.classList.remove('active')); document.getElementById(tabId).classList.add('active'); btn.classList.add('active'); if(tabId === 'moderation' && !isMembersLoaded) window.loadAllMembers(); if(tabId === 'livechat'){ window.loadTicketsForChat(); if(activeChatChannel && !chatPollInterval){ chatPollInterval = setInterval(window.fetchChatMessages, 3000); } } else { if(chatPollInterval){ clearInterval(chatPollInterval); chatPollInterval = null; } } if(tabId === 'analytics'){ renderAnalyticsCharts(); } if(tabId === 'overview'){ window.renderSalesChart(7); } if(tabId === 'backups'){ window.loadBackups(); } if(tabId === 'devtools'){ window.fetchDebugInfo(); if(!debugPollInterval){ debugPollInterval = setInterval(window.fetchDebugInfo, 5000); } } else { if(debugPollInterval){ clearInterval(debugPollInterval); debugPollInterval = null; } } };",
+            "        window.showClickableToast = function(msg, tabId) { const t=document.getElementById('toast'); t.innerHTML = '🔔 <span>' + msg + '</span> <button class=\"admin-btn\" style=\"margin:0 0 0 12px; padding:6px 12px; font-size:0.85em; background:#fff; color:#000; box-shadow:none;\" onclick=\"window.switchTab(\\''+tabId+'\\', document.getElementById(\\'nav-'+tabId+'\\')); this.parentElement.classList.remove(\\'show\\');\">View ➔</button>'; t.style.borderColor = 'var(--accent-blue)'; t.style.boxShadow = '0 10px 30px rgba(56, 189, 248, 0.4)'; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 6000); };",
+            "        function showToast(msg, type='success') { const t=document.getElementById('toast'); t.innerHTML = (type==='error'?'❌':'✅') + ' <span>' + msg + '</span>'; t.style.borderColor = type === 'error' ? 'rgba(239,68,68,0.3)' : 'rgba(16,185,129,0.3)'; t.style.boxShadow = type === 'error' ? '0 10px 30px rgba(239,68,68,0.2)' : '0 10px 30px rgba(16,185,129,0.2)'; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 3000); }",
+            "        window.manualRefresh = async function() { const btn = document.getElementById('refreshBtn'); btn.classList.add('spinning'); await window.refreshDataSilently(); setTimeout(()=>btn.classList.remove('spinning'), 1000); showToast('Data Synced!'); };",
+            "        setInterval(() => { if(document.visibilityState === 'visible') window.refreshDataSilently(true); }, 15000);",
+            "        window.refreshDataSilently = async function(isAutoSync = false) { try{ const res=await fetch('/api/init-data'); if(res.ok){ const data=await res.json(); rawStats=data.memoryStats; document.getElementById('ui-today-rev').innerText='€'+data.todayRevenue; let calcTotalRev = 0; if(rawStats.revenue) { Object.values(rawStats.revenue).forEach(val => calcTotalRev += parseFloat(val)); } document.getElementById('ui-total-rev').innerText='€'+calcTotalRev; document.getElementById('ui-conv-rate').innerText=data.conversionRate+'%'; document.getElementById('ui-online-total').innerHTML = data.onlineCount + ' <span style=\"font-size:0.5em;color:var(--text-muted);\">/ ' + data.memberCount + '</span>'; document.getElementById('ui-retention').innerText=data.retentionRate+'%'; document.getElementById('ui-tickets-opened').innerText=data.ticketsOpened; document.getElementById('ui-dropoff').innerText=data.dropOffRate+'%'; document.getElementById('ui-peak-hour').innerText=data.peakHourStr; const st = data.memoryStats.settings || {}; const ac = st.abandonedCart || {active: true, delayHours: 2, discount: 10}; const up = st.upsell || {active: true, discount: 30}; if(document.getElementById('auto-ac-active')) document.getElementById('auto-ac-active').value = ac.active ? 'true' : 'false'; if(document.getElementById('auto-ac-delay')) document.getElementById('auto-ac-delay').value = ac.delayHours; if(document.getElementById('auto-ac-discount')) document.getElementById('auto-ac-discount').value = ac.discount; if(document.getElementById('auto-up-active')) document.getElementById('auto-up-active').value = up.active ? 'true' : 'false'; if(document.getElementById('auto-up-discount')) document.getElementById('auto-up-discount').value = up.discount; trackedTickets = data.activeTickets || 0; trackedReviews = data.pendingReviewsCount || 0; trackedSales = rawStats.total_transactions || 0; trackedLastTicketMsg = data.globalLastTicketMsg || 0; buildStaticTables(); renderAnalyticsCharts(); updateMaintenanceBadge(data.maintenance); updateBadgesAndFeed(data); if(data.globalLastTicketMsg > trackedLastTicketMsg) { if(trackedLastTicketMsg !== 0) { const chatTab = document.getElementById('livechat'); if(!chatTab.classList.contains('active')) { window.showClickableToast('💬 New Live Chat message!', 'livechat'); playSound('notification'); sendNativePush('💬 New message!', 'You received a new message in a ticket.'); } else { window.fetchChatMessages(); playSound('notification'); } } trackedLastTicketMsg = data.globalLastTicketMsg; } if(data.activeTickets > trackedTickets) { if(trackedTickets !== 0) { const chatTab = document.getElementById('livechat'); if(!chatTab.classList.contains('active')) { window.showClickableToast('🎫 New Ticket!', 'livechat'); playSound('notification'); sendNativePush('🎫 New Ticket!', 'A customer just opened a ticket.'); } } trackedTickets = data.activeTickets; } else { trackedTickets = data.activeTickets; } if(data.pendingReviewsCount > trackedReviews) { if(trackedReviews !== 0) { const adminTab = document.getElementById('admin'); if(!adminTab.classList.contains('active')) { window.showClickableToast('⭐ New Customer Review!', 'admin'); playSound('notification'); sendNativePush('⭐ New Review!', 'A customer submitted a review pending moderation.'); } else { playSound('notification'); } } trackedReviews = data.pendingReviewsCount; } else { trackedReviews = data.pendingReviewsCount; } if((rawStats.total_transactions||0) > trackedSales) { if(trackedSales !== 0) { playSound('sale'); sendNativePush('💰 New Sale!', 'A transaction has just been made.'); } trackedSales = rawStats.total_transactions || 0; } if(isMembersLoaded && !isAutoSync) window.loadAllMembers(); if(!isAutoSync){ try { window.cancelEdit(); window.cancelEditLink(); document.getElementById('promoName').value=''; document.getElementById('promoDiscount').value=''; document.getElementById('promoLimit').value=''; } catch(e) {} } } }catch(e){} };",
+            "        window.executeAction = async function(p, showModal=false) { p.pin=PIN; const res=await fetch('/api/action',{method:'POST',body:JSON.stringify(p)}); if(res.ok) { window.refreshDataSilently(); if(showModal){ document.getElementById('syncModal').style.display='flex'; }else{ showToast('Success!'); } } else { showToast('Error', 'error'); } };",
+            "        window.sendReview = async function() { const author = document.getElementById('rev-author').value; const rating = document.getElementById('rev-rating').value; const text = document.getElementById('rev-msg').value; if(!author || !text) return alert('Fill both author and feedback fields!'); await window.executeAction({ action: 'post_review', author: author, rating: rating, text: text }); document.getElementById('rev-author').value = ''; document.getElementById('rev-msg').value = ''; };",
+            "        window.loadAllMembers = async function() { document.getElementById('memberResults').innerHTML = '<p class=\"text-muted\">Loading directory...</p>'; try { const res = await fetch('/api/members'); if (!res.ok) throw new Error('Error'); allMembersData = await res.json(); isMembersLoaded = true; window.sortMembersLocally(); } catch (e) { document.getElementById('memberResults').innerHTML = '<p class=\"text-pink\">Error fetching data.</p>'; } };",
+            "        window.sortMembersLocally = function() { const sortType = document.getElementById('memberSortSelect').value; const statusFilter = document.getElementById('memberStatusSelect').value; let filtered = [...allMembersData]; if (statusFilter === 'online') { filtered = filtered.filter(m => m.status !== 'offline'); } if (sortType === 'recent') filtered.sort(function(a, b) { return b.joinedTimestamp - a.joinedTimestamp; }); else if (sortType === 'oldest') filtered.sort(function(a, b) { return a.joinedTimestamp - b.joinedTimestamp; }); else if (sortType === 'spent_desc') filtered.sort(function(a, b) { return b.totalSpent - a.totalSpent; }); else if (sortType === 'spent_asc') filtered.sort(function(a, b) { return a.totalSpent - b.totalSpent; }); else if (sortType === 'warns') filtered.sort(function(a, b) { return b.warns.length - a.warns.length; }); const q = document.getElementById('memberSearchInput').value.toLowerCase(); if (q) { filtered = filtered.filter(function(m) { return m.username.toLowerCase().includes(q) || m.id.includes(q); }); } renderMembers(filtered); };",
+            "        window.filterMembersLocally = window.sortMembersLocally;",
+            "        function renderMembers(members) { if (members.length === 0) { document.getElementById('memberResults').innerHTML = '<p class=\"text-pink\">No members found.</p>'; return; } let html = ''; members.forEach(function(m) { let trustColor = m.isBlacklisted ? 'var(--accent-red)' : (m.totalSpent > 0 ? 'var(--accent-green)' : 'var(--accent-orange)'); let trustLabel = m.isBlacklisted ? 'Blacklisted' : (m.totalSpent > 0 ? 'Trusted (Buyer)' : 'New / No Purchases'); let safeUsername = escapeHTML(m.username); let safeNote = escapeHTML(m.note); let statusIndicator = (m.status === 'online' || m.status === 'dnd' || m.status === 'idle') ? '<span style=\"color:#10b981; font-size:0.8em; margin-left:10px;\">🟢 Online</span>' : '<span style=\"color:#94a3b8; font-size:0.8em; margin-left:10px;\">⚪ Offline</span>'; let ticketsHtml = ''; if (m.activeTickets && m.activeTickets.length > 0) { m.activeTickets.forEach(function(t) { ticketsHtml += '<div style=\"display:flex; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.3); padding:5px 10px; margin-top:5px; border-radius:5px;\"><span>#' + escapeHTML(t.name) + '</span><button style=\"background:var(--accent-red); border:none; color:white; border-radius:3px; cursor:pointer; padding:4px 8px;\" onclick=\"window.modAction(\\'close_channel\\', \\'' + m.id + '\\', {channelId: \\'' + t.id + '\\'})\">Close</button></div>'; }); } else ticketsHtml = '<span class=\"text-muted\">No active tickets</span>'; let warnsHtml = ''; if (m.warns && m.warns.length > 0) { m.warns.forEach(function(w, i) { warnsHtml += '<div style=\"font-size:0.8em; color:var(--accent-orange); margin-bottom:3px;\">⚠️ Warn ' + (i+1) + ': ' + escapeHTML(w.reason) + ' (' + w.date + ')</div>'; }); } else warnsHtml = '<span class=\"text-muted\" style=\"font-size:0.8em;\">Clean record</span>'; let historyHtml = ''; if (m.history && m.history.length > 0) { m.history.forEach(function(h) { historyHtml += '<div style=\"font-size:0.8em;\">🛒 ' + escapeHTML(h.product) + ' - €' + h.price + ' (' + h.date + ')</div>'; }); } else historyHtml = '<span class=\"text-muted\" style=\"font-size:0.8em;\">No purchases</span>'; html += '<div class=\"card\" style=\"margin-bottom: 15px; border-left: 4px solid ' + trustColor + ';\"><div style=\"display:flex; gap:15px; align-items:center; margin-bottom:15px; flex-wrap:wrap;\"><img src=\"' + m.avatar + '\" style=\"width:60px; height:60px; border-radius:50%; box-shadow:0 4px 10px rgba(0,0,0,0.5);\"><div><h3 style=\"color:#fff; font-size:1.2em; margin:0; display:flex; align-items:center;\">' + safeUsername + ' ' + statusIndicator + '</h3><span class=\"text-muted\" style=\"font-size:0.8em;\">ID: ' + m.id + '</span></div><div style=\"margin-left:auto; text-align:right;\"><div style=\"color:' + trustColor + '; font-weight:bold;\">' + trustLabel + '</div><div class=\"money text-green font-bold\">Total Spent: €' + m.totalSpent + '</div></div></div><div style=\"display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:15px; margin-bottom:15px; font-size:0.9em;\"><div style=\"background:rgba(0,0,0,0.2); padding:10px; border-radius:8px;\"><strong>Account Created:</strong><br><span class=\"text-muted\">' + m.createdAt + '</span><br><br><strong>Joined Server:</strong><br><span class=\"text-muted\">' + m.joinedAt + '</span></div><div style=\"background:rgba(0,0,0,0.2); padding:10px; border-radius:8px;\"><strong>Active Tickets:</strong><br>' + ticketsHtml + '</div></div><div style=\"display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:15px; margin-bottom:15px;\"><div style=\"background:rgba(0,0,0,0.2); padding:10px; border-radius:8px; max-height:150px; overflow-y:auto;\"><strong>Purchase History:</strong><br>' + historyHtml + '</div><div style=\"background:rgba(0,0,0,0.2); padding:10px; border-radius:8px; max-height:150px; overflow-y:auto;\"><strong>Warn History:</strong><br>' + warnsHtml + '</div></div><div style=\"margin-bottom:15px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.05);\"><label style=\"font-size:0.8rem; color:var(--text-muted); display:block; margin-bottom:5px;\">📝 Private Notes (Admin Only):</label><textarea id=\"note-' + m.id + '\" placeholder=\"Add private remarks about this client...\" style=\"min-height:50px;\" onblur=\"window.saveUserNote(\\'' + m.id + '\\')\">' + safeNote + '</textarea></div><div style=\"border-top:1px solid rgba(255,255,255,0.05); padding-top:10px;\"><span style=\"font-size:0.8rem; color:var(--text-muted); display:block; margin-bottom:8px;\">⚡ Action Controls:</span><div style=\"display:flex; gap:8px; flex-wrap:wrap;\">'; let currentRefs = rawStats.referrals && rawStats.referrals[m.id] ? rawStats.referrals[m.id].count : 0; html += '<button class=\"admin-btn\" style=\"margin:0; background:var(--accent-purple);\" onclick=\"window.editReferralCount(\\'' + m.id + '\\', ' + currentRefs + ')\">🔗 Invites (' + currentRefs + ')</button><button class=\"admin-btn\" style=\"margin:0; background:#3498db;\" onclick=\"window.openDirectContact(\\'' + m.id + '\\')\">💬 DM</button><button class=\"admin-btn\" style=\"margin:0; background:#e67e22;\" onclick=\"window.modAction(\\'mute\\', \\'' + m.id + '\\', {duration: 15})\">🔇 15m</button><button class=\"admin-btn\" style=\"margin:0; background:#d35400;\" onclick=\"window.modAction(\\'mute\\', \\'' + m.id + '\\', {duration: 60})\">🔇 1h</button><button class=\"admin-btn\" style=\"margin:0; background:#c0392b;\" onclick=\"window.modAction(\\'mute\\', \\'' + m.id + '\\', {duration: 1440})\">🔇 1d</button><button class=\"admin-btn\" style=\"margin:0; background:#962d22;\" onclick=\"window.modAction(\\'mute\\', \\'' + m.id + '\\', {duration: 10080})\">🔇 1w</button><button class=\"admin-btn\" style=\"margin:0; background:var(--accent-orange);\" onclick=\"window.modAction(\\'warn\\', \\'' + m.id + '\\')\">⚠️ Warn (DM)</button><button class=\"admin-btn\" style=\"margin:0; background:transparent; border:1px solid var(--accent-orange); color:var(--accent-orange);\" onclick=\"window.modAction(\\'clear_warns\\', \\'' + m.id + '\\')\">🧹 Clear</button><button class=\"admin-btn\" style=\"margin:0; background:var(--accent-red);\" onclick=\"window.modAction(\\'kick\\', \\'' + m.id + '\\')\">👢 Kick</button><button class=\"admin-btn\" style=\"margin:0; background:var(--accent-red);\" onclick=\"window.modAction(\\'ban\\', \\'' + m.id + '\\')\">🔨 Ban</button><button class=\"admin-btn\" style=\"width:auto; margin:0; background:#000; border:1px solid var(--accent-red);\" onclick=\"window.modAction(\\'toggle_blacklist\\', \\'' + m.id + '\\')\">' + (m.isBlacklisted ? '✅ Un-Blacklist' : '🚫 Blacklist') + '</button></div></div></div>'; }); document.getElementById('memberResults').innerHTML = html; }",
+            "        window.modAction = async function(action, userId, extra) { extra = extra || {}; let payload = { action: action, userId: userId, pin: PIN }; if (extra.channelId) payload.channelId = extra.channelId; if (extra.duration) payload.duration = extra.duration; if (action === 'warn') { payload.reason = prompt(\"Reason for warning? (User will be DM'd)\"); if (!payload.reason) return; } else if (action === 'clear_warns') { if (!confirm('Clear all warnings for this user?')) return; } else if (action === 'mute') { if(!payload.duration) payload.duration = prompt('Mute duration in minutes?', '60'); payload.reason = prompt('Reason for mute?'); if (!payload.duration || !payload.reason) return; } else if (action === 'kick' || action === 'ban') { payload.reason = prompt('Reason for ' + action + '?'); if (!payload.reason || !confirm('Execute ' + action + '?')) return; } else if (action === 'toggle_blacklist') { if (!confirm('Toggle shop blacklist for this user?')) return; } else if (action === 'close_channel') { if (!confirm('Force close this ticket?')) return; } try { const res = await fetch('/api/action', { method: 'POST', body: JSON.stringify(payload) }); if (res.ok) { showToast('✅ Action applied successfully'); setTimeout(function() { window.loadAllMembers(); }, 1000); } else showToast('❌ Failed to apply action', 'error'); } catch(e) { showToast('❌ Network Error', 'error'); } };",
+            "        window.refundTx = async function(date, username) { if(confirm('Are you sure you want to refund this transaction? It will be removed from your revenue.')) { await window.executeAction({action: 'refund_tx', date: date, username: username}); } };",
+            "        window.runDiagnostics = async function() { document.getElementById('ui-upstash-status').innerText = '⏳ Waiting...'; document.getElementById('ui-upstash-status').className = 'value text-muted'; document.getElementById('ui-rewarble-status').innerText = '⏳ Waiting...'; document.getElementById('ui-rewarble-status').className = 'value text-muted'; document.getElementById('ui-discord-ws').innerText = '-- ms'; try { const res = await fetch('/api/monitoring'); const data = await res.json(); const upstashCard = document.getElementById('card-upstash'); const rewarbleCard = document.getElementById('card-rewarble'); if (data.upstash.status === 'online') { document.getElementById('ui-upstash-status').innerHTML = '🟢 Connected'; document.getElementById('ui-upstash-status').className = 'value text-green'; upstashCard.style.borderLeft = '4px solid var(--accent-green)'; } else { document.getElementById('ui-upstash-status').innerHTML = '🔴 Offline'; document.getElementById('ui-upstash-status').className = 'value text-red'; upstashCard.style.borderLeft = '4px solid var(--accent-red)'; } document.getElementById('ui-upstash-ping').innerText = 'Latency: ' + data.upstash.latency + ' ms'; if (data.rewarble.status === 'online') { document.getElementById('ui-rewarble-status').innerHTML = '🟢 Connected'; document.getElementById('ui-rewarble-status').className = 'value text-green'; rewarbleCard.style.borderLeft = '4px solid var(--accent-green)'; } else { document.getElementById('ui-rewarble-status').innerHTML = '🔴 Error/Offline'; document.getElementById('ui-rewarble-status').className = 'value text-red'; rewarbleCard.style.borderLeft = '4px solid var(--accent-red)'; } document.getElementById('ui-rewarble-ping').innerText = 'Latency: ' + data.rewarble.latency + ' ms'; document.getElementById('ui-discord-ws').innerText = data.discord.ws_ping + ' ms'; } catch(e) { showToast('❌ Diagnostics Failed', 'error'); } };",
+            "        window.testActionLatency = async function() { const resultDiv = document.getElementById('latency-result'); resultDiv.innerText = 'Testing in progress...'; resultDiv.style.color = 'var(--text-muted)'; const startTime = Date.now(); try { const res = await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'ping_test', pin: PIN }) }); if (res.ok) { const totalTime = Date.now() - startTime; resultDiv.innerText = totalTime + ' ms'; if (totalTime < 500) resultDiv.style.color = 'var(--accent-green)'; else if (totalTime < 1500) resultDiv.style.color = 'var(--accent-orange)'; else resultDiv.style.color = 'var(--accent-red)'; } else { resultDiv.innerText = 'HTTP Error'; resultDiv.style.color = 'var(--accent-red)'; } } catch(e) { resultDiv.innerText = 'Network Error'; resultDiv.style.color = 'var(--accent-red)'; } };",
+            "        window.loadTicketsForChat = async function() { try { const res = await fetch('/api/tickets'); const tickets = await res.json(); let html = ''; if(tickets.length === 0) { html = '<p class=\"text-muted text-center\" style=\"margin-top:20px;\">No active tickets.</p>'; } else { const shopTickets = tickets.filter(t => t.name.startsWith('shop-')); const supportTickets = tickets.filter(t => t.name.startsWith('support-')); if(shopTickets.length > 0) { html += '<div style=\"font-size:0.85em; text-transform:uppercase; color:var(--accent-blue); font-weight:800; margin: 10px 0 5px 5px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom:3px;\">🛒 Shop (' + shopTickets.length + ')</div>'; shopTickets.forEach(t => { const isActive = activeChatChannel === t.id ? 'active' : ''; let tagIcon = t.tag === 'red' ? '🔴 ' : (t.tag === 'green' ? '🟢 ' : (t.tag === 'blue' ? '🔵 ' : '')); html += '<div class=\"ticket-item ' + isActive + '\" onclick=\"window.openTicketChat(\\'' + t.id + '\\')\">' + tagIcon + '🛒 ' + escapeHTML(t.name) + '</div>'; }); } if(supportTickets.length > 0) { html += '<div style=\"font-size:0.85em; text-transform:uppercase; color:var(--accent-orange); font-weight:800; margin: 15px 0 5px 5px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom:3px;\">🎧 Support (' + supportTickets.length + ')</div>'; supportTickets.forEach(t => { const isActive = activeChatChannel === t.id ? 'active' : ''; let tagIcon = t.tag === 'red' ? '🔴 ' : (t.tag === 'green' ? '🟢 ' : (t.tag === 'blue' ? '🔵 ' : '')); html += '<div class=\"ticket-item ' + isActive + '\" onclick=\"window.openTicketChat(\\'' + t.id + '\\')\">' + tagIcon + '🎧 ' + escapeHTML(t.name) + '</div>'; }); } } document.getElementById('chat-ticket-list').innerHTML = html; } catch(e) {} };",
+            "        window.openTicketChat = function(channelId) { activeChatChannel = channelId; window.loadTicketsForChat(); document.getElementById('chat-messages-area').innerHTML = '<div style=\"margin:auto; color:var(--accent-blue);\"><div style=\"width:30px; height:30px; border:3px solid rgba(56,189,248,0.2); border-top:3px solid var(--accent-blue); border-radius:50%; animation:spin 1s linear infinite; margin:auto;\"></div></div>'; window.fetchChatMessages(); if(chatPollInterval) clearInterval(chatPollInterval); chatPollInterval = setInterval(window.fetchChatMessages, 3000); };",
+            "        window.fetchChatMessages = async function() { if(!activeChatChannel) return; try { const res = await fetch('/api/tickets/messages?channelId=' + activeChatChannel); const msgs = await res.json(); let html = ''; if(msgs.length === 0) html = '<p class=\"text-muted text-center\" style=\"margin:auto;\">No messages yet.</p>'; else { msgs.forEach(m => { const bubbleClass = m.isBot ? 'bot' : 'user'; const imgHtml = m.imageUrl ? '<br><img src=\"' + escapeHTML(m.imageUrl) + '\" class=\"chat-img-preview\" onclick=\"window.open(\\'' + escapeHTML(m.imageUrl) + '\\')\">' : ''; const actionsHtml = '<div class=\"chat-bubble-actions\"><button class=\"chat-reaction-btn\" onclick=\"window.reactMessage(\\'' + m.id + '\\', \\'👍\\')\">👍</button><button class=\"chat-reaction-btn\" onclick=\"window.reactMessage(\\'' + m.id + '\\', \\'❤️\\')\">❤️</button></div>'; html += '<div class=\"chat-bubble ' + bubbleClass + '\"><div class=\"chat-author\">' + escapeHTML(m.author) + '</div>' + escapeHTML(m.content) + imgHtml + actionsHtml + '</div>'; }); } const area = document.getElementById('chat-messages-area'); const isAtBottom = area.scrollHeight - area.scrollTop <= area.clientHeight + 100; area.innerHTML = html; if(isAtBottom) area.scrollTop = area.scrollHeight; } catch(e) {} };",
+            "        window.sendChatMessage = async function() { if(!activeChatChannel) return showToast('Select a ticket first!', 'error'); const input = document.getElementById('chat-input-text'); const fileInput = document.getElementById('chat-file-input'); const text = input.value.trim(); const file = fileInput.files[0]; if(!text && !file) return; input.value = ''; document.getElementById('attach-badge').style.display='none'; let base64 = null; if (file) { const reader = new FileReader(); reader.readAsDataURL(file); await new Promise(r => reader.onload = r); base64 = reader.result; fileInput.value = ''; } try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'send_ticket_message', channelId: activeChatChannel, message: text, imageBase64: base64, pin: PIN }) }); window.fetchChatMessages(); } catch(e) { showToast('Failed to send', 'error'); } };",
+            "        window.reactMessage = async function(msgId, emoji) { if(!activeChatChannel) return; try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'react_ticket_message', channelId: activeChatChannel, messageId: msgId, emoji: emoji, pin: PIN }) }); showToast('Reaction sent!'); } catch (e) { showToast('Failed to react', 'error'); } };",
+            "        window.sendQuickResponse = async function(type) { if(!activeChatChannel) return showToast('Select a ticket first!', 'error'); let msg = ''; if(type === 'welcome') msg = '👋 Hello! How can I help you today?'; else if(type === 'wait') { const mins = prompt('How many minutes should the user wait?'); if(!mins) return; msg = '⏳ Please wait for about ' + mins + ' minutes, an admin is looking into it.'; } else if(type === 'resolved') msg = '✅ Did this resolve your issue, or do you have any other questions?'; else if(type === 'close') { if(!confirm('Close this ticket and delete the channel?')) return; msg = '🔒 Closing this ticket. Have a great day!'; await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'send_ticket_message', channelId: activeChatChannel, message: msg, pin: PIN }) }); window.fetchChatMessages(); setTimeout(async () => { await window.executeAction({ action: 'close_channel', channelId: activeChatChannel }, false); activeChatChannel = null; window.loadTicketsForChat(); document.getElementById('chat-messages-area').innerHTML = '<div style=\"margin:auto; color:var(--text-muted); text-align:center;\"><h2 style=\"font-size:3em; margin:0;\">👈</h2><p>Select a ticket to view</p></div>'; }, 2000); return; } if(msg) { try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'send_ticket_message', channelId: activeChatChannel, message: msg, pin: PIN }) }); window.fetchChatMessages(); } catch(e) { showToast('Failed to send', 'error'); } } };",
+            "        window.tagTicket = async function(color) { if(!activeChatChannel) return showToast('Select a ticket first!', 'error'); try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'tag_ticket', channelId: activeChatChannel, color: color, pin: PIN }) }); window.loadTicketsForChat(); document.getElementById(\"quickActionsMenu\").classList.remove(\"open\"); document.getElementById(\"quickActionsToggle\").classList.remove(\"open\"); showToast('Tag applied!'); } catch(e) {} };",
+            "        window.askReviewPrompt = async function() { if(!activeChatChannel) return showToast('Select a ticket first!', 'error'); const pId = prompt('Enter the Product ID to request a review for (check Products tab for IDs):'); if(!pId) return; if(!rawStats.products[pId]) return showToast('Product ID not found.', 'error'); try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'ask_review', channelId: activeChatChannel, productId: pId, pin: PIN }) }); window.fetchChatMessages(); showToast('Review request sent!'); } catch(e) { showToast('Failed to send', 'error'); } };",
+            "        window.createPromo = async function() { const name = document.getElementById('promoName').value.trim().toUpperCase(); const discount = parseInt(document.getElementById('promoDiscount').value); const limit = parseInt(document.getElementById('promoLimit').value); if(!name || isNaN(discount) || isNaN(limit)) { return showToast('Please fill all fields correctly', 'error'); } if(discount < 1 || discount > 100) return showToast('Discount must be between 1 and 100', 'error'); await window.executeAction({ action: 'create_promo', name: name, discount: discount, limit: limit }); };",
+            "        window.deletePromo = async function(code) { if(confirm('Delete promo code ' + decodeURIComponent(code) + '?')) { await window.executeAction({ action: 'delete_promo', name: decodeURIComponent(code) }); } };",
+            "        window.updateRefThreshold = async function() { const val = document.getElementById('ref-threshold').value; if(val) await window.executeAction({action:'update_ref_threshold', threshold: val}); };",
+            "        window.openDirectContact = async function(id) { const msg = prompt('Enter the DM message:'); if(msg) await window.executeAction({action:'send_dm', userId: id, message: msg}); };",
+            "        window.saveUserNote = async function(id) { const note = document.getElementById('note-'+id).value; fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'save_note', userId: id, note: note, pin: PIN }) }).then(r => { if(r.ok) showToast('Note saved!'); }); };",
+            "        window.manageVip = async function(userId, action) { if(action === 'add') { await window.executeAction({action: 'add_vip_days', userId: userId, days: 7}); } else if(action === 'revoke') { if(confirm('Are you sure you want to revoke VIP access for this user?')) { await window.executeAction({action: 'revoke_vip', userId: userId}); } } };",
+            "        window.simulateSale = async function() { await window.executeAction({ action: 'create_manual_tx', username: 'Sandbox Simulator', product: 'Test Item', price: 5.00, date: new Date().toISOString() }); showToast('Simulated sale injected!'); };",
+            "        window.fetchDebugInfo = async function() { try { const res = await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'get_debug_info', pin: PIN }) }); if (res.ok) { const data = await res.json(); document.getElementById('dev-ram').innerText = data.ram + ' MB'; document.getElementById('dev-uptime').innerText = Math.floor(data.uptime / 60) + 'm ' + Math.floor(data.uptime % 60) + 's'; document.getElementById('dev-db-size').innerText = data.dbSize; let logsHtml = ''; data.logs.forEach(l => { const color = l.level === 'ERROR' ? '#f00' : '#0f0'; logsHtml += `<div style=\"color:${color}; margin-bottom:4px;\">[${new Date(l.time).toLocaleTimeString()}] ${escapeHTML(l.msg)}</div>`; }); const logsArea = document.getElementById('dev-logs'); const isBottom = logsArea.scrollHeight - logsArea.scrollTop <= logsArea.clientHeight + 20; logsArea.innerHTML = logsHtml || 'No logs yet...'; if (isBottom) logsArea.scrollTop = logsArea.scrollHeight; if (document.activeElement !== document.getElementById('dev-raw-db')) { document.getElementById('dev-raw-db').value = JSON.stringify(data.rawDb, null, 2); } } } catch(e) {} };",
+            "        window.saveRawDb = async function() { if(!confirm('DANGER: Saving raw JSON! Are you absolutely sure the syntax is perfect?')) return; const val = document.getElementById('dev-raw-db').value; try { JSON.parse(val); } catch(e) { return showToast('Invalid JSON syntax. Aborted to prevent crash.', 'error'); } await window.executeAction({ action: 'update_raw_db', json: val }, false); showToast('Cloud database forcefully overridden!'); };",
+            "        Chart.defaults.color = '#94a3b8'; Chart.defaults.font.family = 'Inter, sans-serif';",
+            "        window.renderSalesChart = function(days) { let dates = Object.keys(rawStats.revenue || {}).sort(); let values = dates.map(d => rawStats.revenue[d]); if (days > 0 && dates.length > days) { dates = dates.slice(-days); values = values.slice(-days); } const ctxSales = document.getElementById('salesChart').getContext('2d'); let grad = ctxSales.createLinearGradient(0,0,0,400); grad.addColorStop(0, 'rgba(56, 189, 248, 0.4)'); grad.addColorStop(1, 'transparent'); if(salesChart) salesChart.destroy(); salesChart = new Chart(ctxSales, { type: 'line', data: { labels: dates.length?dates:['No Data'], datasets: [{ data: values.length?values:[0], borderColor: '#38bdf8', backgroundColor: grad, fill: true, tension: 0.4, pointHoverBackgroundColor: '#fff', pointHoverBorderColor: 'rgba(56, 189, 248, 0.5)', pointHoverBorderWidth: 6, pointHitRadius: 10 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { grid: { color: 'rgba(255,255,255,0.05)'} } } } }); };",
+            "        window.updateSalesChart = function(days) { window.renderSalesChart(days); };",
+            "        function renderAnalyticsCharts() { ",
+            "           const ctxHourly = document.getElementById('hourlyChart').getContext('2d'); if(hourlyChart) hourlyChart.destroy(); hourlyChart = new Chart(ctxHourly, { type: 'bar', data: { labels: Array.from({length: 24}, (_, i) => i+'h'), datasets: [{ label: 'Sales', data: rawStats.analytics.hourly_sales || Array(24).fill(0), backgroundColor: '#a855f7', hoverBackgroundColor: 'rgba(168, 85, 247, 0.4)', borderRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, plugins: { legend: { display: false } }, scales: { y: { grid: { color: 'rgba(255,255,255,0.05)' } }, x: { grid: { display: false } } } } });",
+            "           const prodIds = Object.keys(rawStats.product_sales || {}); const prodLabels = prodIds.map(id => rawStats.products[id] ? rawStats.products[id].name : 'Unknown'); const prodData = Object.values(rawStats.product_sales || {}); const ctxTopProd = document.getElementById('topProductsBarChart').getContext('2d'); if(topProdChart) topProdChart.destroy(); topProdChart = new Chart(ctxTopProd, { type: 'bar', data: { labels: prodLabels.length?prodLabels:['No Data'], datasets: [{ label: 'Sales', data: prodData.length?prodData:[0], backgroundColor: '#38bdf8', hoverBackgroundColor: 'rgba(56, 189, 248, 0.4)', borderRadius: 4 }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, plugins: { legend: { display: false } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' } }, y: { grid: { display: false } } } } });",
+            "           const catRevs = {}; Object.entries(rawStats.product_sales || {}).forEach(([id, count]) => { const p = rawStats.products[id]; if(p && p.price !== 'Custom'){ const cat = p.category || 'Other'; if(!catRevs[cat]) catRevs[cat] = 0; catRevs[cat] += (parseInt(p.price) * count); } }); const ctxCat = document.getElementById('categoryRevenueChart').getContext('2d'); if(catChart) catChart.destroy(); catChart = new Chart(ctxCat, { type: 'polarArea', data: { labels: Object.keys(catRevs).length?Object.keys(catRevs):['No Data'], datasets: [{ data: Object.values(catRevs).length?Object.values(catRevs):[0], backgroundColor: ['#FF1493', '#38bdf8', '#10b981', '#f97316', '#a855f7'], hoverBackgroundColor: ['rgba(255, 20, 147, 0.4)', 'rgba(56, 189, 248, 0.4)', 'rgba(16, 185, 129, 0.4)', 'rgba(249, 115, 22, 0.4)', 'rgba(168, 85, 247, 0.4)'], borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { animateScale: true, animateRotate: true, duration: 1500, easing: 'easeOutQuart' }, plugins: { legend: { position: 'right', labels: {color: '#f8fafc'} } } } });",
+            "           const hLabels = []; const hData = []; Object.entries(rawStats.buy_links || {}).forEach(([id, l]) => { hLabels.push(l.label); hData.push(rawStats.analytics?.heatmap?.[id] || 0); }); const ctxHeatmap = document.getElementById('heatmapChart').getContext('2d'); if(window.heatmapChartInst) window.heatmapChartInst.destroy(); window.heatmapChartInst = new Chart(ctxHeatmap, { type: 'bar', data: { labels: hLabels.length ? hLabels : ['No Data'], datasets: [{ label: 'Clicks', data: hData.length ? hData : [0], backgroundColor: '#f97316', hoverBackgroundColor: 'rgba(249, 115, 22, 0.6)', borderRadius: 4 }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' } }, y: { grid: { display: false } } } } });",
+            "        }",
+            "        initDashboard();",
+            "    </script>",
+            "</body>",
+            "</html>"
+        ].join('\n');
+        return res.end(dashboardHTML);
+    } else { res.writeHead(200, { 'Content-Type': 'text/plain' }); res.end('API Bot'); }
 }).listen(process.env.PORT || 3000);
 
 client.login(DISCORD_BOT_TOKEN);
