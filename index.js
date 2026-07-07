@@ -30,12 +30,9 @@ const MONTHLY_GOAL = 500;
 
 const TEST_VOUCHERS = { "GOYAVE5": 5 };
 
-// === [ANCHOR: GLOBAL_MAPS_AND_SCOPES] ===
 const channelStates = new Map();
 const STATS_FILE = path.join(__dirname, 'stats.json');
 const guildInvites = new Map(); 
-const rateLimits = new Map();
-const bruteForceLocks = new Map();
 
 // === [ANCHOR: MEMORY_CACHE_AND_DB] ===
 let memoryStats = { 
@@ -45,22 +42,22 @@ let memoryStats = {
     custom_requests: [], user_history: {}, warns: {}, blacklist: [], user_notes: {},
     promo_codes: {}, analytics: { tickets_opened: 0, hourly_sales: Array(24).fill(0) },
     referrals: {}, settings: { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } },
-    products: {}, subscriptions: {}, buy_links: {}, pending_reviews: [], overrides: {},
+    products: {}, subscriptions: {}, buy_links: {}, pending_reviews: [],
     activity_feed: [],
     last_update: Date.now() 
 };
 
 // 📦 INTEGRATION: Stock initialized to infinity ("∞")
 const INITIAL_PRODUCTS = {
-    "1": { name: "Photo Pack 1", price: "5", link: "https://drive.google.com/ton_lien", category: "✨ PHOTOS", stock: "∞", upsellId: "6", upsellDiscount: 20 }, 
-    "2": { name: "Photo Pack 2", price: "5", link: "https://drive.google.com/ton_lien", category: "✨ PHOTOS", stock: "∞" },
-    "3": { name: "Full Body", price: "5", link: "https://drive.google.com/ton_lien", category: "✨ PHOTOS", stock: "∞" }, 
-    "4": { name: "Try-On Pack", price: "5", link: "https://drive.google.com/ton_lien", category: "✨ PHOTOS", stock: "∞" },
-    "5": { name: "Mirror Pic", price: "5", link: "https://drive.google.com/ton_lien", category: "✨ PHOTOS", stock: "∞" }, 
-    "6": { name: "5-Min Video", price: "10", link: "https://drive.google.com/ton_lien", category: "🔥 VIDEOS", stock: "∞" },
-    "7": { name: "Shower / Bath", price: "10", link: "https://drive.google.com/ton_lien", category: "🔥 VIDEOS", stock: "∞" }, 
-    "8": { name: "Friends Pack", price: "15", link: "https://drive.google.com/ton_lien", category: "💦 SPECIAL", stock: "∞" },
-    "9": { name: "Surprise Pack", price: "15", link: "https://drive.google.com/ton_lien", category: "💦 SPECIAL", stock: "∞" }, 
+    "1": { name: "Boobs", price: "5", link: "https://drive.google.com/ton_lien_boobs", category: "✨ PHOTOS", stock: "∞" }, 
+    "2": { name: "Ass", price: "5", link: "https://drive.google.com/ton_lien_ass", category: "✨ PHOTOS", stock: "∞" },
+    "3": { name: "Full Body", price: "5", link: "https://drive.google.com/ton_lien_fullbody", category: "✨ PHOTOS", stock: "∞" }, 
+    "4": { name: "Lingerie Try-On", price: "5", link: "https://drive.google.com/ton_lien_lingerie", category: "✨ PHOTOS", stock: "∞" },
+    "5": { name: "Mirror Pic", price: "5", link: "https://drive.google.com/ton_lien_mirror", category: "✨ PHOTOS", stock: "∞" }, 
+    "6": { name: "5-Min Video", price: "10", link: "https://drive.google.com/ton_lien_video5min", category: "🔥 VIDEOS", stock: "∞" },
+    "7": { name: "Shower / Bath", price: "10", link: "https://drive.google.com/ton_lien_shower", category: "🔥 VIDEOS", stock: "∞" }, 
+    "8": { name: "Friends Nude", price: "15", link: "https://drive.google.com/ton_lien_friends", category: "💦 SPECIAL", stock: "∞" },
+    "9": { name: "Surprise Pack", price: "15", link: "https://drive.google.com/ton_lien_surprisepack", category: "💦 SPECIAL", stock: "∞" }, 
     "10": { name: "Sexting", price: "Custom", link: "", category: "💌 PERSONALIZED", stock: "∞" },
     "11": { name: "Custom Request", price: "Custom", link: "", category: "💌 PERSONALIZED", stock: "∞" },
     "VIP": { name: "👑 VIP Pass 30 Days", price: "20", link: "Welcome to VIP!", category: "👑 SUBSCRIPTION", stock: "∞" }
@@ -73,36 +70,7 @@ const INITIAL_BUY_LINKS = {
     "4": { label: "💳 Buy €20", url: "https://www.eneba.com/rewarble-rewarble-revolut-20-gbp-voucher-global" }
 };
 
-// === [ANCHOR: UTILITY_FUNCTIONS] ===
-function parseCookies(cookieHeader) {
-    const list = {};
-    if (!cookieHeader) return list;
-    cookieHeader.split(';').forEach(cookie => {
-        const parts = cookie.split('=');
-        list[parts.shift().trim()] = decodeURIComponent(parts.join('='));
-    });
-    return list;
-}
-
-function deepMergeStats(target, source) {
-    for (const key in source) {
-        if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
-            if (!target[key]) target[key] = {};
-            deepMergeStats(target[key], source[key]);
-        } else {
-            target[key] = source[key];
-        }
-    }
-}
-
 // === [ANCHOR: CLOUD_SYNC_FUNCTIONS] ===
-async function notifyAdminPhone(title, msg) {
-    try {
-        const admin = await client.users.fetch(ADMIN_DISCORD_ID);
-        if (admin) await admin.send(`📱 **NOTIFICATION SYSTÈME**\n**${title}**\n> ${msg}`);
-    } catch(e) {}
-}
-
 function addActivity(type, message) {
     if (!memoryStats.activity_feed) memoryStats.activity_feed = [];
     memoryStats.activity_feed.unshift({ type, message, time: Date.now() });
@@ -121,18 +89,13 @@ async function loadCloudStats() {
         const cleanUrl = url.endsWith('/') ? url.slice(0, -1) : url;
         const res = await axios.get(`${cleanUrl}/get/bot_stats`, { headers: { Authorization: `Bearer ${token}` } });
         if (res.data && res.data.result) {
-            const dataCloud = JSON.parse(res.data.result);
-            if (dataCloud && typeof dataCloud === 'object' && !Array.isArray(dataCloud)) {
-                deepMergeStats(memoryStats, dataCloud);
-            }
+            memoryStats = { ...memoryStats, ...JSON.parse(res.data.result) };
             if (!memoryStats.promo_codes) memoryStats.promo_codes = {};
             if (!memoryStats.user_notes) memoryStats.user_notes = {};
             if (!memoryStats.referrals) memoryStats.referrals = {};
             if (!memoryStats.subscriptions) memoryStats.subscriptions = {};
             if (!memoryStats.pending_reviews) memoryStats.pending_reviews = [];
             if (!memoryStats.activity_feed) memoryStats.activity_feed = [];
-            if (!memoryStats.custom_requests) memoryStats.custom_requests = [];
-            if (!memoryStats.overrides) memoryStats.overrides = {};
             if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } };
             if (!memoryStats.settings.maintenance) memoryStats.settings.maintenance = { active: false, endsAt: 0, channelId: "" };
             if (!memoryStats.buy_links || Object.keys(memoryStats.buy_links).length === 0) memoryStats.buy_links = INITIAL_BUY_LINKS; 
@@ -140,6 +103,7 @@ async function loadCloudStats() {
             if (!memoryStats.analytics.hourly_sales) memoryStats.analytics.hourly_sales = Array(24).fill(0);
             if (!memoryStats.products || Object.keys(memoryStats.products).length === 0) memoryStats.products = INITIAL_PRODUCTS;
             
+            // 🔥 RECALCUL COMPLET DU TOTAL EARNINGS BASÉ SUR L'HISTORIQUE 🔥
             if (memoryStats.revenue) {
                 let total = 0;
                 for (const val of Object.values(memoryStats.revenue)) {
@@ -148,7 +112,7 @@ async function loadCloudStats() {
                 memoryStats.total_revenue = total;
             }
             
-            console.log("Base de données synchronisée avec le Cloud.");
+            console.log("✅ Database synchronized with the Cloud.");
         }
     } catch (e) { console.error("❌ Cloud GET Error :", e.message); }
 }
@@ -180,6 +144,7 @@ async function checkSubscriptions() {
                     const codeName = "COMEBACK-" + Math.random().toString(36).substring(2, 6).toUpperCase();
                     if (!memoryStats.promo_codes) memoryStats.promo_codes = {};
                     memoryStats.promo_codes[codeName] = { discount: 50, limit: 1, used: 0, createdAt: new Date().toLocaleDateString('en-US') };
+                    
                     await member.send(`🛑 **Your VIP Pass has expired.** You lost access to exclusive content. To thank you for your past support, here is a **-50% OFF** promo code valid for 1 use: \`${codeName}\`. Renew your pass in the shop!`).catch(() => {});
                 }
             } catch(e) {}
@@ -212,13 +177,12 @@ function logStat(type, value = 1, extraData = null) {
             memoryStats.user_spending[extraData.username] = (memoryStats.user_spending[extraData.username] || 0) + value;
             memoryStats.product_sales[extraData.productId] = (memoryStats.product_sales[extraData.productId] || 0) + 1;
             if (!memoryStats.user_history[extraData.username]) memoryStats.user_history[extraData.username] = [];
-            memoryStats.user_history[extraData.username].unshift({ product: extraData.productName, price: value, date: new Date().toLocaleString('en-US'), isoDate: today });
+            memoryStats.user_history[extraData.username].unshift({ product: extraData.productName, price: value, date: new Date().toLocaleString('en-US') });
             if (memoryStats.user_history[extraData.username].length > 20) memoryStats.user_history[extraData.username].pop();
-            memoryStats.recent_transactions.unshift({ username: extraData.username, product: extraData.productName, price: value, date: new Date().toLocaleString('en-US'), isoDate: today, productId: extraData.productId });
+            memoryStats.recent_transactions.unshift({ username: extraData.username, product: extraData.productName, price: value, date: new Date().toLocaleString('en-US') });
             if (memoryStats.recent_transactions.length > 50) memoryStats.recent_transactions.pop();
             
             addActivity('sale', `💰 €${value} Sale: ${extraData.username} bought ${extraData.productName}`);
-            notifyAdminPhone('NOUVELLE VENTE', `💰 +${value}€\n👤 Client: ${extraData.username}\n📦 Produit: ${extraData.productName}`);
         }
     } else if (type === 'joins') {
         memoryStats.joins[today] = (memoryStats.joins[today] || 0) + value;
@@ -244,8 +208,7 @@ function logStat(type, value = 1, extraData = null) {
         }
     } else if (type === 'custom_request') {
         if (!Array.isArray(memoryStats.custom_requests)) memoryStats.custom_requests = [];
-        memoryStats.custom_requests.unshift({ id: Date.now().toString(), username: extraData.username, userId: extraData.userId, product: extraData.productName, date: new Date().toLocaleString('en-US'), status: 'pending' });
-        notifyAdminPhone('NOUVELLE CUSTOM REQUEST', `💌 ${extraData.username} a demandé: ${extraData.productName}\n➡️ Vérifie le tableau Kanban sur le Dashboard.`);
+        memoryStats.custom_requests.unshift({ id: Date.now().toString(), username: extraData.username, product: extraData.productName, date: new Date().toLocaleString('en-US'), status: 'pending' });
     }
     memoryStats.last_update = Date.now();
     syncCloud(); 
@@ -293,27 +256,14 @@ async function sendShopSetup(channel) {
         .setTitle('💎 VIP EXCLUSIVE MENU & PRICES 💎')
         .setDescription('> *Instant automatic delivery directly in your DMs!* 🚀\n\n━━━━━━━━━━━━━━━━━━━━━━');
     
+    let isFirst = true;
     for (const [catName, items] of Object.entries(groupedProducts)) {
-        let currentFieldText = "";
-        let chunkIndex = 1;
-        for (const item of items) {
-            const line = `> ${item}\n`;
-            if (currentFieldText.length + line.length > 1000) {
-                shopEmbed.addFields({ name: `${catName} (Part ${chunkIndex})`, value: currentFieldText, inline: true });
-                currentFieldText = line;
-                chunkIndex++;
-            } else {
-                currentFieldText += line;
-            }
-        }
-        if (currentFieldText) {
-            shopEmbed.addFields({ name: chunkIndex > 1 ? `${catName} (Part ${chunkIndex})` : catName, value: currentFieldText, inline: true });
-        }
+        if (!isFirst && items.length > 0) shopEmbed.addFields({ name: '\u200B', value: '\u200B' });
+        shopEmbed.addFields({ name: catName, value: '> ' + items.join('\n> '), inline: true });
+        isFirst = false;
     }
 
     shopEmbed.addFields({ name: '━━━━━━━━━━━━━━━━━━━━━━\n💳 HOW TO BUY ?', value: '**STEP 1:** Click a Buy button below to get your voucher.\n**STEP 2:** Click the green **📩 Redeem Code** button.\n**STEP 3:** Paste your code, choose your item, and check your DMs! 🎉\n\n🎁 **FREE PRODUCT:** Click **🔗 Get Referral Link**, invite your friends, and get a 100% OFF code automatically!' });
-    shopEmbed.addFields({ name: '\u200B', value: '\u200B' });
-
     shopEmbed.setFooter({ text: 'Powered by Nexus Premium • Secure & Automatic 🔒' });
 
     await channel.send({ embeds: [shopEmbed], components: componentsToSend }).catch(() => {});
@@ -354,12 +304,6 @@ client.once('ready', () => {
 
 client.on('inviteCreate', invite => { try { guildInvites.get(invite.guild.id)?.set(invite.code, invite.uses); } catch (e) {} });
 client.on('inviteDelete', invite => { try { guildInvites.get(invite.guild.id)?.delete(invite.code); } catch (e) {} });
-
-client.on('channelDelete', (channel) => {
-    if (channelStates.has(channel.id)) {
-        channelStates.delete(channel.id);
-    }
-});
 
 // === [ANCHOR: DISCORD_INTERACTION_HANDLER] ===
 client.on('interactionCreate', async (interaction) => {
@@ -406,7 +350,6 @@ client.on('interactionCreate', async (interaction) => {
                 date: new Date().toLocaleString('en-US')
             });
             addActivity('review', `⭐ New ${numRating}/5 review submitted by ${interaction.user.username}`);
-            notifyAdminPhone('NOUVELLE REVIEW', `⭐ ${numRating}/5 par ${interaction.user.username}\nEn attente de validation sur le dashboard.`);
             syncCloud();
 
             return await interaction.reply({ content: "✅ **Thank you!** Your review has been submitted to our team for moderation.", ephemeral: true }).catch(()=>{});
@@ -521,7 +464,7 @@ client.on('interactionCreate', async (interaction) => {
             }
 
             // 💥 DESTRUCTION VISUELLE DE L'UI
-            await interaction.update({ content: "📦 **Processing your order... The menu has been locked.**", components: [] }).catch(() => decorate => {});
+            await interaction.update({ content: "📦 **Processing your order... The menu has been locked.**", components: [] }).catch(() => {});
 
             const selected = interaction.values[0]; const product = memoryStats.products[selected]; 
             if (!product) return;
@@ -529,11 +472,15 @@ client.on('interactionCreate', async (interaction) => {
             const promo = state ? state.promo : null;
 
             if (product.price === "Custom") {
-                logStat('custom_request', 0, { username: interaction.user.username, userId: interaction.user.id, productName: product.name });
+                logStat('custom_request', 0, { username: interaction.user.username, productName: product.name });
                 if (interaction.channel) {
                     await interaction.channel.send(`📩 **Custom request registered!** An admin will review it. Closing ticket in 10 seconds...`).catch(() => {});
                     setTimeout(() => { channelStates.delete(interaction.channel.id); interaction.channel.delete().catch(()=>{}); }, 10000);
                 }
+                try {
+                    const admin = await client.users.fetch(ADMIN_DISCORD_ID);
+                    if (admin) await admin.send(`🔔 **Custom Request** from <@${interaction.user.id}>: ${product.name}`).catch(() => {});
+                } catch (err) {}
             } else {
                 let finalPrice = parseInt(product.price);
                 let isVIPPurchase = selected === "VIP" || (product.category && product.category.includes("SUBSCRIPTION"));
@@ -550,11 +497,6 @@ client.on('interactionCreate', async (interaction) => {
 
                 if (appliedDiscount > 0) finalPrice = Math.max(0, finalPrice - (finalPrice * appliedDiscount / 100));
 
-                // DOUBLE VERIFICATION DE SECURITE AU MOMENT DE L'ACHAT
-                if (!promo && state && state.voucherValue !== undefined && state.voucherValue !== Infinity && finalPrice > state.voucherValue) {
-                    return interaction.channel.send(`❌ **Error:** This product (€${finalPrice}) exceeds your voucher value (€${state.voucherValue}). Transaction aborted.`).catch(()=>{});
-                }
-
                 if (product.stock && product.stock !== "∞") {
                     let s = parseInt(product.stock);
                     if (!isNaN(s) && s > 0) memoryStats.products[selected].stock = (s - 1).toString();
@@ -562,23 +504,6 @@ client.on('interactionCreate', async (interaction) => {
 
                 logStat('revenue', finalPrice, { productId: selected, productName: product.name, username: interaction.user.username });
                 
-                // 🚀 UPSELL ENGINE LOGIC
-                let upsellEmbed = null;
-                if (product.upsellId && memoryStats.products[product.upsellId]) {
-                    const upsellProduct = memoryStats.products[product.upsellId];
-                    const uDiscount = product.upsellDiscount || 20;
-                    
-                    const codeName = "UPSELL-" + Math.random().toString(36).substring(2, 8).toUpperCase();
-                    if (!memoryStats.promo_codes) memoryStats.promo_codes = {};
-                    memoryStats.promo_codes[codeName] = { discount: uDiscount, limit: 1, used: 0, createdAt: new Date().toLocaleDateString('en-US') };
-                    syncCloud();
-                    
-                    upsellEmbed = new EmbedBuilder()
-                        .setColor('#00f0ff')
-                        .setTitle('🎁 OFFRE EXCLUSIVE DEBLOCQUÉE !')
-                        .setDescription(`Parce que tu as acheté **${product.name}**, tu as droit à une offre unique !\n\nObtiens **${upsellProduct.name}** avec **-${uDiscount}% de réduction**.\n\n👉 Utilise ce code promo lors de ton prochain achat :\n\`${codeName}\`\n\n*(Code valable pour 1 seule utilisation)*`);
-                }
-
                 if (isVIPPurchase) {
                     const now = Date.now();
                     const thirtyDays = 30 * 24 * 60 * 60 * 1000;
@@ -613,20 +538,15 @@ client.on('interactionCreate', async (interaction) => {
                 );
 
                 try {
-                    let dmMessages = { embeds: [successEmbed], components: [reviewRow] };
-                    await interaction.user.send(dmMessages);
-                    if (upsellEmbed) await interaction.user.send({ embeds: [upsellEmbed] });
-                    
+                    await interaction.user.send({ embeds: [successEmbed], components: [reviewRow] });
                     if (interaction.channel) {
                         await interaction.channel.send("✅ **Product delivered to your DMs!** Closing ticket in 5 seconds...").catch(()=>{});
                         setTimeout(() => { channelStates.delete(interaction.channel.id); interaction.channel.delete().catch(()=>{}); }, 5000);
                     }
                 } catch (e) { 
                     if (interaction.channel) {
-                        let chMsg = { content: "⚠️ **Warning: Could not DM you.** Here is your product. Ticket closes in 30 seconds.", embeds: [successEmbed], components: [reviewRow] };
-                        await interaction.channel.send(chMsg).catch(()=>{}); 
-                        if(upsellEmbed) await interaction.channel.send({ embeds: [upsellEmbed] }).catch(()=>{});
-                        setTimeout(() => { channelStates.delete(interaction.channel.id); interaction.channel.delete().catch(()=>{}); }, 30000);
+                        await interaction.channel.send({ content: "⚠️ **Warning: Could not DM you.** Here is your product. Ticket closes in 15 seconds.", embeds: [successEmbed], components: [reviewRow] }).catch(()=>{}); 
+                        setTimeout(() => { channelStates.delete(interaction.channel.id); interaction.channel.delete().catch(()=>{}); }, 15000);
                     } 
                 }
             }
@@ -649,14 +569,7 @@ client.on('messageCreate', async (message) => {
         }
 
         if (message.channel?.name?.startsWith('shop-')) {
-            // SÉCURITÉ ET AUTO-HEALING SESSIONS : Si le bot a crashé/redémarré, on recrée l'état du salon au lieu d'ignorer le client !
-            let state = channelStates.get(message.channel.id); 
-            if (!state) {
-                state = { validated: false, processing: false, promo: null, redeemed: false };
-                channelStates.set(message.channel.id, state);
-            }
-
-            if (state.validated || state.processing) return;
+            const state = channelStates.get(message.channel.id); if (!state || state.validated || state.processing) return;
             const input = message.content.trim().toUpperCase();
 
             state.processing = true; 
@@ -670,65 +583,24 @@ client.on('messageCreate', async (message) => {
 
             if (promoApplied || TEST_VOUCHERS[input] || input.length >= 8) {
                 try {
-                    let voucherValue = 0; 
-
-                    // PARSING ULTRA-ROBUSTE ET DEEP RECURSIVE SEARCH DE LA VALEUR REWARBLE
                     if (!promoApplied && !TEST_VOUCHERS[input]) {
-                        const apiResponse = await axios.post(REWARBLE_API_URL, { code: input }, { headers: { 'Authorization': `Bearer ${REWARBLE_API_KEY}` } }).catch(err => {
+                        await axios.post(REWARBLE_API_URL, { code: input }, { headers: { 'Authorization': `Bearer ${REWARBLE_API_KEY}` } }).catch(err => {
                             if (err.response && err.response.status === 402) { throw new Error("REWARBLE_402_INSUFFICIENT_FUNDS"); }
                             throw err;
                         });
-                        
-                        console.log("🛠️ [REWARBLE] API RESPONSE DATA:", apiResponse.data);
-
-                        let rawData = apiResponse.data;
-                        if (rawData) {
-                            if (rawData.value !== undefined) voucherValue = parseFloat(rawData.value);
-                            else if (rawData.amount !== undefined) voucherValue = parseFloat(rawData.amount);
-                            else if (rawData.voucher && rawData.voucher.value !== undefined) voucherValue = parseFloat(rawData.voucher.value);
-                            else if (rawData.voucher && rawData.voucher.amount !== undefined) voucherValue = parseFloat(rawData.voucher.amount);
-                            else if (rawData.data && rawData.data.value !== undefined) voucherValue = parseFloat(rawData.data.value);
-                            else if (rawData.data && rawData.data.amount !== undefined) voucherValue = parseFloat(rawData.data.amount);
-                            else {
-                                const deepSearch = (obj) => {
-                                    for (let key in obj) {
-                                        if ((key === 'value' || key === 'amount') && !isNaN(parseFloat(obj[key])) && parseFloat(obj[key]) > 0) {
-                                            return parseFloat(obj[key]);
-                                        }
-                                        if (typeof obj[key] === 'object' && obj[key] !== null) {
-                                            let deepVal = deepSearch(obj[key]);
-                                            if (deepVal) return deepVal;
-                                        }
-                                    }
-                                    return null;
-                                };
-                                let detectedValue = deepSearch(rawData);
-                                voucherValue = detectedValue !== null ? detectedValue : 0;
-                            }
-                        }
-                    } else if (TEST_VOUCHERS[input]) {
-                        voucherValue = parseFloat(TEST_VOUCHERS[input]); 
-                    } else if (promoApplied) {
-                        voucherValue = Infinity; 
                     }
                     
                     state.validated = true; state.processing = false; state.promo = promoApplied; 
-                    state.voucherValue = voucherValue; 
                     
                     const menu = new StringSelectMenuBuilder().setCustomId('product_select').setPlaceholder('Select your product...');
                     const isUserVIP = memoryStats.subscriptions && memoryStats.subscriptions[message.author.id];
-
-                    let availableItems = 0; 
 
                     for (const [id, prod] of Object.entries(memoryStats.products)) { 
                         if (prod.stock && prod.stock !== "∞" && parseInt(prod.stock) <= 0) continue;
 
                         let finalPriceStr = "€" + prod.price;
-                        let numericFinalPrice = 0;
-
-                        if (prod.price === "Custom") {
-                            finalPriceStr = "Custom";
-                        } else {
+                        if (prod.price === "Custom") finalPriceStr = "Custom";
+                        else {
                             let originalPrice = parseInt(prod.price);
                             let discountToApply = 0;
                             let isVIPItem = id === "VIP" || (prod.category && prod.category.includes("SUBSCRIPTION"));
@@ -737,54 +609,79 @@ client.on('messageCreate', async (message) => {
                             else if (promoApplied) { discountToApply = promoApplied.discount; }
 
                             if (discountToApply > 0) {
-                                numericFinalPrice = Math.max(0, originalPrice - (originalPrice * discountToApply / 100));
-                                finalPriceStr = `€${numericFinalPrice.toFixed(2)} (-${discountToApply}%)`;
-                            } else {
-                                numericFinalPrice = originalPrice;
+                                const newPrice = Math.max(0, originalPrice - (originalPrice * discountToApply / 100));
+                                finalPriceStr = `€${newPrice.toFixed(2)} (-${discountToApply}%)`;
                             }
                         }
-
-                        if (!promoApplied && prod.price !== "Custom" && numericFinalPrice > voucherValue) {
-                            continue; 
-                        }
-
-                        availableItems++;
                         menu.addOptions(new StringSelectMenuOptionBuilder().setLabel(prod.name).setDescription(`Price: ${finalPriceStr}`).setValue(id)); 
                     }
                     
-                    // CORRECTION ET RESET SÉCURITÉ DU BLOCAGE INFINI
-                    if (availableItems === 0) {
-                        state.validated = false; 
-                        state.processing = false; 
-                        return message.reply(`❌ **Insufficient Funds.** Your code is valid, but its value (**€${voucherValue}**) is too low to purchase any available items.`);
+                    if (menu.options.length === 0) {
+                        return message.reply("❌ All products are currently out of stock.");
                     }
 
-                    let replyMsg = `✅ **Code validated! Value detected: €${voucherValue}.**\nPlease select an item you can afford below:`;
+                    let replyMsg = "✅ **Code validated! Select your item below:**";
                     if (promoApplied) replyMsg = `✅ **Promo Code Accepted (-${promoApplied.discount}%)! Select your item below:**`;
-                    else if (isUserVIP) replyMsg = `👑 **VIP Status Active! (-20% on all items). Code Value: €${voucherValue}.**\nSelect your item below:`;
+                    else if (isUserVIP) replyMsg = `👑 **VIP Status Active! (-20% on all items). Select your item below:**`;
 
                     await message.reply({ content: replyMsg, components: [new ActionRowBuilder().addComponents(menu)] });
                 } catch (e) { 
                     state.processing = false; 
-                    state.validated = false;
                     if (e.message === "REWARBLE_402_INSUFFICIENT_FUNDS") {
                         message.reply("⚠️ **Rewarble Error (402) :** Insufficient API balance.");
                         const adminUser = await client.users.fetch(ADMIN_DISCORD_ID).catch(() => null);
                         if (adminUser) adminUser.send("🚨 **CRITICAL REWARBLE ALERT:** Insufficient balance!").catch(() => {});
                     } else message.reply("❌ Invalid code."); 
                 }
-            } else {
-                // CORRECTION ANTI FALSH-SILENCE : Renvoi d'un retour immédiat si le format de la string ne correspond à rien de valide
-                state.processing = false;
-                return message.reply("❌ **Code invalide :** Le format saisi est incorrect ou trop court (minimum 8 caractères).");
-            }
+            } else state.processing = false;
         }
-    } catch (globalError) {
-        console.error("Message Block Global Error:", globalError);
-    }
+    } catch (globalError) {}
 });
 
+// === [ANCHOR: DISCORD_GUILD_MEMBER_EVENTS] ===
+client.on('guildMemberAdd', async (member) => { 
+    logStat('joins', 1, { username: member.user.username }); 
+    try {
+        const newInvites = await member.guild.invites.fetch();
+        const oldInvites = guildInvites.get(member.guild.id);
+        const invite = newInvites.find(i => oldInvites.get(i.code) && i.uses > oldInvites.get(i.code)) || newInvites.find(i => !oldInvites.has(i.code) && i.uses > 0);
+        guildInvites.set(member.guild.id, new Map(newInvites.map(i => [i.code, i.uses])));
+
+        if (invite && invite.inviter) {
+            const inviterId = invite.inviter.id;
+            if (!memoryStats.referrals) memoryStats.referrals = {};
+            if (!memoryStats.referrals[inviterId]) memoryStats.referrals[inviterId] = { count: 0, total_rewards: 0, invited: [], username: invite.inviter.username };
+            memoryStats.referrals[inviterId].count++;
+            memoryStats.referrals[inviterId].invited.unshift({ username: member.user.username, date: new Date().toLocaleString('en-US') });
+            
+            const threshold = memoryStats.settings?.invite_reward_threshold || 10;
+            if (memoryStats.referrals[inviterId].count >= threshold) {
+                memoryStats.referrals[inviterId].count -= threshold;
+                memoryStats.referrals[inviterId].total_rewards++;
+                const codeName = "REF" + Math.random().toString(36).substring(2, 8).toUpperCase();
+                if (!memoryStats.promo_codes) memoryStats.promo_codes = {};
+                memoryStats.promo_codes[codeName] = { discount: 100, limit: 1, used: 0, createdAt: new Date().toLocaleDateString('en-US') };
+                const inviterUser = await client.users.fetch(inviterId).catch(()=>null);
+                if (inviterUser) inviterUser.send(`🎉 **CONGRATULATIONS!** You invited ${threshold} people and unlocked a FREE product!\n\nHere is your personal 100% OFF Promo Code:\n\`${codeName}\``).catch(()=>{});
+            }
+            syncCloud();
+        }
+    } catch (err) {}
+});
+
+client.on('guildMemberRemove', async (member) => { 
+    const duration = member.joinedTimestamp ? (Date.now() - member.joinedTimestamp) : 0;
+    const avatar = member.user.displayAvatarURL({ size: 64, dynamic: true });
+    logStat('leaves', 1, { username: member.user.username, avatar: avatar, duration: duration }); 
+});
+
+// ==========================================
+// WEB SERVER API & DASHBOARD HTML
+// ==========================================
 // === [ANCHOR: HTTP_SERVER_AND_AUTH] ===
+const rateLimits = new Map();
+const bruteForceLocks = new Map();
+
 http.createServer(async (req, res) => {
     const clientIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '127.0.0.1';
     const now = Date.now();
@@ -817,7 +714,7 @@ http.createServer(async (req, res) => {
 
     if ((req.url === '/dashboard' || req.url === '/') && !isAuthenticated) {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        return res.end("<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'><title>Nexus Security</title><style>body{font-family:'Inter',sans-serif;background:#030712;color:#f8fafc;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;}.login-box{background:rgba(15,23,42,0.4);backdrop-filter:blur(24px);padding:50px;border-radius:24px;border:1px solid rgba(56,189,248,0.1);text-align:center;width:90%;max-width:420px;}h2{font-weight:800;letter-spacing:2px;background:linear-gradient(135deg,#fff 0%,#38bdf8 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}input{background:rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.05);color:white;padding:18px;border-radius:12px;font-size:20px!important;text-align:center;letter-spacing:15px;width:100%;max-width:240px;margin:30px auto;outline:none;}button{background:linear-gradient(135deg,#38bdf8 0%,#8b5cf6 100%);color:white;border:none;padding:15px 40px;font-size:1.1em;border-radius:12px;cursor:pointer;font-weight:800;width:100%;}</style></head><body><div class='login-box'><h2>NEXUS CORE</h2><input type='password' id='pin' maxlength='4' placeholder='••••'><button onclick='login()'>Authenticate</button><p id='err' style='color:#ec4899;display:none;margin-top:20px;font-weight:bold;'>Access Denied</p></div><script>async function login()){const res=await fetch('/api/login',{method:'POST',body:JSON.stringify({pin:document.getElementById('pin').value})});if(res.ok)location.reload();else document.getElementById('err').style.display='block';}document.getElementById('pin').addEventListener('keypress',e=>{if(e.key==='Enter')login();});</script></body></html>");
+        return res.end("<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no'><meta name='apple-mobile-web-app-capable' content='yes'><meta name='apple-mobile-web-app-status-bar-style' content='black-translucent'><title>Nexus Login</title><style>body{font-family:'Inter',sans-serif;background:#0b0f19;color:#f8fafc;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;}.login-box{background:rgba(15, 23, 42, 0.6);backdrop-filter:blur(16px);padding:40px;border-radius:16px;border:1px solid rgba(56,189,248,0.2);text-align:center;box-shadow:0 10px 40px rgba(0,0,0,0.5);width:90%;max-width:400px;box-sizing:border-box;}input{background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.1);color:white;padding:15px;border-radius:8px;font-size:16px!important;text-align:center;letter-spacing:10px;width:100%;max-width:200px;margin:20px auto;outline:none;transition:0.3s;display:block;}input:focus{border-color:#38bdf8;box-shadow:0 0 15px rgba(56,189,248,0.3);}button{background:#38bdf8;color:white;border:none;padding:12px 30px;font-size:1.1em;border-radius:8px;cursor:pointer;font-weight:bold;width:100%;transition:0.2s;}button:hover{filter:brightness(1.2);}</style></head><body><div class='login-box'><h2>🔒 Restricted Area</h2><input type='password' id='pin' maxlength='4' placeholder='••••'><button onclick='login()'>Unlock Dashboard</button><p id='err' style='color:#ec4899;display:none;margin-top:10px;'>Invalid PIN</p></div><script>async function login(){const res=await fetch('/api/login',{method:'POST',body:JSON.stringify({pin:document.getElementById('pin').value})});if(res.ok)location.reload();else document.getElementById('err').style.display='block';} document.getElementById('pin').addEventListener('keypress', e=>{if(e.key==='Enter')login();});</script></body></html>");
     }
 
     // === [ANCHOR: API_ROUTES_GET] ===
@@ -977,32 +874,16 @@ http.createServer(async (req, res) => {
                 const guild = client.guilds.cache.first();
                 if (!guild) return res.writeHead(404).end('Guild not found');
 
-                if (data.action === 'edit_stat') {
-                    const val = data.value;
-                    if (data.key === 'today_rev') {
-                        const todayStr = new Date().toISOString().split('T')[0];
-                        const oldVal = memoryStats.revenue[todayStr] || 0;
-                        const newVal = parseFloat(val) || 0;
-                        memoryStats.revenue[todayStr] = newVal;
-                        memoryStats.total_revenue = Math.max(0, memoryStats.total_revenue + (newVal - oldVal));
-                    } 
-                    else if (data.key === 'total_rev') {
-                        memoryStats.total_revenue = parseFloat(val) || 0;
-                    } 
-                    else if (data.key === 'tickets') {
-                        if (!memoryStats.analytics) memoryStats.analytics = { tickets_opened: 0, hourly_sales: Array(24).fill(0) };
-                        memoryStats.analytics.tickets_opened = parseInt(val) || 0;
-                    } 
-                    else {
-                        if (!memoryStats.overrides) memoryStats.overrides = {};
-                        if (val === '') {
-                            delete memoryStats.overrides[data.key];
-                        } else {
-                            memoryStats.overrides[data.key] = val;
-                        }
-                    }
+                // --- 📝 EDIT TODAY'S EARNINGS ---
+                if (data.action === 'edit_today_earnings') {
+                    const todayStr = new Date().toISOString().split('T')[0];
+                    const oldVal = memoryStats.revenue[todayStr] || 0;
+                    const newVal = parseFloat(data.value) || 0;
+                    memoryStats.revenue[todayStr] = newVal;
+                    memoryStats.total_revenue = Math.max(0, memoryStats.total_revenue + (newVal - oldVal));
                     syncCloud();
                 }
+                // --- MODERATION DES REVIEWS PENDING ---
                 else if (data.action === 'approve_review') {
                     if (!memoryStats.pending_reviews) memoryStats.pending_reviews = [];
                     const idx = memoryStats.pending_reviews.findIndex(r => r.id === data.id);
@@ -1029,6 +910,7 @@ http.createServer(async (req, res) => {
                         syncCloud();
                     }
                 }
+                // --------------------------------------
                 else if (data.action === 'toggle_maintenance') {
                     if (!memoryStats.settings) memoryStats.settings = {};
                     if (!memoryStats.settings.maintenance) memoryStats.settings.maintenance = { active: false, endsAt: 0, channelId: "" };
@@ -1121,9 +1003,11 @@ http.createServer(async (req, res) => {
                             const tx = memoryStats.recent_transactions[txIndex];
                             memoryStats.recent_transactions.splice(txIndex, 1);
                             
+                            // 🔄 CORRECTION 1: Total Revenue and transactions
                             memoryStats.total_transactions = Math.max(0, memoryStats.total_transactions - 1);
                             memoryStats.total_revenue = Math.max(0, memoryStats.total_revenue - tx.price);
                             
+                            // 🔄 CORRECTION 2: Today's Revenue
                             try {
                                 const revKey = new Date(tx.date).toISOString().split('T')[0];
                                 if (memoryStats.revenue[revKey]) {
@@ -1131,10 +1015,12 @@ http.createServer(async (req, res) => {
                                 }
                             } catch(err) {}
 
+                            // 🔄 CORRECTION 3: User spending
                             if (memoryStats.user_spending && memoryStats.user_spending[tx.username]) {
                                 memoryStats.user_spending[tx.username] = Math.max(0, memoryStats.user_spending[tx.username] - tx.price);
                             }
                             
+                            // 🔄 CORRECTION 4: Remove from Activity Feed (Live Pulse)
                             if (Array.isArray(memoryStats.activity_feed)) {
                                 const feedMsg = `💰 €${tx.price} Sale: ${tx.username} bought ${tx.product}`;
                                 const feedIdx = memoryStats.activity_feed.findIndex(f => f.type === 'sale' && f.message === feedMsg);
@@ -1150,14 +1036,14 @@ http.createServer(async (req, res) => {
                 else if (data.action === 'edit_product') {
                     if (memoryStats.products && memoryStats.products[data.id]) {
                         const oldCat = memoryStats.products[data.id].category || "✨ ITEMS";
-                        memoryStats.products[data.id] = { name: data.name, price: data.price, link: data.link, category: oldCat, stock: data.stock || "∞", desc: data.desc, upsellId: data.upsellId, upsellDiscount: data.upsellDiscount };
+                        memoryStats.products[data.id] = { name: data.name, price: data.price, link: data.link, category: oldCat, stock: data.stock || "∞", desc: data.desc };
                         syncCloud();
                     }
                 }
                 else if (data.action === 'add_product') {
                     if (!memoryStats.products) memoryStats.products = {};
                     const newId = (Object.keys(memoryStats.products).length + 1).toString();
-                    memoryStats.products[newId] = { name: data.name, price: data.price, link: data.link, category: "✨ NEW ITEMS", stock: data.stock || "∞", desc: data.desc, upsellId: data.upsellId, upsellDiscount: data.upsellDiscount };
+                    memoryStats.products[newId] = { name: data.name, price: data.price, link: data.link, category: "✨ NEW ITEMS", stock: data.stock || "∞", desc: data.desc };
                     syncCloud();
                 }
                 else if (data.action === 'delete_product') {
@@ -1229,20 +1115,10 @@ http.createServer(async (req, res) => {
                     const c = guild.channels.cache.get(data.channelId);
                     if (c) { channelStates.delete(c.id); await c.delete().catch(()=>{}); }
                 }
-                else if (data.action === 'move_custom_req') {
+                else if (data.action === 'resolve_req') {
                     if (Array.isArray(memoryStats.custom_requests)) {
                         const reqItem = memoryStats.custom_requests.find(r => r.id === data.id);
-                        if(reqItem) { 
-                            reqItem.status = data.status; 
-                            syncCloud(); 
-                            try {
-                                const targetUser = await client.users.fetch(reqItem.userId).catch(() => null);
-                                if (targetUser && data.status !== 'pending') {
-                                    let statusFr = data.status === 'recording' ? '🎥 Enregistrement en cours' : data.status === 'editing' ? '✂️ Montage en cours' : '✅ Commande Terminée';
-                                    await targetUser.send(`🔔 **Mise à jour de ta commande personnalisée (${reqItem.product}):**\nNouveau statut : **${statusFr}** !`).catch(()=>{});
-                                }
-                            } catch(e){}
-                        }
+                        if(reqItem) { reqItem.status = 'done'; syncCloud(); }
                     }
                 }
                 else if (data.action === 'announce') {
@@ -1257,7 +1133,14 @@ http.createServer(async (req, res) => {
                 else if (data.action === 'create_promo') {
                     if (!memoryStats.promo_codes) memoryStats.promo_codes = {};
                     const codeName = (data.name || "").trim().toUpperCase();
-                    if (codeName) { memoryStats.promo_codes[codeName] = { discount: parseInt(data.discount) || 10, limit: parseInt(data.limit) || 1, used: 0, createdAt: new Date().toLocaleDateString('en-US') }; syncCloud(); }
+                    if (!codeName) throw new Error("Invalid code name");
+                    const discount = parseInt(data.discount);
+                    const limit = parseInt(data.limit);
+                    if (isNaN(discount) || discount < 1 || discount > 100) throw new Error("Discount must be between 1 and 100%");
+                    if (isNaN(limit) || limit < 1) throw new Error("Limit must be at least 1");
+                    
+                    memoryStats.promo_codes[codeName] = { discount: discount, limit: limit, used: 0, createdAt: new Date().toLocaleDateString('en-US') };
+                    syncCloud();
                 }
                 else if (data.action === 'delete_promo') {
                     if (memoryStats.promo_codes && memoryStats.promo_codes[data.name]) { delete memoryStats.promo_codes[data.name]; syncCloud(); }
@@ -1322,461 +1205,426 @@ http.createServer(async (req, res) => {
             "    <script src='https://cdn.jsdelivr.net/npm/chart.js'></script>",
             "    <link href='https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap' rel='stylesheet'>",
             "    <style>",
-            "        :root { ",
-            "           --bg-main: #030712; ",
-            "           --bg-card: rgba(15, 23, 42, 0.4); ",
-            "           --border-color: rgba(56, 189, 248, 0.1); ",
-            "           --text-main: #f8fafc; ",
-            "           --text-muted: #94a3b8; ",
-            "           --accent-blue: #00f0ff; ",
-            "           --accent-green: #10b981; ",
-            "           --accent-purple: #a855f7; ",
-            "           --accent-orange: #f97316; ",
-            "           --accent-pink: #d946ef; ",
-            "           --accent-red: #ef4444; ",
-            "        }",
+            "        :root { --bg-main: #070b14; --bg-card: rgba(15, 23, 42, 0.6); --border-color: rgba(56, 189, 248, 0.15); --text-main: #f8fafc; --text-muted: #94a3b8; --accent-blue: #38bdf8; --accent-green: #10b981; --accent-purple: #a855f7; --accent-orange: #f97316; --accent-pink: #ec4899; --accent-red: #ef4444; }",
             "        * { box-sizing: border-box; } ",
-            "        body { font-family: 'Inter', sans-serif; background-color: var(--bg-main); background-image: radial-gradient(circle at 10% 50%, rgba(56, 189, 248, 0.03), transparent 30%), radial-gradient(circle at 90% 20%, rgba(168, 85, 247, 0.03), transparent 30%); color: var(--text-main); margin: 0; min-height: 100vh; overflow: hidden; }",
-            "        ::-webkit-scrollbar { width: 8px; height: 8px; } ::-webkit-scrollbar-thumb { background: rgba(56, 189, 248, 0.2); border-radius: 4px; } ::-webkit-scrollbar-thumb:hover { background: var(--accent-blue); }",
-            "        @keyframes fadeInSmooth { from { opacity: 0; transform: translateY(20px); filter: blur(5px); } to { opacity: 1; transform: translateY(0); filter: blur(0); } }",
-            "        @keyframes pulseGlow { 0% { box-shadow: 0 0 10px rgba(0, 240, 255, 0.2); } 100% { box-shadow: 0 0 20px rgba(0, 240, 255, 0.6); } }",
-            "        .status-dot { width: 10px; height: 10px; background-color: var(--accent-green); border-radius: 50%; display: inline-block; animation: pulseGlow 2s infinite alternate; margin-right: 10px; box-shadow: 0 0 10px var(--accent-green); }",
-            "        .bot-status { display: flex; align-items: center; background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.2); padding: 8px 18px; border-radius: 12px; font-weight: 600; color: var(--accent-green); font-size: 0.85em; text-transform: uppercase; letter-spacing: 1px; backdrop-filter: blur(10px); }",
-            "        .btn-icon { background: rgba(15,23,42,0.6); border: 1px solid rgba(255,255,255,0.05); color: #fff; padding: 10px 18px; border-radius: 12px; cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); backdrop-filter: blur(20px); font-size: 1rem; }",
-            "        .btn-icon:hover { background: rgba(255,255,255,0.1); border-color: var(--accent-blue); transform: translateY(-3px); box-shadow: 0 10px 20px rgba(0, 240, 255, 0.15); }",
-            "        .nav-badge { background: var(--accent-red); color: white; border-radius: 10px; padding: 2px 6px; font-size: 0.75em; margin-left: auto; box-shadow: 0 0 10px var(--accent-red); }",
-            "        .tab-content { display: none; animation: fadeInSmooth 0.5s ease-out; } .tab-content.active { display: block; }",
-            "        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; margin-bottom: 30px; }",
-            "        .card { background: linear-gradient(180deg, rgba(15,23,42,0.8) 0%, rgba(15,23,42,0.4) 100%); padding: 25px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.05); transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1); position: relative; overflow: hidden; backdrop-filter: blur(20px); box-shadow: 0 10px 30px rgba(0,0,0,0.3); }",
-            "        .card:hover { transform: translateY(-5px); border-color: rgba(255,255,255,0.15); box-shadow: 0 15px 40px rgba(0,0,0,0.5); }",
-            "        .card::before { content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%; background: var(--accent-blue); transition: width 0.3s ease, box-shadow 0.3s ease; }",
-            "        .card:hover::before { width: 100%; opacity: 0.05; }",
-            "        .card.green::before{background:var(--accent-green)} .card.blue::before{background:var(--accent-blue)} .card.pink::before{background:var(--accent-pink)} .card.orange::before{background:var(--accent-orange)} .card.purple::before{background:var(--accent-purple)} .card.red::before{background:var(--accent-red)}",
-            "        .card h3 { margin: 0 0 10px 0; font-size: 0.85em; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); }",
-            "        .card .value { font-size: 2em; font-weight: 800; letter-spacing: -1px; text-shadow: 0 0 20px rgba(255,255,255,0.2); }",
-            "        .box { background: linear-gradient(180deg, rgba(15,23,42,0.6) 0%, rgba(15,23,42,0.3) 100%); padding: 25px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.05); margin-bottom: 25px; transition: all 0.3s ease; backdrop-filter: blur(20px); box-shadow: 0 10px 30px rgba(0,0,0,0.3); }",
-            "        .box h2 { font-size: 1.2em; font-weight: 600; margin-top: 0; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; color: #fff; letter-spacing: 0.5px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 15px; }",
-            "        table { width: 100%; border-collapse: separate; border-spacing: 0; } th { padding: 15px; text-align: left; color: var(--text-muted); font-size: 0.85em; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid rgba(255,255,255,0.1); } td { padding: 15px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.02); vertical-align: middle; } tr { transition: all 0.2s ease; } tr:hover { background: rgba(255,255,255,0.02); transform: scale(1.01); }",
-            "        input, select, textarea { width: 100%; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); color: white; padding: 15px; border-radius: 12px; transition: all 0.3s ease; font-family: 'Inter', sans-serif; font-size: 0.95em; }",
-            "        input:focus, select:focus, textarea:focus { border-color: var(--accent-blue); box-shadow: 0 0 20px rgba(0, 240, 255, 0.15); outline: none; background: rgba(0,0,0,0.5); }",
-            "        .admin-btn { background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%); color: white; border: 1px solid rgba(255,255,255,0.1); padding: 12px 24px; border-radius: 12px; cursor: pointer; font-weight: 600; margin-top: 10px; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); text-transform: uppercase; letter-spacing: 1px; font-size: 0.85em; backdrop-filter: blur(10px); }",
-            "        .admin-btn:hover { border-color: var(--accent-blue); box-shadow: 0 5px 20px rgba(0, 240, 255, 0.2); transform: translateY(-2px); background: linear-gradient(135deg, rgba(0,240,255,0.1) 0%, transparent 100%); color: var(--accent-blue); }",
-            "        .text-green { color: var(--accent-green); text-shadow: 0 0 10px rgba(16, 185, 129, 0.3); } .text-muted { color: var(--text-muted); } .text-blue { color: var(--accent-blue); text-shadow: 0 0 10px rgba(0, 240, 255, 0.3); }",
-            "        .product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 25px; }",
-            "        .product-card { background: rgba(10, 15, 30, 0.5); border: 1px solid rgba(255,255,255,0.05); border-radius: 20px; padding: 25px; position: relative; transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1); display: flex; flex-direction: column; justify-content: space-between; backdrop-filter: blur(20px); overflow: hidden; }",
-            "        .product-card::before { content:''; position:absolute; top:-50%; left:-50%; width:200%; height:200%; background: radial-gradient(circle, rgba(217, 70, 239, 0.1) 0%, transparent 70%); opacity:0; transition: opacity 0.5s; pointer-events:none; }",
-            "        .product-card:hover { transform: translateY(-10px); border-color: var(--accent-pink); box-shadow: 0 15px 40px rgba(217, 70, 239, 0.15); }",
-            "        .product-card:hover::before { opacity:1; }",
-            "        .prod-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 15px; position: relative; z-index: 2; }",
-            "        .prod-title { font-size: 1.2em; font-weight: 800; color: #fff; margin: 0; display:flex; align-items:center; gap:8px; letter-spacing: 0.5px; }",
-            "        .prod-id { font-size: 0.7em; color: var(--accent-blue); font-weight: 800; background: rgba(0, 240, 255, 0.1); padding: 4px 10px; border-radius: 12px; letter-spacing: 1px; border: 1px solid rgba(0, 240, 255, 0.2); }",
-            "        .prod-price { color: var(--accent-green); font-weight: 800; font-size: 1.5em; text-shadow: 0 0 15px rgba(16, 185, 129, 0.3); margin-bottom: 5px; position: relative; z-index: 2; }",
-            "        .prod-stock { font-size: 0.75em; color: var(--text-muted); display: block; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 15px; }",
-            "        .prod-desc { font-size: 0.9em; color: #cbd5e1; line-height: 1.6; margin-bottom: 20px; flex-grow: 1; position: relative; z-index: 2; }",
-            "        .prod-link { background: rgba(0,0,0,0.4); padding: 12px; border-radius: 10px; font-size: 0.8em; margin-bottom: 20px; word-break: break-all; border: 1px dashed rgba(255,255,255,0.1); position: relative; z-index: 2; }",
-            "        .prod-actions { display: flex; gap: 12px; position: relative; z-index: 2; } .prod-actions button { flex: 1; padding: 12px; font-size: 0.8em; margin: 0; border-radius: 10px; }",
-            "        .feed-container { max-height: 350px; overflow-y: auto; padding-right: 10px; } .feed-container::-webkit-scrollbar { width: 4px; } .feed-container::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }",
-            "        .feed-item { display: flex; align-items: flex-start; gap: 15px; margin-bottom: 15px; padding: 15px; background: rgba(255,255,255,0.02); border-left: 3px solid var(--accent-blue); border-radius: 0 12px 12px 0; font-size: 0.9em; transition: 0.3s; }",
-            "        .feed-item:hover { background: rgba(255,255,255,0.05); transform: translateX(5px); }",
-            "        .feed-item.sale { border-color: var(--accent-green); } .feed-item.ticket { border-color: var(--accent-orange); } .feed-item.review { border-color: var(--accent-purple); }",
-            "        .feed-time { font-size: 0.75em; color: var(--accent-blue); min-width: 60px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; }",
-            "        .splash-screen { position: fixed; inset: 0; background: #030712; z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; pointer-events: all; animation: fadeOutSplash 0.5s ease forwards 1.5s; }",
-            "        @keyframes fadeOutSplash { 0% { opacity: 1; visibility: visible; } 100% { opacity: 0; visibility: hidden; pointer-events: none; z-index: -1; display: none; } }",
-            "        .loader-bar-fast { width: 250px; height: 3px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden; position: relative; margin-top: 20px; }",
-            "        .loader-bar-fast::after { content: ''; position: absolute; left: 0; top: 0; height: 100%; width: 100%; background: var(--accent-blue); animation: loadBarAnim 1.5s ease-in-out forwards; }",
-            "        @keyframes loadBarAnim { 0% { width: 0%; } 100% { width: 100%; } }",
-            "        .kanban-board { display: flex; gap: 20px; overflow-x: auto; padding-bottom: 20px; align-items: stretch; min-height: 500px; }",
-            "        .kanban-col { background: rgba(0,0,0,0.2); border-radius: 16px; padding: 15px; min-width: 300px; flex: 1; border: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; gap: 15px; }",
-            "        .kanban-header { font-weight: 800; text-transform: uppercase; letter-spacing: 1px; padding-bottom: 10px; border-bottom: 2px solid; }",
-            "        .kanban-card { background: rgba(15,23,42,0.8); border: 1px solid rgba(255,255,255,0.05); padding: 15px; border-radius: 12px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); transition: transform 0.2s; }",
-            "        .kanban-card:hover { transform: translateY(-3px); border-color: rgba(255,255,255,0.15); }",
-            "        .kanban-actions { display: flex; gap: 5px; margin-top: auto; } .kanban-actions button { flex: 1; padding: 8px; font-size: 0.75em; }",
-            "        .dashboard-layout { display: flex; height: 100vh; overflow: hidden; animation: showDash 0.5s ease forwards 1.5s; opacity: 0; }",
-            "        @keyframes showDash { to { opacity: 1; } }",
-            "        .sidebar { width: 280px; background: #0c101d; border-right: 1px solid var(--border-color); padding: 25px 20px; display: flex; flex-direction: column; overflow-y: auto; z-index: 10000; flex-shrink: 0; transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1), margin-right 0.3s cubic-bezier(0.25, 1, 0.5, 1); -webkit-font-smoothing: antialiased; transform: translate3d(0, 0, 0); backface-visibility: hidden; }",
-            "        .sidebar-closed .sidebar { transform: translate3d(-280px, 0, 0); margin-right: -280px; }",
-            "        .sidebar-header { margin-bottom: 30px; text-align: left; }",
-            "        .sidebar-header h2 { margin: 0; font-size: 2em; font-weight: 800; background: linear-gradient(135deg, #fff 0%, #38bdf8 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: 1px; }",
-            "        .sidebar-header p { margin: 5px 0 0 0; color: var(--accent-blue); font-size: 0.85em; text-transform: uppercase; letter-spacing: 2px; font-weight: 600; }",
-            "        .nav-category { font-size: 0.75em; text-transform: uppercase; color: var(--text-muted); letter-spacing: 1.5px; margin: 25px 0 10px 5px; font-weight: 800; }",
-            "        .nav-btn { width: 100%; text-align: left; padding: 12px 15px; margin-bottom: 5px; background: transparent; border: none; color: var(--text-main); font-size: 0.95em; font-weight: 600; border-radius: 12px; cursor: pointer; transition: all 0.3s; display: flex; justify-content: space-between; align-items: center; }",
-            "        .nav-btn:hover { background: rgba(255,255,255,0.05); transform: translateX(5px); }",
-            "        .nav-btn.active { background: linear-gradient(90deg, rgba(56,189,248,0.15) 0%, transparent 100%); border-left: 4px solid var(--accent-blue); color: var(--accent-blue); transform: translateX(5px); }",
-            "        .main-content { flex: 1; padding: 30px; overflow-y: auto; position: relative; transition: all 0.3s ease; }",
-            "        .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }",
-            "        .hamburger-btn { display: block; background: transparent; border: none; color: #fff; font-size: 1.8em; cursor: pointer; padding: 0; margin-right: 15px; transition: transform 0.2s; z-index: 10001; }",
-            "        .hamburger-btn:hover { color: var(--accent-blue); }",
-            "        .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 9999; opacity: 0; transition: opacity 0.3s ease; }",
-            "        .sidebar-overlay.show { display: block; opacity: 1; }",
-            "        .chat-container { display: flex; height: 650px; gap: 25px; }",
-            "        .ticket-list { flex: 1; background: rgba(0,0,0,0.2); border-radius: 20px; border: 1px solid rgba(255,255,255,0.05); overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 10px; }",
-            "        .ticket-item { padding: 15px; background: rgba(255,255,255,0.02); border-radius: 12px; cursor: pointer; transition: all 0.3s; font-weight: 600; font-size: 0.9em; border: 1px solid transparent; }",
-            "        .ticket-item:hover { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1); }",
-            "        .ticket-item.active { background: linear-gradient(90deg, rgba(0,240,255,0.1) 0%, transparent 100%); border-left: 3px solid #00f0ff; color: #fff; transform: translateX(5px); }",
-            "        .chat-window { flex: 3; display: flex; flex-direction: column; background: rgba(0,0,0,0.2); border-radius: 20px; border: 1px solid rgba(255,255,255,0.05); overflow: hidden; position: relative; }",
-            "        .chat-messages { flex: 1; padding: 25px; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; scroll-behavior: smooth; }",
-            "        .chat-bubble { max-width: 80%; padding: 15px 20px; border-radius: 18px; line-height: 1.5; font-size: 0.95em; position: relative; animation: fadeInSmooth 0.3s ease-out; }",
-            "        .chat-bubble.bot { align-self: flex-end; background: linear-gradient(135deg, #00f0ff 0%, #38bdf8 100%); color: #000; border-bottom-right-radius: 4px; font-weight: 500; }",
-            "        .chat-bubble.user { align-self: flex-start; background: rgba(255,255,255,0.05); color: white; border-bottom-left-radius: 4px; border: 1px solid rgba(255,255,255,0.1); }",
-            "        .chat-author { font-size: 0.7em; opacity: 0.7; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; font-weight: 800; }",
-            "        .chat-input-area { display: flex; padding: 20px; background: rgba(0,0,0,0.4); border-top: 1px solid rgba(255,255,255,0.05); gap: 15px; align-items: center; backdrop-filter: blur(10px); }",
-            "        .chat-input-area input[type='text'] { flex: 1; margin: 0; background: rgba(0,0,0,0.5); border-radius: 12px; }",
+            "        body { font-family: 'Inter', sans-serif; background-color: var(--bg-main); background-image: radial-gradient(circle at 15% 50%, rgba(56, 189, 248, 0.05), transparent 25%), radial-gradient(circle at 85% 30%, rgba(255, 20, 147, 0.05), transparent 25%); color: var(--text-main); margin: 0; padding: 20px; min-height: 100vh; overflow-x: hidden; }",
+            "        @keyframes fadeInSmooth { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }",
+            "        @keyframes slideIn { from { opacity: 0; transform: translateX(-20px); } to { opacity: 1; transform: translateX(0); } }",
+            "        @keyframes slideDownMenu { from { opacity: 0; transform: translateY(-15px); } to { opacity: 1; transform: translateY(0); } }",
+            "        @keyframes pulseGreen { 0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); } 70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); } 100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); } }",
+            "        @keyframes pulseRed { 0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); } 70% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); } 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } }",
+            "        @keyframes spin { 100% { transform: rotate(360deg); } }",
+            "        .spinning { animation: spin 1s cubic-bezier(0.4, 0, 0.2, 1); }",
+            "        .status-dot { width: 12px; height: 12px; background-color: var(--accent-green); border-radius: 50%; display: inline-block; animation: pulseGreen 2s infinite; margin-right: 8px; transition: 0.3s; }",
+            "        .bot-status { display: flex; align-items: center; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); padding: 8px 15px; border-radius: 8px; font-weight: bold; color: var(--accent-green); font-size: 0.9em; transition: 0.3s; }",
+            "        .container { max-width: 1300px; margin: 0 auto; animation: fadeInSmooth 0.6s ease-out; }",
+            "        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid var(--border-color); animation: slideIn 0.5s ease-out; }",
+            "        .header h1 { font-size: 2em; margin: 0; background: linear-gradient(to right, #38bdf8, #a855f7); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }",
+            "        .controls { display: flex; gap: 15px; align-items: center; }",
+            "        .btn-icon { background: var(--bg-card); border: 1px solid var(--border-color); color: white; padding: 8px 15px; border-radius: 8px; cursor: pointer; transition: all 0.3s ease; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);}",
+            "        .btn-icon:hover { background: rgba(255,255,255,0.1); transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.3); }",
+            "        .nav-menu { display: flex; gap: 10px; margin-bottom: 30px; background: var(--bg-card); padding: 10px; border-radius: 12px; border: 1px solid var(--border-color); overflow-x: auto; scrollbar-width: none; animation: slideDownMenu 0.5s ease-out forwards; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);}",
+            "        .nav-menu::-webkit-scrollbar { display: none; }",
+            "        .nav-btn { background: transparent; border: none; color: var(--text-muted); font-size: 1em; font-weight: 600; padding: 10px 20px; border-radius: 8px; cursor: pointer; transition: all 0.3s ease; display: flex; align-items: center; }",
+            "        .nav-btn:hover { color: #fff; background: rgba(255,255,255,0.05); transform: scale(1.03); }",
+            "        .nav-btn.active { color: #fff; background: var(--accent-blue); box-shadow: 0 4px 15px rgba(56, 189, 248, 0.4); transform: scale(1.05); }",
+            "        .nav-badge { background: var(--accent-red); color: white; border-radius: 10px; padding: 2px 6px; font-size: 0.75em; margin-left: 8px; animation: pulseRed 2s infinite; display: none; }",
+            "        .tab-content { display: none; animation: fadeInSmooth 0.4s ease-out; } .tab-content.active { display: block; }",
+            "        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 25px; }",
+            "        .card { background: var(--bg-card); padding: 20px; border-radius: 16px; border: 1px solid var(--border-color); transition: all 0.3s ease; position: relative; overflow: hidden; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: 0 4px 20px rgba(0,0,0,0.2); }",
+            "        .card:hover { transform: translateY(-5px); box-shadow: 0 8px 25px rgba(0,0,0,0.4); border-color: rgba(255,255,255,0.3); }",
+            "        .card::before { content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%; background: var(--accent-blue); transition: width 0.3s ease; }",
+            "        .card:hover::before { width: 6px; }",
+            "        .card.green::before{background:var(--accent-green)} .card.pink::before{background:var(--accent-pink)} .card.orange::before{background:var(--accent-orange)} .card.purple::before{background:var(--accent-purple)} .card.red::before{background:var(--accent-red)} .card.yellow::before{background:#f1c40f;}",
+            "        .box { background: var(--bg-card); padding: 20px; border-radius: 16px; border: 1px solid var(--border-color); margin-bottom:20px; transition: all 0.3s ease; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: 0 4px 20px rgba(0,0,0,0.2); }",
+            "        .box:hover { box-shadow: 0 6px 25px rgba(0,0,0,0.3); }",
+            "        table { width: 100%; border-collapse: collapse; } th, td { padding: 12px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.05); } tr { transition: transform 0.2s ease, background 0.2s ease; } tr:hover { transform: translateX(4px); background: rgba(255,255,255,0.03); box-shadow: -2px 0 0 var(--accent-blue); }",
+            "        input, textarea, select { width: 100%; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); color: white; padding: 12px; border-radius: 8px; transition: all 0.3s ease; font-family: 'Inter', sans-serif; }",
+            "        input:focus, textarea:focus, select:focus { border-color: var(--accent-blue); box-shadow: 0 0 15px rgba(56,189,248,0.2); outline: none; }",
+            "        .admin-btn { background: var(--accent-blue); color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; margin-top:10px; transition: all 0.3s ease; text-transform: uppercase; letter-spacing: 0.5px; }",
+            "        .admin-btn:hover { filter: brightness(1.2); transform: translateY(-2px); box-shadow: 0 5px 15px rgba(56,189,248,0.4); }",
+            "        .text-green { color: var(--accent-green); } .text-muted { color: var(--text-muted); }",
+            "        ",
+            "        /* MODERN PRODUCT GRID */",
+            "        .product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }",
+            "        .product-card { background: rgba(15, 23, 42, 0.4); border: 1px solid rgba(255,255,255,0.05); border-radius: 16px; padding: 25px; position: relative; transition: all 0.3s ease; display: flex; flex-direction: column; justify-content: space-between; box-shadow: 0 4px 15px rgba(0,0,0,0.2); backdrop-filter: blur(10px); }",
+            "        .product-card:hover { transform: translateY(-8px); border-color: var(--accent-blue); box-shadow: 0 10px 30px rgba(56,189,248,0.15); }",
+            "        .prod-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 15px; }",
+            "        .prod-title { font-size: 1.3em; font-weight: 800; color: #fff; margin: 0; display:flex; align-items:center; gap:8px;}",
+            "        .prod-id { font-size: 0.75em; color: var(--accent-purple); font-weight: bold; background: rgba(168,85,247,0.1); padding: 4px 8px; border-radius: 12px; }",
+            "        .prod-price { color: var(--accent-green); font-weight: 800; font-size: 1.4em; }",
+            "        .prod-stock { font-size: 0.8em; color: var(--text-muted); display: block; margin-top: 5px; }",
+            "        .prod-desc { font-size: 0.9em; color: var(--text-muted); line-height: 1.5; margin-bottom: 15px; flex-grow: 1; }",
+            "        .prod-link { background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; font-size: 0.85em; margin-bottom: 15px; word-break: break-all; border: 1px dashed rgba(255,255,255,0.1); }",
+            "        .prod-actions { display: flex; gap: 10px; }",
+            "        .prod-actions button { flex: 1; padding: 10px; font-size: 0.9em; margin: 0; border-radius: 8px; }",
+            "        ",
+            "        /* CLICKABLE EARNINGS CARD */",
+            "        #ui-today-rev:hover { opacity: 0.7; transform: scale(1.02); }",
+            "        ",
+            "        /* FEED ACTIVITY UI */",
+            "        .feed-container { max-height: 300px; overflow-y: auto; padding-right: 5px; }",
+            "        .feed-container::-webkit-scrollbar { width: 5px; } .feed-container::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 5px; }",
+            "        .feed-item { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 12px; padding: 12px; background: rgba(255,255,255,0.02); border-left: 3px solid var(--accent-blue); border-radius: 0 8px 8px 0; font-size: 0.9em; transition: 0.3s; }",
+            "        .feed-item:hover { background: rgba(255,255,255,0.05); transform: translateX(3px); }",
+            "        .feed-item.sale { border-color: var(--accent-green); }",
+            "        .feed-item.ticket { border-color: var(--accent-orange); }",
+            "        .feed-item.review { border-color: var(--accent-purple); }",
+            "        .feed-time { font-size: 0.8em; color: var(--text-muted); min-width: 50px; font-weight: bold; }",
+            "        ",
+            "        /* 💎 ULTRA PREMIUM SPLASH SCREEN 💎 */",
+            "        .splash-screen { position: fixed; inset: 0; background: #030712; z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; transition: opacity 1.2s cubic-bezier(0.8, 0, 0.2, 1), transform 1.2s cubic-bezier(0.8, 0, 0.2, 1); overflow: hidden; perspective: 1000px; }",
+            "        .splash-glow { position: absolute; width: 80vw; height: 80vw; background: radial-gradient(circle, rgba(56, 189, 248, 0.1) 0%, transparent 60%); top: 50%; left: 50%; transform: translate(-50%, -50%); animation: pulseGlow 4s ease-in-out infinite alternate; pointer-events: none; }",
+            "        @keyframes pulseGlow { 0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0.5; } 100% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; } }",
+            "        .premium-logo-container { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; }",
+            "        .premium-logo { font-size: 4rem; font-weight: 800; letter-spacing: -3px; background: linear-gradient(135deg, #fff 0%, #38bdf8 50%, #a855f7 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; opacity: 0; transform: translateY(30px) scale(0.95); filter: blur(15px); transition: all 1.5s cubic-bezier(0.16, 1, 0.3, 1) 0.2s; }",
+            "        .premium-logo.show { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); letter-spacing: 4px; }",
+            "        .premium-subtitle { font-size: 0.9rem; color: #94a3b8; font-weight: 400; letter-spacing: 12px; text-transform: uppercase; margin-top: -5px; opacity: 0; transform: translateY(15px); filter: blur(5px); transition: all 1.5s cubic-bezier(0.16, 1, 0.3, 1) 0.8s; }",
+            "        .premium-subtitle.show { opacity: 1; transform: translateY(0); filter: blur(0); }",
+            "        .loader-wrapper { position: relative; width: 240px; height: 1px; background: rgba(255,255,255,0.05); border-radius: 2px; margin-top: 50px; overflow: hidden; opacity: 0; transition: opacity 1s ease 1.2s; }",
+            "        .loader-wrapper.show { opacity: 1; }",
+            "        .loader-bar { position: absolute; top: 0; left: 0; height: 100%; width: 0%; background: linear-gradient(90deg, transparent, #38bdf8, #fff); box-shadow: 0 0 20px #38bdf8, 0 0 10px #a855f7; transition: width 0.1s cubic-bezier(0.4, 0, 0.2, 1); }",
+            "        .loader-percentage { position: absolute; right: 0; top: 15px; color: #64748b; font-family: 'Inter', monospace; font-size: 0.75rem; font-weight: 600; letter-spacing: 2px; transition: opacity 0.5s ease; }",
+            "        .premium-welcome { position: absolute; top: 180px; font-size: 1.8rem; font-weight: 300; color: #fff; letter-spacing: 6px; opacity: 0; filter: blur(10px); transform: translateY(20px); transition: all 1.5s cubic-bezier(0.16, 1, 0.3, 1); text-shadow: 0 0 30px rgba(56, 189, 248, 0.6); text-transform: uppercase; }",
+            "        .premium-welcome.show { opacity: 1; filter: blur(0); transform: translateY(0); }",
+            "        ",
+            "        /* ULTRA PREMIUM TOAST */",
             "        #toast { position:fixed; bottom: 20px; right: 20px; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); color: white; padding: 16px 24px; border-radius: 12px; font-weight: 600; font-size: 0.95em; display: flex; align-items: center; gap: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); transform: translateY(150px) scale(0.9); opacity: 0; transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.5s ease; z-index: 10000; pointer-events: none; }",
             "        #toast.show { transform: translateY(0) scale(1); opacity: 1; }",
+            "",
             "        .modal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10000; justify-content:center; align-items:center; animation: fadeInSmooth 0.3s ease-out; backdrop-filter: blur(5px); }",
             "        .modal-content { background:var(--bg-main); padding:35px; border-radius:16px; border:1px solid var(--accent-purple); text-align:center; max-width:400px; box-shadow: 0 10px 50px rgba(168,85,247,0.3); animation: zoomIn 0.3s forwards; }",
             "        @keyframes zoomIn { from { transform: scale(0.9); opacity:0; } to { transform: scale(1); opacity:1; } }",
-            "        @media screen and (max-width: 900px) {",
-            "          .sidebar { position: fixed; top: 0; left: 0; height: 100vh; transform: translate3d(-100%, 0, 0); width: 280px; box-shadow: 20px 0 50px rgba(0,0,0,0.5); }",
-            "          .sidebar.open { transform: translate3d(0, 0, 0); }",
-            "          .sidebar-closed .sidebar { transform: translate3d(-100%, 0, 0) !important; margin-right: 0 !important; }",
-            "          .dashboard-layout { flex-direction: column; }",
-            "          .main-content { padding: 15px; }",
-            "          .overview-grid, .chat-container { grid-template-columns: 1fr !important; flex-direction: column; height: auto; }",
-            "          .ticket-list { height: 200px; }",
+            "        .chat-container { display: flex; height: 600px; gap: 20px; }",
+            "        .ticket-list { flex: 1; background: rgba(0,0,0,0.3); border-radius: 12px; border: 1px solid var(--border-color); overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }",
+            "        .ticket-item { padding: 12px; background: rgba(255,255,255,0.05); border-radius: 8px; cursor: pointer; transition: all 0.2s; font-weight: bold; font-size: 0.9em; }",
+            "        .ticket-item:hover, .ticket-item.active { background: var(--accent-blue); color: white; transform: translateX(5px); box-shadow: 0 4px 10px rgba(56,189,248,0.3); }",
+            "        .chat-window { flex: 3; display: flex; flex-direction: column; background: rgba(0,0,0,0.3); border-radius: 12px; border: 1px solid var(--border-color); overflow: hidden; }",
+            "        .chat-messages { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; scroll-behavior: smooth; position: relative; }",
+            "        .chat-bubble { max-width: 75%; padding: 12px 18px; border-radius: 16px; line-height: 1.4; word-wrap: break-word; font-size: 0.95em; position: relative; animation: fadeInSmooth 0.3s ease-out; }",
+            "        .chat-bubble.bot { align-self: flex-end; background: var(--accent-blue); color: white; border-bottom-right-radius: 4px; box-shadow: 0 4px 15px rgba(56,189,248,0.2); }",
+            "        .chat-bubble.user { align-self: flex-start; background: rgba(255,255,255,0.1); color: white; border-bottom-left-radius: 4px; }",
+            "        .chat-author { font-size: 0.75em; opacity: 0.7; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.5px; }",
+            "        .chat-input-area { display: flex; padding: 15px; background: rgba(0,0,0,0.5); border-top: 1px solid var(--border-color); gap: 10px; align-items: center; }",
+            "        .chat-input-area input[type='text'] { flex: 1; margin: 0; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); font-size: 1em; padding: 12px 15px; }",
+            "        .chat-input-area input[type='text']:focus { border-color: var(--accent-blue); }",
+            "        ",
+            "        /* 📎 CSS ATTACHMENTS & REACTIONS 👍 */",
+            "        .chat-bubble-actions { display: none; position: absolute; top: -15px; background: rgba(15,23,42,0.9); border-radius: 20px; padding: 4px 8px; gap: 8px; cursor: default; z-index: 10; border: 1px solid var(--accent-blue); box-shadow: 0 4px 10px rgba(0,0,0,0.5); }",
+            "        .chat-bubble.user .chat-bubble-actions { right: 15px; }",
+            "        .chat-bubble.bot .chat-bubble-actions { left: 15px; }",
+            "        .chat-bubble:hover .chat-bubble-actions { display: flex; animation: fadeInSmooth 0.2s ease-out; }",
+            "        .chat-reaction-btn { background: none; border: none; font-size: 1.2em; cursor: pointer; transition: transform 0.2s; padding:0; line-height:1; }",
+            "        .chat-reaction-btn:hover { transform: scale(1.3); }",
+            "        .chat-img-preview { max-width: 250px; max-height: 250px; border-radius: 8px; margin-top: 10px; cursor: pointer; border: 1px solid rgba(255,255,255,0.1); transition: 0.3s; }",
+            "        .chat-img-preview:hover { transform: scale(1.02); border-color: var(--accent-blue); }",
+            "        .chat-attachment-btn { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: white; padding: 12px; border-radius: 8px; cursor: pointer; transition: 0.2s; font-size: 1.1em; display:flex; align-items:center; justify-content:center; }",
+            "        .chat-attachment-btn:hover { background: rgba(255,255,255,0.15); border-color: var(--accent-blue); }",
+            "        .attachment-badge { position: absolute; top: -5px; right: -5px; background: var(--accent-red); color: white; border-radius: 50%; width: 12px; height: 12px; display: none; }",
+            "        .chat-attachment-wrapper { position: relative; }",
+            "        ",
+            "        /* PROGRESS BAR FOR SUBSCRIPTIONS */",
+            "        .progress-bg { width:100%; background:rgba(255,255,255,0.1); border-radius:4px; height:8px; margin-top:5px; overflow:hidden; }",
+            "        .progress-fill { height:100%; background:var(--accent-purple); }",
+            "        ",
+            "        /* 📱 RESPONSIVE MOBILE IPHONE */",
+            "        @media screen and (max-width: 768px) {",
+            "          body { padding: env(safe-area-inset-top) 10px env(safe-area-inset-bottom) 10px; }",
+            "          .header { flex-direction: column; align-items: center; text-align: center; gap: 15px; }",
+            "          .header h1 { font-size: 1.8em; }",
+            "          .controls { width: 100%; justify-content: center; flex-wrap: wrap; gap: 10px; }",
+            "          .stats-grid { grid-template-columns: 1fr; gap: 10px; }",
+            "          .overview-grid { grid-template-columns: 1fr !important; }",
+            "          .chat-container { flex-direction: column; height: 80vh; }",
+            "          .ticket-list { flex: 0 0 130px; border-radius: 12px; margin-bottom: 10px; }",
+            "          .chat-window { flex: 1; border-radius: 12px; }",
+            "          .product-grid { grid-template-columns: 1fr; }",
+            "          input, select, textarea { font-size: 16px !important; box-sizing: border-box; }",
+            "          .box { padding: 15px; margin-bottom: 15px; border-radius: 12px; }",
+            "          .chat-input-area { padding: 10px; flex-wrap: wrap; }",
+            "          .chat-input-area input[type='text'] { flex: 1 1 100%; margin: 0 0 10px 0; }",
+            "          .chat-input-area .chat-attachment-wrapper { flex: 0 0 auto; }",
+            "          .chat-input-area button:last-child { flex: 1; }",
+            "          table { display: block; overflow-x: auto; white-space: nowrap; }",
+            "          .modal-content { width: 90%; padding: 20px; box-sizing: border-box; }",
             "        }",
             "    </style>",
             "</head>",
             "<body>",
+            "    <!-- [ANCHOR: DASHBOARD_MODALS_TOASTS] -->",
             "    <div id='toast'></div>",
             "    ",
+            "    <!-- 💎 ULTRA PREMIUM LOADING SCREEN 💎 -->",
             "    <div id='loading-screen' class='splash-screen'>",
-            "       <h1 style='color:var(--accent-blue); font-size: 3em; margin-bottom: 20px; letter-spacing: 4px; text-shadow: 0 0 20px rgba(0,240,255,0.5);'>NEXUS CORE</h1>",
-            "       <div class='loader-bar-fast'></div>",
+            "       <div class='splash-glow'></div>",
+            "       <div class='premium-logo-container'>",
+            "           <div id='premium-logo' class='premium-logo'>NEXUS</div>",
+            "           <div id='premium-subtitle' class='premium-subtitle'>Executive</div>",
+            "           <div id='loader-wrapper' class='loader-wrapper'>",
+            "               <div id='loader-bar' class='loader-bar'></div>",
+            "           </div>",
+            "           <div id='loader-percentage' class='loader-percentage'>00%</div>",
+            "           <div id='welcome-text' class='premium-welcome'>Welcome Issam</div>",
+            "       </div>",
             "    </div>",
             "",
-            "    <div class='modal' id='premium-dialog' style='display:none; position:fixed; inset:0; background:rgba(3,7,18,0.85); backdrop-filter:blur(20px); z-index:10001; justify-content:center; align-items:center;'>",
-            "        <div class='modal-content' style='background:rgba(15,23,42,0.8); padding:40px; border-radius:24px; border:1px solid rgba(0,240,255,0.2); width:90%; max-width:450px; text-align:left; box-shadow:0 20px 60px rgba(0,0,0,0.8), inset 0 0 20px rgba(0,240,255,0.05); animation:fadeInSmooth 0.4s ease-out;'>",
-            "            <h2 id='dialog-title' style='margin:0 0 15px 0; color:var(--accent-blue); font-size:1.4em; font-weight:800; letter-spacing:1px; text-transform:uppercase;'>Title</h2>",
-            "            <p id='dialog-message' class='text-muted' style='margin:0 0 25px 0; line-height:1.6; font-size:1em;'>Message</p>",
-            "            <input type='text' id='dialog-input' style='display:none; margin-bottom:25px; width:100%;'>",
-            "            <div style='display:flex; gap:15px;'>",
-            "                <button class='admin-btn' id='dialog-cancel' style='flex:1; margin:0; background:rgba(255,255,255,0.05); border-color:rgba(255,255,255,0.1); color:#fff;'>Abort</button>",
-            "                <button class='admin-btn' id='dialog-confirm' style='flex:1; margin:0; background:rgba(0,240,255,0.1); border-color:var(--accent-blue); color:var(--accent-blue);'>Execute</button>",
-            "            </div>",
+            "    <div class='modal' id='syncModal'>",
+            "        <div class='modal-content'>",
+            "            <h2>📦 Catalog Saved!</h2>",
+            "            <p class='text-muted' style='margin-bottom:20px;'>Apply these changes to your Discord shop channel right now?</p>",
+            "            <button class='admin-btn' style='background:var(--accent-purple); width:100%; margin-bottom:10px;' onclick='window.triggerShopRefresh(); document.getElementById(\"syncModal\").style.display=\"none\";'>🔄 Setup & Clear Old Menu</button>",
+            "            <button class='admin-btn' style='background:transparent; border:1px solid rgba(255,255,255,0.2); width:100%; color:var(--text-muted);' onclick='document.getElementById(\"syncModal\").style.display=\"none\";'>Skip for now</button>",
             "        </div>",
             "    </div>",
             "",
-            "    <div class='sidebar-overlay' id='sidebarOverlay' onclick='window.toggleSidebar()'></div>",
-            "    <div class='dashboard-layout' id='dashboard-container'>",
-            "       <aside class='sidebar' id='appSidebar'>",
-            "           <div class='sidebar-header'>",
-            "               <h2>NEXUS</h2>",
-            "               <p>Executive</p>",
+            "    <!-- [ANCHOR: DASHBOARD_NAVBAR] -->",
+            "    <div class='container' id='dashboard-container' style='display:none;'>",
+            "       <div class='header'>",
+            "           <h1>Nexus Dashboard</h1>",
+            "           <div class='controls'>",
+            "               <button class='btn-icon' onclick='window.toggleMute()' id='audioBtn' title='Mute/Unmute Alerts'>🔊</button>",
+            "               <button class='btn-icon' onclick='window.manualRefresh()' id='refreshBtn' title='Sync Now'>🔄</button>",
+            "               <button class='btn-icon' onclick='window.toggleStealth()' id='stealthBtn'>👁️ Stealth</button>",
+            "               <div class='bot-status'><div class='status-dot'></div> System Online</div>",
             "           </div>",
-            "           <div class='nav-category'>📊 Main</div>",
-            "           <button class='nav-btn active' onclick='window.switchTab(\"overview\", this)'><span>Overview</span></button>",
-            "           <button class='nav-btn' onclick='window.switchTab(\"analytics\", this)'><span>Analytics</span></button>",
-            "           <button class='nav-btn' onclick='window.switchTab(\"transactions\", this)'><span>Transactions</span></button>",
-            "           <div class='nav-category'>🛍️ Storefront</div>",
-            "           <button class='nav-btn' onclick='window.switchTab(\"products\", this)'><span>Catalog & Gateways</span></button>",
-            "           <button class='nav-btn' onclick='window.switchTab(\"kanban\", this)'><span>📋 Custom Kanban</span></button>",
-            "           <button class='nav-btn' onclick='window.switchTab(\"vip\", this)'><span>VIP Pass</span></button>",
-            "           <button class='nav-btn' onclick='window.switchTab(\"referrals\", this)'><span>Promo & Referrals</span></button>",
-            "           <div class='nav-category'>👥 Community</div>",
-            "           <button class='nav-btn' onclick='window.switchTab(\"livechat\", this)'><span>Live Chat</span> <span class='nav-badge' id='badge-chat'>0</span></button>",
-            "           <button class='nav-btn' onclick='window.switchTab(\"audience\", this)'><span>Audience Logs</span></button>",
-            "           <div class='nav-category'>⚙️ System</div>",
-            "           <button class='nav-btn' onclick='window.switchTab(\"moderation\", this)'><span>Moderation CRM</span></button>",
-            "           <button class='nav-btn' onclick='window.switchTab(\"monitoring\", this)'><span>Diagnostics</span></button>",
-            "           <button class='nav-btn' onclick='window.switchTab(\"admin\", this)'><span>Settings</span> <span class='nav-badge' id='badge-admin'>0</span></button>",
-            "       </aside>",
+            "       </div>",
+            "       <div class='nav-menu'>",
+            "           <button class='nav-btn active' onclick='window.switchTab(\"overview\", this)'>📊 Overview</button>",
+            "           <button class='nav-btn' onclick='window.switchTab(\"vip\", this)'>👑 VIP Pass</button>",
+            "           <button class='nav-btn' onclick='window.switchTab(\"livechat\", this)'>💬 Live Chat <span class='nav-badge' id='badge-chat'>0</span></button>",
+            "           <button class='nav-btn' onclick='window.switchTab(\"analytics\", this)'>📈 Analytics</button>",
+            "           <button class='nav-btn' onclick='window.switchTab(\"transactions\", this)'>💳 Transactions</button>",
+            "           <button class='nav-btn' onclick='window.switchTab(\"products\", this)'>📦 Products</button>",
+            "           <button class='nav-btn' onclick='window.switchTab(\"audience\", this)'>👥 Audience</button>",
+            "           <button class='nav-btn' onclick='window.switchTab(\"referrals\", this)'>🔗 Referrals</button>",
+            "           <button class='nav-btn' onclick='window.switchTab(\"moderation\", this)'>🛡️ Moderation</button>",
+            "           <button class='nav-btn' onclick='window.switchTab(\"monitoring\", this)'>📡 Monitoring</button>",
+            "           <button class='nav-btn' onclick='window.switchTab(\"admin\", this)'>⚙️ Admin Config <span class='nav-badge' id='badge-admin'>0</span></button>",
+            "       </div>",
             "",
-            "       <main class='main-content'>",
-            "           <div class='top-bar'>",
-            "               <div style='display:flex; align-items:center;'>",
-            "                   <button class='hamburger-btn' onclick='window.toggleSidebar()'>☰</button>",
-            "                   <h1 id='current-tab-title' style='margin:0; font-size:1.8em; font-weight:800;'>Overview</h1>",
-            "               </div>",
-            "               <div class='controls'>",
-            "                   <button class='btn-icon' onclick='window.toggleMute()' id='audioBtn' title='Toggle Sound'>🔊</button>",
-            "                   <button class='btn-icon' onclick='window.manualRefresh()' id='refreshBtn' title='Sync Data'>🔄</button>",
-            "                   <div class='bot-status'><div class='status-dot'></div> Online</div>",
-            "               </div>",
+            "       <!-- [ANCHOR: DASHBOARD_TABS_CONTENT] -->",
+            "       <div id='overview' class='tab-content active'>",
+            "           <div class='stats-grid'>",
+            "               <div class='card green'><h3>Today's Earnings</h3><div class='value money text-green' id='ui-today-rev' style='cursor:pointer; transition:0.3s;' onclick='window.editTodayEarnings()' title='Click to manually edit'>€0</div></div>",
+            "               <div class='card blue'><h3>Total Earnings</h3><div class='value money text-blue' id='ui-total-rev'>€0</div></div>",
+            "               <div class='card pink'><h3>Conversion Rate</h3><div class='value text-pink' id='ui-conv-rate'>0%</div></div>",
+            "               <div class='card orange'><h3>Online / Total</h3><div class='value text-orange' id='ui-online-total'>0</div></div>",
+            "               <div class='card purple'><h3>Retention Rate</h3><div class='value text-purple' id='ui-retention'>0%</div></div>",
             "           </div>",
-            "",
-            "           <div id='overview' class='tab-content active'>",
-            "               <div class='stats-grid'>",
-            "                   <div class='card green' onclick='window.editStat(\"today_rev\")' style='cursor:pointer;' title='Click to edit'><h3>Today's Earnings</h3><div class='value money text-green' id='ui-today-rev'>€0</div></div>",
-            "                   <div class='card blue' onclick='window.editStat(\"total_rev\")' style='cursor:pointer;' title='Click to edit'><h3>Total Earnings</h3><div class='value money text-blue' id='ui-total-rev'>€0</div></div>",
-            "                   <div class='card pink' onclick='window.editStat(\"conv_rate\")' style='cursor:pointer;' title='Click to edit'><h3>Conversion Rate</h3><div class='value text-pink' id='ui-conv-rate'>0%</div></div>",
-            "                   <div class='card orange' onclick='window.editStat(\"online_total\")' style='cursor:pointer;' title='Click to edit'><h3>Online / Total</h3><div class='value text-orange' id='ui-online-total'>0</div></div>",
-            "                   <div class='card purple' onclick='window.editStat(\"retention\")' style='cursor:pointer;' title='Click to edit'><h3>Retention Rate</h3><div class='value text-purple' id='ui-retention'>0%</div></div>",
-            "               </div>",
-            "               <div class='stats-grid'>",
-            "                   <div class='card purple' onclick='window.editStat(\"tickets\")' style='cursor:pointer;' title='Click to edit'><h3>Tickets Opened</h3><div class='value' id='ui-tickets-opened'>0</div></div>",
-            "                   <div class='card red' onclick='window.editStat(\"dropoff\")' style='cursor:pointer;' title='Click to edit'><h3>Drop-off Rate</h3><div class='value text-red' id='ui-dropoff'>0%</div></div>",
-            "                   <div class='card orange' onclick='window.editStat(\"peak\")' style='cursor:pointer;' title='Click to edit'><h3>Peak Sales Hour</h3><div class='value' id='ui-peak-hour'>N/A</div></div>",
-            "               </div>",
-            "               <div style='display:grid; grid-template-columns: 2fr 1fr; gap:25px; align-items:stretch;' class='overview-grid'>",
-            "                   <div class='box' style='margin:0;'>",
-            "                       <div style='display:flex; justify-content:space-between; align-items:center;'>",
-            "                           <h2 style='margin:0; border:none;'>📈 Revenue Timeline</h2>",
-            "                           <div style='display:flex; gap:10px;'>",
-            "                               <button class='admin-btn' style='margin:0; padding:8px 15px; background:rgba(16, 185, 129, 0.1); border-color:var(--accent-green); color:var(--accent-green);' onclick='window.location.href=\"/api/export\"'>📥 Export</button>",
-            "                               <button class='admin-btn' style='margin:0; padding:8px 15px;' onclick='window.updateSalesChart(7)'>7D</button>",
-            "                               <button class='admin-btn' style='margin:0; padding:8px 15px; background:transparent;' onclick='window.updateSalesChart(30)'>30D</button>",
-            "                           </div>",
+            "           <div class='stats-grid'>",
+            "               <div class='card purple'><h3>Tickets Opened</h3><div class='value' id='ui-tickets-opened'>0</div></div>",
+            "               <div class='card red'><h3>Drop-off Rate</h3><div class='value text-red' id='ui-dropoff'>0%</div></div>",
+            "               <div class='card orange'><h3>Peak Sales Hour</h3><div class='value' id='ui-peak-hour'>N/A</div></div>",
+            "           </div>",
+            "           <div style='display:grid; grid-template-columns: 2fr 1fr; gap:20px; align-items:stretch;' class='overview-grid'>",
+            "               <div class='box' style='margin:0;'>",
+            "                   <div style='display:flex; justify-content:space-between;'>",
+            "                       <h2>📈 Revenue Timeline</h2>",
+            "                       <div class='filter-group'>",
+            "                           <button class='admin-btn' style='margin:0; padding:5px 10px; background:var(--accent-green); margin-right:10px;' onclick='window.location.href=\"/api/export\"'>📥 Export CSV</button>",
+            "                           <button class='admin-btn' style='margin:0; padding:5px 10px;' onclick='window.updateSalesChart(7)'>7D</button>",
+            "                           <button class='admin-btn' style='margin:0; padding:5px 10px; background:rgba(0,0,0,0.5);' onclick='window.updateSalesChart(30)'>30D</button>",
             "                       </div>",
-            "                       <div style='height:280px; margin-top:20px;'><canvas id='salesChart'></canvas></div>",
             "                   </div>",
-            "                   <div class='box' style='margin:0; display:flex; flex-direction:column; overflow:hidden;'>",
-            "                       <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:15px;'><h2 style='margin:0; border:none;'>⚡ Live Pulse</h2><div class='status-dot' style='margin:0;'></div></div>",
-            "                       <div class='feed-container' id='target-feed' style='flex:1;'></div>",
-            "                   </div>",
+            "                   <div style='height:250px; margin-top:15px;'><canvas id='salesChart'></canvas></div>",
+            "               </div>",
+            "               <div class='box' style='margin:0; display:flex; flex-direction:column; overflow:hidden;'>",
+            "                   <div style='display:flex; justify-content:space-between; align-items:center;'><h2 style='margin:0;'>⚡ Live Pulse</h2><div class='status-dot' style='margin:0;'></div></div>",
+            "                   <div class='feed-container' id='target-feed' style='margin-top:15px; flex:1;'></div>",
             "               </div>",
             "           </div>",
-            "               ",
-            "           <div id='kanban' class='tab-content'>",
-            "               <div class='box'>",
-            "                   <h2 style='color:var(--accent-blue);'>📋 Gestion des Commandes Personnalisées</h2>",
-            "                   <p class='text-muted'>Fais glisser virtuellement les commandes pour prévenir le client automatiquement par DM Discord.</p>",
-            "                   <div class='kanban-board' id='target-kanban'>",
-            "                   </div>",
+            "       </div>",
+            "            ",
+            "       <div id='vip' class='tab-content'>",
+            "           <div class='box' style='background:rgba(168, 85, 247, 0.1); border-color:var(--accent-purple);'>",
+            "               <h2>👑 VIP Subscriptions</h2>",
+            "               <p class='text-muted'>Active subscriptions. VIPs get a 20% discount on all shop items automatically.</p>",
+            "               <div style='overflow-x:auto; margin-top:15px;'>",
+            "                   <table><thead><tr><th>Username</th><th>Expires On</th><th>Time Left</th><th>Actions</th></tr></thead><tbody id='target-vips'></tbody></table>",
             "               </div>",
             "           </div>",
-            "               ",
-            "           <div id='vip' class='tab-content'>",
-            "               <div class='box' style='background:rgba(168, 85, 247, 0.05); border-color:rgba(168, 85, 247, 0.3);'>",
-            "                   <h2 style='color:var(--accent-purple);'>👑 VIP Directory</h2>",
-            "                   <p class='text-muted'>Active subscriptions. VIPs get an automatic 20% discount on all shop items.</p>",
-            "                   <div style='overflow-x:auto; margin-top:20px;'>",
-            "                       <table><thead><tr><th>Username</th><th>Expires On</th><th>Time Left</th><th>Actions</th></tr></thead><tbody id='target-vips'></tbody></table>",
-            "                   </div>",
-            "               </div>",
-            "           </div>",
+            "       </div>",
             "",
-            "           <div id='livechat' class='tab-content'>",
-            "               <div class='box'>",
-            "                   <h2>💬 Live Support Console</h2>",
-            "                   <div class='chat-container' style='margin-top:20px;'>",
-            "                       <div class='ticket-list' id='chat-ticket-list'><p class='text-muted text-center' style='margin-top:20px;'>Syncing channels...</p></div>",
-            "                       <div class='chat-window'>",
-            "                           <div class='chat-messages' id='chat-messages-area'>",
-            "                               <div style='margin:auto; text-align:center; opacity:0.5;'>",
-            "                                   <div style='font-size:3em; margin-bottom:10px;'>📡</div>",
-            "                                   <div style='font-weight:600; letter-spacing:1px; text-transform:uppercase;'>Select a communication channel</div>",
-            "                               </div>",
+            "       <div id='livechat' class='tab-content'>",
+            "           <div class='box'>",
+            "               <h2>💬 Live Chat Console</h2>",
+            "               <p class='text-muted' style='margin-bottom:15px;'>Read and reply to Shop and Support tickets without opening Discord.</p>",
+            "               <div class='chat-container'>",
+            "                   <div class='ticket-list' id='chat-ticket-list'><p class='text-muted text-center' style='margin-top:20px;'>Loading tickets...</p></div>",
+            "                   <div class='chat-window'>",
+            "                       <div class='chat-messages' id='chat-messages-area'>",
+            "                           <div style='margin:auto; color:var(--text-muted); text-align:center;'><h2 style='font-size:3em; margin:0;'>👈</h2><p>Select a ticket to view</p></div>",
+            "                       </div>",
+            "                       <div style='display:flex; gap:10px; padding: 10px 15px; background: rgba(0,0,0,0.2); border-top: 1px solid var(--border-color); flex-wrap: wrap;'>",
+            "                           <button class='admin-btn' style='margin:0; padding:6px 12px; font-size:0.85em; background: rgba(255,255,255,0.05);' onclick='window.sendQuickResponse(\"welcome\")'>👋 Welcome</button>",
+            "                           <button class='admin-btn' style='margin:0; padding:6px 12px; font-size:0.85em; background: rgba(255,255,255,0.05);' onclick='window.sendQuickResponse(\"wait\")'>⏳ Wait</button>",
+            "                           <button class='admin-btn' style='margin:0; padding:6px 12px; font-size:0.85em; background: rgba(255,255,255,0.05);' onclick='window.sendQuickResponse(\"resolved\")'>✅ Resolved?</button>",
+            "                           <button class='admin-btn' style='margin:0; padding:6px 12px; font-size:0.85em; background: var(--accent-red);' onclick='window.sendQuickResponse(\"close\")'>🔒 Close Ticket</button>",
+            "                       </div>",
+            "                       <div class='chat-input-area'>",
+            "                           <div class='chat-attachment-wrapper'>",
+            "                               <input type='file' id='chat-file-input' style='display:none' accept='image/*' onchange='document.getElementById(\"attach-badge\").style.display=\"block\"'>",
+            "                               <button class='chat-attachment-btn' onclick='document.getElementById(\"chat-file-input\").click()' title='Attach Image'>📎</button>",
+            "                               <div id='attach-badge' class='attachment-badge'></div>",
             "                           </div>",
-            "                           <div style='display:flex; gap:10px; padding: 15px; background: rgba(0,0,0,0.3); border-top: 1px solid rgba(255,255,255,0.05); flex-wrap: wrap;'>",
-            "                               <button class='admin-btn' style='margin:0; padding:8px 15px; background: rgba(255,255,255,0.05);' onclick='window.sendQuickResponse(\"welcome\")'>👋 Welcome</button>",
-            "                               <button class='admin-btn' style='margin:0; padding:8px 15px; background: rgba(255,255,255,0.05);' onclick='window.sendQuickResponse(\"wait\")'>⏳ Wait</button>",
-            "                               <button class='admin-btn' style='margin:0; padding:8px 15px; background: rgba(255,255,255,0.05);' onclick='window.sendQuickResponse(\"resolved\")'>✅ Resolved?</button>",
-            "                               <button class='admin-btn' style='margin:0; padding:8px 15px; background: rgba(239, 68, 68, 0.1); border-color:var(--accent-red); color:var(--accent-red);' onclick='window.sendQuickResponse(\"close\")'>🔒 Close</button>",
-            "                           </div>",
-            "                           <div class='chat-input-area'>",
-            "                               <div class='chat-attachment-wrapper'>",
-            "                                   <input type='file' id='chat-file-input' style='display:none' accept='image/*' onchange='document.getElementById(\"attach-badge\").style.display=\"block\"'>",
-            "                                   <button class='chat-attachment-btn' onclick='document.getElementById(\"chat-file-input\").click()' title='Attach Image'>📎</button>",
-            "                                   <div id='attach-badge' class='attachment-badge'></div>",
-            "                               </div>",
-            "                               <input type='text' id='chat-input-text' placeholder='Transmit message...' onkeypress='if(event.key===\"Enter\") window.sendChatMessage()'>",
-            "                               <button class='admin-btn' style='margin:0; padding:15px 30px;' onclick='window.sendChatMessage()'>Send</button>",
-            "                           </div>",
+            "                           <input type='text' id='chat-input-text' placeholder='Type your reply here...' onkeypress='if(event.key===\"Enter\") window.sendChatMessage()'>",
+            "                           <button class='admin-btn' style='margin:0; padding:12px 25px;' onclick='window.sendChatMessage()'>Send 🚀</button>",
             "                       </div>",
             "                   </div>",
             "               </div>",
             "           </div>",
+            "       </div>",
             "",
-            "           <div id='analytics' class='tab-content'>",
-            "               <div class='box'><h2>🕒 Peak Execution Hours</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Observe the time of day with the highest transaction volume.</p><div style='height:280px;'><canvas id='hourlyChart'></canvas></div></div>",
-            "               <div style='display:grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap:25px;'>",
-            "                   <div class='box'><h2>🏆 Top Performing Assets</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Which products generate the most sales quantity.</p><div style='height:260px;'><canvas id='topProductsBarChart'></canvas></div></div>",
-            "                   <div class='box'><h2>🏷️ Sector Revenue</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Revenue grouped by product category.</p><div style='height:260px;'><canvas id='categoryRevenueChart'></canvas></div></div>",
-            "                   <div class='box'><h2>📅 Sales by Day of Week</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Identify your most profitable days to plan promotions.</p><div style='height:260px;'><canvas id='dowChart'></canvas></div></div>",
-            "                   <div class='box'><h2>📊 Conversion Funnel</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Ratio of total tickets opened versus successful transactions.</p><div style='height:260px;'><canvas id='funnelChart'></canvas></div></div>",
-            "               </div>",
+            "       <div id='analytics' class='tab-content'>",
+            "           <div class='box'><h2>🕒 Peak Hours (Sales per Hour)</h2><div style='height:250px; margin-top:15px;'><canvas id='hourlyChart'></canvas></div></div>",
+            "           <div style='display:grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap:20px;'>",
+            "               <div class='box'><h2>🏆 Top Selling Products</h2><div style='height:300px; margin-top:15px;'><canvas id='topProductsBarChart'></canvas></div></div>",
+            "               <div class='box'><h2>🏷️ Revenue by Category</h2><div style='height:300px; margin-top:15px;'><canvas id='categoryRevenueChart'></canvas></div></div>",
             "           </div>",
+            "       </div>",
             "",
-            "           <div id='transactions' class='tab-content'>",
-            "               <div class='box'><h2>🛒 Financial Ledger</h2><div style='overflow-x:auto; margin-top:20px;'><table><thead><tr><th>Client ID</th><th>Asset Acquired</th><th>Volume</th><th>Timestamp</th><th>Action</th></tr></thead><tbody id='target-tx'></tbody></table></div></div>",
+            "       <div id='transactions' class='tab-content'>",
+            "           <div class='box'><h2>🛒 Recent Transactions</h2><div style='overflow-x:auto;'><table><thead><tr><th>Customer</th><th>Product</th><th>Price</th><th>Date</th><th>Action</th></tr></thead><tbody id='target-tx'></tbody></table></div></div>",
+            "       </div>",
+            "            ",
+            "       <div id='products' class='tab-content'>",
+            "           <div class='box'>",
+            "               <h2>📝 Add / Edit Product</h2>",
+            "               <div style='display:flex; gap:15px; flex-wrap:wrap; margin-bottom:10px;'>",
+            "                   <input type='hidden' id='editProdId'>",
+            "                   <input type='text' id='newProdName' placeholder='Product Name (e.g. VIP Pack)' style='flex:1; min-width:200px;'>",
+            "                   <input type='text' id='newProdPrice' placeholder='Price in €' style='width:120px;'>",
+            "                   <input type='text' id='newProdStock' placeholder='Stock (e.g. ∞)' style='width:80px;'>",
+            "               </div>",
+            "               <div style='display:flex; gap:15px; flex-wrap:wrap; margin-bottom:5px;'>",
+            "                   <input type='text' id='newProdDesc' placeholder='Description (e.g. Include 5 exclusive HD photos)' style='flex:1; min-width:250px;'>",
+            "                   <input type='text' id='newProdLink' placeholder='Delivery Link (Drive, Mega...)' style='flex:1; min-width:250px;'>",
+            "               </div>",
+            "               <div style='display:flex; gap:10px; margin-top:10px;'>",
+            "                   <button class='admin-btn' style='margin:0;' onclick='window.saveProduct()' id='saveProdBtn'>➕ Add Product</button>",
+            "                   <button class='admin-btn' style='margin:0; background:transparent; border:1px solid var(--accent-red); color:var(--accent-red); display:none;' onclick='window.cancelEdit()' id='cancelEditBtn'>Cancel</button>",
+            "               </div>",
             "           </div>",
-            "               ",
-            "           <div id='products' class='tab-content'>",
-            "               <div class='box'>",
-            "                   <h2>📝 Asset Configuration</h2>",
-            "                   <div style='display:flex; gap:20px; flex-wrap:wrap; margin-bottom:15px;'>",
-            "                       <input type='hidden' id='editProdId'>",
-            "                       <input type='text' id='newProdName' placeholder='Asset Designation (e.g. VIP Pack)' style='flex:1; min-width:200px;'>",
-            "                       <input type='text' id='newProdPrice' placeholder='Value (€)' style='width:100px;'>",
-            "                       <input type='text' id='newProdStock' placeholder='Inventory (∞)' style='width:100px;'>",
-            "                   </div>",
-            "                   <div style='display:flex; gap:20px; flex-wrap:wrap; margin-bottom:15px;'>",
-            "                       <input type='text' id='newProdDesc' placeholder='Asset Description (e.g. Premium 4K Photos)' style='flex:1; min-width:250px;'>",
-            "                       <input type='text' id='newProdLink' placeholder='Secure Delivery Node (Drive, Mega...)' style='flex:1; min-width:250px;'>",
-            "                   </div>",
-            "                   <div style='display:flex; gap:20px; flex-wrap:wrap; margin-bottom:15px; padding:15px; border-radius:12px; background:rgba(56,189,248,0.05); border:1px solid rgba(56,189,248,0.2);'>",
-            "                       <strong style='color:var(--accent-blue); display:flex; align-items:center;'>🚀 Auto-Upsell :</strong>",
-            "                       <input type='text' id='newProdUpsellId' placeholder='ID Produit Upsell (ex: 6)' style='width:180px;'>",
-            "                       <input type='number' id='newProdUpsellDiscount' placeholder='% Réduction' style='width:150px;'>",
-            "                   </div>",
-            "                   <div style='display:flex; gap:15px; margin-top:20px;'>",
-            "                       <button class='admin-btn' style='margin:0; padding:15px 30px;' onclick='window.saveProduct()' id='saveProdBtn'>➕ Inject Asset</button>",
-            "                       <button class='admin-btn' style='margin:0; background:rgba(239, 68, 68, 0.1); border-color:var(--accent-red); color:var(--accent-red); display:none;' onclick='window.cancelEdit()' id='cancelEditBtn'>Abort</button>",
-            "                   </div>",
+            "           ",
+            "           <div class='box'>",
+            "               <h2>🔗 Manage Buy Buttons (Shop Menu)</h2>",
+            "               <p class='text-muted'>Define the Eneba/Voucher buttons that appear on your Discord Shop Embed.</p>",
+            "               <div style='display:flex; gap:15px; flex-wrap:wrap; margin-bottom:5px;'>",
+            "                   <input type='hidden' id='editLinkId'>",
+            "                   <input type='text' id='newLinkLabel' placeholder='Button Label (e.g. 💳 Buy €5)' style='flex:1; min-width:150px;'>",
+            "                   <input type='text' id='newLinkUrl' placeholder='Voucher URL (https://...)' style='flex:2; min-width:200px;'>",
+            "                   <button class='admin-btn' style='margin:0;' onclick='window.saveBuyLink()' id='saveLinkBtn'>➕ Add Link</button>",
+            "                   <button class='admin-btn' style='margin:0; background:transparent; border:1px solid var(--accent-red); color:var(--accent-red); display:none;' onclick='window.cancelEditLink()' id='cancelEditLinkBtn'>Cancel</button>",
             "               </div>",
-            "               ",
-            "               <div class='box'>",
-            "                   <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;'>",
-            "                       <h2 style='margin:0;'>📦 Active Asset Matrix</h2>",
-            "                       <button class='admin-btn' style='margin:0; background:var(--accent-purple); box-shadow:0 5px 15px rgba(168,85,247,0.3); padding:10px 20px;' onclick='window.triggerShopRefresh()'>🚀 PUSH MENU TO DISCORD</button>",
-            "                   </div>",
-            "                   <div class='product-grid' id='target-products' style='margin-top:20px;'></div>",
-            "               </div>",
+            "               <div style='overflow-x:auto; margin-top:15px;'><table><thead><tr><th>Label</th><th>URL</th><th>Actions</th></tr></thead><tbody id='target-buy-links'></tbody></table></div>",
+            "           </div>",
+            "           <div class='box'><h2>📦 Current Catalog</h2><div class='product-grid' id='target-products'></div></div>",
+            "       </div>",
+            "            ",
+            "       <div id='audience' class='tab-content'>",
+            "           <div style='display:grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap:20px;'>",
+            "               <div class='box'><h2>📥 Latest Joins</h2><div style='overflow-x:auto;'><table><thead><tr><th>Username</th><th>Date</th></tr></thead><tbody id='target-joins'></tbody></table></div></div>",
+            "               <div class='box'><h2>👋 Latest Leaves (Attrition)</h2><div style='overflow-x:auto;'><table><thead><tr><th>User</th><th>Retention Time</th><th>Date Left</th></tr></thead><tbody id='target-leaves'></tbody></table></div></div>",
+            "           </div>",
+            "       </div>",
             "",
-            "               <div class='box'>",
-            "                   <h2>🔗 Payment Gateways (Discord Shop)</h2>",
-            "                   <p class='text-muted'>Define the external voucher endpoints embedded in the shop UI.</p>",
-            "                   <div style='display:flex; gap:20px; flex-wrap:wrap; margin-bottom:15px; margin-top:20px;'>",
-            "                       <input type='hidden' id='editLinkId'>",
-            "                       <input type='text' id='newLinkLabel' placeholder='Button Label (e.g. 💳 Buy €5)' style='flex:1; min-width:150px;'>",
-            "                       <input type='text' id='newLinkUrl' placeholder='Endpoint URL (https://...)' style='flex:2; min-width:250px;'>",
-            "                       <button class='admin-btn' style='margin:0;' onclick='window.saveBuyLink()' id='saveLinkBtn'>➕ Link Gateway</button>",
-            "                       <button class='admin-btn' style='margin:0; background:rgba(239, 68, 68, 0.1); border-color:var(--accent-red); color:var(--accent-red); display:none;' onclick='window.cancelEditLink()' id='cancelEditLinkBtn'>Abort</button>",
-            "                   </div>",
-            "                   <div style='overflow-x:auto; margin-top:20px;'><table><thead><tr><th>Label</th><th>Endpoint URL</th><th>Actions</th></tr></thead><tbody id='target-buy-links'></tbody></table></div>",
-            "               </div>",
+            "       <div id='referrals' class='tab-content'>",
+            "           <div class='box'>",
+            "               <h2>🔗 Referral Threshold</h2>",
+            "               <p class='text-muted'>Number of invites required to get a free product code.</p>",
+            "               <div style='display:flex; gap:10px; align-items:center;'><input type='number' id='ref-threshold' style='width:100px;'><button class='admin-btn' style='margin:0;' onclick='window.updateRefThreshold()'>💾 Save Settings</button></div>",
             "           </div>",
-            "               ",
-            "           <div id='audience' class='tab-content'>",
-            "               <div style='display:grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap:25px;'>",
-            "                   <div class='box'><h2>📥 Inbound Traffic</h2><div style='overflow-x:auto; margin-top:15px;'><table><thead><tr><th>Client ID</th><th>Timestamp</th></tr></thead><tbody id='target-joins'></tbody></table></div></div>",
-            "                   <div class='box'><h2>👋 Outbound Traffic</h2><div style='overflow-x:auto; margin-top:15px;'><table><thead><tr><th>Client ID</th><th>Session Duration</th><th>Timestamp</th></tr></thead><tbody id='target-leaves'></tbody></table></div></div>",
-            "               </div>",
+            "           <div class='box'>",
+            "               <h2>🏆 Top Inviters</h2>",
+            "               <div style='overflow-x:auto;'><table><thead><tr><th>User</th><th>Invites</th><th>Rewards Claimed</th><th>Recently Invited Users</th><th>Actions</th></tr></thead><tbody id='target-referrals'></tbody></table></div>",
             "           </div>",
+            "       </div>",
             "",
-            "           <div id='referrals' class='tab-content'>",
-            "               <div class='box'>",
-            "                   <h2>🎟️ Custom Vouchers & Promo Codes</h2>",
-            "                   <div style='display:flex; gap:15px; flex-wrap:wrap; margin-top:20px;'><input type='text' id='promoName' placeholder='VOUCHER_CODE' style='flex:1; min-width:200px;'><input type='number' id='promoDiscount' placeholder='Discount %' style='width:150px;'><input type='number' id='promoLimit' placeholder='Max Uses' style='width:150px;'><button class='admin-btn' style='margin:0; padding:15px 30px;' onclick='window.createPromo()'>➕ Generate</button></div>",
-            "                   <div style='overflow-x:auto; margin-top:25px;'><table><thead><tr><th>Voucher</th><th>Discount</th><th>Integrity</th><th>Action</th></tr></thead><tbody id='target-promos'></tbody></table></div>",
+            "       <div id='moderation' class='tab-content'>",
+            "           <div class='box'>",
+            "               <h2>🔎 Member Directory</h2>",
+            "               <p class='text-muted'>Search and manage users (Mute, Ban, Warn, Blacklist).</p>",
+            "               <div style='display:flex; flex-wrap:wrap; gap:10px; margin-top:10px; align-items:center;'>",
+            "                   <input type='text' id='memberSearchInput' placeholder='Filter by username or ID...' style='margin-top:0; flex:1; min-width:200px;' oninput='window.sortMembersLocally()'>",
+            "                   <select id='memberStatusSelect' style='margin-top:0; width:auto;' onchange='window.sortMembersLocally()'>",
+            "                       <option value='all'>🌍 All Status</option>",
+            "                       <option value='online'>🟢 Online Only</option>",
+            "                   </select>",
+            "                   <select id='memberSortSelect' style='margin-top:0; width:auto;' onchange='window.sortMembersLocally()'>",
+            "                       <option value='recent'>🔽 Newest (Join)</option>",
+            "                       <option value='oldest'>🔼 Oldest (Join)</option>",
+            "                       <option value='spent_desc'>💰 Top Spenders</option>",
+            "                       <option value='spent_asc'>💸 Least Spenders</option>",
+            "                       <option value='warns'>⚠️ Most Warns</option>",
+            "                   </select>",
+            "                   <button class='admin-btn' style='margin:0; height:42px;' onclick='window.loadAllMembers()'>🔄 Load Database</button>",
             "               </div>",
-            "               <div class='box'>",
-            "                   <h2>🔗 Referral Architecture</h2>",
-            "                   <p class='text-muted'>Define the required invite threshold to unlock a 100% discount node.</p>",
-            "                   <div style='display:flex; gap:15px; align-items:center; margin-top:20px;'><input type='number' id='ref-threshold' style='width:120px; text-align:center;'><button class='admin-btn' style='margin:0;' onclick='window.updateRefThreshold()'>💾 Update Protocol</button></div>",
-            "               </div>",
-            "               <div class='box'>",
-            "                   <h2>🏆 Top Affiliates</h2>",
-            "                   <div style='overflow-x:auto; margin-top:20px;'><table><thead><tr><th>Affiliate ID</th><th>Nodes Captured</th><th>Payouts</th><th>Recent Targets</th><th>Action</th></tr></thead><tbody id='target-referrals'></tbody></table></div>",
-            "               </div>",
+            "               <div id='memberResults' style='margin-top:20px;'></div>",
             "           </div>",
+            "       </div>",
             "",
-            "           <div id='moderation' class='tab-content'>",
-            "               <div class='box'>",
-            "                   <h2>🔎 Client Directory</h2>",
-            "                   <p class='text-muted'>Global surveillance and access control matrix.</p>",
-            "                   <div style='display:flex; flex-wrap:wrap; gap:15px; margin-top:20px; align-items:center;'>",
-            "                       <input type='text' id='memberSearchInput' placeholder='Query ID or designation...' style='margin-top:0; flex:1; min-width:250px;' oninput='window.sortMembersLocally()'>",
-            "                       <select id='memberStatusSelect' style='margin-top:0; width:180px;' onchange='window.sortMembersLocally()'>",
-            "                           <option value='all'>🌍 Global View</option>",
-            "                           <option value='online'>🟢 Active Only</option>",
-            "                       </select>",
-            "                       <select id='memberSortSelect' style='margin-top:0; width:180px;' onchange='window.sortMembersLocally()'>",
-            "                           <option value='recent'>🔽 Newest Nodes</option>",
-            "                           <option value='oldest'>🔼 Oldest Nodes</option>",
-            "                           <option value='spent_desc'>💰 High Value</option>",
-            "                           <option value='spent_asc'>💸 Low Value</option>",
-            "                           <option value='warns'>⚠️ High Risk</option>",
-            "                       </select>",
-            "                       <button class='admin-btn' style='margin-top:0; height:50px;' onclick='window.loadAllMembers()'>🔄 Sync Database</button>",
-            "                   </div>",
-            "                   <div id='memberResults' style='margin-top:30px;'></div>",
+            "       <div id='monitoring' class='tab-content'>",
+            "           <div class='box'>",
+            "               <h2>📡 System Diagnostics & Latency</h2>",
+            "               <p class='text-muted'>Check external API status and dashboard-to-Discord latency.</p>",
+            "               <button class='admin-btn' onclick='window.runDiagnostics()'>🔄 Run API Diagnostics</button>",
+            "               <div class='stats-grid' style='margin-top:20px;'>",
+            "                   <div class='card' id='card-upstash'><h3>Upstash Database</h3><div class='value' id='ui-upstash-status' style='font-size:1.5em;'>⚪ Waiting</div><p class='text-muted' id='ui-upstash-ping'>Latency: -- ms</p></div>",
+            "                   <div class='card' id='card-rewarble'><h3>Rewarble API</h3><div class='value' id='ui-rewarble-status' style='font-size:1.5em;'>⚪ Waiting</div><p class='text-muted' id='ui-rewarble-ping'>Latency: -- ms</p></div>",
+            "                   <div class='card' id='card-discord'><h3>Discord WebSocket</h3><div class='value text-blue' id='ui-discord-ws' style='font-size:1.5em;'>-- ms</div><p class='text-muted'>Global Gateway Ping</p></div>",
+            "               </div>",
+            "               <div style='margin-top:30px; background:rgba(0,0,0,0.3); padding:20px; border-radius:16px; border:1px solid var(--border-color);'>",
+            "                   <h3>⚡ Dashboard ➔ Discord Reactivity Test</h3>",
+            "                   <p class='text-muted' style='font-size:0.9em;'>Calculates the exact time between your click, server processing, ghost message creation on Discord, and final display here.</p>",
+            "                   <div style='display:flex; align-items:center; gap:20px; margin-top:15px;'><button class='admin-btn' style='margin:0; background:var(--accent-orange);' onclick='window.testActionLatency()'>⚡ Test Action Speed</button><div id='latency-result' style='font-size:1.5em; font-weight:bold; color:var(--text-muted);'>-- ms</div></div>",
             "               </div>",
             "           </div>",
-            "",
-            "           <div id='monitoring' class='tab-content'>",
-            "               <div class='box'>",
-            "                   <h2>📡 Subsystem Diagnostics</h2>",
-            "                   <p class='text-muted'>Real-time monitoring of external APIs and latency vectors.</p>",
-            "                   <button class='admin-btn' style='margin-top:20px;' onclick='window.runDiagnostics()'>🔄 Initiate Scan</button>",
-            "                   <div class='stats-grid' style='margin-top:30px;'>",
-            "                       <div class='card' id='card-upstash'><h3>Upstash Cluster</h3><div class='value' id='ui-upstash-status' style='font-size:1.5em; text-shadow:none;'>⚪ Standby</div><p class='text-muted' id='ui-upstash-ping' style='margin-top:10px;'>Latency: -- ms</p></div>",
-            "                       <div class='card' id='card-rewarble'><h3>Rewarble Gateway</h3><div class='value' id='ui-rewarble-status' style='font-size:1.5em; text-shadow:none;'>⚪ Standby</div><p class='text-muted' id='ui-rewarble-ping' style='margin-top:10px;'>Latency: -- ms</p></div>",
-            "                       <div class='card' id='card-discord'><h3>Discord WebSocket</h3><div class='value text-blue' id='ui-discord-ws' style='font-size:1.5em;'>-- ms</div><p class='text-muted' style='margin-top:10px;'>Gateway Ping</p></div>",
-            "                   </div>",
-            "                   <div style='margin-top:40px; background:rgba(0,240,255,0.03); padding:30px; border-radius:20px; border:1px solid rgba(0,240,255,0.1);'>",
-            "                       <h3 style='color:var(--accent-blue); margin-top:0;'>⚡ End-to-End Latency Vector</h3>",
-            "                       <p class='text-muted'>Measures round-trip execution speed from dashboard click to Discord network parsing.</p>",
-            "                       <div style='display:flex; align-items:center; gap:30px; margin-top:25px;'><button class='admin-btn' style='margin:0; padding:15px 30px; background:rgba(0,240,255,0.1); color:var(--accent-blue); border-color:var(--accent-blue);' onclick='window.testActionLatency()'>⚡ Execute Ping</button><div id='latency-result' style='font-size:2em; font-weight:800; color:var(--text-main); font-family:monospace;'>-- ms</div></div>",
-            "                   </div>",
+            "       </div>",
+            "            ",
+            "       <!-- 🌟 ADMIN CONFIG TAB -->",
+            "       <div id='admin' class='tab-content'>",
+            "           <div class='box' style='border:1px solid var(--accent-blue); background:linear-gradient(145deg, rgba(56, 189, 248, 0.05), transparent);'>",
+            "               <h2 style='color:var(--accent-blue); margin-top:0;'>⏳ Pending Reviews (Moderation)</h2>",
+            "               <p class='text-muted'>Reviews submitted by clients after their purchase. Accept them to auto-post to Discord.</p>",
+            "               <div style='overflow-x:auto; margin-top:15px;'>",
+            "                   <table><thead><tr><th>Date</th><th>Customer</th><th>Product</th><th>Rating</th><th>Feedback</th><th>Actions</th></tr></thead><tbody id='target-pending-reviews'></tbody></table>",
             "               </div>",
             "           </div>",
-            "               ",
-            "           <!-- 🌟 ADMIN CONFIG TAB -->",
-            "           <div id='admin' class='tab-content'>",
-            "               <div class='box' style='border:1px solid rgba(0,240,255,0.2); background:rgba(0,240,255,0.02);'>",
-            "                   <h2 style='color:var(--accent-blue); margin-top:0; border-bottom-color:rgba(0,240,255,0.1);'>⏳ Review Queue</h2>",
-            "                   <p class='text-muted'>Client feedback awaiting validation before public broadcast.</p>",
-            "                   <div style='overflow-x:auto; margin-top:20px;'>",
-            "                       <table><thead><tr><th>Timestamp</th><th>Client ID</th><th>Asset</th><th>Score</th><th>Data</th><th>Execute</th></tr></thead><tbody id='target-pending-reviews'></tbody></table>",
-            "                   </div>",
+            "            ",
+            "           <div class='box' style='border:1px solid var(--accent-orange); background:linear-gradient(145deg, rgba(249, 115, 22, 0.05), transparent);'>",
+            "               <h2 style='color:var(--accent-orange); margin-top:0;'>🚧 Maintenance Mode (Kill Switch)</h2>",
+            "               <p class='text-muted'>Temporarily freeze all shop purchases and support tickets for clients. Useful for stock updates or breaks.</p>",
+            "               <div style='display:flex; gap:10px; flex-wrap:wrap; margin-top:15px; align-items:center;'>",
+            "                   <input type='number' id='maint-duration' placeholder='Duration (Minutes)' value='60' style='width:160px; border-color:rgba(249,115,22,0.3);'>",
+            "                   <input type='text' id='maint-channel' placeholder='Announcement Channel ID (Optional)' style='flex:1; min-width:200px; border-color:rgba(249,115,22,0.3);'>",
+            "                   <button class='admin-btn' style='margin:0; background:var(--accent-orange);' onclick='window.toggleMaintenance(true)'>⏸️ Enable</button>",
+            "                   <button class='admin-btn' style='margin:0; background:var(--accent-green);' onclick='window.toggleMaintenance(false)'>▶️ Disable</button>",
             "               </div>",
-            "               ",
-            "               <div class='box' style='border:1px solid rgba(249,115,22,0.2); background:rgba(249,115,22,0.02);'>",
-            "                   <h2 style='color:var(--accent-orange); margin-top:0; border-bottom-color:rgba(249,115,22,0.1);'>🚧 Lockout Protocol (Maintenance)</h2>",
-            "                   <p class='text-muted'>Suspend all inbound commercial transactions globally.</p>",
-            "                   <div style='display:flex; gap:15px; flex-wrap:wrap; margin-top:20px; align-items:center;'>",
-            "                       <input type='number' id='maint-duration' placeholder='T-Minus (Mins)' value='60' style='width:180px; border-color:rgba(249,115,22,0.3);'>",
-            "                       <input type='text' id='maint-channel' placeholder='Broadcast Channel ID (Optional)' style='flex:1; min-width:250px; border-color:rgba(249,115,22,0.3);'>",
-            "                       <button class='admin-btn' style='margin:0; background:rgba(249,115,22,0.2); color:var(--accent-orange); border-color:var(--accent-orange);' onclick='window.toggleMaintenance(true)'>⏸️ Engage Lockout</button>",
-            "                       <button class='admin-btn' style='margin:0; background:rgba(16,185,129,0.1); color:var(--accent-green); border-color:var(--accent-green);' onclick='window.toggleMaintenance(false)'>▶️ Disengage</button>",
-            "                   </div>",
-            "               </div>",
-            "               ",
-            "               <div class='box'><h2>🌟 Manual Injection (Reviews)</h2><div style='display:flex; gap:15px; margin-bottom:15px; margin-top:20px;'><input type='text' id='rev-author' placeholder='Client Designation' style='flex:1;'><select id='rev-rating' style='flex:1;'><option value='5'>5/5 ⭐ - Optimal</option><option value='4'>4/5 ⭐ - Sub-optimal</option><option value='3'>3/5 ⭐ - Acceptable</option><option value='2'>2/5 ⭐ - Flawed</option><option value='1'>1/5 ⭐ - Critical</option></select></div><textarea id='rev-msg' placeholder='Inject feedback string...' style='margin-bottom:15px; min-height:100px;'></textarea><button class='admin-btn' style='background:rgba(16,185,129,0.1); color:var(--accent-green); border-color:var(--accent-green); width:100%; padding:15px;' onclick='window.sendReview()'>📤 Broadcast to Network</button></div>",
             "           </div>",
-            "       </main>",
+            "            ",
+            "           <div class='box'><h2>⚡ 1-Click Shop Setup</h2><p class='text-muted'>Clear the old menu and instantly post the new aesthetic setup in your Discord shop channel.</p><button class='admin-btn' style='background:var(--accent-purple); width:100%; padding:15px;' onclick='window.triggerShopRefresh()'>🔄 Setup and clear old menu</button></div>",
+            "           ",
+            "           <div class='box'>",
+            "               <h2>🎟️ Promo Codes</h2>",
+            "               <div style='display:flex; gap:10px; flex-wrap:wrap;'><input type='text' id='promoName' placeholder='CODE' style='flex:1; min-width:150px;'><input type='number' id='promoDiscount' placeholder='% Off' style='width:100px;'><input type='number' id='promoLimit' placeholder='Uses' style='width:100px;'><button class='admin-btn' style='margin:0;' onclick='window.createPromo()'>➕ Create</button></div>",
+            "               <div style='overflow-x:auto; margin-top:20px;'><table><thead><tr><th>Code</th><th>Discount</th><th>Usage</th><th>Action</th></tr></thead><tbody id='target-promos'></tbody></table></div>",
+            "           </div>",
+            "           ",
+            "           <div class='box'>",
+            "               <h2>🌟 Manual Customer Review</h2>",
+            "               <div style='display:flex; gap:10px; margin-bottom:10px;'><input type='text' id='rev-author' placeholder='Author Name' style='flex:1;'><select id='rev-rating' style='flex:1;'><option value='5'>5/5 ⭐ - Excellent</option><option value='4'>4/5 ⭐ - Very Good</option><option value='3'>3/5 ⭐ - Good</option><option value='2'>2/5 ⭐ - Fair</option><option value='1'>1/5 ⭐ - Poor</option></select></div>",
+            "               <textarea id='rev-msg' placeholder='Type the review here...' style='margin-bottom:10px; min-height:80px;'></textarea>",
+            "               <button class='admin-btn' style='background:var(--accent-green); width:100%;' onclick='window.sendReview()'>📤 Publish Review to Discord</button>",
+            "           </div>",
+            "       </div>",
             "    </div>",
             "",
             "    <!-- [ANCHOR: DASHBOARD_JS_LOGIC] -->",
             "    <script>",
-            "        let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, userGoal=500, salesChart, hourlyChart, topProdChart, catChart, dowChartInst, funnelChartInst; ",
+            "        let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, userGoal=500, salesChart, hourlyChart, topProdChart, catChart; ",
             "        let allMembersData = []; let isMembersLoaded = false; let activeChatChannel = null; let chatPollInterval = null;",
-            "        let trackedTickets = 0, trackedReviews = 0, trackedSales = 0;",
             "        ",
-            "        window.toggleSidebar = function() { const sb = document.getElementById('appSidebar'); const ov = document.getElementById('sidebarOverlay'); sb.classList.toggle('open'); if(sb.classList.contains('open')) { ov.classList.add('show'); } else { ov.classList.remove('show'); } };",
-            "        window.closeSidebar = function() { document.getElementById('appSidebar').classList.remove('open'); document.getElementById('sidebarOverlay').classList.remove('show'); };",
-            "        ",
-            "        window.customPrompt = function(title, message, placeholder = '', defaultValue = '') {",
-            "            return new Promise((resolve) => {",
-            "                const dialog = document.getElementById('premium-dialog');",
-            "                const titleEl = document.getElementById('dialog-title');",
-            "                const msgEl = document.getElementById('dialog-message');",
-            "                const inputEl = document.getElementById('dialog-input');",
-            "                const btnCancel = document.getElementById('dialog-cancel');",
-            "                const btnConfirm = document.getElementById('dialog-confirm');",
-            "                titleEl.innerText = title;",
-            "                msgEl.innerText = message;",
-            "                inputEl.style.display = 'block';",
-            "                inputEl.placeholder = placeholder;",
-            "                inputEl.value = defaultValue;",
-            "                dialog.style.display = 'flex';",
-            "                inputEl.focus();",
-            "                const cleanup = () => { dialog.style.display = 'none'; btnCancel.onclick = null; btnConfirm.onclick = null; inputEl.onkeypress = null; };",
-            "                btnCancel.onclick = () => { cleanup(); resolve(null); };",
-            "                btnConfirm.onclick = () => { cleanup(); resolve(inputEl.value); };",
-            "                inputEl.onkeypress = (e) => { if(e.key === 'Enter') btnConfirm.click(); };",
-            "            });",
-            "        };",
-            "        window.customConfirm = function(title, message) {",
-            "            return new Promise((resolve) => {",
-            "                const dialog = document.getElementById('premium-dialog');",
-            "                const titleEl = document.getElementById('dialog-title');",
-            "                const msgEl = document.getElementById('dialog-message');",
-            "                const inputEl = document.getElementById('dialog-input');",
-            "                const btnCancel = document.getElementById('dialog-cancel');",
-            "                const btnConfirm = document.getElementById('dialog-confirm');",
-            "                titleEl.innerText = title;",
-            "                msgEl.innerText = message;",
-            "                inputEl.style.display = 'none';",
-            "                dialog.style.display = 'flex';",
-            "                const cleanup = () => { dialog.style.display = 'none'; btnCancel.onclick = null; btnConfirm.onclick = null; };",
-            "                btnCancel.onclick = () => { cleanup(); resolve(false); };",
-            "                btnConfirm.onclick = () => { cleanup(); resolve(true); };",
-            "            });",
-            "        };",
-            "        ",
+            "        // 🌟 AUDIO ENGINE (Premium Chord Generation)",
             "        let isMuted = false;",
             "        window.toggleMute = function() { isMuted = !isMuted; document.getElementById('audioBtn').innerText = isMuted ? '🔇' : '🔊'; };",
             "        let audioCtx = null;",
@@ -1789,6 +1637,25 @@ http.createServer(async (req, res) => {
             "           } catch(e) {}",
             "        }",
             "        document.body.addEventListener('click', initAudio, { once: true });",
+            "        ",
+            "        function playPremiumIntro() {",
+            "           if(isMuted) return;",
+            "           try {",
+            "               initAudio();",
+            "               if(!audioCtx) return;",
+            "               const now = audioCtx.currentTime;",
+            "               const oscBase = audioCtx.createOscillator(); const gainBase = audioCtx.createGain();",
+            "               oscBase.type = 'sine'; oscBase.frequency.setValueAtTime(100, now); oscBase.frequency.exponentialRampToValueAtTime(50, now + 3);",
+            "               gainBase.gain.setValueAtTime(0, now); gainBase.gain.linearRampToValueAtTime(0.4, now + 1); gainBase.gain.exponentialRampToValueAtTime(0.01, now + 4);",
+            "               oscBase.connect(gainBase); gainBase.connect(audioCtx.destination); oscBase.start(now); oscBase.stop(now + 4);",
+            "               [440, 554.37, 659.25].forEach((freq, i) => {",
+            "                   const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();",
+            "                   osc.type = 'sine'; osc.frequency.setValueAtTime(freq, now + 0.2 + (i * 0.15));",
+            "                   gain.gain.setValueAtTime(0, now + 0.2 + (i * 0.15)); gain.gain.linearRampToValueAtTime(0.15, now + 0.5 + (i * 0.15)); gain.gain.exponentialRampToValueAtTime(0.01, now + 3.5);",
+            "                   osc.connect(gain); gain.connect(audioCtx.destination); osc.start(now + 0.2 + (i * 0.15)); osc.stop(now + 4);",
+            "               });",
+            "           } catch(e) {}",
+            "        }",
             "        ",
             "        function playSound(type) {",
             "           if(isMuted) return;",
@@ -1808,37 +1675,100 @@ http.createServer(async (req, res) => {
             "               }",
             "           } catch(e) {}",
             "        }",
+            "",
+            "        let trackedTickets = 0; let trackedReviews = 0; let trackedSales = 0;",
+            "        let dataPayload = null;",
             "        ",
+            "        // 💎 ULTRA PREMIUM SPLASH SCREEN LOGIC",
             "        async function initDashboard(){",
+            "           let progress = 0;",
+            "           const loadBar = document.getElementById('loader-bar');",
+            "           const loadTxt = document.getElementById('loader-percentage');",
+            "           ",
+            "           setTimeout(() => {",
+            "               const logo = document.getElementById('premium-logo');",
+            "               const sub = document.getElementById('premium-subtitle');",
+            "               const wrap = document.getElementById('loader-wrapper');",
+            "               if(logo) logo.classList.add('show');",
+            "               if(sub) sub.classList.add('show');",
+            "               if(wrap) wrap.classList.add('show');",
+            "           }, 100);",
+            "           ",
+            "           const loadInterval = setInterval(() => {",
+            "               if(progress < 90) { ",
+            "                   progress += Math.random() * 3; ",
+            "                   if(progress > 90) progress = 90; ",
+            "                   if(loadBar) loadBar.style.width = progress + '%';",
+            "                   if(loadTxt) loadTxt.innerText = Math.floor(progress).toString().padStart(2, '0') + '%';",
+            "               }",
+            "           }, 40);",
+            "           ",
             "           try{",
             "               const res = await fetch('/api/init-data');",
-            "               if(res.ok) {",
-            "                   const data = await res.json();",
-            "                   processInitData(data);",
-            "               }",
+            "               if(res.ok) dataPayload = await res.json();",
             "           } catch(e){ console.error('API Error'); }",
-            "           if(typeof window.renderSalesChart === 'function') window.renderSalesChart(7);",
+            "           clearInterval(loadInterval);",
+            "           ",
+            "           let finishInterval = setInterval(() => {",
+            "               progress += 4;",
+            "               if(progress >= 100) {",
+            "                   progress = 100;",
+            "                   clearInterval(finishInterval);",
+            "                   if(loadBar) loadBar.style.width = '100%';",
+            "                   if(loadTxt) loadTxt.innerText = '100%';",
+            "                   ",
+            "                   setTimeout(() => {",
+            "                       const wrap = document.getElementById('loader-wrapper');",
+            "                       const txt = document.getElementById('loader-percentage');",
+            "                       if(wrap) wrap.style.opacity = '0';",
+            "                       if(txt) txt.style.opacity = '0';",
+            "                       ",
+            "                       setTimeout(() => {",
+            "                           const welcome = document.getElementById('welcome-text');",
+            "                           if(welcome) welcome.classList.add('show');",
+            "                           playPremiumIntro();",
+            "                       }, 600);",
+            "                       ",
+            "                       if(dataPayload) processInitData(dataPayload);",
+            "                       ",
+            "                       setTimeout(() => {",
+            "                           const splash = document.getElementById('loading-screen');",
+            "                           if(splash) {",
+            "                               splash.style.transform = 'scale(1.1) translateY(-20px)';",
+            "                               splash.style.opacity = '0';",
+            "                               splash.style.pointerEvents = 'none';",
+            "                           }",
+            "                           setTimeout(() => {",
+            "                               if(splash) splash.style.display = 'none'; ",
+            "                               const dash = document.getElementById('dashboard-container');",
+            "                               if(dash) dash.style.display = 'block'; ",
+            "                               window.renderSalesChart(7);",
+            "                           }, 1200);",
+            "                       }, 3000);",
+            "                   }, 400);",
+            "               } else {",
+            "                   if(loadBar) loadBar.style.width = progress + '%';",
+            "                   if(loadTxt) loadTxt.innerText = Math.floor(progress).toString().padStart(2, '0') + '%';",
+            "               }",
+            "           }, 25);",
             "        }",
             "        ",
             "        function processInitData(data) { ",
-            "            rawStats=data.memoryStats || {}; PRODUCT_DATA=data.PRODUCT_DATA || {}; currentMonthRevenue=data.monthRevenue || 0; PIN=data.PIN || ''; lastTxCount=rawStats.total_transactions||0; ",
+            "            rawStats=data.memoryStats; PRODUCT_DATA=data.PRODUCT_DATA; currentMonthRevenue=data.monthRevenue; PIN=data.PIN; lastTxCount=rawStats.total_transactions||0; ",
             "            ",
+            "            // 🔥 CORRECTION DU CALCUL TOTAL REVENUE BASÉ SUR L'HISTORIQUE RÉEL 🔥",
             "            let calcTotalRev = 0;",
             "            if(rawStats.revenue) {",
             "                Object.values(rawStats.revenue).forEach(val => calcTotalRev += parseFloat(val));",
             "            }",
             "            rawStats.total_revenue = calcTotalRev;",
             "",
-            "            let overrides = rawStats.overrides || {};",
-            "            document.getElementById('ui-today-rev').innerText = overrides['today_rev'] || ('€'+(data.todayRevenue || 0));",
-            "            document.getElementById('ui-total-rev').innerText = overrides['total_rev'] || ('€'+(rawStats.total_revenue || 0));",
-            "            document.getElementById('ui-conv-rate').innerText = overrides['conv_rate'] || ((data.conversionRate||0)+'%');",
-            "            document.getElementById('ui-online-total').innerHTML = overrides['online_total'] || ((data.onlineCount||0) + ' <span style=\"font-size:0.5em;color:var(--text-muted);\">/ ' + (data.memberCount||0) + '</span>');",
-            "            document.getElementById('ui-retention').innerText = overrides['retention'] || ((data.retentionRate||0)+'%');",
-            "            document.getElementById('ui-tickets-opened').innerText = overrides['tickets'] || (data.ticketsOpened||0);",
-            "            document.getElementById('ui-dropoff').innerText = overrides['dropoff'] || ((data.dropOffRate||0)+'%');",
-            "            document.getElementById('ui-peak-hour').innerText = overrides['peak'] || (data.peakHourStr||'N/A');",
-            "            ",
+            "            document.getElementById('ui-today-rev').innerText='€'+data.todayRevenue; ",
+            "            document.getElementById('ui-total-rev').innerText='€'+calcTotalRev; ",
+            "            document.getElementById('ui-conv-rate').innerText=data.conversionRate+'%'; ",
+            "            document.getElementById('ui-online-total').innerHTML = data.onlineCount + ' <span style=\"font-size:0.5em;color:var(--text-muted);\">/ ' + data.memberCount + '</span>'; ",
+            "            document.getElementById('ui-retention').innerText=data.retentionRate+'%'; document.getElementById('ui-tickets-opened').innerText=data.ticketsOpened; ",
+            "            document.getElementById('ui-dropoff').innerText=data.dropOffRate+'%'; document.getElementById('ui-peak-hour').innerText=data.peakHourStr; ",
             "            trackedTickets = data.activeTickets || 0; trackedReviews = data.pendingReviewsCount || 0; trackedSales = rawStats.total_transactions || 0; ",
             "            buildStaticTables(); renderAnalyticsCharts(); updateMaintenanceBadge(data.maintenance); updateBadgesAndFeed(data); ",
             "        }",
@@ -1876,7 +1806,7 @@ http.createServer(async (req, res) => {
             "          let txHtml=''; ",
             "          if(rawStats.recent_transactions && rawStats.recent_transactions.length>0){ ",
             "              rawStats.recent_transactions.forEach(tx=>{ ",
-            "                  txHtml+= '<tr><td>' + escapeHTML(tx.username) + '</td><td>' + escapeHTML(tx.product) + '</td><td class=\"text-green font-bold\">€' + tx.price + '</td><td class=\"text-muted\">' + tx.date + '</td><td><button class=\"admin-btn\" style=\"padding:6px 12px; background:rgba(239, 68, 68, 0.1); border-color:var(--accent-red); color:var(--accent-red); margin:0;\" onclick=\"window.refundTx(\\'' + tx.date + '\\', \\'' + escapeHTML(tx.username).replace(/'/g, \"\\\\'\") + '\\')\">Refund</button></td></tr>'; ",
+            "                  txHtml+= '<tr><td>' + escapeHTML(tx.username) + '</td><td>' + escapeHTML(tx.product) + '</td><td class=\"text-green font-bold\">€' + tx.price + '</td><td class=\"text-muted\">' + tx.date + '</td><td><button class=\"admin-btn\" style=\"padding:4px 8px; background:var(--accent-red); margin:0;\" onclick=\"window.refundTx(\\'' + tx.date + '\\', \\'' + escapeHTML(tx.username).replace(/'/g, \"\\\\'\") + '\\')\">Refund</button></td></tr>'; ",
             "              }); ",
             "          } ",
             "          document.getElementById('target-tx').innerHTML=txHtml;",
@@ -1891,11 +1821,13 @@ http.createServer(async (req, res) => {
             "                  else if(cat.includes('PERSONALIZED')) icon='💌'; ",
             "                  else if(cat.includes('SUBSCRIPTION')) icon='👑'; ",
             "                  let pPrice = p.price==='Custom'?'Custom':'€'+p.price; ",
-            "                  let pLink = p.link ? '<a href=\"' + escapeHTML(p.link) + '\" target=\"_blank\" style=\"color:var(--accent-blue);text-decoration:none;\">[🔗 Open Node]</a>' : '<span class=\"text-muted\">Unlinked</span>'; ",
+            "                  let pLink = p.link ? '<a href=\"' + escapeHTML(p.link) + '\" target=\"_blank\" style=\"color:var(--accent-blue);text-decoration:none;\">[🔗 Open Delivery Link]</a>' : '<span class=\"text-muted\">No Link</span>'; ",
             "                  let stockDisplay = p.stock === '∞' || !p.stock ? '∞' : p.stock; ",
-            "                  let upsellDisplay = p.upsellId ? `<br><span style='color:var(--accent-purple);font-size:0.8em;'>🚀 Upsell: #${p.upsellId} (-${p.upsellDiscount||20}%)</span>` : '';",
-            "                  let pDesc = p.desc ? '<div class=\"prod-desc\">' + escapeHTML(p.desc) + upsellDisplay + '</div>' : '<div class=\"prod-desc\" style=\"font-style:italic; opacity:0.5;\">Awaiting parameters...'+upsellDisplay+'</div>';",
-            "                  prodHtml+= '<div class=\"product-card\"><div class=\"prod-header\"><div class=\"prod-title\">' + icon + ' ' + escapeHTML(p.name) + '</div><div class=\"prod-id\">ID: ' + id + '</div></div><div class=\"prod-price\">' + pPrice + ' <span class=\"prod-stock\">INV: ' + escapeHTML(stockDisplay) + '</span></div>' + pDesc + '<div class=\"prod-link\">' + pLink + '</div><div class=\"prod-actions\"><button class=\"admin-btn\" style=\"background:rgba(255,255,255,0.05); border-color:rgba(255,255,255,0.1);\" onclick=\"window.editProduct(\\'' + id + '\\')\">✏️ Edit</button><button class=\"admin-btn\" style=\"background:rgba(239, 68, 68, 0.1); border-color:var(--accent-red); color:var(--accent-red);\" onclick=\"window.deleteProduct(\\'' + id + '\\')\">🗑️ Purge</button></div></div>'; ",
+            "                  ",
+            "                  // Nouveau Design pour les produits avec la description intégrée",
+            "                  let pDesc = p.desc ? '<div class=\"prod-desc\">' + escapeHTML(p.desc) + '</div>' : '<div class=\"prod-desc\" style=\"font-style:italic; opacity:0.5;\">No description provided.</div>';",
+            "",
+            "                  prodHtml+= '<div class=\"product-card\"><div class=\"prod-header\"><div class=\"prod-title\">' + icon + ' ' + escapeHTML(p.name) + '</div><div class=\"prod-id\">ID: ' + id + '</div></div><div class=\"prod-price\">' + pPrice + ' <span class=\"prod-stock\">Stock: ' + escapeHTML(stockDisplay) + '</span></div>' + pDesc + '<div class=\"prod-link\">' + pLink + '</div><div class=\"prod-actions\"><button class=\"admin-btn\" style=\"background:rgba(255,255,255,0.1);\" onclick=\"window.editProduct(\\'' + id + '\\')\">✏️ Edit</button><button class=\"admin-btn\" style=\"background:rgba(239, 68, 68, 0.2); color:var(--accent-red);\" onclick=\"window.deleteProduct(\\'' + id + '\\')\">🗑️ Delete</button></div></div>'; ",
             "              }); ",
             "          } ",
             "          document.getElementById('target-products').innerHTML=prodHtml;",
@@ -1917,10 +1849,10 @@ http.createServer(async (req, res) => {
             "                      let h=Math.floor((u.duration/(1000*60*60))%24); ",
             "                      durStr=d>0?d+'d '+h+'h':h+'h'; ",
             "                  } ",
-            "                  lHtml+='<tr><td><div style=\"display:flex; align-items:center; gap:15px;\"><img src=\"' + escapeHTML(u.avatar) + '\" style=\"width:35px; height:35px; border-radius:50%; border:1px solid rgba(255,255,255,0.1);\"/><span>' + escapeHTML(u.username) + '</span></div></td><td class=\"text-muted\">' + escapeHTML(durStr) + '</td><td class=\"text-muted\">' + escapeHTML(u.date) + '</td></tr>'; ",
+            "                  lHtml+='<tr><td><div style=\"display:flex; align-items:center; gap:10px;\"><img src=\"' + escapeHTML(u.avatar) + '\" style=\"width:30px; height:30px; border-radius:50%;\"/><span>' + escapeHTML(u.username) + '</span></div></td><td class=\"text-muted\">' + escapeHTML(durStr) + '</td><td class=\"text-muted\">' + escapeHTML(u.date) + '</td></tr>'; ",
             "              }); ",
             "          } ",
-            "          document.getElementById('target-leaves').innerHTML=lHtml||'<tr><td colspan=\"3\" class=\"text-muted text-center\">No drops recorded.</td></tr>';",
+            "          document.getElementById('target-leaves').innerHTML=lHtml||'<tr><td colspan=\"3\" class=\"text-muted text-center\">No leaves recorded.</td></tr>';",
             "",
             "          let promHtml=''; ",
             "          if(rawStats.promo_codes){ ",
@@ -1928,7 +1860,7 @@ http.createServer(async (req, res) => {
             "                  const info=rawStats.promo_codes[code]; ",
             "                  const isExhausted = info.used >= info.limit; ",
             "                  const statusColor = isExhausted ? 'var(--accent-red)' : 'var(--accent-green)'; ",
-            "                  promHtml+= '<tr style=\"opacity:' + (isExhausted?'0.3':'1') + '\"><td><strong style=\"letter-spacing:1px; color:#fff;\">' + escapeHTML(code) + '</strong></td><td style=\"color:' + statusColor + '; font-weight:800;\">-' + info.discount + '%</td><td style=\"font-family:monospace;\">' + info.used + ' / ' + info.limit + '</td><td><button class=\"admin-btn\" style=\"margin:0; padding:6px 12px; background:rgba(239, 68, 68, 0.1); border-color:var(--accent-red); color:var(--accent-red);\" onclick=\"window.deletePromo(\\'' + encodeURIComponent(code) + '\\')\">🗑️</button></td></tr>'; ",
+            "                  promHtml+= '<tr style=\"opacity:' + (isExhausted?'0.5':'1') + '\"><td><strong>' + escapeHTML(code) + '</strong></td><td style=\"color:' + statusColor + '; font-weight:bold;\">-' + info.discount + '%</td><td>' + info.used + ' / ' + info.limit + '</td><td><button class=\"admin-btn\" style=\"margin:0; padding:5px 10px; background:var(--accent-red);\" onclick=\"window.deletePromo(\\'' + encodeURIComponent(code) + '\\')\">🗑️</button></td></tr>'; ",
             "              } ",
             "          } ",
             "          document.getElementById('target-promos').innerHTML=promHtml;",
@@ -1940,7 +1872,7 @@ http.createServer(async (req, res) => {
             "              Object.entries(rawStats.referrals).forEach(([id,r])=>{ ",
             "                  let list=r.invited.slice(0,3).map(u=>escapeHTML(u.username)).join(', '); ",
             "                  if(r.invited.length>3) list+='...'; ",
-            "                  refHtml+= '<tr><td>' + escapeHTML(r.username||id) + '<br><span class=\"text-muted\" style=\"font-size:0.7em; letter-spacing:1px;\">' + id + '</span></td><td class=\"text-green font-bold\" style=\"font-size:1.2em;\">' + r.count + '</td><td><span style=\"background:rgba(255,255,255,0.1); padding:4px 8px; border-radius:8px;\">' + r.total_rewards + '</span></td><td class=\"text-muted\" style=\"font-size:0.85em;\">' + (list||'None') + '</td><td><button class=\"admin-btn\" style=\"padding:6px 12px; margin:0;\" onclick=\"window.editReferralCount(\\'' + id + '\\', ' + r.count + ')\">✏️ Mod</button></td></tr>'; ",
+            "                  refHtml+= '<tr><td>' + escapeHTML(r.username||id) + '<br><span class=\"text-muted\" style=\"font-size:0.8em;\">' + id + '</span></td><td class=\"text-green font-bold\">' + r.count + '</td><td>' + r.total_rewards + '</td><td class=\"text-muted\">' + (list||'None') + '</td><td><button class=\"admin-btn\" style=\"padding:4px 8px; margin:0;\" onclick=\"window.editReferralCount(\\'' + id + '\\', ' + r.count + ')\">✏️ Edit</button></td></tr>'; ",
             "              }); ",
             "          } ",
             "          document.getElementById('target-referrals').innerHTML=refHtml; ",
@@ -1951,68 +1883,37 @@ http.createServer(async (req, res) => {
             "                  const dEnd = new Date(sub.expiresAt); ",
             "                  const diffDays = Math.max(0, Math.ceil((sub.expiresAt - now)/(1000*60*60*24))); ",
             "                  const pct = Math.min(100, Math.max(0, (diffDays/30)*100)); ",
-            "                  vipHtml += '<tr><td><strong>' + escapeHTML(sub.username) + '</strong><br><span class=\"text-muted\" style=\"font-size:0.75em; letter-spacing:1px;\">' + id + '</span></td><td>' + dEnd.toLocaleDateString('en-US') + '</td><td><div style=\"font-weight:800; color:var(--accent-purple); margin-bottom:5px;\">' + diffDays + ' Days</div><div class=\"progress-bg\"><div class=\"progress-fill\" style=\"width:' + pct + '%; box-shadow:0 0 10px var(--accent-purple);\"></div></div></td><td><button class=\"admin-btn\" style=\"padding:6px 12px; margin-right:8px; background:rgba(0,240,255,0.1); border-color:var(--accent-blue); color:var(--accent-blue);\" onclick=\"window.manageVip(\\'' + id + '\\', \\'add\\')\">🎁 +7D</button><button class=\"admin-btn\" style=\"padding:6px 12px; background:rgba(239,68,68,0.1); border-color:var(--accent-red); color:var(--accent-red);\" onclick=\"window.manageVip(\\'' + id + '\\', \\'revoke\\')\">🛑 Revoke</button></td></tr>'; ",
+            "                  vipHtml += '<tr><td><strong>' + escapeHTML(sub.username) + '</strong><br><span class=\"text-muted\" style=\"font-size:0.8em;\">' + id + '</span></td><td>' + dEnd.toLocaleDateString('en-US') + '</td><td><div style=\"font-weight:bold;\">' + diffDays + ' Days Left</div><div class=\"progress-bg\"><div class=\"progress-fill\" style=\"width:' + pct + '%\"></div></div></td><td><button class=\"admin-btn\" style=\"padding:5px 10px; margin-right:5px; background:var(--accent-blue);\" onclick=\"window.manageVip(\\'' + id + '\\', \\'add\\')\">🎁 +7D</button><button class=\"admin-btn\" style=\"padding:5px 10px; background:var(--accent-red);\" onclick=\"window.manageVip(\\'' + id + '\\', \\'revoke\\')\">🛑 Revoke</button></td></tr>'; ",
             "              }); ",
             "          } ",
-            "          document.getElementById('target-vips').innerHTML = vipHtml || '<tr><td colspan=\"4\" class=\"text-muted text-center\">No active assignments.</td></tr>';",
+            "          document.getElementById('target-vips').innerHTML = vipHtml || '<tr><td colspan=\"4\" class=\"text-muted text-center\">No active VIP subscriptions.</td></tr>';",
             "",
             "          let blHtml=''; ",
             "          if(rawStats.buy_links){ ",
             "              Object.entries(rawStats.buy_links).forEach(([id, l]) => { ",
-            "                  blHtml += '<tr><td><strong>' + escapeHTML(l.label) + '</strong></td><td><a href=\"' + escapeHTML(l.url) + '\" target=\"_blank\" style=\"color:var(--accent-blue); background:rgba(0,240,255,0.05); padding:6px 12px; border-radius:8px; text-decoration:none;\">Verify Gateway ↗</a></td><td><button class=\"admin-btn\" style=\"padding:6px 12px; margin:0 8px 0 0;\" onclick=\"window.editBuyLink(\\'' + id + '\\')\">✏️ Mod</button><button class=\"admin-btn\" style=\"padding:6px 12px; background:rgba(239, 68, 68, 0.1); border-color:var(--accent-red); color:var(--accent-red); margin:0;\" onclick=\"window.deleteBuyLink(\\'' + id + '\\')\">🗑️ Purge</button></td></tr>'; ",
+            "                  blHtml += '<tr><td>' + escapeHTML(l.label) + '</td><td><a href=\"' + escapeHTML(l.url) + '\" target=\"_blank\" style=\"color:var(--accent-blue);\">Link</a></td><td><button class=\"admin-btn\" style=\"padding:4px 8px; margin:0 5px 0 0;\" onclick=\"window.editBuyLink(\\'' + id + '\\')\">✏️</button><button class=\"admin-btn\" style=\"padding:4px 8px; background:var(--accent-red); margin:0;\" onclick=\"window.deleteBuyLink(\\'' + id + '\\')\">🗑️</button></td></tr>'; ",
             "              }); ",
             "          } ",
-            "          document.getElementById('target-buy-links').innerHTML=blHtml || '<tr><td colspan=\"3\" class=\"text-muted\">Gateways missing.</td></tr>'; ",
+            "          document.getElementById('target-buy-links').innerHTML=blHtml || '<tr><td colspan=\"3\" class=\"text-muted\">No buy links configured.</td></tr>'; ",
             "",
             "          let prHtml=''; ",
             "          if(rawStats.pending_reviews && rawStats.pending_reviews.length>0){ ",
             "              rawStats.pending_reviews.forEach(r=>{ ",
-            "                  prHtml+= '<tr><td class=\"text-muted\" style=\"font-size:0.85em;\">' + r.date + '</td><td><strong style=\"color:#fff;\">' + escapeHTML(r.username) + '</strong></td><td>' + escapeHTML(r.product) + '</td><td style=\"color:var(--accent-orange); font-weight:800;\">' + r.rating + '/5 ⭐</td><td style=\"max-width:250px; white-space:normal; font-style:italic; color:#cbd5e1;\">\"' + escapeHTML(r.text) + '\"</td><td style=\"display:flex; gap:8px;\"><button class=\"admin-btn\" style=\"padding:6px 12px; margin:0; background:rgba(16,185,129,0.1); border-color:var(--accent-green); color:var(--accent-green);\" onclick=\"window.approveReview(\\'' + r.id + '\\')\">✅ Accept</button><button class=\"admin-btn\" style=\"padding:6px 12px; margin:0; background:rgba(239,68,68,0.1); border-color:var(--accent-red); color:var(--accent-red);\" onclick=\"window.rejectReview(\\'' + r.id + '\\')\">❌ Reject</button></td></tr>'; ",
+            "                  prHtml+= '<tr><td class=\"text-muted\">' + r.date + '</td><td><strong>' + escapeHTML(r.username) + '</strong></td><td>' + escapeHTML(r.product) + '</td><td style=\"color:var(--accent-orange); font-weight:bold;\">' + r.rating + '/5 ⭐</td><td style=\"max-width:250px; white-space:normal; font-style:italic;\">\"' + escapeHTML(r.text) + '\"</td><td><button class=\"admin-btn\" style=\"padding:4px 8px; margin:0 5px 0 0; background:var(--accent-green);\" onclick=\"window.approveReview(\\'' + r.id + '\\')\">✅ Accept</button><button class=\"admin-btn\" style=\"padding:4px 8px; background:var(--accent-red); margin:0;\" onclick=\"window.rejectReview(\\'' + r.id + '\\')\">❌ Reject</button></td></tr>'; ",
             "              }); ",
             "          } else { ",
-            "              prHtml='<tr><td colspan=\"6\" class=\"text-muted text-center\">Queue clear.</td></tr>'; ",
+            "              prHtml='<tr><td colspan=\"6\" class=\"text-muted text-center\">No pending reviews to moderate.</td></tr>'; ",
             "          } ",
             "          document.getElementById('target-pending-reviews').innerHTML=prHtml; ",
-            "",
-            "          let kPending='', kRec='', kEdit='', kDone='';",
-            "          if(rawStats.custom_requests && rawStats.custom_requests.length>0) {",
-            "              rawStats.custom_requests.forEach(req => {",
-            "                  let html = `<div class='kanban-card'>",
-            "                      <div style='font-size:0.8em;color:var(--text-muted);display:flex;justify-content:space-between'><span>\${req.date}</span></div>",
-            "                      <strong style='color:var(--accent-blue);font-size:1.1em'>\${escapeHTML(req.username)}</strong>",
-            "                      <div style='color:#fff;margin-bottom:10px'>\${escapeHTML(req.product)}</div>",
-            "                      <div class='kanban-actions'>`;",
-            "                  if(req.status === 'pending') { html += `<button class='admin-btn' style='background:rgba(249,115,22,0.1);color:var(--accent-orange)' onclick='window.moveReq(\"\${req.id}\",\"recording\")'>🎥 Enregistrer</button>`; }",
-            "                  else if(req.status === 'recording') { html += `<button class='admin-btn' style='background:rgba(168,85,247,0.1);color:var(--accent-purple)' onclick='window.moveReq(\"\${req.id}\",\"editing\")'>✂️ Monter</button>`; }",
-            "                  else if(req.status === 'editing') { html += `<button class='admin-btn' style='background:rgba(16,185,129,0.1);color:var(--accent-green)' onclick='window.moveReq(\"\${req.id}\",\"done\")'>✅ Terminer</button>`; }",
-            "                  html += `</div></div>`;",
-            "                  if(req.status === 'pending') kPending += html;",
-            "                  else if(req.status === 'recording') kRec += html;",
-            "                  else if(req.status === 'editing') kEdit += html;",
-            "                  else if(req.status === 'done') kDone += html;",
-            "              });",
-            "          }",
-            "          document.getElementById('target-kanban').innerHTML=`",
-            "              <div class='kanban-col'><div class='kanban-header text-blue' style='border-color:var(--accent-blue)'>📬 NOUVELLES DEMANDES</div>\${kPending||'<p class=\"text-muted\">Vide</p>'}</div>",
-            "              <div class='kanban-col'><div class='kanban-header text-orange' style='border-color:var(--accent-orange)'>🎥 ENREGISTREMENT</div>\${kRec||'<p class=\"text-muted\">Vide</p>'}</div>",
-            "              <div class='kanban-col'><div class='kanban-header text-purple' style='border-color:var(--accent-purple)'>✂️ MONTAGE / EDIT</div>\${kEdit||'<p class=\"text-muted\">Vide</p>'}</div>",
-            "              <div class='kanban-col'><div class='kanban-header text-green' style='border-color:var(--accent-green)'>✅ TERMINÉ</div>\${kDone||'<p class=\"text-muted\">Vide</p>'}</div>",
-            "          \`;",
             "        }",
             "            ",
-            "        window.moveReq = async function(id, status) { await window.executeAction({action:'move_custom_req', id: id, status: status}, false); };",
-            "        ",
-            "        window.editStat = async function(key) {",
-            "            const val = await window.customPrompt('OVERRIDE STAT', 'Enter new value (leave empty to revert to auto):', '', '');",
-            "            if (val !== null) { await window.executeAction({action:'edit_stat', key: key, value: val}); }",
-            "        };",
-            "        window.editTodayEarnings = function() { window.editStat('today_rev'); };",
-            "        ",
+            "        window.editTodayEarnings = async function() { const current = document.getElementById('ui-today-rev').innerText.replace('€', ''); const n = prompt(\"Manual override for Today's Earnings (€):\", current); if(n !== null) { const parsed = parseFloat(n); if(!isNaN(parsed)) { await window.executeAction({action:'edit_today_earnings', value: parsed}); } } };",
+            "",
             "        window.approveReview = async function(id) { await window.executeAction({action:'approve_review', id:id}); };",
-            "        window.rejectReview = async function(id) { const reason = await window.customPrompt('REVIEW REJECTION', 'Specify reason for user log:'); if(reason !== null) await window.executeAction({action:'reject_review', id:id, reason:reason}); };",
-            "        ",
-            "        window.toggleMaintenance = async function(state) { const dur = document.getElementById('maint-duration').value; const ch = document.getElementById('maint-channel').value; if(state && !dur) return showToast('T-Minus missing', 'error'); await window.executeAction({action:'toggle_maintenance', state:state, duration:dur, channelId:ch}); };",
-            "        window.editReferralCount = async function(id, current) { const n = await window.customPrompt('NODE OVERWRITE', 'Overwrite referral node integer:', '0', current); if(n !== null) { const parsed = parseInt(n); if(!isNaN(parsed)) { await window.executeAction({action:'edit_referral_count', userId:id, newCount: parsed}); } } };",
+            "        window.rejectReview = async function(id) { const reason = prompt('Rejecting review. Please specify the reason (sent to user):'); if(reason !== null) await window.executeAction({action:'reject_review', id:id, reason:reason}); };",
+            "",
+            "        window.toggleMaintenance = async function(state) { const dur = document.getElementById('maint-duration').value; const ch = document.getElementById('maint-channel').value; if(state && !dur) return showToast('Set duration', 'error'); await window.executeAction({action:'toggle_maintenance', state:state, duration:dur, channelId:ch}); };",
+            "        window.editReferralCount = async function(id, current) { const n = prompt('Enter the new referral count for this user:', current); if(n !== null) { const parsed = parseInt(n); if(!isNaN(parsed)) { await window.executeAction({action:'edit_referral_count', userId:id, newCount: parsed}); } } };",
             "        ",
             "        window.editProduct = function(id) { ",
             "            const p = rawStats.products[id]; if(!p) return; ",
@@ -2022,9 +1923,7 @@ http.createServer(async (req, res) => {
             "            document.getElementById('newProdStock').value = p.stock || '∞'; ",
             "            document.getElementById('newProdLink').value = p.link; ",
             "            document.getElementById('newProdDesc').value = p.desc || ''; ",
-            "            document.getElementById('newProdUpsellId').value = p.upsellId || ''; ",
-            "            document.getElementById('newProdUpsellDiscount').value = p.upsellDiscount || ''; ",
-            "            document.getElementById('saveProdBtn').innerText = '💾 Patch Asset'; ",
+            "            document.getElementById('saveProdBtn').innerText = '💾 Update Product'; ",
             "            document.getElementById('cancelEditBtn').style.display = 'block'; ",
             "            window.scrollTo({top:0, behavior:'smooth'}); ",
             "        };",
@@ -2036,9 +1935,7 @@ http.createServer(async (req, res) => {
             "            document.getElementById('newProdStock').value = ''; ",
             "            document.getElementById('newProdLink').value = ''; ",
             "            document.getElementById('newProdDesc').value = ''; ",
-            "            document.getElementById('newProdUpsellId').value = ''; ",
-            "            document.getElementById('newProdUpsellDiscount').value = ''; ",
-            "            document.getElementById('saveProdBtn').innerText = '➕ Inject Asset'; ",
+            "            document.getElementById('saveProdBtn').innerText = '➕ Add Product'; ",
             "            document.getElementById('cancelEditBtn').style.display = 'none'; ",
             "        };",
             "        ",
@@ -2049,134 +1946,131 @@ http.createServer(async (req, res) => {
             "            const s = document.getElementById('newProdStock').value || '∞'; ",
             "            const l = document.getElementById('newProdLink').value; ",
             "            const d = document.getElementById('newProdDesc').value; ",
-            "            const uid = document.getElementById('newProdUpsellId').value; ",
-            "            const udisc = document.getElementById('newProdUpsellDiscount').value; ",
-            "            if(!n||!p) return showToast('Designation & Value required', 'error'); ",
-            "            if(id) { await window.executeAction({action:'edit_product', id:id, name:n, price:p, stock:s, link:l, desc:d, upsellId:uid, upsellDiscount:udisc}, false); } ",
-            "            else { await window.executeAction({action:'add_product', name:n, price:p, stock:s, link:l, desc:d, upsellId:uid, upsellDiscount:udisc}, false); } ",
+            "            if(!n||!p) return alert('Name & Price required'); ",
+            "            if(id) { await window.executeAction({action:'edit_product', id:id, name:n, price:p, stock:s, link:l, desc:d}, true); } ",
+            "            else { await window.executeAction({action:'add_product', name:n, price:p, stock:s, link:l, desc:d}, true); } ",
             "        };",
             "        ",
-            "        window.deleteProduct = async function(id) { if(await window.customConfirm('ASSET PURGE', 'Purge asset from network?')) await window.executeAction({action:'delete_product', id:id}, false); };",
+            "        window.deleteProduct = async function(id) { if(confirm('Delete product?')) await window.executeAction({action:'delete_product', id:id}, true); };",
             "        ",
-            "        window.editBuyLink = function(id) { const l = rawStats.buy_links[id]; if(!l) return; document.getElementById('editLinkId').value = id; document.getElementById('newLinkLabel').value = l.label; document.getElementById('newLinkUrl').value = l.url; document.getElementById('saveLinkBtn').innerText = '💾 Patch Gateway'; document.getElementById('cancelEditLinkBtn').style.display = 'block'; };",
-            "        window.cancelEditLink = function() { document.getElementById('editLinkId').value = ''; document.getElementById('newLinkLabel').value = ''; document.getElementById('newLinkUrl').value = ''; document.getElementById('saveLinkBtn').innerText = '➕ Link Gateway'; document.getElementById('cancelEditLinkBtn').style.display = 'none'; };",
-            "        window.saveBuyLink = async function() { const id = document.getElementById('editLinkId').value; const label = document.getElementById('newLinkLabel').value; const url = document.getElementById('newLinkUrl').value; if(!label || !url) return showToast('Label & URL required', 'error'); if(id) { await window.executeAction({action:'edit_buy_link', id:id, label:label, url:url}, false); } else { await window.executeAction({action:'add_buy_link', label:label, url:url}, false); } };",
-            "        window.deleteBuyLink = async function(id) { if(await window.customConfirm('GATEWAY SEVER', 'Sever this gateway link?')) await window.executeAction({action:'delete_buy_link', id:id}, false); };",
-            "        ",
+            "        window.editBuyLink = function(id) { const l = rawStats.buy_links[id]; if(!l) return; document.getElementById('editLinkId').value = id; document.getElementById('newLinkLabel').value = l.label; document.getElementById('newLinkUrl').value = l.url; document.getElementById('saveLinkBtn').innerText = '💾 Update'; document.getElementById('cancelEditLinkBtn').style.display = 'block'; };",
+            "        window.cancelEditLink = function() { document.getElementById('editLinkId').value = ''; document.getElementById('newLinkLabel').value = ''; document.getElementById('newLinkUrl').value = ''; document.getElementById('saveLinkBtn').innerText = '➕ Add Link'; document.getElementById('cancelEditLinkBtn').style.display = 'none'; };",
+            "        window.saveBuyLink = async function() { const id = document.getElementById('editLinkId').value; const label = document.getElementById('newLinkLabel').value; const url = document.getElementById('newLinkUrl').value; if(!label || !url) return showToast('Label & URL required', 'error'); if(id) { await window.executeAction({action:'edit_buy_link', id:id, label:label, url:url}, true); } else { await window.executeAction({action:'add_buy_link', label:label, url:url}, true); } };",
+            "        window.deleteBuyLink = async function(id) { if(confirm('Delete this buy button?')) await window.executeAction({action:'delete_buy_link', id:id}, true); };",
+            "",
             "        window.triggerShopRefresh = async function() { await window.executeAction({action:'refresh_setup'}, false); };",
             "        ",
-            "        window.switchTab = function(tabId, btn) { document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active')); document.querySelectorAll('.nav-btn').forEach(el=>el.classList.remove('active')); document.getElementById(tabId).classList.add('active'); btn.classList.add('active'); document.getElementById('current-tab-title').innerText = btn.innerText.replace(/[0-9]/g, '').replace('💬', '').replace('⚙️', '').replace('📋', '').trim(); if(window.innerWidth <= 900) { window.closeSidebar(); } if(tabId === 'moderation' && !isMembersLoaded) window.loadAllMembers(); if(tabId === 'livechat'){ window.loadTicketsForChat(); if(activeChatChannel && !chatPollInterval){ chatPollInterval = setInterval(window.fetchChatMessages, 3000); } } else { if(chatPollInterval){ clearInterval(chatPollInterval); chatPollInterval = null; } } if(tabId === 'analytics'){ renderAnalyticsCharts(); } if(tabId === 'overview'){ window.renderSalesChart(7); } };",
+            "        window.switchTab = function(tabId, btn) { document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active')); document.querySelectorAll('.nav-btn').forEach(el=>el.classList.remove('active')); document.getElementById(tabId).classList.add('active'); btn.classList.add('active'); if(tabId === 'moderation' && !isMembersLoaded) window.loadAllMembers(); if(tabId === 'livechat'){ window.loadTicketsForChat(); if(activeChatChannel && !chatPollInterval){ chatPollInterval = setInterval(window.fetchChatMessages, 3000); } } else { if(chatPollInterval){ clearInterval(chatPollInterval); chatPollInterval = null; } } if(tabId === 'analytics'){ renderAnalyticsCharts(); } if(tabId === 'overview'){ window.renderSalesChart(7); } };",
             "        ",
-            "        function showToast(msg, type='success') { const t=document.getElementById('toast'); t.innerHTML = (type==='error'?'❌':'✅') + ' <span style=\"letter-spacing:0.5px;\">' + msg + '</span>'; t.style.borderColor = type === 'error' ? 'rgba(239,68,68,0.5)' : 'rgba(16,185,129,0.5)'; t.style.boxShadow = type === 'error' ? '0 10px 30px rgba(239,68,68,0.2)' : '0 10px 30px rgba(16,185,129,0.2)'; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 3000); }",
+            "        function showToast(msg, type='success') { const t=document.getElementById('toast'); t.innerHTML = (type==='error'?'❌':'✅') + ' <span>' + msg + '</span>'; t.style.borderColor = type === 'error' ? 'rgba(239,68,68,0.3)' : 'rgba(16,185,129,0.3)'; t.style.boxShadow = type === 'error' ? '0 10px 30px rgba(239,68,68,0.2)' : '0 10px 30px rgba(16,185,129,0.2)'; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 3000); }",
             "        ",
-            "        window.manualRefresh = async function() { const btn = document.getElementById('refreshBtn'); btn.classList.add('spinning'); await window.refreshDataSilently(); setTimeout(()=>btn.classList.remove('spinning'), 1000); showToast('Matrix Synced'); };",
-            "        ",
+            "        window.manualRefresh = async function() { const btn = document.getElementById('refreshBtn'); btn.classList.add('spinning'); await window.refreshDataSilently(); setTimeout(()=>btn.classList.remove('spinning'), 1000); showToast('Data Synced!'); };",
+            "",
             "        setInterval(() => { if(document.visibilityState === 'visible') window.refreshDataSilently(true); }, 15000);",
+            "",
+            "        window.refreshDataSilently = async function(isAutoSync = false) { try{ const res=await fetch('/api/init-data'); if(res.ok){ const data=await res.json(); rawStats=data.memoryStats; document.getElementById('ui-today-rev').innerText='€'+data.todayRevenue; ",
             "        ",
-            "        window.refreshDataSilently = async function(isAutoSync = false) { try{ const res=await fetch('/api/init-data'); if(res.ok){ const data=await res.json(); processInitData(data); if(!isAutoSync){ try { window.cancelEdit(); window.cancelEditLink(); document.getElementById('promoName').value=''; document.getElementById('promoDiscount').value=''; document.getElementById('promoLimit').value=''; } catch(e) {} } } }catch(e){} };",
+            "        let calcTotalRev = 0; if(rawStats.revenue) { Object.values(rawStats.revenue).forEach(val => calcTotalRev += parseFloat(val)); }",
+            "        document.getElementById('ui-total-rev').innerText='€'+calcTotalRev; ",
             "        ",
-            "        window.executeAction = async function(p, showModal=false) { p.pin=PIN; const res=await fetch('/api/action',{method:'POST',body:JSON.stringify(p)}); if(res.ok) { window.refreshDataSilently(); showToast('Action Successful ✅'); } else { showToast('Action Failed ❌', 'error'); } };",
+            "        document.getElementById('ui-conv-rate').innerText=data.conversionRate+'%'; buildStaticTables(); updateMaintenanceBadge(data.maintenance); updateBadgesAndFeed(data); if(data.activeTickets > trackedTickets || data.pendingReviewsCount > trackedReviews) { playSound('notification'); } if((rawStats.total_transactions||0) > trackedSales) { playSound('sale'); } trackedTickets = data.activeTickets || 0; trackedReviews = data.pendingReviewsCount || 0; trackedSales = rawStats.total_transactions || 0; if(isMembersLoaded && !isAutoSync) window.loadAllMembers(); if(!isAutoSync){ try { window.cancelEdit(); window.cancelEditLink(); document.getElementById('promoName').value=''; document.getElementById('promoDiscount').value=''; document.getElementById('promoLimit').value=''; } catch(e) {} } } }catch(e){} };",
             "        ",
-            "        window.sendReview = async function() { const author = document.getElementById('rev-author').value; const rating = document.getElementById('rev-rating').value; const text = document.getElementById('rev-msg').value; if(!author || !text) return showToast('Parameters missing', 'error'); await window.executeAction({ action: 'post_review', author: author, rating: rating, text: text }); document.getElementById('rev-author').value = ''; document.getElementById('rev-msg').value = ''; };",
-            "        window.loadAllMembers = async function() { document.getElementById('memberResults').innerHTML = '<p class=\"text-muted\" style=\"font-family:monospace;\">Syncing directory...</p>'; try { const res = await fetch('/api/members'); if (!res.ok) throw new Error('Error'); allMembersData = await res.json(); isMembersLoaded = true; window.sortMembersLocally(); } catch (e) { document.getElementById('memberResults').innerHTML = '<p class=\"text-pink\">Network failure.</p>'; } };",
+            "        window.executeAction = async function(p, showModal=false) { p.pin=PIN; const res=await fetch('/api/action',{method:'POST',body:JSON.stringify(p)}); if(res.ok) { window.refreshDataSilently(); if(showModal){ document.getElementById('syncModal').style.display='flex'; }else{ showToast('Success!'); } } else { showToast('Error', 'error'); } };",
+            "        ",
+            "        window.sendReview = async function() { const author = document.getElementById('rev-author').value; const rating = document.getElementById('rev-rating').value; const text = document.getElementById('rev-msg').value; if(!author || !text) return alert('Fill both author and feedback fields!'); await window.executeAction({ action: 'post_review', author: author, rating: rating, text: text }); document.getElementById('rev-author').value = ''; document.getElementById('rev-msg').value = ''; };",
+            "        window.loadAllMembers = async function() { document.getElementById('memberResults').innerHTML = '<p class=\"text-muted\">Loading directory...</p>'; try { const res = await fetch('/api/members'); if (!res.ok) throw new Error('Error'); allMembersData = await res.json(); isMembersLoaded = true; window.sortMembersLocally(); } catch (e) { document.getElementById('memberResults').innerHTML = '<p class=\"text-pink\">Error fetching data.</p>'; } };",
             "        window.sortMembersLocally = function() { const sortType = document.getElementById('memberSortSelect').value; const statusFilter = document.getElementById('memberStatusSelect').value; let filtered = [...allMembersData]; if (statusFilter === 'online') { filtered = filtered.filter(m => m.status !== 'offline'); } if (sortType === 'recent') filtered.sort(function(a, b) { return b.joinedTimestamp - a.joinedTimestamp; }); else if (sortType === 'oldest') filtered.sort(function(a, b) { return a.joinedTimestamp - b.joinedTimestamp; }); else if (sortType === 'spent_desc') filtered.sort(function(a, b) { return b.totalSpent - a.totalSpent; }); else if (sortType === 'spent_asc') filtered.sort(function(a, b) { return a.totalSpent - b.totalSpent; }); else if (sortType === 'warns') filtered.sort(function(a, b) { return b.warns.length - a.warns.length; }); const q = document.getElementById('memberSearchInput').value.toLowerCase(); if (q) { filtered = filtered.filter(function(m) { return m.username.toLowerCase().includes(q) || m.id.includes(q); }); } renderMembers(filtered); };",
             "        window.filterMembersLocally = window.sortMembersLocally;",
             "        function renderMembers(members) { ",
-            "            if (members.length === 0) { document.getElementById('memberResults').innerHTML = '<p class=\"text-pink\" style=\"font-family:monospace;\">0 Nodes Discovered.</p>'; return; } ",
+            "            if (members.length === 0) { document.getElementById('memberResults').innerHTML = '<p class=\"text-pink\">No members found.</p>'; return; } ",
             "            let html = ''; ",
             "            members.forEach(function(m) { ",
             "                let trustColor = m.isBlacklisted ? 'var(--accent-red)' : (m.totalSpent > 0 ? 'var(--accent-green)' : 'var(--accent-orange)'); ",
-            "                let trustLabel = m.isBlacklisted ? 'Blacklisted' : (m.totalSpent > 0 ? 'Verified' : 'Unverified'); ",
+            "                let trustLabel = m.isBlacklisted ? 'Blacklisted' : (m.totalSpent > 0 ? 'Trusted (Buyer)' : 'New / No Purchases'); ",
             "                let safeUsername = escapeHTML(m.username); ",
             "                let safeNote = escapeHTML(m.note); ",
-            "                let statusIndicator = (m.status === 'online' || m.status === 'dnd' || m.status === 'idle') ? '<span style=\"color:#10b981; font-size:0.7em; margin-left:10px; letter-spacing:1px;\">🟢 ACTIVE</span>' : '<span style=\"color:#94a3b8; font-size:0.7em; margin-left:10px; letter-spacing:1px;\">⚪ DORMANT</span>'; ",
+            "                let statusIndicator = (m.status === 'online' || m.status === 'dnd' || m.status === 'idle') ? '<span style=\"color:#10b981; font-size:0.8em; margin-left:10px;\">🟢 Online</span>' : '<span style=\"color:#94a3b8; font-size:0.8em; margin-left:10px;\">⚪ Offline</span>'; ",
             "                let ticketsHtml = ''; ",
             "                if (m.activeTickets && m.activeTickets.length > 0) { ",
             "                    m.activeTickets.forEach(function(t) { ",
-            "                        ticketsHtml += '<div style=\"display:flex; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.4); padding:8px 12px; margin-top:5px; border-radius:8px; border:1px solid rgba(255,255,255,0.05);\"><span style=\"font-family:monospace;\">#' + escapeHTML(t.name) + '</span><button style=\"background:rgba(239, 68, 68, 0.1); border:1px solid var(--accent-red); color:var(--accent-red); border-radius:6px; cursor:pointer; padding:6px 12px;\" onclick=\"window.modAction(\\'close_channel\\', \\'' + m.id + '\\', {channelId: \\'' + t.id + '\\'})\">Close</button></div>'; ",
+            "                        ticketsHtml += '<div style=\"display:flex; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.3); padding:5px 10px; margin-top:5px; border-radius:5px;\"><span>#' + escapeHTML(t.name) + '</span><button style=\"background:var(--accent-red); border:none; color:white; border-radius:3px; cursor:pointer; padding:4px 8px;\" onclick=\"window.modAction(\\'close_channel\\', \\'' + m.id + '\\', {channelId: \\'' + t.id + '\\'})\">Close</button></div>'; ",
             "                    }); ",
-            "                } else ticketsHtml = '<span class=\"text-muted\" style=\"font-family:monospace;\">No active links</span>'; ",
+            "                } else ticketsHtml = '<span class=\"text-muted\">No active tickets</span>'; ",
             "                let warnsHtml = ''; ",
             "                if (m.warns && m.warns.length > 0) { ",
             "                    m.warns.forEach(function(w, i) { ",
-            "                        warnsHtml += '<div style=\"font-size:0.85em; color:var(--accent-orange); margin-bottom:5px; background:rgba(249,115,22,0.1); padding:5px 8px; border-radius:6px;\">⚠️ Log ' + (i+1) + ': ' + escapeHTML(w.reason) + ' <span style=\"opacity:0.5\">(' + w.date + ')</span></div>'; ",
+            "                        warnsHtml += '<div style=\"font-size:0.8em; color:var(--accent-orange); margin-bottom:3px;\">⚠️ Warn ' + (i+1) + ': ' + escapeHTML(w.reason) + ' (' + w.date + ')</div>'; ",
             "                    }); ",
-            "                } else warnsHtml = '<span class=\"text-muted\" style=\"font-family:monospace;\">Clean record</span>'; ",
+            "                } else warnsHtml = '<span class=\"text-muted\" style=\"font-size:0.8em;\">Clean record</span>'; ",
             "                let historyHtml = ''; ",
             "                if (m.history && m.history.length > 0) { ",
             "                    m.history.forEach(function(h) { ",
-            "                        historyHtml += '<div style=\"font-size:0.85em; margin-bottom:5px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:5px;\"><span style=\"color:var(--accent-blue);\">🛒 ' + escapeHTML(h.product) + '</span> - €' + h.price + ' <br><span style=\"opacity:0.5; font-size:0.9em;\">' + h.date + '</span></div>'; ",
+            "                        historyHtml += '<div style=\"font-size:0.8em;\">🛒 ' + escapeHTML(h.product) + ' - €' + h.price + ' (' + h.date + ')</div>'; ",
             "                    }); ",
-            "                } else historyHtml = '<span class=\"text-muted\" style=\"font-family:monospace;\">No purchases</span>'; ",
-            "                html += '<div class=\"card\" style=\"margin-bottom: 25px; border-left: 4px solid ' + trustColor + '; background:rgba(15,23,42,0.6);\">' +",
-            "                            '<div style=\"display:flex; gap:20px; align-items:center; margin-bottom:20px; flex-wrap:wrap;\">' +",
-            "                                '<img src=\"' + m.avatar + '\" style=\"width:70px; height:70px; border-radius:16px; box-shadow:0 10px 20px rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.1);\">' +",
-            "                                '<div><h3 style=\"color:#fff; font-size:1.4em; font-weight:800; margin:0; display:flex; align-items:center; letter-spacing:0.5px;\">' + safeUsername + ' ' + statusIndicator + '</h3><span class=\"text-muted\" style=\"font-size:0.85em; font-family:monospace; letter-spacing:1px;\">UID: ' + m.id + '</span></div>' +",
-            "                                '<div style=\"margin-left:auto; text-align:right;\"><div style=\"color:\\'' + trustColor + '\\'; font-weight:800; text-transform:uppercase; letter-spacing:1px; margin-bottom:5px;\">' + trustLabel + '</div><div class=\"money text-green font-bold\" style=\"font-size:1.2em;\">Yield: €' + m.totalSpent + '</div></div>' +",
+            "                } else historyHtml = '<span class=\"text-muted\" style=\"font-size:0.8em;\">No purchases</span>'; ",
+            "                html += '<div class=\"card\" style=\"margin-bottom: 15px; border-left: 4px solid ' + trustColor + ';\">' +",
+            "                            '<div style=\"display:flex; gap:15px; align-items:center; margin-bottom:15px; flex-wrap:wrap;\">' +",
+            "                                '<img src=\"' + m.avatar + '\" style=\"width:60px; height:60px; border-radius:50%; box-shadow:0 4px 10px rgba(0,0,0,0.5);\">' +",
+            "                                '<div><h3 style=\"color:#fff; font-size:1.2em; margin:0; display:flex; align-items:center;\">' + safeUsername + ' ' + statusIndicator + '</h3><span class=\"text-muted\" style=\"font-size:0.8em;\">ID: ' + m.id + '</span></div>' +",
+            "                                '<div style=\"margin-left:auto; text-align:right;\"><div style=\"color:' + trustColor + '; font-weight:bold;\">' + trustLabel + '</div><div class=\"money text-green font-bold\">Total Spent: €' + m.totalSpent + '</div></div>' +",
             "                            '</div>' +",
-            "                            '<div style=\"display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:20px; margin-bottom:20px; font-size:0.9em;\">' +",
-            "                                '<div style=\"background:rgba(0,0,0,0.4); padding:15px; border-radius:12px; border:1px solid rgba(255,255,255,0.02);\"><strong>Creation Node:</strong><br><span class=\"text-muted\" style=\"font-family:monospace;\">' + m.createdAt + '</span><br><br><strong>Link Established:</strong><br><span class=\"text-muted\" style=\"font-family:monospace;\">' + m.joinedAt + '</span></div>' +",
-            "                                '<div style=\"background:rgba(0,0,0,0.4); padding:15px; border-radius:12px; border:1px solid rgba(255,255,255,0.02);\"><strong>Active Links:</strong><br>' + ticketsHtml + '</div>' +",
+            "                            '<div style=\"display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:15px; margin-bottom:15px; font-size:0.9em;\">' +",
+            "                                '<div style=\"background:rgba(0,0,0,0.2); padding:10px; border-radius:8px;\"><strong>Account Created:</strong><br><span class=\"text-muted\">' + m.createdAt + '</span><br><br><strong>Joined Server:</strong><br><span class=\"text-muted\">' + m.joinedAt + '</span></div>' +",
+            "                                '<div style=\"background:rgba(0,0,0,0.2); padding:10px; border-radius:8px;\"><strong>Active Tickets:</strong><br>' + ticketsHtml + '</div>' +",
             "                            '</div>' +",
-            "                            '<div style=\"display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:20px; margin-bottom:20px;\">' +",
-            "                                '<div style=\"background:rgba(0,0,0,0.4); padding:15px; border-radius:12px; max-height:200px; overflow-y:auto; border:1px solid rgba(255,255,255,0.02);\"><strong>Ledger:</strong><br><div style=\"margin-top:10px;\">' + historyHtml + '</div></div>' +",
-            "                                '<div style=\"background:rgba(0,0,0,0.4); padding:15px; border-radius:12px; max-height:200px; overflow-y:auto; border:1px solid rgba(255,255,255,0.02);\"><strong>Risk Logs:</strong><br><div style=\"margin-top:10px;\">' + warnsHtml + '</div></div>' +",
+            "                            '<div style=\"display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:15px; margin-bottom:15px;\">' +",
+            "                                '<div style=\"background:rgba(0,0,0,0.2); padding:10px; border-radius:8px; max-height:150px; overflow-y:auto;\"><strong>Purchase History:</strong><br>' + historyHtml + '</div>' +",
+            "                                '<div style=\"background:rgba(0,0,0,0.2); padding:10px; border-radius:8px; max-height:150px; overflow-y:auto;\"><strong>Warn History:</strong><br>' + warnsHtml + '</div>' +",
             "                            '</div>' +",
-            "                            '<div style=\"margin-bottom:20px; padding-top:15px; border-top:1px solid rgba(255,255,255,0.05);\">' +",
-            "                                '<label style=\"font-size:0.8rem; font-weight:600; text-transform:uppercase; letter-spacing:1px; color:var(--accent-blue); display:block; margin-bottom:10px;\">📝 Admin Directives:</label>' +",
-            "                                '<textarea id=\"note-' + m.id + '\" placeholder=\"Inject private parameters...\" style=\"min-height:60px; background:rgba(0,0,0,0.5);\" onblur=\"window.saveUserNote(\\\'' + m.id + '\\\')\">' + safeNote + '</textarea>' +",
+            "                            '<div style=\"margin-bottom:15px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.05);\">' +",
+            "                                '<label style=\"font-size:0.8rem; color:var(--text-muted); display:block; margin-bottom:5px;\">📝 Private Notes (Admin Only):</label>' +",
+            "                                '<textarea id=\"note-' + m.id + '\" placeholder=\"Add private remarks about this client...\" style=\"min-height:50px;\" onblur=\"window.saveUserNote(\\'' + m.id + '\\')\">' + safeNote + '</textarea>' +",
             "                            '</div>' +",
-            "                            '<div style=\"border-top:1px solid rgba(255,255,255,0.05); padding-top:15px;\">' +",
-            "                                '<span style=\"font-size:0.8rem; font-weight:600; text-transform:uppercase; letter-spacing:1px; color:var(--text-muted); display:block; margin-bottom:12px;\">⚡ Execute Command:</span>' +",
-            "                                '<div style=\"display:flex; gap:10px; flex-wrap:wrap;\">'; ",
+            "                            '<div style=\"border-top:1px solid rgba(255,255,255,0.05); padding-top:10px;\">' +",
+            "                                '<span style=\"font-size:0.8rem; color:var(--text-muted); display:block; margin-bottom:8px;\">⚡ Action Controls:</span>' +",
+            "                                '<div style=\"display:flex; gap:8px; flex-wrap:wrap;\">'; ",
             "                let currentRefs = rawStats.referrals && rawStats.referrals[m.id] ? rawStats.referrals[m.id].count : 0; ",
-            "                html += '<button class=\"admin-btn\" style=\"margin:0; background:rgba(168,85,247,0.1); border-color:var(--accent-purple); color:var(--accent-purple);\" onclick=\"window.editReferralCount(\\\'' + m.id + '\\\', ' + currentRefs + ')\">🔗 Nodes (' + currentRefs + ')</button>' +",
-            "                        '<button class=\"admin-btn\" style=\"margin:0; background:rgba(56,189,248,0.1); border-color:var(--accent-blue); color:var(--accent-blue);\" onclick=\"window.openDirectContact(\\\'' + m.id + '\\\')\">💬 Inject DM</button>' +",
-            "                        '<button class=\"admin-btn\" style=\"margin:0; background:rgba(249,115,22,0.1); border-color:var(--accent-orange); color:var(--accent-orange);\" onclick=\"window.modAction(\\\'' + 'mute' + '\\\', \\\'' + m.id + '\\\', {duration: 15})\">🔇 15m</button>' +",
-            "                        '<button class=\"admin-btn\" style=\"margin:0; background:rgba(249,115,22,0.1); border-color:var(--accent-orange); color:var(--accent-orange);\" onclick=\"window.modAction(\\\'' + 'mute' + '\\\', \\\'' + m.id + '\\\', {duration: 60})\">🔇 1h</button>' +",
-            "                        '<button class=\"admin-btn\" style=\"margin:0; background:rgba(239,68,68,0.1); border-color:var(--accent-red); color:var(--accent-red);\" onclick=\"window.modAction(\\\'' + 'mute' + '\\\', \\\'' + m.id + '\\\', {duration: 1440})\">🔇 1d</button>' +",
-            "                        '<button class=\"admin-btn\" style=\"margin:0; background:rgba(239,68,68,0.1); border-color:var(--accent-red); color:var(--accent-red);\" onclick=\"window.modAction(\\\'' + 'mute' + '\\\', \\\'' + m.id + '\\\', {duration: 10080})\">🔇 1w</button>' +",
-            "                        '<button class=\"admin-btn\" style=\"margin:0; background:rgba(249,115,22,0.1); border-color:var(--accent-orange); color:var(--accent-orange);\" onclick=\"window.modAction(\\\'' + 'warn' + '\\\', \\\'' + m.id + '\\\')\">⚠️ Warn</button>' +",
-            "                        '<button class=\"admin-btn\" style=\"margin:0; background:transparent; border:1px solid rgba(255,255,255,0.2); color:var(--text-muted);\" onclick=\"window.modAction(\\\'' + 'clear_warns' + '\\\', \\\'' + m.id + '\\\')\">🧹 Clear Log</button>' +",
-            "                        '<button class=\"admin-btn\" style=\"margin:0; background:rgba(239,68,68,0.2); border-color:var(--accent-red); color:#fff;\" onclick=\"window.modAction(\\\'' + 'kick' + '\\\', \\\'' + m.id + '\\\')\">👢 Kick</button>' +",
-            "                        '<button class=\"admin-btn\" style=\"margin:0; background:var(--accent-red); border-color:var(--accent-red); color:#fff;\" onclick=\"window.modAction(\\\'' + 'ban' + '\\\', \\\'' + m.id + '\\\')\">🔨 Ban</button>' +",
-            "                        '<button class=\"admin-btn\" style=\"width:auto; margin:0; background:#000; border:1px solid ' + (m.isBlacklisted ? 'var(--accent-green)' : 'var(--accent-red)') + '; color:\' + (m.isBlacklisted ? \'var(--accent-green)\' : \'var(--accent-red)\') + \';\" onclick=\"window.modAction(\\\'' + 'toggle_blacklist' + '\\\', \\\'' + m.id + '\\\')\">\\' + (m.isBlacklisted ? \\'Restore Access\\' : \\'Sever Access\\') + \\'</button>\\' +",
-            "                        \\'</div></div></div>\\'; ",
+            "                html += '<button class=\"admin-btn\" style=\"margin:0; background:var(--accent-purple);\" onclick=\"window.editReferralCount(\\'' + m.id + '\\', ' + currentRefs + ')\">🔗 Invites (' + currentRefs + ')</button>' +",
+            "                        '<button class=\"admin-btn\" style=\"margin:0; background:#3498db;\" onclick=\"window.openDirectContact(\\'' + m.id + '\\')\">💬 DM</button>' +",
+            "                        '<button class=\"admin-btn\" style=\"margin:0; background:#e67e22;\" onclick=\"window.modAction(\\'mute\\', \\'' + m.id + '\\', {duration: 15})\">🔇 15m</button>' +",
+            "                        '<button class=\"admin-btn\" style=\"margin:0; background:#d35400;\" onclick=\"window.modAction(\\'mute\\', \\'' + m.id + '\\', {duration: 60})\">🔇 1h</button>' +",
+            "                        '<button class=\"admin-btn\" style=\"margin:0; background:#c0392b;\" onclick=\"window.modAction(\\'mute\\', \\'' + m.id + '\\', {duration: 1440})\">🔇 1d</button>' +",
+            "                        '<button class=\"admin-btn\" style=\"margin:0; background:#962d22;\" onclick=\"window.modAction(\\'mute\\', \\'' + m.id + '\\', {duration: 10080})\">🔇 1w</button>' +",
+            "                        '<button class=\"admin-btn\" style=\"margin:0; background:var(--accent-orange);\" onclick=\"window.modAction(\\'warn\\', \\'' + m.id + '\\')\">⚠️ Warn (DM)</button>' +",
+            "                        '<button class=\"admin-btn\" style=\"margin:0; background:transparent; border:1px solid var(--accent-orange); color:var(--accent-orange);\" onclick=\"window.modAction(\\'clear_warns\\', \\'' + m.id + '\\')\">🧹 Clear</button>' +",
+            "                        '<button class=\"admin-btn\" style=\"margin:0; background:var(--accent-red);\" onclick=\"window.modAction(\\'kick\\', \\'' + m.id + '\\')\">👢 Kick</button>' +",
+            "                        '<button class=\"admin-btn\" style=\"margin:0; background:var(--accent-red);\" onclick=\"window.modAction(\\'ban\\', \\'' + m.id + '\\')\">🔨 Ban</button>' +",
+            "                        '<button class=\"admin-btn\" style=\"width:auto; margin:0; background:#000; border:1px solid var(--accent-red);\" onclick=\"window.modAction(\\'toggle_blacklist\\', \\'' + m.id + '\\')\">' + (m.isBlacklisted ? '✅ Un-Blacklist' : '🚫 Blacklist') + '</button>' +",
+            "                        '</div></div></div>'; ",
             "            }); ",
-            "            document.getElementById(\\'memberResults\\').innerHTML = html; ",
+            "            document.getElementById('memberResults').innerHTML = html; ",
             "        }",
-            "        window.modAction = async function(action, userId, extra) { extra = extra || {}; let payload = { action: action, userId: userId, pin: PIN }; if (extra.channelId) payload.channelId = extra.channelId; if (extra.duration) payload.duration = extra.duration; if (action === \\'warn\\') { payload.reason = await window.customPrompt(\\'WARNING\\', \\'Input warning parameter (User will be DM\\\\\\'d)\\'); if (!payload.reason) return; } else if (action === \\'clear_warns\\') { if (!(await window.customConfirm(\\'PURGE\\', \\'Purge all risk logs for this node?\\'))) return; } else if (action === \\'mute\\') { if(!payload.duration) payload.duration = await window.customPrompt(\\'TIMEOUT\\', \\'Timeout duration (minutes)?\\', \\'60\\', \\'60\\'); if(!payload.duration) return; payload.reason = await window.customPrompt(\\'TIMEOUT\\', \\'Reason for timeout?\\'); if (!payload.reason) return; } else if (action === \\'kick\\' || action === \\'ban\\') { payload.reason = await window.customPrompt(\\'EXPULSION\\', \\'Reason for \\' + action + \\'?\\'); if (!payload.reason || !(await window.customConfirm(\\'CONFIRM\\', \\'Execute \\' + action + \\'?\\'))) return; } else if (action === \\'toggle_blacklist\\') { if (!(await window.customConfirm(\\'ACCESS\\', \\'Toggle shop access for this node?\\'))) return; } else if (action === \\'close_channel\\') { if (!(await window.customConfirm(\\'SEVER\\', \\'Sever this link?\\'))) return; } try { const res = await fetch(\\'/api/action\\', { method: \\'POST\\', body: JSON.stringify(payload) }); if (res.ok) { showToast(\\'Action Successful\\'); setTimeout(function() { window.loadAllMembers(); }, 1000); } else showToast(\\'Action Failed\\', \\'error\\'); } catch(e) { showToast(\\'Network Error\\', \\'error\\'); } };",
-            "        window.refundTx = async function(date, username) { if(await window.customConfirm(\\'REVERSE TX\\', \\'Reverse this transaction? Yield will be adjusted.\\')) { await window.executeAction({action: \\'refund_tx\\', date: date, username: username}); } };",
-            "        window.runDiagnostics = async function() { document.getElementById(\\'ui-upstash-status\\').innerText = \\'⏳ Executing...\\'; document.getElementById(\\'ui-upstash-status\\').className = \\'value text-muted\\'; document.getElementById(\\'ui-rewarble-status\\').innerText = \\'⏳ Executing...\\'; document.getElementById(\\'ui-rewarble-status\\').className = \\'value text-muted\\'; document.getElementById(\\'ui-discord-ws\\').innerText = \\'-- ms\\'; try { const res = await fetch(\\'/api/monitoring\\'); const data = await res.json(); const upstashCard = document.getElementById(\\'card-upstash\\'); const rewarbleCard = document.getElementById(\\'card-rewarble\\'); if (data.upstash.status === \\'online\\') { document.getElementById(\\'ui-upstash-status\\').innerHTML = \\'🟢 Optimal\\'; document.getElementById(\\'ui-upstash-status\\').className = \\'value text-green\\'; upstashCard.style.borderLeft = \\'4px solid var(--accent-green)\\'; } else { document.getElementById(\\'ui-upstash-status\\').innerHTML = \\'🔴 Down\\'; document.getElementById(\\'ui-upstash-status\\').className = \\'value text-red\\'; upstashCard.style.borderLeft = \\'4px solid var(--accent-red)\\'; } document.getElementById(\\'ui-upstash-ping\\').innerText = \\'Latency: \\' + data.upstash.latency + \\' ms\\'; if (data.rewarble.status === \\'online\\') { document.getElementById(\\'ui-rewarble-status\\').innerHTML = \\'🟢 Optimal\\'; document.getElementById(\\'ui-rewarble-status\\').className = \\'value text-green\\'; rewarbleCard.style.borderLeft = \\'4px solid var(--accent-green)\\'; } else { document.getElementById(\\'ui-rewarble-status\\').innerHTML = \\'🔴 Error/Offline\\'; document.getElementById(\\'ui-rewarble-status\\').className = \\'value text-red\\'; rewarbleCard.style.borderLeft = \\'4px solid var(--accent-red)\\'; } document.getElementById(\\'ui-rewarble-ping\\').innerText = \\'Latency: \\' + data.rewarble.latency + \\' ms\\'; document.getElementById(\\'ui-discord-ws\\').innerText = data.discord.ws_ping + \\' ms\\'; } catch(e) { showToast(\\'Diagnostics Failed\\', \\'error\\'); } };",
-            "        window.testActionLatency = async function() { const resultDiv = document.getElementById(\\'latency-result\\'); resultDiv.innerText = \\'Pinging...\\'; resultDiv.style.color = \\'var(--text-muted)\\'; const startTime = Date.now(); try { const res = await fetch(\\'/api/action\\', { method: \\'POST\\', body: JSON.stringify({ action: \\'ping_test\\', pin: PIN }) }); if (res.ok) { const totalTime = Date.now() - startTime; resultDiv.innerText = totalTime + \\' ms\\'; if (totalTime < 500) resultDiv.style.color = \\'var(--accent-green)\\'; else if (totalTime < 1500) resultDiv.style.color = \\'var(--accent-orange)\\'; else resultDiv.style.color = \\'var(--accent-red)\\'; } else { resultDiv.innerText = \\'Error\\'; resultDiv.style.color = \\'var(--accent-red)\\'; } } catch(e) { resultDiv.innerText = \\'Net Error\\'; resultDiv.style.color = \\'var(--accent-red)\\'; } };",
+            "        window.modAction = async function(action, userId, extra) { extra = extra || {}; let payload = { action: action, userId: userId, pin: PIN }; if (extra.channelId) payload.channelId = extra.channelId; if (extra.duration) payload.duration = extra.duration; if (action === 'warn') { payload.reason = prompt(\"Reason for warning? (User will be DM'd)\"); if (!payload.reason) return; } else if (action === 'clear_warns') { if (!confirm('Clear all warnings for this user?')) return; } else if (action === 'mute') { if(!payload.duration) payload.duration = prompt('Mute duration in minutes?', '60'); payload.reason = prompt('Reason for mute?'); if (!payload.duration || !payload.reason) return; } else if (action === 'kick' || action === 'ban') { payload.reason = prompt('Reason for ' + action + '?'); if (!payload.reason || !confirm('Execute ' + action + '?')) return; } else if (action === 'toggle_blacklist') { if (!confirm('Toggle shop blacklist for this user?')) return; } else if (action === 'close_channel') { if (!confirm('Force close this ticket?')) return; } try { const res = await fetch('/api/action', { method: 'POST', body: JSON.stringify(payload) }); if (res.ok) { showToast('✅ Action applied successfully'); setTimeout(function() { window.loadAllMembers(); }, 1000); } else showToast('❌ Failed to apply action', 'error'); } catch(e) { showToast('❌ Network Error', 'error'); } };",
+            "        window.refundTx = async function(date, username) { if(confirm('Are you sure you want to refund this transaction? It will be removed from your revenue.')) { await window.executeAction({action: 'refund_tx', date: date, username: username}); } };",
+            "        window.runDiagnostics = async function() { document.getElementById('ui-upstash-status').innerText = '⏳ Waiting...'; document.getElementById('ui-upstash-status').className = 'value text-muted'; document.getElementById('ui-rewarble-status').innerText = '⏳ Waiting...'; document.getElementById('ui-rewarble-status').className = 'value text-muted'; document.getElementById('ui-discord-ws').innerText = '-- ms'; try { const res = await fetch('/api/monitoring'); const data = await res.json(); const upstashCard = document.getElementById('card-upstash'); const rewarbleCard = document.getElementById('card-rewarble'); if (data.upstash.status === 'online') { document.getElementById('ui-upstash-status').innerHTML = '🟢 Connected'; document.getElementById('ui-upstash-status').className = 'value text-green'; upstashCard.style.borderLeft = '4px solid var(--accent-green)'; } else { document.getElementById('ui-upstash-status').innerHTML = '🔴 Offline'; document.getElementById('ui-upstash-status').className = 'value text-red'; upstashCard.style.borderLeft = '4px solid var(--accent-red)'; } document.getElementById('ui-upstash-ping').innerText = 'Latency: ' + data.upstash.latency + ' ms'; if (data.rewarble.status === 'online') { document.getElementById('ui-rewarble-status').innerHTML = '🟢 Connected'; document.getElementById('ui-rewarble-status').className = 'value text-green'; rewarbleCard.style.borderLeft = '4px solid var(--accent-green)'; } else { document.getElementById('ui-rewarble-status').innerHTML = '🔴 Error/Offline'; document.getElementById('ui-rewarble-status').className = 'value text-red'; rewarbleCard.style.borderLeft = '4px solid var(--accent-red)'; } document.getElementById('ui-rewarble-ping').innerText = 'Latency: ' + data.rewarble.latency + ' ms'; document.getElementById('ui-discord-ws').innerText = data.discord.ws_ping + ' ms'; } catch(e) { showToast('❌ Diagnostics Failed', 'error'); } };",
+            "        window.testActionLatency = async function() { const resultDiv = document.getElementById('latency-result'); resultDiv.innerText = 'Testing in progress...'; resultDiv.style.color = 'var(--text-muted)'; const startTime = Date.now(); try { const res = await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'ping_test', pin: PIN }) }); if (res.ok) { const totalTime = Date.now() - startTime; resultDiv.innerText = totalTime + ' ms'; if (totalTime < 500) resultDiv.style.color = 'var(--accent-green)'; else if (totalTime < 1500) resultDiv.style.color = 'var(--accent-orange)'; else resultDiv.style.color = 'var(--accent-red)'; } else { resultDiv.innerText = 'HTTP Error'; resultDiv.style.color = 'var(--accent-red)'; } } catch(e) { resultDiv.innerText = 'Network Error'; resultDiv.style.color = 'var(--accent-red)'; } };",
             "        ",
-            "        window.loadTicketsForChat = async function() { try { const res = await fetch(\\'/api/tickets\\'); const tickets = await res.json(); let html = \\'\\'; if(tickets.length === 0) { html = \\'<p class=\"text-muted text-center\" style=\"margin-top:20px; font-family:monospace;\">No active lines.</p>\\'; } else { tickets.forEach(t => { const icon = t.name.startsWith(\\'shop\\') ? \\'🛒\\' : \\'🎧\\'; const isActive = activeChatChannel === t.id ? \\'active\\' : \\'\\'; html += \\'<div class=\"ticket-item \\' + isActive + \\'\" onclick=\"window.openTicketChat(\\\\\\'\\' + t.id + \\'\\\\\\')\">\\' + icon + \\' \\' + escapeHTML(t.name) + \\'</div>\\'; }); } document.getElementById(\\'chat-ticket-list\\').innerHTML = html; } catch(e) {} };",
-            "        window.openTicketChat = function(channelId) { activeChatChannel = channelId; window.loadTicketsForChat(); document.getElementById(\\'chat-messages-area\\').innerHTML = \\'<div style=\"margin:auto; color:var(--accent-blue);\"><div style=\"width:40px; height:40px; border:3px solid rgba(0,240,255,0.1); border-top:3px solid var(--accent-blue); border-radius:50%; animation:spin 1s linear infinite; margin:auto; box-shadow:0 0 15px rgba(0,240,255,0.5);\"></div></div>\\'; window.fetchChatMessages(); if(chatPollInterval) clearInterval(chatPollInterval); chatPollInterval = setInterval(window.fetchChatMessages, 3000); };",
-            "        window.fetchChatMessages = async function() { if(!activeChatChannel) return; try { const res = await fetch(\\'/api/tickets/messages?channelId=\\' + activeChatChannel); const msgs = await res.json(); let html = \\'\\'; if(msgs.length === 0) html = \\'<p class=\"text-muted text-center\" style=\"margin:auto; font-family:monospace;\">Awaiting transmission...</p>\\'; else { msgs.forEach(m => { const bubbleClass = m.isBot ? \\'bot\\' : \\'user\\'; const imgHtml = m.imageUrl ? \\'<br><img src=\"\\' + escapeHTML(m.imageUrl) + \\'\" class=\"chat-img-preview\" onclick=\"window.open(\\\\\\'\\' + escapeHTML(m.imageUrl) + \\'\\\\\\')\">\\' : \\'\\'; const actionsHtml = \\'<div class=\"chat-bubble-actions\"><button class=\"chat-reaction-btn\" onclick=\"window.reactMessage(\\\\\\'\\' + m.id + \\'\\\\\\', \\\\\\'👍\\\\\\')\">👍</button><button class=\"chat-reaction-btn\" onclick=\"window.reactMessage(\\\\\\'\\' + m.id + \\'\\\\\\', \\\\\\'❤️\\\\\\')\">❤️</button></div>\\'; html += \\'<div class=\"chat-bubble \\' + bubbleClass + \\'\"><div class=\"chat-author\">\\' + escapeHTML(m.author) + \\'</div>\\' + escapeHTML(m.content) + imgHtml + actionsHtml + \\'</div>\\'; }); } const area = document.getElementById(\\'chat-messages-area\\'); const isAtBottom = area.scrollHeight - area.scrollTop <= area.clientHeight + 100; area.innerHTML = html; if(isAtBottom) area.scrollTop = area.scrollHeight; } catch(e) {} };",
-            "        window.sendChatMessage = async function() { if(!activeChatChannel) return showToast(\\'Select line first\\', \\'error\\'); const input = document.getElementById(\\'chat-input-text\\'); const fileInput = document.getElementById(\\'chat-file-input\\'); const text = input.value.trim(); const file = fileInput.files[0]; if(!text && !file) return; input.value = \\'\\'; document.getElementById(\\'attach-badge\\').style.display=\\'none\\'; let base64 = null; if (file) { const reader = new FileReader(); reader.readAsDataURL(file); await new Promise(r => reader.onload = r); base64 = reader.result; fileInput.value = \\'\\'; } try { await fetch(\\'/api/action\\', { method: \\'POST\\', body: JSON.stringify({ action: \\'send_ticket_message\\', channelId: activeChatChannel, message: text, imageBase64: base64, pin: PIN }) }); window.fetchChatMessages(); } catch(e) { showToast(\\'Transmission Failed\\', \\'error\\'); } };",
-            "        window.reactMessage = async function(msgId, emoji) { if(!activeChatChannel) return; try { await fetch(\\'/api/action\\', { method: \\'POST\\', body: JSON.stringify({ action: \\'react_ticket_message\\', channelId: activeChatChannel, messageId: msgId, emoji: emoji, pin: PIN }) }); showToast(\\'Reaction sent\\'); } catch (e) { showToast(\\'Failure\\', \\'error\\'); } };",
-            "        window.sendQuickResponse = async function(type) { if(!activeChatChannel) return showToast(\\'Select line first\\', \\'error\\'); let msg = \\'\\'; if(type === \\'welcome\\') msg = \\'👋 Hello! How can I help you today?\\'; else if(type === \\'wait\\') { const mins = await window.customPrompt(\\'TRANSMISSION DELAY\\', \\'Delay in minutes?\\', \\'5\\'); if(!mins) return; msg = \\'⏳ Please wait for about \\' + mins + \\' minutes, an admin is looking into it.\\'; } else if(type === \\'resolved\\') msg = \\'✅ Did this resolve your issue, or do you have any other questions?\\'; else if(type === \\'close\\') { if(!(await window.customConfirm(\\'SEVER COMMS\\', \\'Sever this communication line?\\'))) return; msg = \\'🔒 Closing this ticket. Have a great day!\\'; await fetch(\\'/api/action\\', { method: \\'POST\\', body: JSON.stringify({ action: \\'send_ticket_message\\', channelId: activeChatChannel, message: msg, pin: PIN }) }); window.fetchChatMessages(); setTimeout(async () => { await window.executeAction({ action: \\'close_channel\\', channelId: activeChatChannel }, false); activeChatChannel = null; window.loadTicketsForChat(); document.getElementById(\\'chat-messages-area\\').innerHTML = \\'<div style=\"margin:auto; text-align:center; opacity:0.5;\"><div style=\"font-size:3em; margin-bottom:10px;\">📡</div><div style=\"font-weight:600; letter-spacing:1px; text-transform:uppercase;\">Select a communication channel</div></div>\\'; }, 2000); return; } if(msg) { try { await fetch(\\'/api/action\\', { method: \\'POST\\', body: JSON.stringify({ action: \\'send_ticket_message\\', channelId: activeChatChannel, message: msg, pin: PIN }) }); window.fetchChatMessages(); } catch(e) { showToast(\\'Transmission Failed\\', \\'error\\'); } } };",
-            "        ",
-            "        window.createPromo = async function() { const name = document.getElementById(\\'promoName\\').value.trim().toUpperCase(); const discount = parseInt(document.getElementById(\\'promoDiscount\\').value); const limit = parseInt(document.getElementById(\\'promoLimit\\').value); if(!name || isNaN(discount) || isNaN(limit)) { return showToast(\\'Invalid parameters\\', \\'error\\'); } if(discount < 1 || discount > 100) return showToast(\\'Discount 1-100\\', \\'error\\'); await window.executeAction({ action: \\'create_promo\\', name: name, discount: discount, limit: limit }); };",
-            "        window.deletePromo = async function(code) { if(await window.customConfirm(\\'VOUCHER PURGE\\', \\'Purge voucher \\' + decodeURIComponent(code) + \\'?\\')) { await window.executeAction({ action: \\'delete_promo\\', name: decodeURIComponent(code) }); } };",
-            "        window.updateRefThreshold = async function() { const val = document.getElementById(\\'ref-threshold\\').value; if(val) await window.executeAction({action:\\'update_ref_threshold\\', threshold: val}); };",
-            "        window.openDirectContact = async function(id) { const msg = await window.customPrompt(\\'DIRECT MESSAGE\\', \\'Input DM payload:\\'); if(msg) await window.executeAction({action:\\'send_dm\\', userId: id, message: msg}); };",
-            "        window.saveUserNote = async function(id) { const note = document.getElementById(\\'note-\\'+id).value; fetch(\\'/api/action\\', { method: \\'POST\\', body: JSON.stringify({ action: \\'save_note\\', userId: id, note: note, pin: PIN }) }).then(r => { if(r.ok) showToast(\\'Saved\\'); }); };",
-            "        window.manageVip = async function(userId, action) { if(action === \\'add\\') { await window.executeAction({action: \\'add_vip_days\\', userId: userId, days: 7}); } else if(action === \\'revoke\\') { if(await window.customConfirm(\\'VIP REVOKE\\', \\'Revoke VIP status for this node?\\')) { await window.executeAction({action: \\'revoke_vip\\', userId: userId}); } } };",
-            "        ",
-            "        if(typeof Chart !== \\'undefined\\') {",
-            "            Chart.defaults.color = \\'#64748b\\'; Chart.defaults.font.family = \\'Inter, monospace\\';",
-            "        }",
-            "        window.renderSalesChart = function(days) { if(typeof Chart === \\'undefined\\') return; let dates = Object.keys(rawStats.revenue || {}).sort(); let values = dates.map(d => rawStats.revenue[d]); if (days > 0 && dates.length > days) { dates = dates.slice(-days); values = values.slice(-days); } const ctxSales = document.getElementById(\\'salesChart\\').getContext(\\'2d\\'); let grad = ctxSales.createLinearGradient(0,0,0,400); grad.addColorStop(0, \\'rgba(56, 189, 248, 0.4)\\'); grad.addColorStop(1, \\'transparent\\'); if(salesChart) salesChart.destroy(); salesChart = new Chart(ctxSales, { type: \\'line\\', data: { labels: dates.length?dates:[\\'No Data\\'], datasets: [{ data: values.length?values:[0], borderColor: \\'#38bdf8\\', backgroundColor: grad, fill: true, tension: 0.4, pointHoverBackgroundColor: \\'#fff\\', pointHoverBorderColor: \\'rgba(56, 189, 248, 1)\\', pointHoverBorderWidth: 4, pointRadius: 2, pointHitRadius: 20 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 2000, easing: \\'easeOutExpo\\' }, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { grid: { color: \\'rgba(255,255,255,0.02)\\'}, border: { dash: [4, 4] } } } } }); };",
+            "        window.loadTicketsForChat = async function() { try { const res = await fetch('/api/tickets'); const tickets = await res.json(); let html = ''; if(tickets.length === 0) { html = '<p class=\"text-muted text-center\" style=\"margin-top:20px;\">No active tickets.</p>'; } else { tickets.forEach(t => { const icon = t.name.startsWith('shop') ? '🛒' : '🎧'; const isActive = activeChatChannel === t.id ? 'active' : ''; html += '<div class=\"ticket-item ' + isActive + '\" onclick=\"window.openTicketChat(\\'' + t.id + '\\')\">' + icon + ' ' + escapeHTML(t.name) + '</div>'; }); } document.getElementById('chat-ticket-list').innerHTML = html; } catch(e) {} };",
+            "        window.openTicketChat = function(channelId) { activeChatChannel = channelId; window.loadTicketsForChat(); document.getElementById('chat-messages-area').innerHTML = '<div style=\"margin:auto; color:var(--accent-blue);\"><div style=\"width:30px; height:30px; border:3px solid rgba(56,189,248,0.2); border-top:3px solid var(--accent-blue); border-radius:50%; animation:spin 1s linear infinite; margin:auto;\"></div></div>'; window.fetchChatMessages(); if(chatPollInterval) clearInterval(chatPollInterval); chatPollInterval = setInterval(window.fetchChatMessages, 3000); };",
+            "        window.fetchChatMessages = async function() { if(!activeChatChannel) return; try { const res = await fetch('/api/tickets/messages?channelId=' + activeChatChannel); const msgs = await res.json(); let html = ''; if(msgs.length === 0) html = '<p class=\"text-muted text-center\" style=\"margin:auto;\">No messages yet.</p>'; else { msgs.forEach(m => { const bubbleClass = m.isBot ? 'bot' : 'user'; const imgHtml = m.imageUrl ? '<br><img src=\"' + escapeHTML(m.imageUrl) + '\" class=\"chat-img-preview\" onclick=\"window.open(\\'' + escapeHTML(m.imageUrl) + '\\')\">' : ''; const actionsHtml = '<div class=\"chat-bubble-actions\"><button class=\"chat-reaction-btn\" onclick=\"window.reactMessage(\\'' + m.id + '\\', \\'👍\\')\">👍</button><button class=\"chat-reaction-btn\" onclick=\"window.reactMessage(\\'' + m.id + '\\', \\'❤️\\')\">❤️</button></div>'; html += '<div class=\"chat-bubble ' + bubbleClass + '\"><div class=\"chat-author\">' + escapeHTML(m.author) + '</div>' + escapeHTML(m.content) + imgHtml + actionsHtml + '</div>'; }); } const area = document.getElementById('chat-messages-area'); const isAtBottom = area.scrollHeight - area.scrollTop <= area.clientHeight + 100; area.innerHTML = html; if(isAtBottom) area.scrollTop = area.scrollHeight; } catch(e) {} };",
+            "        window.sendChatMessage = async function() { if(!activeChatChannel) return showToast('Select a ticket first!', 'error'); const input = document.getElementById('chat-input-text'); const fileInput = document.getElementById('chat-file-input'); const text = input.value.trim(); const file = fileInput.files[0]; if(!text && !file) return; input.value = ''; document.getElementById('attach-badge').style.display='none'; let base64 = null; if (file) { const reader = new FileReader(); reader.readAsDataURL(file); await new Promise(r => reader.onload = r); base64 = reader.result; fileInput.value = ''; } try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'send_ticket_message', channelId: activeChatChannel, message: text, imageBase64: base64, pin: PIN }) }); window.fetchChatMessages(); } catch(e) { showToast('Failed to send', 'error'); } };",
+            "        window.reactMessage = async function(msgId, emoji) { if(!activeChatChannel) return; try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'react_ticket_message', channelId: activeChatChannel, messageId: msgId, emoji: emoji, pin: PIN }) }); showToast('Reaction sent!'); } catch (e) { showToast('Failed to react', 'error'); } };",
+            "        window.sendQuickResponse = async function(type) { if(!activeChatChannel) return showToast('Select a ticket first!', 'error'); let msg = ''; if(type === 'welcome') msg = '👋 Hello! How can I help you today?'; else if(type === 'wait') { const mins = prompt('How many minutes should the user wait?'); if(!mins) return; msg = '⏳ Please wait for about ' + mins + ' minutes, an admin is looking into it.'; } else if(type === 'resolved') msg = '✅ Did this resolve your issue, or do you have any other questions?'; else if(type === 'close') { if(!confirm('Close this ticket and delete the channel?')) return; msg = '🔒 Closing this ticket. Have a great day!'; await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'send_ticket_message', channelId: activeChatChannel, message: msg, pin: PIN }) }); window.fetchChatMessages(); setTimeout(async () => { await window.executeAction({ action: 'close_channel', channelId: activeChatChannel }, false); activeChatChannel = null; window.loadTicketsForChat(); document.getElementById('chat-messages-area').innerHTML = '<div style=\"margin:auto; color:var(--text-muted); text-align:center;\"><h2 style=\"font-size:3em; margin:0;\">👈</h2><p>Select a ticket to view</p></div>'; }, 2000); return; } if(msg) { try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'send_ticket_message', channelId: activeChatChannel, message: msg, pin: PIN }) }); window.fetchChatMessages(); } catch(e) { showToast('Failed to send', 'error'); } } };",
+            "",
+            "        window.createPromo = async function() { const name = document.getElementById('promoName').value.trim().toUpperCase(); const discount = parseInt(document.getElementById('promoDiscount').value); const limit = parseInt(document.getElementById('promoLimit').value); if(!name || isNaN(discount) || isNaN(limit)) { return showToast('Please fill all fields correctly', 'error'); } if(discount < 1 || discount > 100) return showToast('Discount must be between 1 and 100', 'error'); await window.executeAction({ action: 'create_promo', name: name, discount: discount, limit: limit }); };",
+            "        window.deletePromo = async function(code) { if(confirm('Delete promo code ' + decodeURIComponent(code) + '?')) { await window.executeAction({ action: 'delete_promo', name: decodeURIComponent(code) }); } };",
+            "        window.updateRefThreshold = async function() { const val = document.getElementById('ref-threshold').value; if(val) await window.executeAction({action:'update_ref_threshold', threshold: val}); };",
+            "        window.openDirectContact = async function(id) { const msg = prompt('Enter the DM message:'); if(msg) await window.executeAction({action:'send_dm', userId: id, message: msg}); };",
+            "        window.saveUserNote = async function(id) { const note = document.getElementById('note-'+id).value; fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'save_note', userId: id, note: note, pin: PIN }) }).then(r => { if(r.ok) showToast('Note saved!'); }); };",
+            "        window.manageVip = async function(userId, action) { if(action === 'add') { await window.executeAction({action: 'add_vip_days', userId: userId, days: 7}); } else if(action === 'revoke') { if(confirm('Are you sure you want to revoke VIP access for this user?')) { await window.executeAction({action: 'revoke_vip', userId: userId}); } } };",
+            "",
+            "        Chart.defaults.color = '#94a3b8'; Chart.defaults.font.family = 'Inter, sans-serif';",
+            "        window.renderSalesChart = function(days) { let dates = Object.keys(rawStats.revenue || {}).sort(); let values = dates.map(d => rawStats.revenue[d]); if (days > 0 && dates.length > days) { dates = dates.slice(-days); values = values.slice(-days); } const ctxSales = document.getElementById('salesChart').getContext('2d'); let grad = ctxSales.createLinearGradient(0,0,0,400); grad.addColorStop(0, 'rgba(56, 189, 248, 0.4)'); grad.addColorStop(1, 'transparent'); if(salesChart) salesChart.destroy(); salesChart = new Chart(ctxSales, { type: 'line', data: { labels: dates.length?dates:['No Data'], datasets: [{ data: values.length?values:[0], borderColor: '#38bdf8', backgroundColor: grad, fill: true, tension: 0.4, pointHoverBackgroundColor: '#fff', pointHoverBorderColor: 'rgba(56, 189, 248, 0.5)', pointHoverBorderWidth: 6, pointHitRadius: 10 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { grid: { color: 'rgba(255,255,255,0.05)'} } } } }); };",
             "        window.updateSalesChart = function(days) { window.renderSalesChart(days); };",
             "        function renderAnalyticsCharts() { ",
-            "           if(typeof Chart === \\'undefined\\') return;",
-            "           const ctxHourly = document.getElementById(\\'hourlyChart\\').getContext(\\'2d\\'); if(hourlyChart) hourlyChart.destroy(); hourlyChart = new Chart(ctxHourly, { type: \\'bar\\', data: { labels: Array.from({length: 24}, (_, i) => i+\\'h\\'), datasets: [{ label: \\'Sales\\', data: rawStats.analytics.hourly_sales || Array(24).fill(0), backgroundColor: \\'#a855f7\\', hoverBackgroundColor: \\'#d946ef\\', borderRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: \\'easeOutExpo\\' }, plugins: { legend: { display: false } }, scales: { y: { grid: { color: \\'rgba(255,255,255,0.02)\\' } }, x: { grid: { display: false } } } } });",
-            "           const ctxTopProd = document.getElementById(\\'topProductsBarChart\\').getContext(\\'2d\\'); if(topProdChart) topProdChart.destroy(); topProdChart = new Chart(ctxTopProd, { type: \\'bar\\', data: { labels: Object.keys(rawStats.product_sales || {}).map(id => rawStats.products[id] ? rawStats.products[id].name : \\'Unknown\\'), datasets: [{ label: \\'Sales\\', data: Object.values(rawStats.product_sales || {}), backgroundColor: \\'#38bdf8\\', hoverBackgroundColor: \\'#fff\\', borderRadius: 4 }] }, options: { indexAxis: \\'y\\', responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: \\'easeOutExpo\\' }, plugins: { legend: { display: false } }, scales: { x: { grid: { color: \\'rgba(255,255,255,0.02)\\' } }, y: { grid: { display: false } } } } });",
-            "           const catRevs = {}; Object.entries(rawStats.product_sales || {}).forEach(([id, count]) => { const p = rawStats.products[id]; if(p && p.price !== \\'Custom\\'){ const cat = p.category || \\'Other\\'; if(!catRevs[cat]) catRevs[cat] = 0; catRevs[cat] += (parseInt(p.price) * count); } }); const ctxCat = document.getElementById(\\'categoryRevenueChart\\').getContext(\\'2d\\'); if(catChart) catChart.destroy(); catChart = new Chart(ctxCat, { type: \\'polarArea\\', data: { labels: Object.keys(catRevs).length?Object.keys(catRevs):[\\'No Data\\'], datasets: [{ data: Object.values(catRevs).length?Object.values(catRevs):[0], backgroundColor: [\\'#FF1493\\', \\'#38bdf8\\', \\'#10b981\\', \\'#f97316\\', \\'#a855f7\\'], hoverBackgroundColor: [\\'#fff\\', \\'#fff\\', \\'#fff\\', \\'#fff\\', \\'#fff\\'], borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { animateScale: true, animateRotate: true, duration: 1500, easing: 'easeOutExpo' }, plugins: { legend: { position: \\'right\\', labels: {color: \\'#94a3b8\\', font: { family: \\'monospace\\' }} } } } });",
-            "           ",
-            "           const dowSales = { \\'Sun\\':0, \\'Mon\\':0, \\'Tue\\':0, \\'Wed\\':0, \\'Thu\\':0, \\'Fri\\':0, \\'Sat\\':0 }; const daysArr = [\\'Sun\\',\\'Mon\\',\\'Tue\\',\\'Wed\\',\\'Thu\\',\\'Fri\\',\\'Sat\\']; Object.entries(rawStats.revenue || {}).forEach(([dateStr, val]) => { const d = new Date(dateStr); if(!isNaN(d)) { dowSales[daysArr[d.getDay()]] += parseFloat(val); } }); const ctxDow = document.getElementById(\\'dowChart\\').getContext(\\'2d\\'); if(window.dowChartInst) window.dowChartInst.destroy(); window.dowChartInst = new Chart(ctxDow, { type: \\'bar\\', data: { labels: daysArr, datasets: [{ label: \\'Revenue (€)\\', data: daysArr.map(d=>dowSales[d]), backgroundColor: \\'#10b981\\', hoverBackgroundColor: \\'#34d399\\', borderRadius: 6 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { grid: { color: \\'rgba(255,255,255,0.05)\\' } }, x: { grid: { display: false } } } } });",
-            "           const ticketsOpened = rawStats.analytics?.tickets_opened || 0; const salesClosed = rawStats.total_transactions || 0; const ctxFunnel = document.getElementById(\\'funnelChart\\').getContext(\\'2d\\'); if(window.funnelChartInst) window.funnelChartInst.destroy(); window.funnelChartInst = new Chart(ctxFunnel, { type: \\'doughnut\\', data: { labels: [\\'Tickets Opened (No Purchase)\\', \\'Successful Sales\\'], datasets: [{ data: [Math.max(0, ticketsOpened - salesClosed), salesClosed], backgroundColor: [\\'rgba(239, 68, 68, 0.8)\\', \\'rgba(56, 189, 248, 0.8)\\'], hoverOffset: 4, borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: \\'70%\\', plugins: { legend: { position: \\'bottom\\', labels: { color: \\'#94a3b8\\' } } } } });",
+            "           const ctxHourly = document.getElementById('hourlyChart').getContext('2d'); if(hourlyChart) hourlyChart.destroy(); hourlyChart = new Chart(ctxHourly, { type: 'bar', data: { labels: Array.from({length: 24}, (_, i) => i+'h'), datasets: [{ label: 'Sales', data: rawStats.analytics.hourly_sales || Array(24).fill(0), backgroundColor: '#a855f7', hoverBackgroundColor: 'rgba(168, 85, 247, 0.4)', borderRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, plugins: { legend: { display: false } }, scales: { y: { grid: { color: 'rgba(255,255,255,0.05)' } }, x: { grid: { display: false } } } } });",
+            "           const prodIds = Object.keys(rawStats.product_sales || {}); const prodLabels = prodIds.map(id => rawStats.products[id] ? rawStats.products[id].name : 'Unknown'); const prodData = Object.values(rawStats.product_sales || {}); const ctxTopProd = document.getElementById('topProductsBarChart').getContext('2d'); if(topProdChart) topProdChart.destroy(); topProdChart = new Chart(ctxTopProd, { type: 'bar', data: { labels: prodLabels.length?prodLabels:['No Data'], datasets: [{ label: 'Sales', data: prodData.length?prodData:[0], backgroundColor: '#38bdf8', hoverBackgroundColor: 'rgba(56, 189, 248, 0.4)', borderRadius: 4 }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, plugins: { legend: { display: false } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' } }, y: { grid: { display: false } } } } });",
+            "           const catRevs = {}; Object.entries(rawStats.product_sales || {}).forEach(([id, count]) => { const p = rawStats.products[id]; if(p && p.price !== 'Custom'){ const cat = p.category || 'Other'; if(!catRevs[cat]) catRevs[cat] = 0; catRevs[cat] += (parseInt(p.price) * count); } }); const ctxCat = document.getElementById('categoryRevenueChart').getContext('2d'); if(catChart) catChart.destroy(); catChart = new Chart(ctxCat, { type: 'polarArea', data: { labels: Object.keys(catRevs).length?Object.keys(catRevs):['No Data'], datasets: [{ data: Object.values(catRevs).length?Object.values(catRevs):[0], backgroundColor: ['#FF1493', '#38bdf8', '#10b981', '#f97316', '#a855f7'], hoverBackgroundColor: ['rgba(255, 20, 147, 0.4)', 'rgba(56, 189, 248, 0.4)', 'rgba(16, 185, 129, 0.4)', 'rgba(249, 115, 22, 0.4)', 'rgba(168, 85, 247, 0.4)'], borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { animateScale: true, animateRotate: true, duration: 1500, easing: 'easeOutQuart' }, plugins: { legend: { position: 'right', labels: {color: '#f8fafc'} } } } });",
             "        }",
             "        initDashboard();",
             "    </script>",
