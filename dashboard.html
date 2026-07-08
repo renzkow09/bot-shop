@@ -542,7 +542,6 @@
 
     <script>
         let PIN='${DASHBOARD_PIN}';
-        let SERVER_CSRF_TOKEN='${SERVER_CSRF_TOKEN}';
         let rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, userGoal=500, salesChart, hourlyChart, topProdChart, catChart, heatmapChartInst; 
         let allMembersData = []; let isMembersLoaded = false; let activeChatChannel = null; let chatPollInterval = null; let debugPollInterval = null;
         let trackedTickets = 0; let trackedReviews = 0; let trackedSales = 0; let trackedLastTicketMsg = 0;
@@ -637,6 +636,7 @@
         }
 
         let dataPayload = null;
+        let SERVER_CSRF_TOKEN = '';
         
         // 💎 ULTRA PREMIUM SPLASH SCREEN LOGIC
         async function initDashboard(){
@@ -665,7 +665,10 @@
            
            try{
                const res = await fetch('/api/init-data');
-               if(res.ok) dataPayload = await res.json();
+               if(res.ok) {
+                   dataPayload = await res.json();
+                   SERVER_CSRF_TOKEN = dataPayload.CSRF;
+               }
            } catch(e){ console.error('API Error'); }
            clearInterval(loadInterval);
            
@@ -703,6 +706,7 @@
                                const dash = document.getElementById('dashboard-container');
                                if(dash) dash.style.display = 'block'; 
                                window.renderSalesChart(7);
+                               window.loadBackups();
                            }, 1200);
                        }, 3000);
                    }, 400);
@@ -1086,7 +1090,6 @@
         window.reactMessage = async function(msgId, emoji) { if(!activeChatChannel) return; try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'react_ticket_message', channelId: activeChatChannel, messageId: msgId, emoji: emoji, pin: PIN, csrf: SERVER_CSRF_TOKEN }) }); showToast('Reaction sent!'); } catch (e) { showToast('Failed to react', 'error'); } };
         window.sendQuickResponse = async function(type) { if(!activeChatChannel) return showToast('Select a ticket first!', 'error'); let msg = ''; if(type === 'welcome') msg = '👋 Hello! How can I help you today?'; else if(type === 'wait') { const mins = prompt('How many minutes should the user wait?'); if(!mins) return; msg = '⏳ Please wait for about ' + mins + ' minutes, an admin is looking into it.'; } else if(type === 'resolved') msg = '✅ Did this resolve your issue, or do you have any other questions?'; else if(type === 'close') { if(!confirm('Close this ticket and delete the channel?')) return; msg = '🔒 Closing this ticket. Have a great day!'; await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'send_ticket_message', channelId: activeChatChannel, message: msg, pin: PIN, csrf: SERVER_CSRF_TOKEN }) }); window.fetchChatMessages(); setTimeout(async () => { await window.executeAction({ action: 'close_channel', channelId: activeChatChannel }, false); activeChatChannel = null; window.loadTicketsForChat(); document.getElementById('chat-messages-area').innerHTML = '<div style="margin:auto; color:var(--text-muted); text-align:center;"><h2 style="font-size:3em; margin:0;">👈</h2><p>Select a ticket to view</p></div>'; }, 2000); return; } if(msg) { try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'send_ticket_message', channelId: activeChatChannel, message: msg, pin: PIN, csrf: SERVER_CSRF_TOKEN }) }); window.fetchChatMessages(); } catch(e) { showToast('Failed to send', 'error'); } } };
         
-        window.tagTicket = async function(color) { if(!activeChatChannel) return showToast('Select a ticket first!', 'error'); try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'tag_ticket', channelId: activeChatChannel, color: color, pin: PIN, csrf: SERVER_CSRF_TOKEN }) }); window.loadTicketsForChat(); document.getElementById("quickActionsMenu").classList.remove("open"); document.getElementById("quickActionsToggle").classList.remove("open"); showToast('Tag applied!'); } catch(e) {} };
         window.askReviewPrompt = async function() {
             if(!activeChatChannel) return showToast('Select a ticket first!', 'error');
             const pId = prompt('Enter the Product ID to request a review for (check Products tab for IDs):');
@@ -1158,9 +1161,25 @@
            const hLabels = []; const hData = []; Object.entries(rawStats.buy_links || {}).forEach(([id, l]) => { hLabels.push(l.label); hData.push(rawStats.analytics?.heatmap?.[id] || 0); }); const ctxHeatmap = document.getElementById('heatmapChart').getContext('2d'); if(window.heatmapChartInst) window.heatmapChartInst.destroy(); window.heatmapChartInst = new Chart(ctxHeatmap, { type: 'bar', data: { labels: hLabels.length ? hLabels : ['No Data'], datasets: [{ label: 'Clicks', data: hData.length ? hData : [0], backgroundColor: '#f97316', hoverBackgroundColor: 'rgba(249, 115, 22, 0.6)', borderRadius: 4 }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' } }, y: { grid: { display: false } } } } });
         }
         
+        // --- FIX FOR BACKUPS TAB ---
+        window.loadBackups = async function() {
+            try {
+                const res = await fetch('/api/backups');
+                const files = await res.json();
+                let html = '';
+                if(files.length === 0) html = '<tr><td colspan="3" class="text-center text-muted">No backups found</td></tr>';
+                else {
+                    files.forEach(f => {
+                        html += `<tr><td>${escapeHTML(f.name)}</td><td>${escapeHTML(f.size)}</td><td><button class="admin-btn" style="padding:4px 8px; margin:0;" onclick="window.location.href='/api/download_backup?file=${escapeHTML(f.name)}'">⬇️ Download</button></td></tr>`;
+                    });
+                }
+                document.getElementById('target-backups').innerHTML = html;
+            } catch(e) { document.getElementById('target-backups').innerHTML = '<tr><td colspan="3" class="text-center text-red">Error loading backups</td></tr>'; }
+        };
+
         let SERVER_CSRF_TOKEN = '';
         async function getCSRF() { const r = await fetch('/api/init-data'); const d = await r.json(); SERVER_CSRF_TOKEN = d.CSRF; }
-        getCSRF().then(initDashboard);
+        getCSRF().then(initDashboard).catch(err => console.error(err));
     </script>
 </body>
 </html>
