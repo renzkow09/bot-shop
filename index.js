@@ -1,5 +1,5 @@
 // === [IMPORTS & CONFIG] ===
-require('dotenv').config(); // Chargement des variables .env pour le dev local
+require('dotenv').config(); 
 const { Client, GatewayIntentBits, Partials, ButtonBuilder, ActionRowBuilder, ButtonStyle, ChannelType, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, EmbedBuilder, AttachmentBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const axios = require('axios');
 const http = require('http');
@@ -7,7 +7,12 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto'); 
 
-// Vérification stricte des variables d'environnement
+// --- CONFIGURATION GLOBALE ---
+const GUILD_ID = "1520735089573494944"; // Ton ID de serveur fixé
+const ADMIN_DISCORD_ID = "1520551977854042114";
+const DASHBOARD_PIN = "1206"; 
+
+// Vérification des variables d'environnement
 const REQUIRED_ENVS = ['DISCORD_BOT_TOKEN', 'REWARBLE_API_KEY'];
 for (const env of REQUIRED_ENVS) {
     if (!process.env[env]) {
@@ -17,7 +22,6 @@ for (const env of REQUIRED_ENVS) {
 }
 console.log("✅ Environment variables loaded successfully.");
 
-const ADMIN_DISCORD_ID = "1520551977854042114";
 let discordClientReady = false;
 
 async function sendAdminAlert(msg) {
@@ -57,17 +61,16 @@ async function shutdownSignal(signal) {
 process.on('SIGTERM', () => shutdownSignal('SIGTERM'));
 process.on('SIGINT', () => shutdownSignal('SIGINT'));
 
-// === [CONFIG & CONSTANTS] ===
+// === [CONSTANTS] ===
 const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
 const REWARBLE_API_KEY = process.env.REWARBLE_API_KEY;
 const REVIEW_CHANNEL_ID = "1521625370929922078"; 
 const SHOP_CHANNEL_ID = "1520803761130311970"; 
-const VIP_ROLE_ID = "REMPLACE_AVEC_ID_ROLE_VIP"; 
+const VIP_ROLE_ID = "REMPLACE_AVEC_ID_ROLE_VIP"; // <--- METS TON ID DE ROLE VIP ICI
 
 const REWARBLE_API_URL = "https://api.rewarble.com/client/1.00/redeem"; 
 const CATEGORY_CUSTOMER_ID = "1521540733226713249";
 const CATEGORY_SUPPORT_ID = "1521541155005796484";
-const DASHBOARD_PIN = "1206"; 
 const MONTHLY_GOAL = 500; 
 const TEST_VOUCHERS = { "GOYAVE5": 5 };
 
@@ -78,7 +81,6 @@ const BACKUP_DIR = path.join(__dirname, 'backups');
 if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR);
 const guildInvites = new Map(); 
 
-// CORRECTION: Secret de session stable pour éviter les déconnexions sur Render
 const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
 const SERVER_CSRF_TOKEN = crypto.randomBytes(16).toString('hex');
 
@@ -139,27 +141,41 @@ function addActivity(type, message) {
 async function loadCloudStats() {
     const url = process.env.UPSTASH_REDIS_REST_URL;
     const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-    if (!url || !token) return console.log("⚠️ Upstash variables missing.");
-    try {
-        const cleanUrl = url.endsWith('/') ? url.slice(0, -1) : url;
-        const res = await axios.get(`${cleanUrl}/get/bot_stats`, { headers: { Authorization: `Bearer ${token}` } });
-        if (res.data && res.data.result) {
-            const cloudData = JSON.parse(res.data.result);
-            memoryStats = { ...memoryStats, ...cloudData };
-            console.log("✅ Database synchronized with the Cloud.");
-        }
-    } catch (e) { console.error("❌ Cloud GET Error :", e.message); }
+    if (!url || !token) {
+        console.log("⚠️ Upstash variables missing. Using local memory only.");
+    } else {
+        try {
+            const cleanUrl = url.endsWith('/') ? url.slice(0, -1) : url;
+            const res = await axios.get(`${cleanUrl}/get/bot_stats`, { headers: { Authorization: `Bearer ${token}` } });
+            if (res.data && res.data.result) {
+                const cloudData = JSON.parse(res.data.result);
+                memoryStats = { ...memoryStats, ...cloudData };
+                console.log("✅ Database synchronized with the Cloud.");
+            }
+        } catch (e) { console.error("❌ Cloud GET Error :", e.message); }
+    }
 
     if (fs.existsSync(STATS_FILE)) {
         try { 
             const localData = JSON.parse(fs.readFileSync(STATS_FILE, 'utf8'));
             memoryStats = { ...localData, ...memoryStats };
-        } catch (e) { console.error("❌ Local file read error:", e); }
+        } catch (e) {}
     }
+
+    // --- CORRECTION : Injection des produits par défaut si vide ---
+    if (!memoryStats.products || Object.keys(memoryStats.products).length === 0) {
+        console.log("📦 No products found. Injecting initial product list...");
+        memoryStats.products = { ...INITIAL_PRODUCTS };
+    }
+    if (!memoryStats.buy_links || Object.keys(memoryStats.buy_links).length === 0) {
+        console.log("🔗 No buy links found. Injecting initial buy links...");
+        memoryStats.buy_links = { ...INITIAL_BUY_LINKS };
+    }
+    await syncCloud();
 }
 
 async function syncCloud() {
-    try { fs.writeFileSync(STATS_FILE, JSON.stringify(memoryStats)); } catch (e) { console.error("❌ Local write error:", e); }
+    try { fs.writeFileSync(STATS_FILE, JSON.stringify(memoryStats)); } catch (e) {}
     const url = process.env.UPSTASH_REDIS_REST_URL;
     const token = process.env.UPSTASH_REDIS_REST_TOKEN;
     if (!url || !token) return;
@@ -168,7 +184,7 @@ async function syncCloud() {
         await axios.post(cleanUrl, ["SET", "bot_stats", JSON.stringify(memoryStats)], { 
             headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } 
         });
-    } catch (err) { console.error("❌ Cloud Sync Error:", err.message); }
+    } catch (err) {}
 }
 
 async function runDailyBackup() {
@@ -179,12 +195,12 @@ async function runDailyBackup() {
             fs.writeFileSync(backupPath, JSON.stringify(memoryStats));
             console.log(`💾 Auto-Backup Saved: ${backupPath}`);
         }
-    } catch(e) { console.error("❌ Backup Error:", e); }
+    } catch(e) {}
 }
 
 async function checkSubscriptions() {
     const now = Date.now();
-    const guild = client.guilds.cache.first();
+    const guild = client.guilds.cache.get(GUILD_ID);
     if (!guild) return;
     for (const [userId, subData] of Object.entries(memoryStats.subscriptions || {})) {
         if (now > subData.expiresAt) {
@@ -197,7 +213,7 @@ async function checkSubscriptions() {
                     memoryStats.promo_codes[codeName] = { discount: 50, limit: 1, used: 0, createdAt: new Date().toLocaleDateString('en-US') };
                     await member.send(`🛑 **Your VIP Pass has expired.** To thank you for your past support, here is a **-50% OFF** promo code valid for 1 use: \`${codeName}\`. Renew your pass in the shop!`).catch(() => {});
                 }
-            } catch(e) { console.error("❌ Sub expiration error:", e); }
+            } catch(e) {}
             delete memoryStats.subscriptions[userId];
             syncCloud();
         } 
@@ -205,7 +221,7 @@ async function checkSubscriptions() {
             try {
                 const member = await guild.members.fetch(userId).catch(() => null);
                 if (member) await member.send("⏳ **Your VIP Pass expires in 3 days!** Don't forget to renew it to keep your 20% discount and perks.").catch(() => {});
-            } catch(e) { console.error("❌ Sub notification error:", e); }
+            } catch(e) {}
             memoryStats.subscriptions[userId].notified = true;
             syncCloud();
         }
@@ -262,7 +278,7 @@ async function sendShopSetup(channel) {
         try {
             currentComponents.push(new ButtonBuilder().setLabel(linkObj.label).setStyle(ButtonStyle.Link).setURL(linkObj.url));
             if (currentComponents.length === 5) { buyRows.push(new ActionRowBuilder().addComponents(currentComponents)); currentComponents = []; }
-        } catch(e) { console.error("Error adding buy button:", e); }
+        } catch(e) {}
     }
     if (currentComponents.length > 0) buyRows.push(new ActionRowBuilder().addComponents(currentComponents));
     buyRows = buyRows.slice(0, 4);
@@ -287,7 +303,7 @@ async function sendShopSetup(channel) {
         shopEmbed.addFields({ name: catName, value: '> ' + items.join('\n> '), inline: true });
     }
     shopEmbed.addFields({ name: '━━━━━━━━━━━━━━━━━━━━━━\n💳 HOW TO BUY ?', value: '**STEP 1:** Buy a voucher above.\n**STEP 2:** Click **📩 Redeem Code**.\n**STEP 3:** Paste your code and check your DMs!' });
-    await channel.send({ embeds: [shopEmbed], components: componentsToSend }).catch(e => console.error("Error sending shop setup:", e));
+    await channel.send({ embeds: [shopEmbed], components: componentsToSend }).catch(() => {});
 }
 
 // === [DISCORD_BOT_CLIENT] ===
@@ -299,7 +315,7 @@ client.once('ready', () => {
     loadCloudStats();
     runDailyBackup(); 
     client.guilds.cache.forEach(async guild => {
-        try { const firstInvites = await guild.invites.fetch(); guildInvites.set(guild.id, new Map(firstInvites.map(invite => [invite.code, invite.uses]))); } catch (err) { console.error("Error fetching invites:", err); }
+        try { const firstInvites = await guild.invites.fetch(); guildInvites.set(guild.id, new Map(firstInvites.map(invite => [invite.code, invite.uses]))); } catch (err) {}
     });
     setInterval(checkSubscriptions, 60 * 60 * 1000); 
     setInterval(runDailyBackup, 60 * 60 * 1000); 
@@ -311,23 +327,22 @@ client.once('ready', () => {
             for (const [chId, state] of channelStates.entries()) {
                 if (!state.validated && !state.notified && (Date.now() - state.createdAt > delayMs)) {
                     state.notified = true;
-                    const guild = client.guilds.cache.first();
-                    const member = await guild.members.fetch(state.userId).catch(()=>null);
+                    const guild = client.guilds.cache.get(GUILD_ID);
+                    const member = await guild?.members.fetch(state.userId).catch(()=>null);
                     if (member) {
                         const code = "COMEBACK-" + Math.random().toString(36).substring(2, 6).toUpperCase();
                         memoryStats.promo_codes[code] = { discount: acSet.discount, limit: 1, used: 0, createdAt: new Date().toLocaleDateString() };
                         syncCloud();
-                        // CORRECTION : SyntaxError corrigé ici (parenthèse ajoutée)
-                        await member.send({ embeds: [new EmbedBuilder().setColor('#f97316').setTitle('🛒 Pending Cart!').setDescription(`Finish your order with **-${acSet.discount}%**: \`${code}\``)] }).catch(e => console.error("Error sending cart reminder:", e));
+                        await member.send({ embeds: [new EmbedBuilder().setColor('#f97316').setTitle('🛒 Pending Cart!').setDescription(`Finish your order with **-${acSet.discount}%**: \`${code}\``)] }).catch(()=>{});
                     }
                 }
             }
-        } catch(e) { console.error("Error in Abandoned Cart loop:", e); }
+        } catch(e) {}
     }, 15 * 60 * 1000);
 });
 
-client.on('inviteCreate', invite => { try { guildInvites.get(invite.guild.id)?.set(invite.code, invite.uses); } catch (e) { console.error("Invite create error:", e); } });
-client.on('inviteDelete', invite => { try { guildInvites.get(invite.guild.id)?.delete(invite.code); } catch (e) { console.error("Invite delete error:", e); } });
+client.on('inviteCreate', invite => { try { guildInvites.get(invite.guild.id)?.set(invite.code, invite.uses); } catch (e) {} });
+client.on('inviteDelete', invite => { try { guildInvites.get(invite.guild.id)?.delete(invite.code); } catch (e) {} });
 
 client.on('interactionCreate', async (interaction) => {
     try {
@@ -421,7 +436,7 @@ client.on('interactionCreate', async (interaction) => {
                 setTimeout(() => { channelStates.delete(interaction.channel.id); interaction.channel.delete().catch(()=>{}); }, 5000);
             }
         }
-    } catch (err) { console.error("❌ Interaction Error:", err); }
+    } catch (err) { console.error("Interaction Error:", err); }
 });
 
 client.on('messageCreate', async (message) => {
@@ -467,7 +482,7 @@ client.on('messageCreate', async (message) => {
                 } catch (e) { state.processing = false; message.reply("❌ Invalid code."); }
             } else state.processing = false;
         }
-    } catch (err) { console.error("❌ Message Error:", err); }
+    } catch (err) { console.error("Message Error:", err); }
 });
 
 client.on('guildMemberAdd', async (member) => { logStat('joins', 1, { username: member.user.username }); });
@@ -527,20 +542,23 @@ http.createServer(async (req, res) => {
         if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         const todayStr = new Date().toISOString().split('T')[0];
         let monthRevenue = 0; Object.keys(memoryStats.revenue || {}).forEach(date => { if(date.startsWith(todayStr.substring(0, 7))) monthRevenue += memoryStats.revenue[date]; });
+        const guild = client.guilds.cache.get(GUILD_ID);
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify({ memoryStats, activeTickets: client.guilds.cache.first()?.channels.cache.filter(c => c.name.startsWith('shop-') || c.name.startsWith('support-')).size || 0, todayRevenue: memoryStats.revenue?.[todayStr] || 0, monthRevenue, ticketsOpened: memoryStats.analytics?.tickets_opened || 0, dropOffRate: memoryStats.analytics?.tickets_opened > 0 ? (100 - (memoryStats.total_transactions / memoryStats.analytics.tickets_opened) * 100).toFixed(1) : 0, CSRF: SERVER_CSRF_TOKEN, globalLastTicketMsg }));
+        return res.end(JSON.stringify({ memoryStats, activeTickets: guild?.channels.cache.filter(c => c.name.startsWith('shop-') || c.name.startsWith('support-')).size || 0, todayRevenue: memoryStats.revenue?.[todayStr] || 0, monthRevenue, ticketsOpened: memoryStats.analytics?.tickets_opened || 0, dropOffRate: memoryStats.analytics?.tickets_opened > 0 ? (100 - (memoryStats.total_transactions / memoryStats.analytics.tickets_opened) * 100).toFixed(1) : 0, CSRF: SERVER_CSRF_TOKEN, globalLastTicketMsg }));
     }
 
     if (req.url === '/api/tickets' && req.method === 'GET') {
         if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
+        const guild = client.guilds.cache.get(GUILD_ID);
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify(client.guilds.cache.first()?.channels.cache.filter(c => c.name.startsWith('shop-') || c.name.startsWith('support-')).map(c => ({ id: c.id, name: c.name, tag: memoryStats.ticket_tags?.[c.id] || null })).sort((a,b)=>a.name.localeCompare(b.name)) || []));
+        return res.end(JSON.stringify(guild?.channels.cache.filter(c => c.name.startsWith('shop-') || c.name.startsWith('support-')).map(c => ({ id: c.id, name: c.name, tag: memoryStats.ticket_tags?.[c.id] || null })).sort((a,b)=>a.name.localeCompare(b.name)) || []));
     }
 
     if (req.url.startsWith('/api/tickets/messages') && req.method === 'GET') {
         if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         const channelId = new URL(req.url, `http://${req.headers.host}`).searchParams.get('channelId');
-        const channel = client.guilds.cache.first()?.channels.cache.get(channelId);
+        const guild = client.guilds.cache.get(GUILD_ID);
+        const channel = guild?.channels.cache.get(channelId);
         let msgs = [];
         if (channel) {
             try {
@@ -554,10 +572,31 @@ http.createServer(async (req, res) => {
     if (req.url.startsWith('/api/members') && req.method === 'GET') {
         if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         try {
-            const fetchedMembers = await client.guilds.cache.first()?.members.fetch({ limit: 1000 });
+            const guild = client.guilds.cache.get(GUILD_ID);
+            if (!guild) {
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                return res.end(JSON.stringify([]));
+            }
+            const fetchedMembers = await guild.members.fetch({ limit: 1000 });
+            const membersArray = Array.from(fetchedMembers.values());
+            const responseData = membersArray.map(m => ({ 
+                id: m.id, 
+                username: m.user.username, 
+                avatar: m.user.displayAvatarURL({ size: 128 }), 
+                totalSpent: memoryStats.user_spending[m.user.username] || 0, 
+                isBlacklisted: (memoryStats.blacklist || []).includes(m.id), 
+                warns: memoryStats.warns[m.id] || [], 
+                history: memoryStats.user_history[m.user.username] || [] 
+            }));
             res.writeHead(200, { 'Content-Type': 'application/json' });
-            return res.end(JSON.stringify(fetchedMembers.map(m => ({ id: m.id, username: m.user.username, avatar: m.user.displayAvatarURL({ size: 128 }), totalSpent: memoryStats.user_spending[m.user.username] || 0, isBlacklisted: (memoryStats.blacklist || []).includes(m.id), warns: memoryStats.warns[m.id] || [], history: memoryStats.user_history[m.user.username] || [] }))));
-        } catch(e) { console.error("Error fetching members:", e); return res.writeHead(500).end('[]'); }
+            return res.end(JSON.stringify(responseData));
+        } catch(e) { 
+            console.error("Error fetching members:", e); 
+            if (!res.headersSent) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: "Internal Server Error" }));
+            }
+        }
     }
 
     if (req.url === '/api/action' && req.method === 'POST') {
@@ -572,14 +611,13 @@ http.createServer(async (req, res) => {
                 if (data.action === 'tag_ticket') { memoryStats.ticket_tags = memoryStats.ticket_tags || {}; if (data.color) memoryStats.ticket_tags[data.channelId] = sanitizeInput(data.color); else delete memoryStats.ticket_tags[data.channelId]; syncCloud(); }
                 if (data.action === 'create_manual_tx') { logStat('revenue', parseFloat(data.price), { productId: 'MAN', productName: sanitizeInput(data.product), username: sanitizeInput(data.username) }); }
                 if (data.action === 'edit_today_earnings') { memoryStats.revenue[new Date().toISOString().split('T')[0]] = parseFloat(data.value) || 0; syncCloud(); }
-                if (data.action === 'send_ticket_message') { const ch = client.guilds.cache.first()?.channels.cache.get(data.channelId); if (ch) await ch.send(`💬 **[Admin]** : ${sanitizeInput(data.message)}`); }
-                if (data.action === 'close_channel') { const c = client.guilds.cache.first()?.channels.cache.get(data.channelId); if(c) { channelStates.delete(c.id); await c.delete().catch(()=>{}); } }
+                if (data.action === 'send_ticket_message') { const ch = client.guilds.cache.get(GUILD_ID)?.channels.cache.get(data.channelId); if (ch) await ch.send(`💬 **[Admin]** : ${sanitizeInput(data.message)}`); }
+                if (data.action === 'close_channel') { const c = client.guilds.cache.get(GUILD_ID)?.channels.cache.get(data.channelId); if(c) { channelStates.delete(c.id); await c.delete().catch(()=>{}); } }
                 if (data.action === 'add_product' || data.action === 'edit_product') { memoryStats.products[data.id || Date.now()] = { name: sanitizeInput(data.name), price: sanitizeInput(data.price), link: data.link, category: "✨ ITEMS", stock: data.stock || "∞", desc: sanitizeInput(data.desc) }; syncCloud(); }
                 if (data.action === 'delete_product') { delete memoryStats.products[data.id]; syncCloud(); }
                 if (data.action === 'refresh_setup') { const ch = await client.channels.fetch(SHOP_CHANNEL_ID).catch(()=>null); if(ch) { (await ch.messages.fetch({ limit: 50 })).filter(m => m.author.id === client.user.id).forEach(async m => m.delete().catch(()=>{})); await sendShopSetup(ch); } }
-                if (['ban', 'kick', 'mute'].includes(data.action)) { const target = await client.guilds.cache.first()?.members.fetch(data.userId).catch(()=>null); if(target) { if(data.action==='ban') target.ban(); else if(data.action==='kick') target.kick(); else target.timeout(parseInt(data.duration)*60000); } }
+                if (['ban', 'kick', 'mute'].includes(data.action)) { const target = await client.guilds.cache.get(GUILD_ID)?.members.fetch(data.userId).catch(()=>null); if(target) { if(data.action==='ban') target.ban(); else if(data.action==='kick') target.kick(); else target.timeout(parseInt(data.duration)*60000); } }
                 if (data.action === 'warn') { memoryStats.warns[data.userId] = memoryStats.warns[data.userId] || []; memoryStats.warns[data.userId].push({ reason: sanitizeInput(data.reason), date: new Date().toLocaleString() }); syncCloud(); }
-                
                 if (data.action === 'force_sync_db') {
                     try {
                         const restoredData = JSON.parse(data.rawJson);
