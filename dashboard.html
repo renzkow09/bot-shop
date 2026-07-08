@@ -1099,12 +1099,17 @@
         // --- Transactions & Audience ---
         function renderTransactions() {
             const body = document.getElementById('tx-table-body');
+            if (!state.data.transactions || state.data.transactions.length === 0) {
+                body.innerHTML = `<tr><td colspan="5" style="text-align:center; opacity:0.5;">Aucune transaction trouvée dans Upstash</td></tr>`;
+                return;
+            }
+
             body.innerHTML = state.data.transactions.map(tx => `
                 <tr>
-                    <td>${tx.username || 'Unknown'}</td>
-                    <td>${tx.product}</td>
-                    <td style="color:var(--accent-success); font-weight:600">${currencyFormatter.format(tx.price)}</td>
-                    <td>${tx.date}</td>
+                    <td>${tx.username || tx.customer || 'Unknown'}</td>
+                    <td>${tx.product || 'N/A'}</td>
+                    <td style="color:var(--accent-success); font-weight:600">${currencyFormatter.format(tx.price || 0)}</td>
+                    <td>${tx.date || 'N/A'}</td>
                     <td><span class="status-pill" style="font-size:0.6rem">Completed</span></td>
                 </tr>
             `).join('');
@@ -1149,23 +1154,32 @@
             }
         }
 
-        // --- Global Sync Engine (CORRIGÉ POUR TON BOT) ---
+        // --- Global Sync Engine (ROBUSTE) ---
         async function syncData() {
+            console.log("🔄 Tentative de synchronisation...");
             const data = await apiRequest('/api/init-data');
-            if (!data) return;
+            
+            if (!data) {
+                console.error("❌ Erreur: Aucune réponse reçue de l'API /api/init-data");
+                return;
+            }
 
-            // On mappe les données exactement comme elles sont envoyées par ton bot
+            console.log("📦 Données reçues du bot:", data);
+
+            // Utilisation de "guards" pour éviter les crashs JS si Upstash renvoie des données incomplètes
             state.data = {
                 todayRevenue: data.todayRevenue || 0,
-                totalRevenue: data.memoryStats.total_revenue || 0,
+                totalRevenue: (data.memoryStats && data.memoryStats.total_revenue) ? data.memoryStats.total_revenue : 0,
                 conversionRate: data.dropOffRate ? (100 - parseFloat(data.dropOffRate)).toFixed(1) : 0,
                 activeTickets: data.activeTickets || 0,
-                products: data.memoryStats.products || {},
-                transactions: data.memoryStats.recent_transactions || [],
-                activity: data.memoryStats.activity_feed || [],
-                revenueHistory: data.memoryStats.revenue || {},
-                users: data.memoryStats.users || []
+                products: (data.memoryStats && data.memoryStats.products) ? data.memoryStats.products : {},
+                transactions: (data.memoryStats && Array.isArray(data.memoryStats.recent_transactions)) ? data.memoryStats.recent_transactions : [],
+                activity: (data.memoryStats && Array.isArray(data.memoryStats.activity_feed)) ? data.memoryStats.activity_feed : [],
+                revenueHistory: (data.memoryStats && data.memoryStats.revenue) ? data.memoryStats.revenue : {},
+                users: (data.memoryStats && Array.isArray(data.memoryStats.users)) ? data.memoryStats.users : []
             };
+
+            console.log("✅ État mis à jour avec succès:", state.data);
 
             // Update all UI components based on current state
             updateKPIs();
