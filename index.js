@@ -2215,4 +2215,8 @@ http.createServer(async (req, res) => {
     } else { res.writeHead(200, { 'Content-Type': 'text/plain' }); res.end('API Bot'); }
 }).listen(process.env.PORT || 3000);
 
+// === [ANCHOR: STARTUP_DEBUG] ===
+console.log('🔍 Starting bot...');
+console.log('Token:', DISCORD_BOT_TOKEN ? '✅ Présent' : '❌ Manquant');
+
 client.login(DISCORD_BOT_TOKEN);
