@@ -2240,7 +2240,3 @@ setTimeout(() => {
 }, 15000);
 
 client.login(DISCORD_BOT_TOKEN);
-
-client.login(DISCORD_BOT_TOKEN);
-
-client.login(DISCORD_BOT_TOKEN);
