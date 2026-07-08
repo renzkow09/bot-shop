@@ -11,10 +11,11 @@ const crypto = require('crypto');
 const REQUIRED_ENVS = ['DISCORD_BOT_TOKEN', 'REWARBLE_API_KEY'];
 for (const env of REQUIRED_ENVS) {
     if (!process.env[env]) {
-        console.error(`❌ CRITICAL ERROR: Environment variable ${env} is missing!`);
+        console.error(`❌ ERREUR CRITIQUE : La variable d'environnement ${env} est manquante !`);
         process.exit(1);
     }
 }
+console.log("✅ Toutes les variables d'environnement sont chargées.");
 
 const ADMIN_DISCORD_ID = "1520551977854042114";
 let discordClientReady = false;
