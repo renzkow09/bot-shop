@@ -8,637 +8,162 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <!-- Icons: Lucide (via CDN for simplicity/speed) -->
+    <!-- Icons: Lucide -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <!-- Charts: Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
         :root {
-            /* Color Palette - Modern Dark SaaS */
             --bg-base: #09090b;
             --bg-surface: #18181b;
             --bg-card: rgba(24, 24, 27, 0.6);
             --glass-border: rgba(255, 255, 255, 0.08);
             --glass-bg: rgba(255, 255, 255, 0.03);
-            
-            /* Accents */
-            --accent-primary: #0ea5e9; /* Sky Blue */
-            --accent-success: #10b981; /* Emerald */
-            --accent-danger: #f43f5e;  /* Rose */
-            --accent-warning: #f59e0b; /* Amber */
-            
-            /* Text */
+            --accent-primary: #0ea5e9;
+            --accent-success: #10b981;
+            --accent-danger: #f43f5e;
+            --accent-warning: #f59e0b;
             --text-primary: #fafafa;
             --text-secondary: #a1a1aa;
             --text-muted: #71717a;
-            
-            /* Transitions */
             --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             --shadow-premium: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.2);
         }
 
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            -webkit-font-smoothing: antialiased;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+        body { font-family: 'Inter', sans-serif; background-color: var(--bg-base); color: var(--text-primary); height: 100vh; overflow: hidden; display: flex; }
 
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: var(--bg-base);
-            color: var(--text-primary);
-            height: 100vh;
-            overflow: hidden;
-            display: flex;
-        }
-
-        /* Custom Scrollbar */
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: var(--glass-border); border-radius: 10px; }
-        ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 
-        /* Layout Structure */
-        .sidebar {
-            width: 260px;
-            background: var(--bg-surface);
-            border-right: 1px solid var(--glass-border);
-            display: flex;
-            flex-direction: column;
-            transition: var(--transition-smooth);
-            z-index: 100;
-        }
-
-        .sidebar-header {
-            padding: 2rem 1.5rem;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            font-weight: 700;
-            font-size: 1.25rem;
-            letter-spacing: -0.02em;
-            color: var(--text-primary);
-        }
-
-        .sidebar-header .logo-dot {
-            width: 12px;
-            height: 12px;
-            background: var(--accent-primary);
-            border-radius: 50%;
-            box-shadow: 0 0 12px var(--accent-primary);
-        }
-
-        .nav-group {
-            flex: 1;
-            padding: 0 0.75rem;
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-
-        .nav-item {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 0.75rem 1rem;
-            color: var(--text-secondary);
-            text-decoration: none;
-            border-radius: 8px;
-            font-size: 0.9rem;
-            font-weight: 500;
-            cursor: pointer;
-            transition: var(--transition-smooth);
-            border: 1px solid transparent;
-        }
-
-        .nav-item:hover {
-            color: var(--text-primary);
-            background: var(--glass-bg);
-        }
-
-        .nav-item.active {
-            color: var(--text-primary);
-            background: rgba(14, 165, 233, 0.1);
-            border-color: rgba(14, 165, 233, 0.2);
-        }
-
+        .sidebar { width: 260px; background: var(--bg-surface); border-right: 1px solid var(--glass-border); display: flex; flex-direction: column; transition: var(--transition-smooth); z-index: 100; }
+        .sidebar-header { padding: 2rem 1.5rem; display: flex; align-items: center; gap: 12px; font-weight: 700; font-size: 1.25rem; letter-spacing: -0.02em; color: var(--text-primary); }
+        .sidebar-header .logo-dot { width: 12px; height: 12px; background: var(--accent-primary); border-radius: 50%; box-shadow: 0 0 12px var(--accent-primary); }
+        .nav-group { flex: 1; padding: 0 0.75rem; display: flex; flex-direction: column; gap: 4px; }
+        .nav-item { display: flex; align-items: center; gap: 12px; padding: 0.75rem 1rem; color: var(--text-secondary); text-decoration: none; border-radius: 8px; font-size: 0.9rem; font-weight: 500; cursor: pointer; transition: var(--transition-smooth); border: 1px solid transparent; }
+        .nav-item:hover { color: var(--text-primary); background: var(--glass-bg); }
+        .nav-item.active { color: var(--text-primary); background: rgba(14, 165, 233, 0.1); border-color: rgba(14, 165, 233, 0.2); }
         .nav-item i { width: 18px; height: 18px; }
 
-        /* Main Content Area */
-        .main-viewport {
-            flex: 1;
-            overflow-y: auto;
-            position: relative;
-            background: radial-gradient(circle at top right, #1e1b4b 0%, #09090b 40%);
-        }
+        .main-viewport { flex: 1; overflow-y: auto; position: relative; background: radial-gradient(circle at top right, #1e1b4b 0%, #09090b 40%); }
+        .top-bar { position: sticky; top: 0; height: 64px; backdrop-filter: blur(12px); background: rgba(9, 9, 11, 0.8); border-bottom: 1px solid var(--glass-border); display: flex; align-items: center; justify-content: space-between; padding: 0 2rem; z-index: 50; }
+        .page-title { font-size: 1.1rem; font-weight: 600; }
+        .status-pill { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; background: var(--glass-bg); padding: 4px 12px; border-radius: 100px; border: 1px solid var(--glass-border); color: var(--text-secondary); }
+        .status-pill .dot { width: 6px; height: 6px; background: var(--accent-success); border-radius: 50%; box-shadow: 0 0 8px var(--accent-success); }
 
-        .top-bar {
-            position: sticky;
-            top: 0;
-            height: 64px;
-            backdrop-filter: blur(12px);
-            background: rgba(9, 9, 11, 0.8);
-            border-bottom: 1px solid var(--glass-border);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0 2rem;
-            z-index: 50;
-        }
-
-        .page-title {
-            font-size: 1.1rem;
-            font-weight: 600;
-        }
-
-        .status-pill {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 0.75rem;
-            background: var(--glass-bg);
-            padding: 4px 12px;
-            border-radius: 100px;
-            border: 1px solid var(--glass-border);
-            color: var(--text-secondary);
-        }
-
-        .status-pill .dot {
-            width: 6px;
-            height: 6px;
-            background: var(--accent-success);
-            border-radius: 50%;
-            box-shadow: 0 0 8px var(--accent-success);
-        }
-
-        /* Dashboard Container */
-        .content-container {
-            padding: 2rem;
-            max-width: 1400px;
-            margin: 0 auto;
-        }
-
+        .content-container { padding: 2rem; max-width: 1400px; margin: 0 auto; }
         .tab-content { display: none; animation: fadeIn 0.4s ease-out; }
         .tab-content.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        /* Premium Cards & Glassmorphism */
-        .glass-card {
-            background: var(--bg-card);
-            backdrop-filter: blur(12px);
-            border: 1px solid var(--glass-border);
-            border-radius: 16px;
-            padding: 1.5rem;
-            transition: var(--transition-smooth);
-            box-shadow: var(--shadow-premium);
-        }
-
-        .glass-card:hover {
-            border-color: rgba(255, 255, 255, 0.15);
-        }
-
-        /* KPI Grid */
-        .kpi-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-            gap: 1.5rem;
-            margin-bottom: 2rem;
-        }
-
-        .kpi-card {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        .kpi-label {
-            font-size: 0.85rem;
-            color: var(--text-secondary);
-            font-weight: 500;
-        }
-
-        .kpi-value {
-            font-size: 1.75rem;
-            font-weight: 700;
-            letter-spacing: -0.03em;
-        }
-
-        .kpi-trend {
-            font-size: 0.75rem;
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
-
+        .glass-card { background: var(--bg-card); backdrop-filter: blur(12px); border: 1px solid var(--glass-border); border-radius: 16px; padding: 1.5rem; transition: var(--transition-smooth); box-shadow: var(--shadow-premium); }
+        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
+        .kpi-card { display: flex; flex-direction: column; gap: 12px; }
+        .kpi-label { font-size: 0.85rem; color: var(--text-secondary); font-weight: 500; }
+        .kpi-value { font-size: 1.75rem; font-weight: 700; letter-spacing: -0.03em; }
+        .kpi-trend { font-size: 0.75rem; display: flex; align-items: center; gap: 4px; }
         .trend-up { color: var(--accent-success); }
         .trend-down { color: var(--accent-danger); }
 
-        /* Charts Section */
-        .chart-container {
-            height: 400px;
-            width: 100%;
-            margin-top: 1rem;
-        }
-
-        /* Live Pulse Feed */
-        .pulse-feed {
-            margin-top: 2rem;
-            max-height: 500px;
-            overflow-y: auto;
-        }
-
-        .pulse-item {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 1rem;
-            border-bottom: 1px solid var(--glass-border);
-            font-size: 0.85rem;
-            transition: var(--transition-smooth);
-        }
-
+        .chart-container { height: 400px; width: 100%; margin-top: 1rem; }
+        .pulse-feed { margin-top: 2rem; max-height: 500px; overflow-y: auto; }
+        .pulse-item { display: flex; align-items: center; gap: 12px; padding: 1rem; border-bottom: 1px solid var(--glass-border); font-size: 0.85rem; transition: var(--transition-smooth); }
         .pulse-item:hover { background: var(--glass-bg); }
-        .pulse-icon {
-            width: 32px;
-            height: 32px;
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: var(--glass-bg);
-        }
+        .pulse-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: var(--glass-bg); }
 
-        /* Ticket System Layout */
-        .ticket-layout {
-            display: grid;
-            grid-template-columns: 320px 1fr;
-            gap: 0;
-            height: calc(100vh - 140px);
-            border-radius: 16px;
-            overflow: hidden;
-            border: 1px solid var(--glass-border);
-        }
-
-        .ticket-sidebar {
-            background: var(--bg-surface);
-            border-right: 1px solid var(--glass-border);
-            display: flex;
-            flex-direction: column;
-        }
-
-        .ticket-list {
-            overflow-y: auto;
-            flex: 1;
-        }
-
-        .ticket-item {
-            padding: 1rem;
-            cursor: pointer;
-            border-bottom: 1px solid var(--glass-border);
-            transition: var(--transition-smooth);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
+        .ticket-layout { display: grid; grid-template-columns: 320px 1fr; gap: 0; height: calc(100vh - 140px); border-radius: 16px; overflow: hidden; border: 1px solid var(--glass-border); }
+        .ticket-sidebar { background: var(--bg-surface); border-right: 1px solid var(--glass-border); display: flex; flex-direction: column; }
+        .ticket-list { overflow-y: auto; flex: 1; }
+        .ticket-item { padding: 1rem; cursor: pointer; border-bottom: 1px solid var(--glass-border); transition: var(--transition-smooth); display: flex; justify-content: space-between; align-items: center; }
         .ticket-item:hover { background: var(--glass-bg); }
         .ticket-item.active { background: rgba(14, 165, 233, 0.1); border-left: 4px solid var(--accent-primary); }
+        .ticket-main { display: flex; flex-direction: column; background: var(--bg-base); }
+        .chat-messages { flex: 1; padding: 1.5rem; overflow-y: auto; display: flex; flex-direction: column; gap: 1rem; }
+        .msg { max-width: 70%; padding: 0.75rem 1rem; border-radius: 12px; font-size: 0.9rem; line-height: 1.5; position: relative; }
+        .msg-user { align-self: flex-end; background: var(--accent-primary); color: white; border-bottom-right-radius: 2px; }
+        .msg-bot { align-self: flex-start; background: var(--bg-surface); border: 1px solid var(--glass-border); border-bottom-left-radius: 2px; }
+        .msg-meta { font-size: 0.7rem; opacity: 0.7; margin-bottom: 4px; display: block; }
+        .chat-input-area { padding: 1.5rem; background: var(--bg-surface); border-top: 1px solid var(--glass-border); display: flex; gap: 12px; align-items: center; }
 
-        .ticket-main {
-            display: flex;
-            flex-direction: column;
-            background: var(--bg-base);
-        }
-
-        .chat-messages {
-            flex: 1;
-            padding: 1.5rem;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            gap: 1rem;
-        }
-
-        .msg {
-            max-width: 70%;
-            padding: 0.75rem 1rem;
-            border-radius: 12px;
-            font-size: 0.9rem;
-            line-height: 1.5;
-            position: relative;
-        }
-
-        .msg-user {
-            align-self: flex-end;
-            background: var(--accent-primary);
-            color: white;
-            border-bottom-right-radius: 2px;
-        }
-
-        .msg-bot {
-            align-self: flex-start;
-            background: var(--bg-surface);
-            border: 1px solid var(--glass-border);
-            border-bottom-left-radius: 2px;
-        }
-
-        .msg-meta {
-            font-size: 0.7rem;
-            opacity: 0.7;
-            margin-bottom: 4px;
-            display: block;
-        }
-
-        .chat-input-area {
-            padding: 1.5rem;
-            background: var(--bg-surface);
-            border-top: 1px solid var(--glass-border);
-            display: flex;
-            gap: 12px;
-            align-items: center;
-        }
-
-        /* Forms & Inputs */
-        .input-premium {
-            background: var(--bg-base);
-            border: 1px solid var(--glass-border);
-            color: var(--text-primary);
-            padding: 0.6rem 1rem;
-            border-radius: 8px;
-            font-family: inherit;
-            transition: var(--transition-smooth);
-            outline: none;
-        }
-
-        .input-premium:focus {
-            border-color: var(--accent-primary);
-            box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.2);
-        }
-
-        .btn {
-            padding: 0.6rem 1.2rem;
-            border-radius: 8px;
-            font-weight: 600;
-            font-size: 0.85rem;
-            cursor: pointer;
-            transition: var(--transition-smooth);
-            border: none;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
+        .input-premium { background: var(--bg-base); border: 1px solid var(--glass-border); color: var(--text-primary); padding: 0.6rem 1rem; border-radius: 8px; font-family: inherit; transition: var(--transition-smooth); outline: none; }
+        .input-premium:focus { border-color: var(--accent-primary); box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.2); }
+        .btn { padding: 0.6rem 1.2rem; border-radius: 8px; font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: var(--transition-smooth); border: none; display: flex; align-items: center; gap: 8px; }
         .btn-primary { background: var(--accent-primary); color: white; }
-        .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
         .btn-danger { background: var(--accent-danger); color: white; }
         .btn-ghost { background: var(--glass-bg); color: var(--text-primary); border: 1px solid var(--glass-border); }
-        .btn-ghost:hover { background: var(--glass-border); }
 
-        /* Data Table */
-        .table-wrapper {
-            overflow-x: auto;
-            border-radius: 12px;
-            border: 1px solid var(--glass-border);
-        }
+        .table-wrapper { overflow-x: auto; border-radius: 12px; border: 1px solid var(--glass-border); }
+        table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem; }
+        th { background: var(--bg-surface); padding: 1rem; color: var(--text-secondary); font-weight: 600; position: sticky; top: 0; }
+        td { padding: 1rem; border-bottom: 1px solid var(--glass-border); color: var(--text-secondary); }
 
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            text-align: left;
-            font-size: 0.9rem;
-        }
+        .product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.5rem; margin-top: 2rem; }
+        .product-card { display: flex; flex-direction: column; gap: 1rem; }
+        .product-header { display: flex; justify-content: space-between; align-items: start; }
+        .product-icon { width: 48px; height: 48px; background: var(--accent-primary); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: white; }
 
-        th {
-            background: var(--bg-surface);
-            padding: 1rem;
-            color: var(--text-secondary);
-            font-weight: 600;
-            position: sticky;
-            top: 0;
-        }
+        .terminal { background: #000; color: #10b981; font-family: 'JetBrains Mono', monospace; padding: 1rem; border-radius: 8px; height: 300px; overflow-y: auto; font-size: 0.8rem; border: 1px solid #333; }
+        .json-editor { width: 100%; height: 300px; background: #000; color: #a1a1aa; font-family: 'JetBrains Mono', monospace; padding: 1rem; border-radius: 8px; border: 1px solid var(--glass-border); resize: none; outline: none; }
 
-        td {
-            padding: 1rem;
-            border-bottom: 1px solid var(--glass-border);
-            color: var(--text-secondary);
-        }
-
-        tr:hover td { background: var(--glass-bg); color: var(--text-primary); }
-
-        /* Product Grid */
-        .product-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 1.5rem;
-            margin-top: 2rem;
-        }
-
-        .product-card {
-            display: flex;
-            flex-direction: column;
-            gap: 1rem;
-        }
-
-        .product-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: start;
-        }
-
-        .product-icon {
-            width: 48px;
-            height: 48px;
-            background: var(--accent-primary);
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-        }
-
-        /* DevTools Terminal */
-        .terminal {
-            background: #000;
-            color: #10b981;
-            font-family: 'JetBrains Mono', monospace;
-            padding: 1rem;
-            border-radius: 8px;
-            height: 300px;
-            overflow-y: auto;
-            font-size: 0.8rem;
-            border: 1px solid #333;
-        }
-
-        .json-editor {
-            width: 100%;
-            height: 300px;
-            background: #000;
-            color: #a1a1aa;
-            font-family: 'JetBrains Mono', monospace;
-            padding: 1rem;
-            border-radius: 8px;
-            border: 1px solid var(--glass-border);
-            resize: none;
-            outline: none;
-        }
-
-        /* Toasts */
-        #toast-container {
-            position: fixed;
-            bottom: 2rem;
-            right: 2rem;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            z-index: 1000;
-        }
-
-        .toast {
-            padding: 1rem 1.5rem;
-            border-radius: 12px;
-            background: var(--bg-surface);
-            border: 1px solid var(--glass-border);
-            color: white;
-            box-shadow: var(--shadow-premium);
-            animation: slideIn 0.3s ease-out;
-            min-width: 250px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        @keyframes slideIn {
-            from { transform: translateX(100%); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
-        }
-
-        /* Skeleton Loader */
-        .skeleton {
-            background: linear-gradient(90deg, var(--bg-surface) 25%, var(--glass-border) 50%, var(--bg-surface) 75%);
-            background-size: 200% 100%;
-            animation: skeleton-load 1.5s infinite;
-            border-radius: 4px;
-        }
-
-        @keyframes skeleton-load {
-            0% { background-position: 200% 0; }
-            100% { background-position: -200% 0; }
-        }
+        #toast-container { position: fixed; bottom: 2rem; right: 2rem; display: flex; flex-direction: column; gap: 10px; z-index: 1000; }
+        .toast { padding: 1rem 1.5rem; border-radius: 12px; background: var(--bg-surface); border: 1px solid var(--glass-border); color: white; box-shadow: var(--shadow-premium); animation: slideIn 0.3s ease-out; min-width: 250px; display: flex; align-items: center; gap: 10px; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
     </style>
 </head>
 <body>
 
-    <!-- Sidebar Navigation -->
     <aside class="sidebar">
-        <div class="sidebar-header">
-            <div class="logo-dot"></div>
-            NEXUS ADMIN
-        </div>
+        <div class="sidebar-header"><div class="logo-dot"></div>NEXUS ADMIN</div>
         <nav class="nav-group">
-            <a class="nav-item active" data-tab="overview">
-                <i data-lucide="layout-dashboard"></i> Overview
-            </a>
-            <a class="nav-item" data-tab="tickets">
-                <i data-lucide="message-square"></i> Live Chat
-            </a>
-            <a class="nav-item" data-tab="products">
-                <i data-lucide="package"></i> Products
-            </a>
-            <a class="nav-item" data-tab="transactions">
-                <i data-lucide="credit-card"></i> Transactions
-            </a>
-            <a class="nav-item" data-tab="audience">
-                <i data-lucide="users"></i> Audience
-            </a>
-            <a class="nav-item" data-tab="devtools">
-                <i data-lucide="terminal"></i> DevTools
-            </a>
+            <a class="nav-item active" data-tab="overview"><i data-lucide="layout-dashboard"></i> Overview</a>
+            <a class="nav-item" data-tab="tickets"><i data-lucide="message-square"></i> Live Chat</a>
+            <a class="nav-item" data-tab="products"><i data-lucide="package"></i> Products</a>
+            <a class="nav-item" data-tab="transactions"><i data-lucide="credit-card"></i> Transactions</a>
+            <a class="nav-item" data-tab="audience"><i data-lucide="users"></i> Audience</a>
+            <a class="nav-item" data-tab="devtools"><i data-lucide="terminal"></i> DevTools</a>
         </nav>
     </aside>
 
-    <!-- Main Area -->
     <main class="main-viewport">
         <header class="top-bar">
             <div class="page-title" id="current-tab-title">Overview</div>
             <div style="display: flex; gap: 1rem; align-items: center;">
-                <div class="status-pill">
-                    <div class="dot"></div>
-                    Backend Online <span id="latency-val" style="margin-left: 5px; opacity: 0.6;">--ms</span>
-                </div>
-                <div class="status-pill">
-                    <i data-lucide="shield-check" style="width: 12px; color: var(--accent-success);"></i>
-                    Secure Session
-                </div>
+                <div class="status-pill"><div class="dot"></div>Backend Online <span id="latency-val" style="margin-left: 5px; opacity: 0.6;">--ms</span></div>
+                <div class="status-pill"><i data-lucide="shield-check" style="width: 12px; color: var(--accent-success);"></i>Secure Session</div>
             </div>
         </header>
 
         <div class="content-container">
-            
-            <!-- Tab: Overview -->
             <section id="overview" class="tab-content active">
                 <div class="kpi-grid">
-                    <div class="glass-card kpi-card">
-                        <span class="kpi-label">Today's Revenue</span>
-                        <span class="kpi-value" id="kpi-today-rev">€0.00</span>
-                        <span class="kpi-trend trend-up"><i data-lucide="trending-up" style="width:12px"></i> +12% vs yesterday</span>
-                    </div>
-                    <div class="glass-card kpi-card">
-                        <span class="kpi-label">Total Revenue</span>
-                        <span class="kpi-value" id="kpi-total-rev">€0.00</span>
-                        <span class="kpi-trend trend-up"><i data-lucide="trending-up" style="width:12px"></i> All-time growth</span>
-                    </div>
-                    <div class="glass-card kpi-card">
-                        <span class="kpi-label">Conversion Rate</span>
-                        <span class="kpi-value" id="kpi-conv">0.0%</span>
-                        <span class="kpi-trend trend-down"><i data-lucide="trending-down" style="width:12px"></i> -2% drift</span>
-                    </div>
-                    <div class="glass-card kpi-card">
-                        <span class="kpi-label">Active Tickets</span>
-                        <span class="kpi-value" id="kpi-tickets">0</span>
-                        <span class="kpi-trend" style="color: var(--text-muted)">Current queue</span>
-                    </div>
+                    <div class="glass-card kpi-card"><span class="kpi-label">Today's Revenue</span><span class="kpi-value" id="kpi-today-rev">€0.00</span><span class="kpi-trend trend-up"><i data-lucide="trending-up" style="width:12px"></i> +12% vs yesterday</span></div>
+                    <div class="glass-card kpi-card"><span class="kpi-label">Total Revenue</span><span class="kpi-value" id="kpi-total-rev">€0.00</span><span class="kpi-trend trend-up"><i data-lucide="trending-up" style="width:12px"></i> All-time growth</span></div>
+                    <div class="glass-card kpi-card"><span class="kpi-label">Conversion Rate</span><span class="kpi-value" id="kpi-conv">0.0%</span><span class="kpi-trend trend-down"><i data-lucide="trending-down" style="width:12px"></i> -2% drift</span></div>
+                    <div class="glass-card kpi-card"><span class="kpi-label">Active Tickets</span><span class="kpi-value" id="kpi-tickets">0</span><span class="kpi-trend" style="color: var(--text-muted)">Current queue</span></div>
                 </div>
-
                 <div class="glass-card">
                     <div style="display:flex; justify-content: space-between; align-items:center; margin-bottom: 1.5rem;">
                         <h3 style="font-size: 1rem; font-weight: 600;">Revenue Analytics</h3>
-                        <select class="input-premium" style="font-size: 0.75rem;">
-                            <option>Last 30 Days</option>
-                            <option>Last 7 Days</option>
-                        </select>
+                        <select class="input-premium" style="font-size: 0.75rem;"><option>Last 30 Days</option><option>Last 7 Days</option></select>
                     </div>
-                    <div class="chart-container">
-                        <canvas id="revenueChart"></canvas>
-                    </div>
+                    <div class="chart-container"><canvas id="revenueChart"></canvas></div>
                 </div>
-
                 <div class="glass-card pulse-feed" id="activity-feed">
                     <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem;">Live Pulse</h3>
-                    <!-- Pulse items injected by JS -->
                 </div>
             </section>
 
-            <!-- Tab: Tickets -->
             <section id="tickets" class="tab-content">
                 <div class="ticket-layout">
                     <div class="ticket-sidebar">
-                        <div style="padding: 1rem; border-bottom: 1px solid var(--glass-border);">
-                            <h3 style="font-size: 1rem; font-weight: 600;">Open Tickets</h3>
-                        </div>
-                        <div class="ticket-list" id="ticket-list">
-                            <!-- Ticket items injected by JS -->
-                        </div>
+                        <div style="padding: 1rem; border-bottom: 1px solid var(--glass-border);"><h3>Open Tickets</h3></div>
+                        <div class="ticket-list" id="ticket-list"></div>
                     </div>
                     <div class="ticket-main">
                         <div id="chat-placeholder" style="flex:1; display:flex; align-items:center; justify-content:center; color: var(--text-muted); flex-direction: column; gap: 1rem;">
-                            <i data-lucide="message-circle" style="width: 48px; height: 48px; opacity: 0.2;"></i>
-                            <p>Select a ticket to start chatting</p>
+                            <i data-lucide="message-circle" style="width: 48px; height: 48px; opacity: 0.2;"></i><p>Select a ticket to start chatting</p>
                         </div>
                         <div id="chat-window" style="display: none; height: 100%; flex-direction: column;">
                             <div class="top-bar" style="position: relative; border-bottom: 1px solid var(--glass-border);">
@@ -649,125 +174,59 @@
                                     <button class="btn btn-danger" onclick="closeTicket()">Close</button>
                                 </div>
                             </div>
-                            <div class="chat-messages" id="chat-messages">
-                                <!-- Messages injected by JS -->
-                            </div>
+                            <div class="chat-messages" id="chat-messages"></div>
                             <div class="chat-input-area">
                                 <button class="btn btn-ghost"><i data-lucide="paperclip"></i></button>
                                 <input type="text" id="chat-input" class="input-premium" style="flex:1" placeholder="Type your message...">
-                                <button class="btn btn-primary" onclick="sendMessage()">
-                                    Send <i data-lucide="send" style="width:14px"></i>
-                                </button>
+                                <button class="btn btn-primary" onclick="sendMessage()">Send <i data-lucide="send" style="width:14px"></i></button>
                             </div>
                         </div>
                     </div>
                 </div>
             </section>
 
-            <!-- Tab: Products -->
             <section id="products" class="tab-content">
                 <div class="glass-card" style="margin-bottom: 2rem;">
                     <h3 style="margin-bottom: 1.5rem; font-size: 1rem;">Manage Catalog</h3>
                     <form id="product-form" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; align-items: end;">
-                        <div style="display:flex; flex-direction:column; gap: 8px;">
-                            <label style="font-size: 0.75rem; color: var(--text-secondary);">Product Name</label>
-                            <input type="text" id="p-name" class="input-premium" required>
-                        </div>
-                        <div style="display:flex; flex-direction:column; gap: 8px;">
-                            <label style="font-size: 0.75rem; color: var(--text-secondary);">Price (€)</label>
-                            <input type="number" step="0.01" id="p-price" class="input-premium" required>
-                        </div>
-                        <div style="display:flex; flex-direction:column; gap: 8px;">
-                            <label style="font-size: 0.75rem; color: var(--text-secondary);">Stock Quantity</label>
-                            <input type="number" id="p-stock" class="input-premium" required>
-                        </div>
-                        <div style="display:flex; flex-direction:column; gap: 8px;">
-                            <label style="font-size: 0.75rem; color: var(--text-secondary);">Description</label>
-                            <input type="text" id="p-desc" class="input-premium">
-                        </div>
+                        <div style="display:flex; flex-direction:column; gap: 8px;"><label style="font-size: 0.75rem; color: var(--text-secondary);">Product Name</label><input type="text" id="p-name" class="input-premium" required></div>
+                        <div style="display:flex; flex-direction:column; gap: 8px;"><label style="font-size: 0.75rem; color: var(--text-secondary);">Price (€)</label><input type="number" step="0.01" id="p-price" class="input-premium" required></div>
+                        <div style="display:flex; flex-direction:column; gap: 8px;"><label style="font-size: 0.75rem; color: var(--text-secondary);">Stock Quantity</label><input type="number" id="p-stock" class="input-premium" required></div>
+                        <div style="display:flex; flex-direction:column; gap: 8px;"><label style="font-size: 0.75rem; color: var(--text-secondary);">Description</label><input type="text" id="p-desc" class="input-premium"></div>
                         <button type="submit" class="btn btn-primary"><i data-lucide="plus"></i> Add Product</button>
                     </form>
                 </div>
-                <div class="product-grid" id="product-grid">
-                    <!-- Product cards injected by JS -->
-                </div>
+                <div class="product-grid" id="product-grid"></div>
             </section>
 
-            <!-- Tab: Transactions -->
             <section id="transactions" class="tab-content">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
                     <h3 style="font-size: 1rem;">Recent Transactions</h3>
                     <button class="btn btn-primary" onclick="toggleModal('tx-modal')"><i data-lucide="plus"></i> Manual Tx</button>
                 </div>
                 <div class="table-wrapper glass-card" style="padding: 0;">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Customer</th>
-                                <th>Product</th>
-                                <th>Amount</th>
-                                <th>Date</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tx-table-body">
-                            <!-- Rows injected by JS -->
-                        </tbody>
-                    </table>
+                    <table><thead><tr><th>Customer</th><th>Product</th><th>Amount</th><th>Date</th><th>Status</th></tr></thead><tbody id="tx-table-body"></tbody></table>
                 </div>
             </section>
 
-            <!-- Tab: Audience -->
             <section id="audience" class="tab-content">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
                     <h3 style="font-size: 1rem;">User Management</h3>
-                    <div style="display:flex; gap: 10px;">
-                        <input type="text" id="user-search" class="input-premium" placeholder="Search username..." oninput="filterUsers()">
-                    </div>
+                    <div style="display:flex; gap: 10px;"><input type="text" id="user-search" class="input-premium" placeholder="Search username..." oninput="filterUsers()"></div>
                 </div>
                 <div class="table-wrapper glass-card" style="padding: 0;">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>User</th>
-                                <th>Joined</th>
-                                <th>Total Spent</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="user-table-body">
-                            <!-- Rows injected by JS -->
-                        </tbody>
-                    </table>
+                    <table><thead><tr><th>User</th><th>Joined</th><th>Total Spent</th><th>Actions</th></tr></thead><tbody id="user-table-body"></tbody></table>
                 </div>
             </section>
 
-            <!-- Tab: DevTools -->
             <section id="devtools" class="tab-content">
                 <div class="kpi-grid" style="margin-bottom: 2rem;">
-                    <div class="glass-card kpi-card">
-                        <span class="kpi-label">API Ping</span>
-                        <span class="kpi-value" id="dev-ping">--ms</span>
-                    </div>
-                    <div class="glass-card kpi-card">
-                        <span class="kpi-label">Uptime</span>
-                        <span class="kpi-value">99.9%</span>
-                    </div>
-                    <div class="glass-card kpi-card">
-                        <span class="kpi-label">Database Status</span>
-                        <span class="kpi-value" style="color: var(--accent-success);">Synchronized</span>
-                    </div>
+                    <div class="glass-card kpi-card"><span class="kpi-label">API Ping</span><span class="kpi-value" id="dev-ping">--ms</span></div>
+                    <div class="glass-card kpi-card"><span class="kpi-label">Uptime</span><span class="kpi-value">99.9%</span></div>
+                    <div class="glass-card kpi-card"><span class="kpi-label">Database Status</span><span class="kpi-value" style="color: var(--accent-success);">Synchronized</span></div>
                 </div>
-
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
-                    <div class="glass-card">
-                        <h3 style="margin-bottom: 1rem; font-size: 0.9rem;">System Logs</h3>
-                        <div class="terminal" id="sys-logs">
-                            [SYSTEM] Initializing Nexus Kernel...<br>
-                            [AUTH] Handshake established...<br>
-                            [API] Listening on port 443...<br>
-                        </div>
-                    </div>
+                    <div class="glass-card"><h3 style="margin-bottom: 1rem; font-size: 0.9rem;">System Logs</h3><div class="terminal" id="sys-logs">[SYSTEM] Initializing...</div></div>
                     <div class="glass-card">
                         <div style="display:flex; justify-content: space-between; align-items:center; margin-bottom: 1rem;">
                             <h3 style="font-size: 0.9rem;">Database Raw JSON</h3>
@@ -777,11 +236,9 @@
                     </div>
                 </div>
             </section>
-
         </div>
     </main>
 
-    <!-- Modals -->
     <div id="tx-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); backdrop-filter:blur(4px); z-index:1000; align-items:center; justify-content:center;">
         <div class="glass-card" style="width: 400px; animation: fadeIn 0.2s ease;">
             <h3 style="margin-bottom: 1.5rem;">Create Manual Transaction</h3>
@@ -796,20 +253,14 @@
             </form>
         </div>
     </div>
-
     <div id="toast-container"></div>
 
-    <!-- Injected Globals from Node.js -->
     <script>
         let PIN = '${DASHBOARD_PIN}';
         let SERVER_CSRF_TOKEN = '${SERVER_CSRF_TOKEN}';
-    </script>
 
-    <script>
-        /**
-         * NEXUS ADMIN - CORE ENGINE
-         * Built for performance, security, and premium UX.
-         */
+        // === BACKUP NETTOYÉ (SANS DONNÉES MEMBRES) ===
+        const MANUAL_BACKUP = {"joins":{"2026-07-03":171,"2026-07-04":171,"2026-07-05":280,"2026-07-06":264,"2026-07-07":32},"leaves":{"2026-07-03":130,"2026-07-04":136,"2026-07-05":171,"2026-07-06":188,"2026-07-07":32},"revenue":{"2026-07-03":15,"2026-07-04":25,"2026-07-05":55,"2026-07-06":40,"2026-07-07":10},"total_revenue":145,"transactions":{"2026-07-03":1},"total_transactions":22,"product_sales":{"1":6,"2":3,"3":3,"4":4,"5":2,"6":9,"7":3,"8":2,"9":1,"13":1,"14":1,"15":1},"total_leaves":657,"total_joins":915,"recent_transactions":[{"username":"Manual Entry","product":"Custom Amount","price":10,"date":"7/7/2026, 1:51:00 AM"},{"username":"Manual Entry","product":"Custom Amount","price":5,"date":"7/6/2026, 8:37:00 PM"},{"username":"Manual Entry","product":"Custom Amount","price":10,"date":"7/6/2026, 12:59:00 PM"},{"username":"Manual Entry","product":"Custom Amount","price":20,"date":"7/6/2026, 11:27:00 AM"},{"username":"Manual Entry","product":"Custom Amount","price":5,"date":"7/6/2026, 11:05:00 AM"},{"username":"blake0850","product":"Boobs","price":5,"date":"7/5/2026, 5:19:34 PM"},{"username":"blake0850","product":"3-Min Video","price":10,"date":"7/5/2026, 9:12:26 AM"},{"username":"ifw.emerson","product":"3-Min Video","price":10,"date":"7/5/2026, 12:40:57 AM"},{"username":"ifw.emerson","product":"Boobs","price":5,"date":"7/5/2026, 12:37:08 AM"},{"username":"2fly2high._18652","product":"3-Min Video","price":10,"date":"7/5/2026, 12:27:17 AM"},{"username":"itsjustme0924","product":"Friends Nude","price":15,"date":"7/5/2026, 12:06:59 AM"},{"username":"olivier770548","product":"Lingerie Try-On","price":5,"date":"7/4/2026, 6:51:03 PM"},{"username":"ryznlu","product":"3-Min Video","price":10,"date":"7/4/2026, 6:44:12 PM"},{"username":"snesh.hideo","product":"Shower / Bath","price":10,"date":"7/4/2026, 3:53:08 PM"},{"username":"artek15","product":"Lingerie Try-On","price":5,"date":"7/4/2026, 2:43:55 PM"},{"username":"fentheaven","product":"Boobs","price":5,"date":"7/4/2026, 1:46:56 PM"},{"username":"snesh.hideo","product":"3-Min Video","price":10,"date":"7/4/2026, 9:03:05 AM"},{"username":"shadoz2fly","product":"3-Min Video","price":10,"date":"7/4/2026, 6:34:27 AM"},{"username":"shadoz2fly","product":"Shower / Bath","price":10,"date":"7/4/2026, 6:33:51 AM"},{"username":"goofy_kid14.","product":"Full Body","price":5,"date":"7/4/2026, 4:42:05 AM"},{"username":"ryznlu","product":"Lingerie Try-On","price":5,"date":"03/07/2026 19:11:32"},{"username":"voxi1_3","product":"5-Min Video","price":10,"date":"03/07/2026 06:55:07"}],"custom_requests":[{"id":"1783389113246","username":"keepitahuncho","userId":"452237597520035850","product":"Sexting","date":"7/7/2026, 1:51:53 AM","status":"pending"},{"id":"1783370379133","username":"justbiz8090","userId":"1522689068457136259","product":"Custom Request","date":"7/6/2026, 8:39:39 PM","status":"pending"},{"id":"1783369514644","username":"js.evan007","userId":"1203839673751969863","product":"Custom Request","date":"7/6/2026, 8:25:14 PM","status":"pending"},{"id":"1783342781925","username":"not_bxndz","userId":"1326446219723018293","product":"Custom Request","date":"7/6/2026, 12:59:41 PM","status":"pending"},{"id":"1783337272218","username":"dtapz978","userId":"859211193922748426","product":"Custom Request","date":"7/6/2026, 11:27:52 AM","status":"pending"},{"id":"1783160948278","username":"snesh.hideo","product":"Custom Request","date":"7/4/2026, 10:29:08 AM","status":"recording"},{"id":"1783156406852","username":"snesh.hideo","product":"Custom Request","date":"7/4/2026, 9:13:26 AM","status":"pending"}],"promo_codes":{"REFYOFW5G":{"discount":100,"limit":1,"used":0,"createdAt":"7/5/2026"},"REFGWN0C0":{"discount":100,"limit":1,"used":0,"createdAt":"7/5/2026"},"REFP5E3YA":{"discount":100,"limit":1,"used":0,"createdAt":"7/5/2026"},"REFAL6SP4":{"discount":100,"limit":1,"used":0,"createdAt":"7/5/2026"},"REFPFHD58":{"discount":100,"limit":1,"used":0,"createdAt":"7/5/2026"},"REFNOWYC1":{"discount":100,"limit":1,"used":0,"createdAt":"7/5/2026"},"REFX9YIK8":{"discount":100,"limit":1,"used":0,"createdAt":"7/6/2026"},"REFVOUZA7":{"discount":100,"limit":1,"used":0,"createdAt":"7/6/2026"},"REF74OB46":{"discount":100,"limit":1,"used":0,"createdAt":"7/6/2026"},"REFX78P1C":{"discount":100,"limit":1,"used":0,"createdAt":"7/6/2026"},"REFWUYJF1":{"discount":100,"limit":1,"used":0,"createdAt":"7/6/2026"},"REF4L08DK":{"discount":100,"limit":1,"used":0,"createdAt":"7/6/2026"},"REF2DJV6K":{"discount":100,"limit":1,"used":0,"createdAt":"7/6/2026"}},"ticket_tags":{"1523653853558603850":"red"},"analytics":{"tickets_opened":76,"hourly_sales":[4,0,0,0,1,0,2,0,1,2,0,0,1,14,2,1,0,1,2,1,0,1,1,1]},"settings":{"invite_reward_threshold":1000,"maintenance":{"active":false,"endsAt":0,"channelId":"1520823312618623036"},"flashSale":{"active":false,"discount":0,"endsAt":0}},"products":{"1":{"name":"Boobs","price":"5","link":"https://oavqyazsogotcigjysml.supabase.co/storage/v1/object/public/vip-content/boobs.jpeg","category":"✨ PHOTOS","stock":"∞"},"2":{"name":"Ass","price":"5","link":"https://oavqyazsogotcigjysml.supabase.co/storage/v1/object/public/vip-content/ass.jpeg","category":"✨ PHOTOS"},"3":{"name":"Full Body","price":"5","link":"https://oavqyazsogotcigjysml.supabase.co/storage/v1/object/public/vip-content/test1.png","category":"✨ PHOTOS"},"4":{"name":"Lingerie Try-On","price":"5","link":"https://oavqyazsogotcigjysml.supabase.co/storage/v1/object/public/vip-content/lingerie1.jpg","category":"✨ PHOTOS"},"5":{"name":"Mirror Pic","price":"5","link":"https://oavqyazsogotcigjysml.supabase.co/storage/v1/object/public/vip-content/mirrorpic.jpg","category":"✨ PHOTOS","stock":"∞","desc":""},"6":{"name":"3-Min Video","price":"10","link":"https://oavqyazsogotcigjysml.supabase.co/storage/v1/object/public/vip-content/3min.mp4","category":"🔥 VIDEOS"},"7":{"name":"Shower / Bath","price":"10","link":"https://drive.google.com/ton_lien_shower","category":"🔥 VIDEOS"},"8":{"name":"Friends Nude","price":"15","link":"https://oavqyazsogotcigjysml.supabase.co/storage/v1/object/public/vip-content/friendnude1.jpeg","category":"💦 SPECIAL","stock":"∞","desc":""},"9":{"name":"Surprise Pack","price":"15","link":"https://drive.google.com/ton_lien_surprisepack","category":"💦 SPECIAL"},"10":{"name":"Sexting","price":"Custom","link":"","category":"💌 PERSONALIZED"},"11":{"name":"Custom Request","price":"Custom","link":"","category":"💌 PERSONALIZED"},"12":{"name":"Whole menu","price":"70","link":"","category":"✨ NEW ITEMS"},"13":{"name":"Mutual fingering with my friend (video)","price":"20","link":"test.com","category":"✨ NEW ITEMS","stock":"∞","desc":"A 4min video of me and my hg fingering eachother until they bot squirt"},"14":{"name":"Montly VIP pass (nudes and videos everyday)","price":"15","link":"","category":"✨ NEW ITEMS","stock":"∞","desc":""},"15":{"name":"Trans hg video nude","price":"15","link":"https://oavqyazsogotcigjysml.supabase.co/storage/v1/object/public/vip-content/transhg.mp4","category":"✨ NEW ITEMS","stock":"∞","desc":""}},"buy_links":{"1":{"label":"💳 Buy €5","url":"https://www.eneba.com/rewarble-rewarble-revolut-5-gbp-voucher-global"},"2":{"label":"💳 Buy €10","url":"https://www.eneba.com/rewarble-rewarble-revolut-10-gbp-voucher-global"},"3":{"label":"💳 Buy €15","url":"https://www.eneba.com/rewarble-rewarble-revolut-15-gbp-voucher-global"},"4":{"label":"💳 Buy €20","url":"https://www.eneba.com/rewarble-rewarble-revolut-10-gbp-voucher-global"},"51783122081973":{"label":"💳 Buy €30","url":"https://www.g2a.com/paypal-gift-card-30-gbp-by-rewarble-global-i10000339995035"},"61783122153026":{"label":"💳 Buy €70","url":"https://www.g2a.com/paypal-gift-card-70-gbp-by-rewarble-global-i10000339995118"}},"pending_reviews":[],"activity_feed":[{"type":"ticket","message":"🎧 New support ticket opened by lily_woods02","time":1783445368489},{"type":"join","message":"👋 fabianx06 joined the server","time":1783445204429},{"type":"review","message":"⭐ New 5/5 review submitted by lily_woods02","time":1783444844430},{"type":"ticket","message":"🎫 New shop ticket opened by lily_woods02","time":1783444806101},{"type":"join","message":"👋 tobi046066 joined the server","time":1783444477564},{"type":"ticket","message":"🎫 New shop ticket opened by dan2538866.","time":1783444316576},{"type":"join","message":"👋 nj33megatron joined the server","time":1783444278239},{"type":"review","message":"⭐ New 5/5 review submitted by keepitahuncho","time":1783444246514},{"type":"join","message":"👋 dexterdadude joined the server","time":1783444190952},{"type":"join","message":"👋 rrkap1003 joined the server","time":1783443688189},{"type":"review","message":"⭐ New 5/5 review submitted by lily_woods02","time":1783443291624},{"type":"ticket","message":"🎧 New support ticket opened by lily_woods02","time":1783443237319},{"type":"sale","message":"💰 €10 Manual Sale: Manual Entry bought Custom Amount","time":1783442699009},{"type":"sale","message":"💰 €5 Manual Sale: Manual Entry bought Custom Amount","time":1783442682779},{"type":"sale","message":"💰 €10 Manual Sale: Manual Entry bought Custom Amount","time":1783442643371},{"type":"sale","message":"💰 €10 Manual Sale: Manual Entry bought Custom Amount","time":1783442603850},{"type":"sale","message":"💰 €10 Manual Sale: Manual Entry bought Custom Amount","time":1783442560706},{"type":"sale","message":"💰 €20 Manual Sale: Manual Entry bought Custom Amount","time":1783442543912},{"type":"sale","message":"💰 €5 Manual Sale: Manual Entry bought Custom Amount","time":1783442488975},{"type":"join","message":"👋 lee_99999 joined the server","time":1783442455590},{"type":"join","message":"👋 daddyrico71 joined the server","time":1783441620931},{"type":"join","message":"👋 wrld.of.kam joined the server","time":1783441214549},{"type":"join","message":"👋 unnownnn_ joined the server","time":1783440804168},{"type":"ticket","message":"🎧 New support ticket opened by keepitahuncho","time":1783440325274},{"type":"join","message":"👋 bgjhjhgfgvv joined the server","time":1783440269626},{"type":"ticket","message":"🎫 New shop ticket opened by lily_woods02","time":1783440202019},{"type":"join","message":"👋 bigpapirolando joined the server","time":1783436733409},{"type":"ticket","message":"🎫 New shop ticket opened by lily_woods02","time":1783436565789},{"type":"join","message":"👋 azzurri98 joined the server","time":1783436321022},{"type":"join","message":"👋 graham_0509 joined the server","time":1783436020830}]};
 
         // --- State Management ---
         const state = {
@@ -829,47 +280,26 @@
             chart: null
         };
 
-        // --- Utilities ---
-        const currencyFormatter = new Intl.NumberFormat('en-IE', { 
-            style: 'currency', 
-            currency: 'EUR' 
-        });
+        const currencyFormatter = new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' });
 
         const notify = (message, type = 'success') => {
             const container = document.getElementById('toast-container');
             const toast = document.createElement('div');
             toast.className = `toast`;
-            toast.innerHTML = `
-                <i data-lucide="${type === 'success' ? 'check-circle' : 'alert-circle'}" 
-                   style="color: ${type === 'success' ? 'var(--accent-success)' : 'var(--accent-danger)'}"></i>
-                <span>${message}</span>
-            `;
+            toast.innerHTML = `<i data-lucide="${type === 'success' ? 'check-circle' : 'alert-circle'}" style="color: ${type === 'success' ? 'var(--accent-success)' : 'var(--accent-danger)'}"></i><span>${message}</span>`;
             container.appendChild(toast);
             lucide.createIcons();
-            setTimeout(() => {
-                toast.style.opacity = '0';
-                toast.style.transform = 'translateX(100%)';
-                setTimeout(() => toast.remove(), 300);
-            }, 4000);
+            setTimeout(() => { toast.style.opacity = '0'; toast.style.transform = 'translateX(100%)'; setTimeout(() => toast.remove(), 300); }, 4000);
         };
 
-        // --- API Wrapper ---
         async function apiRequest(endpoint, options = {}) {
             const startTime = performance.now();
             try {
-                const response = await fetch(endpoint, {
-                    ...options,
-                    headers: {
-                        'Content-Type': 'application/json',
-                        ...options.headers
-                    }
-                });
-
+                const response = await fetch(endpoint, { ...options, headers: { 'Content-Type': 'application/json', ...options.headers } });
                 const endTime = performance.now();
                 const latency = Math.round(endTime - startTime);
                 document.getElementById('latency-val').innerText = `${latency}ms`;
                 document.getElementById('dev-ping').innerText = `${latency}ms`;
-
                 if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
                 return await response.json();
             } catch (err) {
@@ -881,40 +311,24 @@
         async function performAction(action, payload = {}) {
             const result = await apiRequest('/api/action', {
                 method: 'POST',
-                body: JSON.stringify({
-                    action,
-                    pin: PIN,
-                    csrf: SERVER_CSRF_TOKEN,
-                    ...payload
-                })
+                body: JSON.stringify({ action, pin: PIN, csrf: SERVER_CSRF_TOKEN, ...payload })
             });
-            if (result) {
-                notify(`Action ${action} completed successfully`);
-                syncData(); // Refresh UI after action
-            }
+            if (result) { notify(`Action ${action} completed successfully`); syncData(); }
             return result;
         }
 
-        // --- Tab Navigation ---
         document.querySelectorAll('.nav-item').forEach(item => {
             item.addEventListener('click', () => {
                 const tab = item.getAttribute('data-tab');
-                
-                // UI Update
                 document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
                 item.classList.add('active');
-                
                 document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
                 document.getElementById(tab).classList.add('active');
-                
-                document.getElementById('current-tab-title').innerText = 
-                    item.innerText.trim();
-                
+                document.getElementById('current-tab-title').innerText = item.innerText.trim();
                 state.currentTab = tab;
             });
         });
 
-        // --- Overview Tab Logic ---
         function updateKPIs() {
             document.getElementById('kpi-today-rev').innerText = currencyFormatter.format(state.data.todayRevenue);
             document.getElementById('kpi-total-rev').innerText = currencyFormatter.format(state.data.totalRevenue);
@@ -926,72 +340,30 @@
             const ctx = document.getElementById('revenueChart').getContext('2d');
             const labels = Object.keys(state.data.revenueHistory).sort();
             const values = labels.map(date => state.data.revenueHistory[date]);
-
             if (state.chart) state.chart.destroy();
-
             const gradient = ctx.createLinearGradient(0, 0, 0, 400);
             gradient.addColorStop(0, 'rgba(14, 165, 233, 0.3)');
             gradient.addColorStop(1, 'rgba(14, 165, 233, 0)');
-
             state.chart = new Chart(ctx, {
                 type: 'line',
-                data: {
-                    labels,
-                    datasets: [{
-                        label: 'Daily Revenue',
-                        data: values,
-                        borderColor: '#0ea5e9',
-                        borderWidth: 3,
-                        fill: true,
-                        backgroundColor: gradient,
-                        tension: 0.4,
-                        pointRadius: 4,
-                        pointBackgroundColor: '#0ea5e9'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        x: { grid: { display: false }, ticks: { color: '#71717a' } },
-                        y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#71717a' } }
-                    }
-                }
+                data: { labels, datasets: [{ label: 'Daily Revenue', data: values, borderColor: '#0ea5e9', borderWidth: 3, fill: true, backgroundColor: gradient, tension: 0.4, pointRadius: 4, pointBackgroundColor: '#0ea5e9' }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: { color: '#71717a' } }, y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#71717a' } } } }
             });
         }
 
         function updatePulseFeed() {
             const feed = document.getElementById('activity-feed');
             const header = `<h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem;">Live Pulse</h3>`;
-            
-            const items = state.data.activity.map(act => `
-                <div class="pulse-item">
-                    <div class="pulse-icon"><i data-lucide="activity" style="width:14px"></i></div>
-                    <div>
-                        <div style="font-weight:500">${act.type}</div>
-                        <div style="font-size:0.75rem; color:var(--text-muted)">${act.message} • ${act.time}</div>
-                    </div>
-                </div>
-            `).join('');
-            
+            const items = state.data.activity.map(act => `<div class="pulse-item"><div class="pulse-icon"><i data-lucide="activity" style="width:14px"></i></div><div><div style="font-weight:500">${act.type}</div><div style="font-size:0.75rem; color:var(--text-muted)">${act.message} • ${act.time}</div></div></div>`).join('');
             feed.innerHTML = header + items;
             lucide.createIcons();
         }
 
-        // --- Ticket System Logic ---
         async function loadTickets() {
             const tickets = await apiRequest('/api/tickets');
             if (!tickets) return;
-
             const list = document.getElementById('ticket-list');
-            list.innerHTML = tickets.map(t => `
-                <div class="ticket-item ${state.activeTicketId === t.id ? 'active' : ''}" 
-                     onclick="selectTicket('${t.id}', '${t.name}')">
-                    <span style="font-weight:500">${t.name}</span>
-                    <i data-lucide="chevron-right" style="width:14px; opacity:0.5"></i>
-                </div>
-            `).join('');
+            list.innerHTML = tickets.map(t => `<div class="ticket-item ${state.activeTicketId === t.id ? 'active' : ''}" onclick="selectTicket('${t.id}', '${t.name}')"><span style="font-weight:500">${t.name}</span><i data-lucide="chevron-right" style="width:14px; opacity:0.5"></i></div>`).join('');
             lucide.createIcons();
         }
 
@@ -1000,22 +372,15 @@
             document.getElementById('chat-placeholder').style.display = 'none';
             document.getElementById('chat-window').style.display = 'flex';
             document.getElementById('active-ticket-name').innerText = `Ticket: ${name}`;
-            
-            loadTickets(); // Update active state in sidebar
+            loadTickets();
             loadMessages(id);
         }
 
         async function loadMessages(channelId) {
             const messages = await apiRequest(`/api/tickets/messages?channelId=${channelId}`);
             if (!messages) return;
-
             const container = document.getElementById('chat-messages');
-            container.innerHTML = messages.map(m => `
-                <div class="msg ${m.isBot ? 'msg-bot' : 'msg-user'}">
-                    <span class="msg-meta">${m.author}</span>
-                    ${m.content}
-                </div>
-            `).join('');
+            container.innerHTML = messages.map(m => `<div class="msg ${m.isBot ? 'msg-bot' : 'msg-user'}"><span class="msg-meta">${m.author}</span>${m.content}</div>`).join('');
             container.scrollTop = container.scrollHeight;
         }
 
@@ -1023,24 +388,14 @@
             const input = document.getElementById('chat-input');
             const msg = input.value.trim();
             if (!msg || !state.activeTicketId) return;
-
             input.value = '';
-            await performAction('send_ticket_message', { 
-                channelId: state.activeTicketId, 
-                message: msg 
-            });
+            await performAction('send_ticket_message', { channelId: state.activeTicketId, message: msg });
             loadMessages(state.activeTicketId);
         }
 
         async function triggerQuickAction(type) {
-            const messages = {
-                wait: "Please hold on a moment, a staff member will be with you shortly!",
-                review: "We'd love your feedback! Could you please leave a review on our store?"
-            };
-            await performAction('send_ticket_message', { 
-                channelId: state.activeTicketId, 
-                message: messages[type] 
-            });
+            const messages = { wait: "Please hold on a moment, a staff member will be with you shortly!", review: "We'd love your feedback! Could you please leave a review on our store?" };
+            await performAction('send_ticket_message', { channelId: state.activeTicketId, message: messages[type] });
             loadMessages(state.activeTicketId);
         }
 
@@ -1054,119 +409,46 @@
             }
         }
 
-        // --- Product & Catalog Logic ---
         function renderProducts() {
             const grid = document.getElementById('product-grid');
-            // Conversion de l'objet produits en tableau pour le rendu
             const productsArray = Object.entries(state.data.products).map(([id, p]) => ({ id, ...p }));
-
-            grid.innerHTML = productsArray.map((p, idx) => `
-                <div class="glass-card product-card">
-                    <div class="product-header">
-                        <div class="product-icon"><i data-lucide="package"></i></div>
-                        <div style="display:flex; gap:5px">
-                            <button class="btn btn-ghost" style="padding:4px" onclick="editProduct('${p.id}')"><i data-lucide="edit-2" style="width:12px"></i></button>
-                            <button class="btn btn-ghost" style="padding:4px; color:var(--accent-danger)" onclick="deleteProduct('${p.id}')"><i data-lucide="trash" style="width:12px"></i></button>
-                        </div>
-                    </div>
-                    <div style="font-weight:600; font-size:1.1rem">${p.name}</div>
-                    <div style="color:var(--accent-success); font-weight:700">${currencyFormatter.format(p.price)}</div>
-                    <div style="font-size:0.8rem; color:var(--text-secondary)">Stock: ${p.stock}</div>
-                    <div style="font-size:0.8rem; opacity:0.7">${p.desc || 'No description'}</div>
-                </div>
-            `).join('');
+            grid.innerHTML = productsArray.map((p, idx) => `<div class="glass-card product-card"><div class="product-header"><div class="product-icon"><i data-lucide="package"></i></div><div style="display:flex; gap:5px"><button class="btn btn-ghost" style="padding:4px" onclick="editProduct('${p.id}')"><i data-lucide="edit-2" style="width:12px"></i></button><button class="btn btn-ghost" style="padding:4px; color:var(--accent-danger)" onclick="deleteProduct('${p.id}')"><i data-lucide="trash" style="width:12px"></i></button></div></div><div style="font-weight:600; font-size:1.1rem">${p.name}</div><div style="color:var(--accent-success); font-weight:700">${currencyFormatter.format(p.price)}</div><div style="font-size:0.8rem; color:var(--text-secondary)">Stock: ${p.stock}</div><div style="font-size:0.8rem; opacity:0.7">${p.desc || 'No description'}</div></div>`).join('');
             lucide.createIcons();
         }
 
         document.getElementById('product-form').onsubmit = async (e) => {
             e.preventDefault();
-            const payload = {
-                name: document.getElementById('p-name').value,
-                price: parseFloat(document.getElementById('p-price').value),
-                stock: parseInt(document.getElementById('p-stock').value),
-                desc: document.getElementById('p-desc').value
-            };
+            const payload = { name: document.getElementById('p-name').value, price: parseFloat(document.getElementById('p-price').value), stock: parseInt(document.getElementById('p-stock').value), desc: document.getElementById('p-desc').value };
             await performAction('add_product', payload);
             e.target.reset();
         };
 
-        async function deleteProduct(id) {
-            if (confirm('Delete this product?')) {
-                await performAction('delete_product', { id: id });
-            }
-        }
+        async function deleteProduct(id) { if (confirm('Delete this product?')) await performAction('delete_product', { id: id }); }
 
-        // --- Transactions & Audience ---
         function renderTransactions() {
             const body = document.getElementById('tx-table-body');
             if (!state.data.transactions || state.data.transactions.length === 0) {
-                body.innerHTML = `<tr><td colspan="5" style="text-align:center; opacity:0.5;">Aucune transaction trouvée dans Upstash</td></tr>`;
+                body.innerHTML = `<tr><td colspan="5" style="text-align:center; opacity:0.5;">Aucune transaction trouvée</td></tr>`;
                 return;
             }
-
-            body.innerHTML = state.data.transactions.map(tx => `
-                <tr>
-                    <td>${tx.username || tx.customer || 'Unknown'}</td>
-                    <td>${tx.product || 'N/A'}</td>
-                    <td style="color:var(--accent-success); font-weight:600">${currencyFormatter.format(tx.price || 0)}</td>
-                    <td>${tx.date || 'N/A'}</td>
-                    <td><span class="status-pill" style="font-size:0.6rem">Completed</span></td>
-                </tr>
-            `).join('');
+            body.innerHTML = state.data.transactions.map(tx => `<tr><td>${tx.username || tx.customer || 'Unknown'}</td><td>${tx.product || 'N/A'}</td><td style="color:var(--accent-success); font-weight:600">${currencyFormatter.format(tx.price || 0)}</td><td>${tx.date || 'N/A'}</td><td><span class="status-pill" style="font-size:0.6rem">Completed</span></td></tr>`).join('');
         }
 
         function renderAudience() {
             const body = document.getElementById('user-table-body');
-            body.innerHTML = state.data.users.map(u => `
-                <tr>
-                    <td>
-                        <div style="display:flex; align-items:center; gap:10px">
-                            <img src="${u.avatar || 'https://via.placeholder.com/32'}" style="width:32px; height:32px; border-radius:50%">
-                            ${u.username}
-                        </div>
-                    </td>
-                    <td>${u.joined || '--'}</td>
-                    <td>${currencyFormatter.format(u.spent || 0)}</td>
-                    <td>
-                        <div style="display:flex; gap:5px">
-                            <button class="btn btn-ghost" style="padding:4px 8px" onclick="modUser('${u.id}', 'warn')">Warn</button>
-                            <button class="btn btn-ghost" style="padding:4px 8px; color:var(--accent-danger)" onclick="modUser('${u.id}', 'ban')">Ban</button>
-                        </div>
-                    </td>
-                </tr>
-            `).join('');
+            body.innerHTML = state.data.users.map(u => `<tr><td><div style="display:flex; align-items:center; gap:10px"><img src="${u.avatar || 'https://via.placeholder.com/32'}" style="width:32px; height:32px; border-radius:50%">${u.username}</div></td><td>${u.joined || '--'}</td><td>${currencyFormatter.format(u.spent || 0)}</td><td><div style="display:flex; gap:5px"><button class="btn btn-ghost" style="padding:4px 8px" onclick="modUser('${u.id}', 'warn')">Warn</button><button class="btn btn-ghost" style="padding:4px 8px; color:var(--accent-danger)" onclick="modUser('${u.id}', 'ban')">Ban</button></div></td></tr>`).join('');
         }
 
-        async function modUser(id, action) {
-            if (confirm(`Are you sure you want to ${action} this user?`)) {
-                await performAction(action, { userId: id });
-            }
-        }
+        async function modUser(id, action) { if (confirm(`Are you sure you want to ${action} this user?`)) await performAction(action, { userId: id }); }
 
-        // --- DevTools ---
         function forceSync() {
             const json = document.getElementById('db-json').value;
-            try {
-                JSON.parse(json);
-                performAction('force_sync_db', { rawJson: json });
-            } catch (e) {
-                notify('Invalid JSON format', 'error');
-            }
+            try { JSON.parse(json); performAction('force_sync_db', { rawJson: json }); } catch (e) { notify('Invalid JSON format', 'error'); }
         }
 
-        // --- Global Sync Engine (ROBUSTE) ---
         async function syncData() {
-            console.log("🔄 Tentative de synchronisation...");
             const data = await apiRequest('/api/init-data');
-            
-            if (!data) {
-                console.error("❌ Erreur: Aucune réponse reçue de l'API /api/init-data");
-                return;
-            }
-
-            console.log("📦 Données reçues du bot:", data);
-
-            // Utilisation de "guards" pour éviter les crashs JS si Upstash renvoie des données incomplètes
+            if (!data) return;
             state.data = {
                 todayRevenue: data.todayRevenue || 0,
                 totalRevenue: (data.memoryStats && data.memoryStats.total_revenue) ? data.memoryStats.total_revenue : 0,
@@ -1178,46 +460,29 @@
                 revenueHistory: (data.memoryStats && data.memoryStats.revenue) ? data.memoryStats.revenue : {},
                 users: (data.memoryStats && Array.isArray(data.memoryStats.users)) ? data.memoryStats.users : []
             };
-
-            console.log("✅ État mis à jour avec succès:", state.data);
-
-            // Update all UI components based on current state
             updateKPIs();
             updateRevenueChart();
             updatePulseFeed();
             renderProducts();
             renderTransactions();
             renderAudience();
-            
-            // Sync JSON editor if in DevTools
-            if (state.currentTab === 'devtools') {
-                document.getElementById('db-json').value = JSON.stringify(data.memoryStats, null, 4);
-            }
+            if (state.currentTab === 'devtools') document.getElementById('db-json').value = JSON.stringify(data.memoryStats, null, 4);
         }
 
-        // --- Initialization ---
         function init() {
             lucide.createIcons();
+            // PRÉ-CHARGEMENT DU BACKUP DANS L'ÉDITEUR
+            document.getElementById('db-json').value = JSON.stringify(MANUAL_BACKUP, null, 4);
             syncData();
-            setInterval(syncData, 15000); // Poll every 15s
-
-            // Manual Transaction Form
+            setInterval(syncData, 15000);
             document.getElementById('manual-tx-form').onsubmit = async (e) => {
                 e.preventDefault();
-                await performAction('create_manual_tx', {
-                    username: document.getElementById('tx-user').value,
-                    product: document.getElementById('tx-prod').value,
-                    price: parseFloat(document.getElementById('tx-amt').value)
-                });
+                await performAction('create_manual_tx', { username: document.getElementById('tx-user').value, product: document.getElementById('tx-prod').value, price: parseFloat(document.getElementById('tx-amt').value) });
                 toggleModal('tx-modal');
             };
         }
 
-        function toggleModal(id) {
-            const m = document.getElementById(id);
-            m.style.display = (m.style.display === 'none') ? 'flex' : 'none';
-        }
-
+        function toggleModal(id) { const m = document.getElementById(id); m.style.display = (m.style.display === 'none') ? 'flex' : 'none'; }
         window.onload = init;
     </script>
 </body>
