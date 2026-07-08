@@ -12,7 +12,6 @@ const GUILD_ID = "1520735089573494944";
 const ADMIN_DISCORD_ID = "1520551977854042114";
 const DASHBOARD_PIN = "1206"; 
 
-// Vérification des variables d'environnement
 const REQUIRED_ENVS = ['DISCORD_BOT_TOKEN', 'REWARBLE_API_KEY'];
 for (const env of REQUIRED_ENVS) {
     if (!process.env[env]) {
@@ -22,7 +21,6 @@ for (const env of REQUIRED_ENVS) {
 }
 
 // === [DONNÉES INITIALES] ===
-// On définit les produits ICI pour qu'ils soient disponibles dès la milliseconde 1
 const INITIAL_PRODUCTS = {
     "1": { name: "Boobs", price: "5", link: "https://drive.google.com/ton_lien_boobs", category: "✨ PHOTOS", stock: "∞" }, 
     "2": { name: "Ass", price: "5", link: "https://drive.google.com/ton_lien_ass", category: "✨ PHOTOS", stock: "∞" },
@@ -44,9 +42,9 @@ let memoryStats = {
     custom_requests: [], user_history: {}, warns: {}, blacklist: [], user_notes: {},
     promo_codes: {}, analytics: { tickets_opened: 0, hourly_sales: Array(24).fill(0) },
     referrals: {}, settings: { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } },
-    products: { ...INITIAL_PRODUCTS }, // <--- INJECTION IMMÉDIATE
+    products: { ...INITIAL_PRODUCTS }, 
     subscriptions: {}, 
-    buy_links: { ...INITIAL_BUY_LINKS }, // <--- INJECTION IMMÉDIATE
+    buy_links: { ...INITIAL_BUY_LINKS }, 
     pending_reviews: [],
     activity_feed: [], last_update: Date.now() 
 };
@@ -56,34 +54,15 @@ let discordClientReady = false;
 const sysLogs = [];
 const originalLog = console.log;
 const originalError = console.error;
-
 function addSysLog(level, ...args) {
     const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ');
     sysLogs.push({ time: new Date().toISOString(), level, msg });
     if (sysLogs.length > 100) sysLogs.shift();
 }
-
 console.log = (...args) => { addSysLog('INFO', ...args); originalLog(...args); };
-console.error = (...args) => { 
-    addSysLog('ERROR', ...args); 
-    originalError(...args); 
-};
-
-async function sendAdminAlert(msg) {
-    try {
-        if (!discordClientReady) return;
-        const admin = await client.users.fetch(ADMIN_DISCORD_ID);
-        if (admin) await admin.send(`🚨 **SYSTEM ALERT** 🚨\n${msg}`);
-    } catch (e) {}
-}
-
-process.on('unhandledRejection', (reason) => { console.error('[ANTI-CRASH] Unhandled Rejection', reason); });
-process.on('uncaughtException', (err) => { console.error('[ANTI-CRASH] Uncaught Exception', err); });
+console.error = (...args) => { addSysLog('ERROR', ...args); originalError(...args); };
 
 const STATS_FILE = path.join(__dirname, 'stats.json');
-const BACKUP_DIR = path.join(__dirname, 'backups');
-if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR);
-
 const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
 const SERVER_CSRF_TOKEN = crypto.randomBytes(16).toString('hex');
 
@@ -110,18 +89,25 @@ async function loadCloudStats() {
             const res = await axios.get(`${cleanUrl}/get/bot_stats`, { headers: { Authorization: `Bearer ${token}` } });
             if (res.data && res.data.result) {
                 const cloudData = JSON.parse(res.data.result);
-                memoryStats = { ...memoryStats, ...cloudData };
-                console.log("✅ Database synchronized with Cloud.");
+                
+                // fusion intelligente : on ne remplace pas memoryStats, on fusionne
+                Object.assign(memoryStats, cloudData);
+                console.log("✅ Data merged from Cloud.");
             }
         } catch (e) { console.error("❌ Cloud Load Error:", e.message); }
     }
-    // Sécurité : on s'assure que les produits sont toujours là même après chargement cloud
+
+    // --- SÉCURITÉ ANTI-VIDE ---
+    // Si après le chargement cloud, les produits sont vides, on FORCE les produits initiaux
     if (!memoryStats.products || Object.keys(memoryStats.products).length === 0) {
+        console.log("⚠️ Cloud products were empty! Forcing INITIAL_PRODUCTS...");
         memoryStats.products = { ...INITIAL_PRODUCTS };
     }
     if (!memoryStats.buy_links || Object.keys(memoryStats.buy_links).length === 0) {
         memoryStats.buy_links = { ...INITIAL_BUY_LINKS };
     }
+    
+    // On sauvegarde immédiatement le correctif dans le cloud pour ne plus avoir le problème
     await syncCloud();
 }
 
@@ -134,9 +120,7 @@ client.once('ready', async () => {
     await loadCloudStats();
 });
 
-// (Les fonctions logStat, sendShopSetup, interactions restent identiques à la version précédente...)
-// Pour gagner de la place, je garde la logique métier intacte comme dans ton dernier fichier.
-
+// (Logique métier conservée)
 function logStat(type, value = 1, extraData = null) {
     const today = new Date().toISOString().split('T')[0];
     if (type === 'revenue') {
@@ -161,13 +145,11 @@ async function sendShopSetup(channel) {
         if (currentComponents.length === 5) { buyRows.push(new ActionRowBuilder().addComponents(currentComponents)); currentComponents = []; }
     }
     if (currentComponents.length > 0) buyRows.push(new ActionRowBuilder().addComponents(currentComponents));
-    
     const rowActions = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('open_shop_channel').setLabel('📩 Redeem Code').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId('get_referral_link').setLabel('🔗 Referral Link').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId('open_support_ticket').setLabel('🎧 Support').setStyle(ButtonStyle.Secondary)
     );
-    
     const shopEmbed = new EmbedBuilder().setColor('#3b82f6').setTitle('💎 EXCLUSIVE MENU 💎').setDescription('> *Instant delivery in DMs!*\n━━━━━━━━━━━━━━━━━━━━━━');
     const grouped = {};
     for (const [id, prod] of Object.entries(memoryStats.products)) {
@@ -176,7 +158,6 @@ async function sendShopSetup(channel) {
         grouped[cat].push(`**${id}.** ${prod.name}`);
     }
     for (const [cat, items] of Object.entries(grouped)) shopEmbed.addFields({ name: cat, value: items.join('\n'), inline: true });
-    
     await channel.send({ embeds: [shopEmbed], components: [...buyRows.slice(0,4), rowActions] }).catch(()=>{});
 }
 
@@ -191,7 +172,6 @@ client.on('interactionCreate', async (interaction) => {
             await channel.send(`👋 Welcome <@${interaction.user.id}>!\nPaste your code below:`);
             await interaction.editReply(`✅ Room ready: <#${channel.id}>`);
         }
-        // ... (Le reste de tes interactions est conservé)
     } catch(e) { console.error(e); }
 });
 
@@ -229,7 +209,6 @@ const verifyCookie = (cookieStr) => {
 http.createServer(async (req, res) => {
     const cookie = req.headers.cookie || '';
     const isAuthenticated = verifyCookie(cookie);
-
     if (req.url === '/api/health') return res.writeHead(200).end('OK');
 
     if (req.url === '/api/login' && req.method === 'POST') {
@@ -249,8 +228,10 @@ http.createServer(async (req, res) => {
             return res.end("<html><body style='background:#0f172a;color:white;display:flex;justify-content:center;align-items:center;height:100vh;font-family:sans-serif'><div style='background:#1e293b;padding:40px;border-radius:12px;text-align:center'><input type='password' id='p' placeholder='PIN'><button onclick='l()'>Unlock</button></div><script>async function l(){const r=await fetch('/api/login',{method:'POST',body:JSON.stringify({pin:document.getElementById('p').value})});if(r.ok)location.reload();}</script></body></html>");
         }
         res.writeHead(200, { 'Content-Type': 'text/html' });
-        let html = fs.readFileSync(path.join(__dirname, 'dashboard.html'), 'utf8');
-        return res.end(html.replace('${SERVER_CSRF_TOKEN}', SERVER_CSRF_TOKEN).replace('${DASHBOARD_PIN}', DASHBOARD_PIN));
+        try {
+            let html = fs.readFileSync(path.join(__dirname, 'dashboard.html'), 'utf8');
+            return res.end(html.replace('${SERVER_CSRF_TOKEN}', SERVER_CSRF_TOKEN).replace('${DASHBOARD_PIN}', DASHBOARD_PIN));
+        } catch(e) { return res.writeHead(500).end("Error loading dashboard"); }
     }
 
     if (req.url === '/api/init-data' && req.method === 'GET') {
