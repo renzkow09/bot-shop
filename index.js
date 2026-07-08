@@ -2218,10 +2218,26 @@ http.createServer(async (req, res) => {
 // === [ANCHOR: STARTUP_DEBUG] ===
 console.log('🔍 Starting bot...');
 console.log('Token:', DISCORD_BOT_TOKEN ? '✅ Présent' : '❌ Manquant');
+console.log('Intents configurés ✅');
 
-client.on('error', err => console.error('❌ ERREUR CONNEXION:', err.message));
-client.on('disconnect', () => console.log('⚠️ Bot déconnecté'));
-client.on('ready', () => console.log(`✅ Bot logged in as ${client.user.tag}`));
+let isConnected = false;
+
+client.on('ready', () => {
+    isConnected = true;
+    console.log(`✅ Bot logged in as ${client.user.tag}`);
+});
+
+client.on('error', err => console.error('❌ ERREUR:', err.message));
+client.on('shardError', err => console.error('❌ SHARD ERROR:', err.message));
+
+setTimeout(() => {
+    if (!isConnected) {
+        console.error('❌ TIMEOUT: Bot n\'a pas pu se connecter après 15 secondes');
+        console.error('Vérifiez: 1) Token valide 2) Intents activés 3) Bot sur le serveur');
+    }
+}, 15000);
+
+client.login(DISCORD_BOT_TOKEN);
 
 client.login(DISCORD_BOT_TOKEN);
 
