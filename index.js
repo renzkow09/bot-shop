@@ -1,3 +1,5 @@
+require('dotenv').config(); 
+const crypto = require('crypto');
 // === [IMPORTS & CRASH HANDLER] ===
 const { Client, GatewayIntentBits, Partials, ButtonBuilder, ActionRowBuilder, ButtonStyle, ChannelType, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, EmbedBuilder, AttachmentBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const axios = require('axios');
