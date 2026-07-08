@@ -2219,4 +2219,10 @@ http.createServer(async (req, res) => {
 console.log('🔍 Starting bot...');
 console.log('Token:', DISCORD_BOT_TOKEN ? '✅ Présent' : '❌ Manquant');
 
+client.on('error', err => console.error('❌ ERREUR CONNEXION:', err.message));
+client.on('disconnect', () => console.log('⚠️ Bot déconnecté'));
+client.on('ready', () => console.log(`✅ Bot logged in as ${client.user.tag}`));
+
+client.login(DISCORD_BOT_TOKEN);
+
 client.login(DISCORD_BOT_TOKEN);
