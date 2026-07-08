@@ -12,7 +12,6 @@ const GUILD_ID = "1520735089573494944";
 const ADMIN_DISCORD_ID = "1520551977854042114";
 const DASHBOARD_PIN = "1206"; 
 
-// Vérification des variables d'environnement
 const REQUIRED_ENVS = ['DISCORD_BOT_TOKEN', 'REWARBLE_API_KEY'];
 for (const env of REQUIRED_ENVS) {
     if (!process.env[env]) {
@@ -21,7 +20,6 @@ for (const env of REQUIRED_ENVS) {
     }
 }
 
-// CORRECTION : On définit les constantes pour qu'elles soient accessibles partout
 const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
 const REWARBLE_API_KEY = process.env.REWARBLE_API_KEY;
 
@@ -82,7 +80,7 @@ async function syncCloud() {
         await axios.post(cleanUrl, ["SET", "bot_stats", JSON.stringify(memoryStats)], { 
             headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } 
         });
-    } catch (err) {}
+    } catch (err) { console.error("❌ Sync Error:", err.message); }
 }
 
 async function loadCloudStats() {
@@ -94,18 +92,24 @@ async function loadCloudStats() {
             const res = await axios.get(`${cleanUrl}/get/bot_stats`, { headers: { Authorization: `Bearer ${token}` } });
             if (res.data && res.data.result) {
                 const cloudData = JSON.parse(res.data.result);
+                // On fusionne les données cloud dans memoryStats
                 Object.assign(memoryStats, cloudData);
                 console.log("✅ Data merged from Cloud.");
             }
         } catch (e) { console.error("❌ Cloud Load Error:", e.message); }
     }
 
+    // --- RÉPARATION FORCÉE DES PRODUITS ---
+    // Si le cloud a écrasé les produits par "undefined" ou "{}"
     if (!memoryStats.products || Object.keys(memoryStats.products).length === 0) {
+        console.log("⚠️ Products missing in DB! Restoring defaults...");
         memoryStats.products = { ...INITIAL_PRODUCTS };
     }
     if (!memoryStats.buy_links || Object.keys(memoryStats.buy_links).length === 0) {
         memoryStats.buy_links = { ...INITIAL_BUY_LINKS };
     }
+    
+    // On sauvegarde immédiatement pour réparer le Cloud
     await syncCloud();
 }
 
