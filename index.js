@@ -312,7 +312,7 @@ client.once('ready', () => {
                         const code = "COMEBACK-" + Math.random().toString(36).substring(2, 6).toUpperCase();
                         memoryStats.promo_codes[code] = { discount: acSet.discount, limit: 1, used: 0, createdAt: new Date().toLocaleDateString() };
                         syncCloud();
-                        await member.send({ embeds: [new EmbedBuilder().setColor('#f97316').setTitle('🛒 Pending Cart!').setDescription(`Finish your order with **-${acSet.discount}%**: \`${code}\`)] }).catch(()=>{});
+                        await member.send({ embeds: [new EmbedBuilder().setColor('#f97316').setTitle('🛒 Pending Cart!').setDescription(`Finish your order with **-${acSet.discount}%**: \`${code}\``)] }).catch(()=>{});
                     }
                 }
             }
