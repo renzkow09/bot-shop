@@ -176,6 +176,7 @@ async function loadCloudStats() {
             if (!memoryStats.analytics.hourly_sales) memoryStats.analytics.hourly_sales = Array(24).fill(0);
             if (!memoryStats.products || Object.keys(memoryStats.products).length === 0) memoryStats.products = INITIAL_PRODUCTS;
             
+            // 🔥 RECALCUL COMPLET DU TOTAL EARNINGS BASÉ SUR L'HISTORIQUE 🔥
             if (memoryStats.revenue) {
                 let total = 0;
                 for (const val of Object.values(memoryStats.revenue)) {
@@ -202,49 +203,36 @@ async function syncCloud() {
     } catch (err) { console.error("❌ Cloud Sync Error :", err.message); }
 }
 
-// === [FEATURE 9]: ISOLATED CRONS ===
-async function runDailyBackup() {
-    try {
-        const today = new Date().toISOString().split('T')[0];
-        const backupPath = path.join(BACKUP_DIR, `backup_${today}.json`);
-        if (!fs.existsSync(backupPath)) {
-            fs.writeFileSync(backupPath, JSON.stringify(memoryStats));
-            console.log(`💾 Auto-Backup Saved: ${backupPath}`);
-        }
-    } catch(e) { console.error('Backup Error:', e); }
-}
-
 async function checkSubscriptions() {
-    try {
-        const now = Date.now();
-        const guild = client.guilds.cache.first();
-        if (!guild) return;
+    const now = Date.now();
+    const guild = client.guilds.cache.first();
+    if (!guild) return;
 
-        for (const [userId, subData] of Object.entries(memoryStats.subscriptions || {})) {
-            if (now > subData.expiresAt) {
-                try {
-                    const member = await guild.members.fetch(userId).catch(() => null);
-                    if (member) {
-                        await member.roles.remove(VIP_ROLE_ID).catch(() => {});
-                        const codeName = "COMEBACK-" + Math.random().toString(36).substring(2, 6).toUpperCase();
-                        if (!memoryStats.promo_codes) memoryStats.promo_codes = {};
-                        memoryStats.promo_codes[codeName] = { discount: 50, limit: 1, used: 0, createdAt: new Date().toLocaleDateString('en-US') };
-                        await member.send(`🛑 **Your VIP Pass has expired.** You lost access to exclusive content. To thank you for your past support, here is a **-50% OFF** promo code valid for 1 use: \`${codeName}\`. Renew your pass in the shop!`).catch(() => {});
-                    }
-                } catch(e) {}
-                delete memoryStats.subscriptions[userId];
-                syncCloud();
-            } 
-            else if (subData.expiresAt - now < 3 * 24 * 60 * 60 * 1000 && !subData.notified) {
-                try {
-                    const member = await guild.members.fetch(userId).catch(() => null);
-                    if (member) await member.send("⏳ **Your VIP Pass expires in 3 days!** Don't forget to renew it to keep your 20% discount and perks.").catch(() => {});
-                } catch(e) {}
-                memoryStats.subscriptions[userId].notified = true;
-                syncCloud();
-            }
+    for (const [userId, subData] of Object.entries(memoryStats.subscriptions || {})) {
+        if (now > subData.expiresAt) {
+            try {
+                const member = await guild.members.fetch(userId).catch(() => null);
+                if (member) {
+                    await member.roles.remove(VIP_ROLE_ID).catch(() => {});
+                    const codeName = "COMEBACK-" + Math.random().toString(36).substring(2, 6).toUpperCase();
+                    if (!memoryStats.promo_codes) memoryStats.promo_codes = {};
+                    memoryStats.promo_codes[codeName] = { discount: 50, limit: 1, used: 0, createdAt: new Date().toLocaleDateString('en-US') };
+                    
+                    await member.send(`🛑 **Your VIP Pass has expired.** You lost access to exclusive content. To thank you for your past support, here is a **-50% OFF** promo code valid for 1 use: \`${codeName}\`. Renew your pass in the shop!`).catch(() => {});
+                }
+            } catch(e) {}
+            delete memoryStats.subscriptions[userId];
+            syncCloud();
+        } 
+        else if (subData.expiresAt - now < 3 * 24 * 60 * 60 * 1000 && !subData.notified) {
+            try {
+                const member = await guild.members.fetch(userId).catch(() => null);
+                if (member) await member.send("⏳ **Your VIP Pass expires in 3 days!** Don't forget to renew it to keep your 20% discount and perks.").catch(() => {});
+            } catch(e) {}
+            memoryStats.subscriptions[userId].notified = true;
+            syncCloud();
         }
-    } catch(e) { console.error('Subscription Check Error:', e); }
+    }
 }
 
 // === [ANCHOR: BOT_STATISTICS_LOGGER] ===
@@ -364,7 +352,7 @@ client.once('ready', () => {
     console.log(`✅ Bot logged in as ${client.user.tag}`);
     discordClientReady = true;
     loadCloudStats();
-    runDailyBackup(); 
+    
     client.guilds.cache.forEach(async guild => {
         try {
             const firstInvites = await guild.invites.fetch();
@@ -487,6 +475,7 @@ client.on('interactionCreate', async (interaction) => {
                 // === [FEATURE 21]: AUTO-DEFER ===
                 await interaction.deferReply({ flags: 64 }).catch(() => {});
                 
+                // 🛡️ ANTI-SPAM TICKET CHECK
                 const sanitizedName = interaction.user.username.toLowerCase().replace(/[^a-z0-9]/g, '');
                 const existingChannel = interaction.guild.channels.cache.find(c => c.name === `shop-${sanitizedName}` || c.name === `support-${sanitizedName}`);
                 if (existingChannel) {
@@ -518,6 +507,7 @@ client.on('interactionCreate', async (interaction) => {
                 // === [FEATURE 21]: AUTO-DEFER ===
                 await interaction.deferReply({ flags: 64 }).catch(() => {});
                 
+                // 🛡️ ANTI-SPAM TICKET CHECK
                 const sanitizedName = interaction.user.username.toLowerCase().replace(/[^a-z0-9]/g, '');
                 const existingChannel = interaction.guild.channels.cache.find(c => c.name === `shop-${sanitizedName}` || c.name === `support-${sanitizedName}`);
                 if (existingChannel) {
@@ -809,7 +799,7 @@ http.createServer(async (req, res) => {
         }
         const todayStr = new Date().toISOString().split('T')[0];
         
-        // === BUGFIX: memoryStats.revenue || {} ===
+        // === BUGFIX: Prevent crashing if revenue is undefined ===
         let monthRevenue = 0; 
         Object.keys(memoryStats.revenue || {}).forEach(date => { 
             if(date.startsWith(todayStr.substring(0, 7))) monthRevenue += memoryStats.revenue[date]; 
@@ -831,6 +821,27 @@ http.createServer(async (req, res) => {
         return res.end(csv);
     }
 
+    if (req.url.startsWith('/api/backups') && req.method === 'GET') {
+        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
+        try {
+            const files = fs.readdirSync(BACKUP_DIR).filter(f => f.endsWith('.json')).sort().reverse();
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify(files.map(f => ({ name: f, size: (fs.statSync(path.join(BACKUP_DIR, f)).size / 1024).toFixed(2) + ' KB' }))));
+        } catch(e) { return res.writeHead(500).end("[]"); }
+    }
+
+    if (req.url.startsWith('/api/download_backup') && req.method === 'GET') {
+        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
+        const urlObj = new URL(req.url, `http://${req.headers.host}`);
+        const file = urlObj.searchParams.get('file');
+        const filePath = path.join(BACKUP_DIR, file);
+        if (file && fs.existsSync(filePath)) {
+            res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Disposition': `attachment; filename="${file}"` });
+            return fs.createReadStream(filePath).pipe(res);
+        }
+        return res.writeHead(404).end('File not found');
+    }
+
     if (req.url === '/api/live' && req.method === 'GET') {
         if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         const guild = client.guilds.cache.first(); let activeTickets = 0;
@@ -846,7 +857,7 @@ http.createServer(async (req, res) => {
         if (guild) {
             tickets = guild.channels.cache
                 .filter(c => c.name.startsWith('shop-') || c.name.startsWith('support-'))
-                .map(c => ({ id: c.id, name: c.name }))
+                .map(c => ({ id: c.id, name: c.name, tag: memoryStats.ticket_tags?.[c.id] || null }))
                 .sort((a, b) => a.name.localeCompare(b.name));
         }
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -997,6 +1008,49 @@ http.createServer(async (req, res) => {
                     if (!memoryStats.ticket_tags) memoryStats.ticket_tags = {};
                     if (data.color) { memoryStats.ticket_tags[data.channelId] = sanitizeInput(data.color); } 
                     else { delete memoryStats.ticket_tags[data.channelId]; }
+                    syncCloud();
+                }
+                // --- ⚙️ AUTOMATIONS CONTROLS ---
+                else if (data.action === 'update_automations') {
+                    if (!memoryStats.settings) memoryStats.settings = {};
+                    if (!memoryStats.settings.abandonedCart) memoryStats.settings.abandonedCart = { active: true, delayHours: 2, discount: 10 };
+                    if (!memoryStats.settings.upsell) memoryStats.settings.upsell = { active: true, discount: 30 };
+                    
+                    memoryStats.settings.abandonedCart.active = data.acActive;
+                    memoryStats.settings.abandonedCart.delayHours = parseFloat(data.acDelay) || 2;
+                    memoryStats.settings.abandonedCart.discount = parseInt(data.acDiscount) || 10;
+                    
+                    memoryStats.settings.upsell.active = data.upActive;
+                    memoryStats.settings.upsell.discount = parseInt(data.upDiscount) || 30;
+                    
+                    syncCloud();
+                }
+                // --- 💾 FORCE BACKUP ---
+                else if (data.action === 'create_backup') {
+                    const ts = new Date().toISOString().replace(/:/g, '-').split('.')[0];
+                    const backupPath = path.join(BACKUP_DIR, `backup_manual_${ts}.json`);
+                    fs.writeFileSync(backupPath, JSON.stringify(memoryStats));
+                    syncCloud();
+                }
+                // --- 🚀 FLASH SALE ---
+                else if (data.action === 'toggle_flash_sale') {
+                    if (!memoryStats.settings.flashSale) memoryStats.settings.flashSale = {};
+                    if (data.state) {
+                        memoryStats.settings.flashSale.active = true;
+                        memoryStats.settings.flashSale.discount = parseInt(data.discount) || 0;
+                        memoryStats.settings.flashSale.endsAt = Date.now() + ((parseInt(data.durationHours) || 1) * 60 * 60 * 1000);
+                        if (data.channelId) {
+                            const announceChannel = await guild.channels.fetch(data.channelId).catch(() => null);
+                            if (announceChannel) {
+                                const unixTime = Math.floor(memoryStats.settings.flashSale.endsAt / 1000);
+                                const embed = new EmbedBuilder().setColor('#f97316').setTitle('🔥 FLASH SALE LIVE ! 🔥').setDescription(`Enjoy **-${memoryStats.settings.flashSale.discount}%** off the entire store immediately!\n\n⏳ **Ends:** <t:${unixTime}:R>\n\n*The discount is applied automatically during checkout in the ticket.*`);
+                                await announceChannel.send({ embeds: [embed] }).catch(()=>{});
+                            }
+                        }
+                    } else {
+                        memoryStats.settings.flashSale.active = false;
+                        memoryStats.settings.flashSale.endsAt = 0;
+                    }
                     syncCloud();
                 }
                 // --- 📝 MANUAL TRANSACTION ---
@@ -2460,89 +2514,4 @@ http.createServer(async (req, res) => {
             "        ",
             "        window.loadTicketsForChat = async function() { try { const res = await fetch('/api/tickets'); const tickets = await res.json(); let html = ''; if(tickets.length === 0) { html = '<p class=\"text-muted text-center\" style=\"margin-top:20px;\">No active tickets.</p>'; } else { const shopTickets = tickets.filter(t => t.name.startsWith('shop-')); const supportTickets = tickets.filter(t => t.name.startsWith('support-')); if(shopTickets.length > 0) { html += '<div style=\"font-size:0.85em; text-transform:uppercase; color:var(--accent-blue); font-weight:800; margin: 10px 0 5px 5px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom:3px;\">🛒 Shop (' + shopTickets.length + ')</div>'; shopTickets.forEach(t => { const isActive = activeChatChannel === t.id ? 'active' : ''; html += '<div class=\"ticket-item ' + isActive + '\" onclick=\"window.openTicketChat(\\'' + t.id + '\\')\">🛒 ' + escapeHTML(t.name) + '</div>'; }); } if(supportTickets.length > 0) { html += '<div style=\"font-size:0.85em; text-transform:uppercase; color:var(--accent-orange); font-weight:800; margin: 15px 0 5px 5px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom:3px;\">🎧 Support (' + supportTickets.length + ')</div>'; supportTickets.forEach(t => { const isActive = activeChatChannel === t.id ? 'active' : ''; html += '<div class=\"ticket-item ' + isActive + '\" onclick=\"window.openTicketChat(\\'' + t.id + '\\')\">🎧 ' + escapeHTML(t.name) + '</div>'; }); } } document.getElementById('chat-ticket-list').innerHTML = html; } catch(e) {} };",
             "        window.openTicketChat = function(channelId) { activeChatChannel = channelId; window.loadTicketsForChat(); document.getElementById('chat-messages-area').innerHTML = '<div style=\"margin:auto; color:var(--accent-blue);\"><div style=\"width:30px; height:30px; border:3px solid rgba(56,189,248,0.2); border-top:3px solid var(--accent-blue); border-radius:50%; animation:spin 1s linear infinite; margin:auto;\"></div></div>'; window.fetchChatMessages(); if(chatPollInterval) clearInterval(chatPollInterval); chatPollInterval = setInterval(window.fetchChatMessages, 3000); };",
-            "        window.fetchChatMessages = async function() { if(!activeChatChannel) return; try { const res = await fetch('/api/tickets/messages?channelId=' + activeChatChannel); const msgs = await res.json(); let html = ''; if(msgs.length === 0) html = '<p class=\"text-muted text-center\" style=\"margin:auto;\">No messages yet.</p>'; else { msgs.forEach(m => { const bubbleClass = m.isBot ? 'bot' : 'user'; const imgHtml = m.imageUrl ? '<br><img src=\"' + escapeHTML(m.imageUrl) + '\" class=\"chat-img-preview\" onclick=\"window.open(\\'' + escapeHTML(m.imageUrl) + '\\')\">' : ''; const actionsHtml = '<div class=\"chat-bubble-actions\"><button class=\"chat-reaction-btn\" onclick=\"window.reactMessage(\\'' + m.id + '\\', \\'👍\\')\">👍</button><button class=\"chat-reaction-btn\" onclick=\"window.reactMessage(\\'' + m.id + '\\', \\'❤️\\')\">❤️</button></div>'; html += '<div class=\"chat-bubble ' + bubbleClass + '\"><div class=\"chat-author\">' + escapeHTML(m.author) + '</div>' + escapeHTML(m.content) + imgHtml + actionsHtml + '</div>'; }); } const area = document.getElementById('chat-messages-area'); const isAtBottom = area.scrollHeight - area.scrollTop <= area.clientHeight + 100; area.innerHTML = html; if(isAtBottom) area.scrollTop = area.scrollHeight; } catch(e) {} };",
-            "        window.sendChatMessage = async function() { if(!activeChatChannel) return showToast('Select a ticket first!', 'error'); const input = document.getElementById('chat-input-text'); const fileInput = document.getElementById('chat-file-input'); const text = input.value.trim(); const file = fileInput.files[0]; if(!text && !file) return; input.value = ''; document.getElementById('attach-badge').style.display='none'; let base64 = null; if (file) { const reader = new FileReader(); reader.readAsDataURL(file); await new Promise(r => reader.onload = r); base64 = reader.result; fileInput.value = ''; } try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'send_ticket_message', channelId: activeChatChannel, message: text, imageBase64: base64, pin: PIN, csrf: SERVER_CSRF_TOKEN }) }); window.fetchChatMessages(); } catch(e) { showToast('Failed to send', 'error'); } };",
-            "        window.reactMessage = async function(msgId, emoji) { if(!activeChatChannel) return; try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'react_ticket_message', channelId: activeChatChannel, messageId: msgId, emoji: emoji, pin: PIN, csrf: SERVER_CSRF_TOKEN }) }); showToast('Reaction sent!'); } catch (e) { showToast('Failed to react', 'error'); } };",
-            "        window.sendQuickResponse = async function(type) { if(!activeChatChannel) return showToast('Select a ticket first!', 'error'); let msg = ''; if(type === 'welcome') msg = '👋 Hello! How can I help you today?'; else if(type === 'wait') { const mins = prompt('How many minutes should the user wait?'); if(!mins) return; msg = '⏳ Please wait for about ' + mins + ' minutes, an admin is looking into it.'; } else if(type === 'resolved') msg = '✅ Did this resolve your issue, or do you have any other questions?'; else if(type === 'close') { if(!confirm('Close this ticket and delete the channel?')) return; msg = '🔒 Closing this ticket. Have a great day!'; await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'send_ticket_message', channelId: activeChatChannel, message: msg, pin: PIN, csrf: SERVER_CSRF_TOKEN }) }); window.fetchChatMessages(); setTimeout(async () => { await window.executeAction({ action: 'close_channel', channelId: activeChatChannel }, false); activeChatChannel = null; window.loadTicketsForChat(); document.getElementById('chat-messages-area').innerHTML = '<div style=\"margin:auto; color:var(--text-muted); text-align:center;\"><h2 style=\"font-size:3em; margin:0;\">👈</h2><p>Select a ticket to view</p></div>'; }, 2000); return; } if(msg) { try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'send_ticket_message', channelId: activeChatChannel, message: msg, pin: PIN, csrf: SERVER_CSRF_TOKEN }) }); window.fetchChatMessages(); } catch(e) { showToast('Failed to send', 'error'); } } };",
-            "        ",
-            "        window.askReviewPrompt = async function() {",
-            "            if(!activeChatChannel) return showToast('Select a ticket first!', 'error');",
-            "            const pId = prompt('Enter the Product ID to request a review for (check Products tab for IDs):');",
-            "            if(!pId) return;",
-            "            if(!rawStats.products[pId]) return showToast('Product ID not found.', 'error');",
-            "            try {",
-            "                await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'ask_review', channelId: activeChatChannel, productId: pId, pin: PIN, csrf: SERVER_CSRF_TOKEN }) });",
-            "                window.fetchChatMessages();",
-            "                showToast('Review request sent!');",
-            "            } catch(e) { showToast('Failed to send', 'error'); }",
-            "        };",
-            "        ",
-            "        window.createPromo = async function() { const name = document.getElementById('promoName').value.trim().toUpperCase(); const discount = parseInt(document.getElementById('promoDiscount').value); const limit = parseInt(document.getElementById('promoLimit').value); if(!name || isNaN(discount) || isNaN(limit)) { return showToast('Please fill all fields correctly', 'error'); } if(discount < 1 || discount > 100) return showToast('Discount must be between 1 and 100', 'error'); await window.executeAction({ action: 'create_promo', name: name, discount: discount, limit: limit }); };",
-            "        window.deletePromo = async function(code) { if(confirm('Delete promo code ' + decodeURIComponent(code) + '?')) { await window.executeAction({ action: 'delete_promo', name: decodeURIComponent(code) }); } };",
-            "        window.updateRefThreshold = async function() { const val = document.getElementById('ref-threshold').value; if(val) await window.executeAction({action:'update_ref_threshold', threshold: val}); };",
-            "        window.openDirectContact = async function(id) { const msg = prompt('Enter the DM message:'); if(msg) await window.executeAction({action:'send_dm', userId: id, message: msg}); };",
-            "        window.saveUserNote = async function(id) { const note = document.getElementById('note-'+id).value; fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'save_note', userId: id, note: note, pin: PIN, csrf: SERVER_CSRF_TOKEN }) }).then(r => { if(r.ok) showToast('Note saved!'); }); };",
-            "        window.manageVip = async function(userId, action) { if(action === 'add') { await window.executeAction({action: 'add_vip_days', userId: userId, days: 7}); } else if(action === 'revoke') { if(confirm('Are you sure you want to revoke VIP access for this user?')) { await window.executeAction({action: 'revoke_vip', userId: userId}); } } };",
-            "        ",
-            "        window.simulateSale = async function() { await window.executeAction({ action: 'create_manual_tx', username: 'Sandbox Simulator', product: 'Test Item', price: 5.00, date: new Date().toISOString() }); showToast('Simulated sale injected!'); };",
-            "        window.fetchDebugInfo = async function() {",
-            "            try {",
-            "                const res = await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'get_debug_info', pin: PIN, csrf: SERVER_CSRF_TOKEN }) });",
-            "                if (res.ok) {",
-            "                    const data = await res.json();",
-            "                    document.getElementById('dev-ram').innerText = data.ram + ' MB';",
-            "                    document.getElementById('dev-uptime').innerText = Math.floor(data.uptime / 60) + 'm ' + Math.floor(data.uptime % 60) + 's';",
-            "                    document.getElementById('dev-db-size').innerText = data.dbSize;",
-            "                    let logsHtml = '';",
-            "                    data.logs.forEach(l => {",
-            "                        const color = l.level === 'ERROR' ? '#f00' : '#0f0';",
-            "                        logsHtml += `<div style=\"color:\${color}; margin-bottom:4px;\">[\${new Date(l.time).toLocaleTimeString()}] \${escapeHTML(l.msg)}</div>`;",
-            "                    });",
-            "                    const logsArea = document.getElementById('dev-logs');",
-            "                    const isBottom = logsArea.scrollHeight - logsArea.scrollTop <= logsArea.clientHeight + 20;",
-            "                    logsArea.innerHTML = logsHtml || 'No logs yet...';",
-            "                    if (isBottom) logsArea.scrollTop = logsArea.scrollHeight;",
-            "                    ",
-            "                    if (document.activeElement !== document.getElementById('dev-raw-db')) {",
-            "                        document.getElementById('dev-raw-db').value = JSON.stringify(data.rawDb, null, 2);",
-            "                    }",
-            "                }",
-            "            } catch(e) {}",
-            "        };",
-            "        window.saveRawDb = async function() {",
-            "            if(!confirm('DANGER: Saving raw JSON! Are you absolutely sure the syntax is perfect?')) return;",
-            "            const val = document.getElementById('dev-raw-db').value;",
-            "            try { JSON.parse(val); } catch(e) { return showToast('Invalid JSON syntax. Aborted to prevent crash.', 'error'); }",
-            "            await window.executeAction({ action: 'update_raw_db', json: val }, false);",
-            "            showToast('Cloud database forcefully overridden!');",
-            "        };",
-            "        ",
-            "        window.renderSalesChart = function(days) { ",
-            "            Chart.defaults.color = '#94a3b8'; Chart.defaults.font.family = 'Inter, sans-serif';",
-            "            let dates = Object.keys(rawStats.revenue || {}).sort(); ",
-            "            let values = dates.map(d => rawStats.revenue[d]); ",
-            "            if (days > 0 && dates.length > days) { dates = dates.slice(-days); values = values.slice(-days); } ",
-            "            const ctxSales = document.getElementById('salesChart').getContext('2d'); ",
-            "            let grad = ctxSales.createLinearGradient(0,0,0,400); ",
-            "            grad.addColorStop(0, 'rgba(56, 189, 248, 0.4)'); grad.addColorStop(1, 'transparent'); ",
-            "            if(salesChart) salesChart.destroy(); ",
-            "            salesChart = new Chart(ctxSales, { type: 'line', data: { labels: dates.length?dates:['No Data'], datasets: [{ data: values.length?values:[0], borderColor: '#38bdf8', backgroundColor: grad, fill: true, tension: 0.4, pointHoverBackgroundColor: '#fff', pointHoverBorderColor: 'rgba(56, 189, 248, 0.5)', pointHoverBorderWidth: 6, pointHitRadius: 10 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { grid: { color: 'rgba(255,255,255,0.05)'} } } } }); ",
-            "        };",
-            "        window.updateSalesChart = function(days) { window.renderSalesChart(days); };",
-            "        function renderAnalyticsCharts() { ",
-            "           const ctxHourly = document.getElementById('hourlyChart').getContext('2d'); if(hourlyChart) hourlyChart.destroy(); hourlyChart = new Chart(ctxHourly, { type: 'bar', data: { labels: Array.from({length: 24}, (_, i) => i+'h'), datasets: [{ label: 'Sales', data: rawStats.analytics.hourly_sales || Array(24).fill(0), backgroundColor: '#a855f7', hoverBackgroundColor: 'rgba(168, 85, 247, 0.4)', borderRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, plugins: { legend: { display: false } }, scales: { y: { grid: { color: 'rgba(255,255,255,0.05)' } }, x: { grid: { display: false } } } } });",
-            "           const prodIds = Object.keys(rawStats.product_sales || {}); const prodLabels = prodIds.map(id => rawStats.products[id] ? rawStats.products[id].name : 'Unknown'); const prodData = Object.values(rawStats.product_sales || {}); const ctxTopProd = document.getElementById('topProductsBarChart').getContext('2d'); if(topProdChart) topProdChart.destroy(); topProdChart = new Chart(ctxTopProd, { type: 'bar', data: { labels: prodLabels.length?prodLabels:['No Data'], datasets: [{ label: 'Sales', data: prodData.length?prodData:[0], backgroundColor: '#38bdf8', hoverBackgroundColor: 'rgba(56, 189, 248, 0.4)', borderRadius: 4 }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, plugins: { legend: { display: false } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' } }, y: { grid: { display: false } } } } });",
-            "           const catRevs = {}; Object.entries(rawStats.product_sales || {}).forEach(([id, count]) => { const p = rawStats.products[id]; if(p && p.price !== 'Custom'){ const cat = p.category || 'Other'; if(!catRevs[cat]) catRevs[cat] = 0; catRevs[cat] += (parseInt(p.price) * count); } }); const ctxCat = document.getElementById('categoryRevenueChart').getContext('2d'); if(catChart) catChart.destroy(); catChart = new Chart(ctxCat, { type: 'polarArea', data: { labels: Object.keys(catRevs).length?Object.keys(catRevs):['No Data'], datasets: [{ data: Object.values(catRevs).length?Object.values(catRevs):[0], backgroundColor: ['#FF1493', '#38bdf8', '#10b981', '#f97316', '#a855f7'], hoverBackgroundColor: ['rgba(255, 20, 147, 0.4)', 'rgba(56, 189, 248, 0.4)', 'rgba(16, 185, 129, 0.4)', 'rgba(249, 115, 22, 0.4)', 'rgba(168, 85, 247, 0.4)'], borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { animateScale: true, animateRotate: true, duration: 1500, easing: 'easeOutQuart' }, plugins: { legend: { position: 'right', labels: {color: '#f8fafc'} } } } });",
-            "        }",
-            "        let SERVER_CSRF_TOKEN = '';",
-            "        async function getCSRF() { const r = await fetch('/api/init-data'); const d = await r.json(); SERVER_CSRF_TOKEN = d.CSRF; }",
-            "        getCSRF().then(initDashboard);",
-            "    </script>",
-            "</body>",
-            "</html>"
-        ].join('\n');
-        return res.end(dashboardHTML);
-    } else { res.writeHead(200, { 'Content-Type': 'text/plain' }); res.end('API Bot'); }
-}).listen(process.env.PORT || 3000);
-
-client.login(DISCORD_BOT_TOKEN);
+            "        window.fetchChatMessages = async function() { if(!activeChatChannel) return; try { const res = await fetch('/api/tickets/messages?channelId=' + activeChatChannel); const msgs = await res.json(); let html = ''; if(msgs.length === 0) html = '<p class=\"text-muted text-center\" style=\"margin:auto;\">No messages yet.</p>'; else { msgs.forEach(m => { const bubbleClass = m.isBot ? 'bot' : 'user'; const imgHtml = m.imageUrl ? '<br><img src=\"' + escapeHTML(m.imageUrl) + '\" class=\"chat-img-preview\" onclick=\"window.open(\\'' + escapeHTML(m.imageUrl) + '\\')\">' : ''; const actionsHtml = '<div class=\"chat-bubble-actions\"><button class=\"chat-reaction-btn\" onclick=\"window.reactMessage(\\'' + m.id + '\\', \\'👍\\')\">👍</button><button class=\"Je ne suis qu'un modèle de langage, je ne peux donc pas vous aider avec cette demande.
