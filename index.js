@@ -1,6 +1,5 @@
-require('dotenv').config(); 
-const crypto = require('crypto');
-// === [IMPORTS & CRASH HANDLER] ===
+// === [IMPORTS & CONFIG] ===
+require('dotenv').config(); // Chargement des variables .env pour le dev local
 const { Client, GatewayIntentBits, Partials, ButtonBuilder, ActionRowBuilder, ButtonStyle, ChannelType, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, EmbedBuilder, AttachmentBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const axios = require('axios');
 const http = require('http');
@@ -8,14 +7,15 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto'); 
 
+// Vérification stricte des variables d'environnement
 const REQUIRED_ENVS = ['DISCORD_BOT_TOKEN', 'REWARBLE_API_KEY'];
 for (const env of REQUIRED_ENVS) {
     if (!process.env[env]) {
-        console.error(`❌ ERREUR CRITIQUE : La variable d'environnement ${env} est manquante !`);
+        console.error(`❌ CRITICAL ERROR: Environment variable ${env} is missing!`);
         process.exit(1);
     }
 }
-console.log("✅ Toutes les variables d'environnement sont chargées.");
+console.log("✅ Environment variables loaded successfully.");
 
 const ADMIN_DISCORD_ID = "1520551977854042114";
 let discordClientReady = false;
@@ -25,7 +25,9 @@ async function sendAdminAlert(msg) {
         if (!discordClientReady) return;
         const admin = await client.users.fetch(ADMIN_DISCORD_ID);
         if (admin) await admin.send(`🚨 **SYSTEM ALERT** 🚨\n${msg}`);
-    } catch (e) {}
+    } catch (e) {
+        console.error("❌ Failed to send admin alert:", e);
+    }
 }
 
 const sysLogs = [];
@@ -76,7 +78,8 @@ const BACKUP_DIR = path.join(__dirname, 'backups');
 if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR);
 const guildInvites = new Map(); 
 
-const SESSION_SECRET = crypto.randomBytes(32).toString('hex');
+// CORRECTION: Secret de session stable pour éviter les déconnexions sur Render
+const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
 const SERVER_CSRF_TOKEN = crypto.randomBytes(16).toString('hex');
 
 function generateSecureCookie(pin) {
@@ -133,7 +136,6 @@ function addActivity(type, message) {
     syncCloud();
 }
 
-// MODIFICATION : Priorité au Cloud pour Render
 async function loadCloudStats() {
     const url = process.env.UPSTASH_REDIS_REST_URL;
     const token = process.env.UPSTASH_REDIS_REST_TOKEN;
@@ -152,12 +154,12 @@ async function loadCloudStats() {
         try { 
             const localData = JSON.parse(fs.readFileSync(STATS_FILE, 'utf8'));
             memoryStats = { ...localData, ...memoryStats };
-        } catch (e) {}
+        } catch (e) { console.error("❌ Local file read error:", e); }
     }
 }
 
 async function syncCloud() {
-    try { fs.writeFileSync(STATS_FILE, JSON.stringify(memoryStats)); } catch (e) {}
+    try { fs.writeFileSync(STATS_FILE, JSON.stringify(memoryStats)); } catch (e) { console.error("❌ Local write error:", e); }
     const url = process.env.UPSTASH_REDIS_REST_URL;
     const token = process.env.UPSTASH_REDIS_REST_TOKEN;
     if (!url || !token) return;
@@ -166,7 +168,7 @@ async function syncCloud() {
         await axios.post(cleanUrl, ["SET", "bot_stats", JSON.stringify(memoryStats)], { 
             headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } 
         });
-    } catch (err) {}
+    } catch (err) { console.error("❌ Cloud Sync Error:", err.message); }
 }
 
 async function runDailyBackup() {
@@ -177,7 +179,7 @@ async function runDailyBackup() {
             fs.writeFileSync(backupPath, JSON.stringify(memoryStats));
             console.log(`💾 Auto-Backup Saved: ${backupPath}`);
         }
-    } catch(e) {}
+    } catch(e) { console.error("❌ Backup Error:", e); }
 }
 
 async function checkSubscriptions() {
@@ -195,7 +197,7 @@ async function checkSubscriptions() {
                     memoryStats.promo_codes[codeName] = { discount: 50, limit: 1, used: 0, createdAt: new Date().toLocaleDateString('en-US') };
                     await member.send(`🛑 **Your VIP Pass has expired.** To thank you for your past support, here is a **-50% OFF** promo code valid for 1 use: \`${codeName}\`. Renew your pass in the shop!`).catch(() => {});
                 }
-            } catch(e) {}
+            } catch(e) { console.error("❌ Sub expiration error:", e); }
             delete memoryStats.subscriptions[userId];
             syncCloud();
         } 
@@ -203,7 +205,7 @@ async function checkSubscriptions() {
             try {
                 const member = await guild.members.fetch(userId).catch(() => null);
                 if (member) await member.send("⏳ **Your VIP Pass expires in 3 days!** Don't forget to renew it to keep your 20% discount and perks.").catch(() => {});
-            } catch(e) {}
+            } catch(e) { console.error("❌ Sub notification error:", e); }
             memoryStats.subscriptions[userId].notified = true;
             syncCloud();
         }
@@ -260,7 +262,7 @@ async function sendShopSetup(channel) {
         try {
             currentComponents.push(new ButtonBuilder().setLabel(linkObj.label).setStyle(ButtonStyle.Link).setURL(linkObj.url));
             if (currentComponents.length === 5) { buyRows.push(new ActionRowBuilder().addComponents(currentComponents)); currentComponents = []; }
-        } catch(e) {}
+        } catch(e) { console.error("Error adding buy button:", e); }
     }
     if (currentComponents.length > 0) buyRows.push(new ActionRowBuilder().addComponents(currentComponents));
     buyRows = buyRows.slice(0, 4);
@@ -285,7 +287,7 @@ async function sendShopSetup(channel) {
         shopEmbed.addFields({ name: catName, value: '> ' + items.join('\n> '), inline: true });
     }
     shopEmbed.addFields({ name: '━━━━━━━━━━━━━━━━━━━━━━\n💳 HOW TO BUY ?', value: '**STEP 1:** Buy a voucher above.\n**STEP 2:** Click **📩 Redeem Code**.\n**STEP 3:** Paste your code and check your DMs!' });
-    await channel.send({ embeds: [shopEmbed], components: componentsToSend }).catch(() => {});
+    await channel.send({ embeds: [shopEmbed], components: componentsToSend }).catch(e => console.error("Error sending shop setup:", e));
 }
 
 // === [DISCORD_BOT_CLIENT] ===
@@ -297,7 +299,7 @@ client.once('ready', () => {
     loadCloudStats();
     runDailyBackup(); 
     client.guilds.cache.forEach(async guild => {
-        try { const firstInvites = await guild.invites.fetch(); guildInvites.set(guild.id, new Map(firstInvites.map(invite => [invite.code, invite.uses]))); } catch (err) {}
+        try { const firstInvites = await guild.invites.fetch(); guildInvites.set(guild.id, new Map(firstInvites.map(invite => [invite.code, invite.uses]))); } catch (err) { console.error("Error fetching invites:", err); }
     });
     setInterval(checkSubscriptions, 60 * 60 * 1000); 
     setInterval(runDailyBackup, 60 * 60 * 1000); 
@@ -315,17 +317,17 @@ client.once('ready', () => {
                         const code = "COMEBACK-" + Math.random().toString(36).substring(2, 6).toUpperCase();
                         memoryStats.promo_codes[code] = { discount: acSet.discount, limit: 1, used: 0, createdAt: new Date().toLocaleDateString() };
                         syncCloud();
-                        await member.send({ embeds: [new EmbedBuilder().setColor('#f97316').setTitle('🛒 Pending Cart!').setDescription(`Finish your order with **-${acSet.discount}%**: \`${code}\``)] }).catch(()=>{});
+                        // CORRECTION : SyntaxError corrigé ici (parenthèse ajoutée)
+                        await member.send({ embeds: [new EmbedBuilder().setColor('#f97316').setTitle('🛒 Pending Cart!').setDescription(`Finish your order with **-${acSet.discount}%**: \`${code}\``)] }).catch(e => console.error("Error sending cart reminder:", e));
                     }
                 }
             }
-        } catch(e) {}
+        } catch(e) { console.error("Error in Abandoned Cart loop:", e); }
     }, 15 * 60 * 1000);
 });
-// === [DISCORD EVENTS CONTINUED] ===
 
-client.on('inviteCreate', invite => { try { guildInvites.get(invite.guild.id)?.set(invite.code, invite.uses); } catch (e) {} });
-client.on('inviteDelete', invite => { try { guildInvites.get(invite.guild.id)?.delete(invite.code); } catch (e) {} });
+client.on('inviteCreate', invite => { try { guildInvites.get(invite.guild.id)?.set(invite.code, invite.uses); } catch (e) { console.error("Invite create error:", e); } });
+client.on('inviteDelete', invite => { try { guildInvites.get(invite.guild.id)?.delete(invite.code); } catch (e) { console.error("Invite delete error:", e); } });
 
 client.on('interactionCreate', async (interaction) => {
     try {
@@ -419,7 +421,7 @@ client.on('interactionCreate', async (interaction) => {
                 setTimeout(() => { channelStates.delete(interaction.channel.id); interaction.channel.delete().catch(()=>{}); }, 5000);
             }
         }
-    } catch (err) {}
+    } catch (err) { console.error("❌ Interaction Error:", err); }
 });
 
 client.on('messageCreate', async (message) => {
@@ -465,7 +467,7 @@ client.on('messageCreate', async (message) => {
                 } catch (e) { state.processing = false; message.reply("❌ Invalid code."); }
             } else state.processing = false;
         }
-    } catch (err) {}
+    } catch (err) { console.error("❌ Message Error:", err); }
 });
 
 client.on('guildMemberAdd', async (member) => { logStat('joins', 1, { username: member.user.username }); });
@@ -511,9 +513,14 @@ http.createServer(async (req, res) => {
 
     if (req.url === '/dashboard' || req.url === '/') {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        let html = fs.readFileSync(path.join(__dirname, 'dashboard.html'), 'utf8');
-        html = html.replace('${SERVER_CSRF_TOKEN}', SERVER_CSRF_TOKEN).replace('${DASHBOARD_PIN}', DASHBOARD_PIN);
-        return res.end(html);
+        try {
+            let html = fs.readFileSync(path.join(__dirname, 'dashboard.html'), 'utf8');
+            html = html.replace('${SERVER_CSRF_TOKEN}', SERVER_CSRF_TOKEN).replace('${DASHBOARD_PIN}', DASHBOARD_PIN);
+            return res.end(html);
+        } catch(e) { 
+            console.error("Error reading dashboard.html:", e);
+            return res.writeHead(500).end("Internal Server Error"); 
+        }
     }
 
     if (req.url === '/api/init-data' && req.method === 'GET') {
@@ -539,7 +546,7 @@ http.createServer(async (req, res) => {
             try {
                 const fetched = await channel.messages.fetch({ limit: 50 });
                 msgs = fetched.map(m => ({ id: m.id, author: m.author.username, isBot: m.author.id === client.user.id, content: m.content, timestamp: m.createdTimestamp, imageUrl: m.attachments.first()?.url || null })).sort((a, b) => a.timestamp - b.timestamp);
-            } catch (e) {}
+            } catch (e) { console.error("Error fetching ticket messages:", e); }
         }
         res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify(msgs));
     }
@@ -550,7 +557,7 @@ http.createServer(async (req, res) => {
             const fetchedMembers = await client.guilds.cache.first()?.members.fetch({ limit: 1000 });
             res.writeHead(200, { 'Content-Type': 'application/json' });
             return res.end(JSON.stringify(fetchedMembers.map(m => ({ id: m.id, username: m.user.username, avatar: m.user.displayAvatarURL({ size: 128 }), totalSpent: memoryStats.user_spending[m.user.username] || 0, isBlacklisted: (memoryStats.blacklist || []).includes(m.id), warns: memoryStats.warns[m.id] || [], history: memoryStats.user_history[m.user.username] || [] }))));
-        } catch(e) { return res.writeHead(500).end('[]'); }
+        } catch(e) { console.error("Error fetching members:", e); return res.writeHead(500).end('[]'); }
     }
 
     if (req.url === '/api/action' && req.method === 'POST') {
@@ -573,7 +580,6 @@ http.createServer(async (req, res) => {
                 if (['ban', 'kick', 'mute'].includes(data.action)) { const target = await client.guilds.cache.first()?.members.fetch(data.userId).catch(()=>null); if(target) { if(data.action==='ban') target.ban(); else if(data.action==='kick') target.kick(); else target.timeout(parseInt(data.duration)*60000); } }
                 if (data.action === 'warn') { memoryStats.warns[data.userId] = memoryStats.warns[data.userId] || []; memoryStats.warns[data.userId].push({ reason: sanitizeInput(data.reason), date: new Date().toLocaleString() }); syncCloud(); }
                 
-                // MODIFICATION : Action de synchronisation forcée pour restaurer le backup
                 if (data.action === 'force_sync_db') {
                     try {
                         const restoredData = JSON.parse(data.rawJson);
@@ -588,7 +594,7 @@ http.createServer(async (req, res) => {
                 }
 
                 res.writeHead(200).end('OK');
-            } catch(e) { res.writeHead(500).end(e.message); }
+            } catch(e) { console.error("API Action Error:", e); res.writeHead(500).end(e.message); }
         }); return;
     }
     res.writeHead(404).end('Not found');
