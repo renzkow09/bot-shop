@@ -130,10 +130,8 @@ function addActivity(type, message) {
     syncCloud();
 }
 
+// MODIFICATION : Priorité au Cloud pour Render
 async function loadCloudStats() {
-    if (fs.existsSync(STATS_FILE)) {
-        try { memoryStats = { ...memoryStats, ...JSON.parse(fs.readFileSync(STATS_FILE, 'utf8')) }; } catch (e) {}
-    }
     const url = process.env.UPSTASH_REDIS_REST_URL;
     const token = process.env.UPSTASH_REDIS_REST_TOKEN;
     if (!url || !token) return console.log("⚠️ Upstash variables missing.");
@@ -141,26 +139,18 @@ async function loadCloudStats() {
         const cleanUrl = url.endsWith('/') ? url.slice(0, -1) : url;
         const res = await axios.get(`${cleanUrl}/get/bot_stats`, { headers: { Authorization: `Bearer ${token}` } });
         if (res.data && res.data.result) {
-            memoryStats = { ...memoryStats, ...JSON.parse(res.data.result) };
-            if (!memoryStats.promo_codes) memoryStats.promo_codes = {};
-            if (!memoryStats.user_notes) memoryStats.user_notes = {};
-            if (!memoryStats.referrals) memoryStats.referrals = {};
-            if (!memoryStats.subscriptions) memoryStats.subscriptions = {};
-            if (!memoryStats.pending_reviews) memoryStats.pending_reviews = [];
-            if (!memoryStats.activity_feed) memoryStats.activity_feed = [];
-            if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } };
-            if (!memoryStats.buy_links || Object.keys(memoryStats.buy_links).length === 0) memoryStats.buy_links = INITIAL_BUY_LINKS; 
-            if (!memoryStats.analytics) memoryStats.analytics = { tickets_opened: 0, hourly_sales: Array(24).fill(0) };
-            if (!memoryStats.products || Object.keys(memoryStats.products).length === 0) memoryStats.products = INITIAL_PRODUCTS;
-            
-            if (memoryStats.revenue) {
-                let total = 0;
-                for (const val of Object.values(memoryStats.revenue)) total += parseFloat(val) || 0;
-                memoryStats.total_revenue = total;
-            }
+            const cloudData = JSON.parse(res.data.result);
+            memoryStats = { ...memoryStats, ...cloudData };
             console.log("✅ Database synchronized with the Cloud.");
         }
     } catch (e) { console.error("❌ Cloud GET Error :", e.message); }
+
+    if (fs.existsSync(STATS_FILE)) {
+        try { 
+            const localData = JSON.parse(fs.readFileSync(STATS_FILE, 'utf8'));
+            memoryStats = { ...localData, ...memoryStats };
+        } catch (e) {}
+    }
 }
 
 async function syncCloud() {
@@ -191,7 +181,6 @@ async function checkSubscriptions() {
     const now = Date.now();
     const guild = client.guilds.cache.first();
     if (!guild) return;
-
     for (const [userId, subData] of Object.entries(memoryStats.subscriptions || {})) {
         if (now > subData.expiresAt) {
             try {
@@ -323,13 +312,14 @@ client.once('ready', () => {
                         const code = "COMEBACK-" + Math.random().toString(36).substring(2, 6).toUpperCase();
                         memoryStats.promo_codes[code] = { discount: acSet.discount, limit: 1, used: 0, createdAt: new Date().toLocaleDateString() };
                         syncCloud();
-                        await member.send({ embeds: [new EmbedBuilder().setColor('#f97316').setTitle('🛒 Pending Cart!').setDescription(`Finish your order with **-${acSet.discount}%**: \`${code}\``)] }).catch(()=>{});
+                        await member.send({ embeds: [new EmbedBuilder().setColor('#f97316').setTitle('🛒 Pending Cart!').setDescription(`Finish your order with **-${acSet.discount}%**: \`${code}\`)] }).catch(()=>{});
                     }
                 }
             }
         } catch(e) {}
     }, 15 * 60 * 1000);
 });
+// === [DISCORD EVENTS CONTINUED] ===
 
 client.on('inviteCreate', invite => { try { guildInvites.get(invite.guild.id)?.set(invite.code, invite.uses); } catch (e) {} });
 client.on('inviteDelete', invite => { try { guildInvites.get(invite.guild.id)?.delete(invite.code); } catch (e) {} });
@@ -516,7 +506,6 @@ http.createServer(async (req, res) => {
         return res.end("<!DOCTYPE html><html lang='en'><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'><title>Nexus Admin</title><style>body{background:#0f172a;color:#f8fafc;display:flex;justify-content:center;align-items:center;height:100vh;font-family:sans-serif}.box{background:#1e293b;padding:40px;border-radius:12px;text-align:center;box-shadow:0 10px 25px rgba(0,0,0,0.5)}input{background:#334155;border:1px solid #475569;color:#fff;padding:12px;border-radius:6px;margin:20px 0;width:100%;text-align:center;letter-spacing:5px}button{background:#3b82f6;color:#fff;border:none;padding:12px 24px;border-radius:6px;cursor:pointer;font-weight:bold;width:100%}</style></head><body><div class='box'><h2>Restricted Area</h2><input type='password' id='pin' placeholder='••••'><button onclick='l()'>Unlock</button></div><script>async function l(){const r=await fetch('/api/login',{method:'POST',body:JSON.stringify({pin:document.getElementById('pin').value})});if(r.ok)location.reload();}document.getElementById('pin').addEventListener('keypress',e=>{if(e.key==='Enter')l();})</script></body></html>");
     }
 
-    // === SERVE NEW DASHBOARD HTML ===
     if (req.url === '/dashboard' || req.url === '/') {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         let html = fs.readFileSync(path.join(__dirname, 'dashboard.html'), 'utf8');
@@ -580,6 +569,20 @@ http.createServer(async (req, res) => {
                 if (data.action === 'refresh_setup') { const ch = await client.channels.fetch(SHOP_CHANNEL_ID).catch(()=>null); if(ch) { (await ch.messages.fetch({ limit: 50 })).filter(m => m.author.id === client.user.id).forEach(async m => m.delete().catch(()=>{})); await sendShopSetup(ch); } }
                 if (['ban', 'kick', 'mute'].includes(data.action)) { const target = await client.guilds.cache.first()?.members.fetch(data.userId).catch(()=>null); if(target) { if(data.action==='ban') target.ban(); else if(data.action==='kick') target.kick(); else target.timeout(parseInt(data.duration)*60000); } }
                 if (data.action === 'warn') { memoryStats.warns[data.userId] = memoryStats.warns[data.userId] || []; memoryStats.warns[data.userId].push({ reason: sanitizeInput(data.reason), date: new Date().toLocaleString() }); syncCloud(); }
+                
+                // MODIFICATION : Action de synchronisation forcée pour restaurer le backup
+                if (data.action === 'force_sync_db') {
+                    try {
+                        const restoredData = JSON.parse(data.rawJson);
+                        memoryStats = { ...memoryStats, ...restoredData };
+                        await syncCloud();
+                        res.writeHead(200).end('RESTORED');
+                        return;
+                    } catch (e) {
+                        res.writeHead(500).end('Invalid JSON');
+                        return;
+                    }
+                }
 
                 res.writeHead(200).end('OK');
             } catch(e) { res.writeHead(500).end(e.message); }
