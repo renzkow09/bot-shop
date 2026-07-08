@@ -2213,7 +2213,9 @@ http.createServer(async (req, res) => {
         ].join('\n');
         return res.end(dashboardHTML);
     } else { res.writeHead(200, { 'Content-Type': 'text/plain' }); res.end('API Bot'); }
-}).listen(process.env.PORT || 3000);
+}).listen(process.env.PORT || 10000, () => {
+    console.log(`✅ Server démarré sur le port ${process.env.PORT || 10000}`);
+});
 
 // === [ANCHOR: STARTUP_DEBUG] ===
 console.log('🔍 Starting bot...');
