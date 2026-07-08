@@ -820,7 +820,7 @@
                 totalRevenue: 0,
                 conversionRate: 0,
                 activeTickets: 0,
-                products: [],
+                products: {},
                 transactions: [],
                 activity: [],
                 revenueHistory: {},
@@ -970,7 +970,7 @@
                     <div class="pulse-icon"><i data-lucide="activity" style="width:14px"></i></div>
                     <div>
                         <div style="font-weight:500">${act.type}</div>
-                        <div style="font-size:0.75rem; color:var(--text-muted)">${act.description} • ${act.time}</div>
+                        <div style="font-size:0.75rem; color:var(--text-muted)">${act.message} • ${act.time}</div>
                     </div>
                 </div>
             `).join('');
@@ -1057,19 +1057,22 @@
         // --- Product & Catalog Logic ---
         function renderProducts() {
             const grid = document.getElementById('product-grid');
-            grid.innerHTML = state.data.products.map((p, idx) => `
+            // Conversion de l'objet produits en tableau pour le rendu
+            const productsArray = Object.entries(state.data.products).map(([id, p]) => ({ id, ...p }));
+
+            grid.innerHTML = productsArray.map((p, idx) => `
                 <div class="glass-card product-card">
                     <div class="product-header">
                         <div class="product-icon"><i data-lucide="package"></i></div>
                         <div style="display:flex; gap:5px">
-                            <button class="btn btn-ghost" style="padding:4px" onclick="editProduct(${idx})"><i data-lucide="edit-2" style="width:12px"></i></button>
+                            <button class="btn btn-ghost" style="padding:4px" onclick="editProduct('${p.id}')"><i data-lucide="edit-2" style="width:12px"></i></button>
                             <button class="btn btn-ghost" style="padding:4px; color:var(--accent-danger)" onclick="deleteProduct('${p.id}')"><i data-lucide="trash" style="width:12px"></i></button>
                         </div>
                     </div>
                     <div style="font-weight:600; font-size:1.1rem">${p.name}</div>
                     <div style="color:var(--accent-success); font-weight:700">${currencyFormatter.format(p.price)}</div>
                     <div style="font-size:0.8rem; color:var(--text-secondary)">Stock: ${p.stock}</div>
-                    <div style="font-size:0.8rem; opacity:0.7">${p.description || 'No description'}</div>
+                    <div style="font-size:0.8rem; opacity:0.7">${p.desc || 'No description'}</div>
                 </div>
             `).join('');
             lucide.createIcons();
@@ -1081,7 +1084,7 @@
                 name: document.getElementById('p-name').value,
                 price: parseFloat(document.getElementById('p-price').value),
                 stock: parseInt(document.getElementById('p-stock').value),
-                description: document.getElementById('p-desc').value
+                desc: document.getElementById('p-desc').value
             };
             await performAction('add_product', payload);
             e.target.reset();
@@ -1089,7 +1092,7 @@
 
         async function deleteProduct(id) {
             if (confirm('Delete this product?')) {
-                await performAction('delete_product', { productId: id });
+                await performAction('delete_product', { id: id });
             }
         }
 
@@ -1098,7 +1101,7 @@
             const body = document.getElementById('tx-table-body');
             body.innerHTML = state.data.transactions.map(tx => `
                 <tr>
-                    <td>${tx.customer}</td>
+                    <td>${tx.username || 'Unknown'}</td>
                     <td>${tx.product}</td>
                     <td style="color:var(--accent-success); font-weight:600">${currencyFormatter.format(tx.price)}</td>
                     <td>${tx.date}</td>
@@ -1117,8 +1120,8 @@
                             ${u.username}
                         </div>
                     </td>
-                    <td>${u.joined}</td>
-                    <td>${currencyFormatter.format(u.spent)}</td>
+                    <td>${u.joined || '--'}</td>
+                    <td>${currencyFormatter.format(u.spent || 0)}</td>
                     <td>
                         <div style="display:flex; gap:5px">
                             <button class="btn btn-ghost" style="padding:4px 8px" onclick="modUser('${u.id}', 'warn')">Warn</button>
@@ -1146,17 +1149,18 @@
             }
         }
 
-        // --- Global Sync Engine ---
+        // --- Global Sync Engine (CORRIGÉ POUR TON BOT) ---
         async function syncData() {
             const data = await apiRequest('/api/init-data');
             if (!data) return;
 
+            // On mappe les données exactement comme elles sont envoyées par ton bot
             state.data = {
-                todayRevenue: data.todayRevenue,
-                totalRevenue: data.totalRevenue,
-                conversionRate: data.conversionRate,
-                activeTickets: data.activeTickets,
-                products: data.memoryStats.products || [],
+                todayRevenue: data.todayRevenue || 0,
+                totalRevenue: data.memoryStats.total_revenue || 0,
+                conversionRate: data.dropOffRate ? (100 - parseFloat(data.dropOffRate)).toFixed(1) : 0,
+                activeTickets: data.activeTickets || 0,
+                products: data.memoryStats.products || {},
                 transactions: data.memoryStats.recent_transactions || [],
                 activity: data.memoryStats.activity_feed || [],
                 revenueHistory: data.memoryStats.revenue || {},
@@ -1187,9 +1191,9 @@
             document.getElementById('manual-tx-form').onsubmit = async (e) => {
                 e.preventDefault();
                 await performAction('create_manual_tx', {
-                    user: document.getElementById('tx-user').value,
+                    username: document.getElementById('tx-user').value,
                     product: document.getElementById('tx-prod').value,
-                    amount: parseFloat(document.getElementById('tx-amt').value)
+                    price: parseFloat(document.getElementById('tx-amt').value)
                 });
                 toggleModal('tx-modal');
             };
