@@ -110,10 +110,41 @@
         #toast-container { position: fixed; bottom: 2rem; right: 2rem; display: flex; flex-direction: column; gap: 10px; z-index: 1000; }
         .toast { padding: 1rem 1.5rem; border-radius: 12px; background: var(--bg-surface); border: 1px solid var(--glass-border); color: white; box-shadow: var(--shadow-premium); animation: slideIn 0.3s ease-out; min-width: 250px; display: flex; align-items: center; gap: 10px; }
         @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        /* 💎 ULTRA PREMIUM SPLASH SCREEN 💎 */
+        .splash-screen { position: fixed; inset: 0; background: #030712; z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; transition: opacity 1.2s cubic-bezier(0.8, 0, 0.2, 1), transform 1.2s cubic-bezier(0.8, 0, 0.2, 1); overflow: hidden; perspective: 1000px; }
+        .splash-glow { position: absolute; width: 80vw; height: 80vw; background: radial-gradient(circle, rgba(14, 165, 233, 0.15) 0%, transparent 60%); top: 50%; left: 50%; transform: translate(-50%, -50%); animation: pulseGlow 4s ease-in-out infinite alternate; pointer-events: none; }
+        @keyframes pulseGlow { 0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0.5; } 100% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; } }
+        .premium-logo-container { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; }
+        .premium-logo { font-size: 4rem; font-weight: 800; letter-spacing: -3px; background: linear-gradient(135deg, #fff 0%, #0ea5e9 50%, #a855f7 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; opacity: 0; transform: translateY(30px) scale(0.95); filter: blur(15px); transition: all 1.5s cubic-bezier(0.16, 1, 0.3, 1) 0.2s; }
+        .premium-logo.show { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); letter-spacing: 4px; }
+        .premium-subtitle { font-size: 0.9rem; color: #94a3b8; font-weight: 400; letter-spacing: 12px; text-transform: uppercase; margin-top: -5px; opacity: 0; transform: translateY(15px); filter: blur(5px); transition: all 1.5s cubic-bezier(0.16, 1, 0.3, 1) 0.8s; }
+        .premium-subtitle.show { opacity: 1; transform: translateY(0); filter: blur(0); }
+        .loader-wrapper { position: relative; width: 240px; height: 2px; background: rgba(255,255,255,0.05); border-radius: 2px; margin-top: 50px; overflow: hidden; opacity: 0; transition: opacity 1s ease 1.2s; }
+        .loader-wrapper.show { opacity: 1; }
+        .loader-bar { position: absolute; top: 0; left: 0; height: 100%; width: 0%; background: linear-gradient(90deg, transparent, #0ea5e9, #fff); box-shadow: 0 0 20px #0ea5e9, 0 0 10px #a855f7; transition: width 0.1s cubic-bezier(0.4, 0, 0.2, 1); }
+        .loader-percentage { position: absolute; right: 0; top: 20px; color: #64748b; font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; font-weight: 600; letter-spacing: 2px; transition: opacity 0.5s ease; }
+        .premium-welcome { position: absolute; top: 180px; font-size: 1.8rem; font-weight: 300; color: #fff; letter-spacing: 6px; opacity: 0; filter: blur(10px); transform: translateY(20px); transition: all 1.5s cubic-bezier(0.16, 1, 0.3, 1); text-shadow: 0 0 30px rgba(14, 165, 233, 0.6); text-transform: uppercase; }
+        .premium-welcome.show { opacity: 1; filter: blur(0); transform: translateY(0); }
     </style>
 </head>
 <body>
 
+    <!-- SPLASH SCREEN -->
+    <div id='loading-screen' class='splash-screen'>
+       <div class='splash-glow'></div>
+       <div class='premium-logo-container'>
+           <div id='premium-logo' class='premium-logo'>NEXUS</div>
+           <div id='premium-subtitle' class='premium-subtitle'>Executive</div>
+           <div id='loader-wrapper' class='loader-wrapper'>
+               <div id='loader-bar' class='loader-bar'></div>
+           </div>
+           <div id='loader-percentage' class='loader-percentage'>00%</div>
+           <div id='welcome-text' class='premium-welcome'>Welcome Admin</div>
+       </div>
+    </div>
+
+    <!-- SIDEBAR -->
     <aside class="sidebar">
         <div class="sidebar-header"><div class="logo-dot"></div>NEXUS ADMIN</div>
         <nav class="nav-group">
@@ -127,6 +158,7 @@
     </aside>
 
     <main class="main-viewport">
+        <!-- HEADER -->
         <header class="top-bar">
             <div class="page-title" id="current-tab-title">Overview</div>
             <div style="display: flex; gap: 1rem; align-items: center;">
@@ -136,17 +168,18 @@
         </header>
 
         <div class="content-container">
+            
+            <!-- OVERVIEW TAB -->
             <section id="overview" class="tab-content active">
                 <div class="kpi-grid">
-                    <div class="glass-card kpi-card"><span class="kpi-label">Today's Revenue</span><span class="kpi-value" id="kpi-today-rev">€0.00</span><span class="kpi-trend trend-up"><i data-lucide="trending-up" style="width:12px"></i> +12% vs yesterday</span></div>
-                    <div class="glass-card kpi-card"><span class="kpi-label">Total Revenue</span><span class="kpi-value" id="kpi-total-rev">€0.00</span><span class="kpi-trend trend-up"><i data-lucide="trending-up" style="width:12px"></i> All-time growth</span></div>
-                    <div class="glass-card kpi-card"><span class="kpi-label">Conversion Rate</span><span class="kpi-value" id="kpi-conv">0.0%</span><span class="kpi-trend trend-down"><i data-lucide="trending-down" style="width:12px"></i> -2% drift</span></div>
-                    <div class="glass-card kpi-card"><span class="kpi-label">Active Tickets</span><span class="kpi-value" id="kpi-tickets">0</span><span class="kpi-trend" style="color: var(--text-muted)">Current queue</span></div>
+                    <div class="glass-card kpi-card"><span class="kpi-label">Today's Revenue</span><span class="kpi-value" id="kpi-today-rev">€0.00</span><span class="kpi-trend trend-up"><i data-lucide="trending-up" style="width:12px"></i> Real-time</span></div>
+                    <div class="glass-card kpi-card"><span class="kpi-label">Total Revenue</span><span class="kpi-value" id="kpi-total-rev">€0.00</span><span class="kpi-trend trend-up"><i data-lucide="trending-up" style="width:12px"></i> All-time</span></div>
+                    <div class="glass-card kpi-card"><span class="kpi-label">Conversion Rate</span><span class="kpi-value" id="kpi-conv">0.0%</span><span class="kpi-trend trend-down"><i data-lucide="activity" style="width:12px"></i> Analytics</span></div>
+                    <div class="glass-card kpi-card"><span class="kpi-label">Active Tickets</span><span class="kpi-value" id="kpi-tickets">0</span><span class="kpi-trend" style="color: var(--text-muted)"><i data-lucide="message-square" style="width:12px"></i> Current queue</span></div>
                 </div>
                 <div class="glass-card">
                     <div style="display:flex; justify-content: space-between; align-items:center; margin-bottom: 1.5rem;">
                         <h3 style="font-size: 1rem; font-weight: 600;">Revenue Analytics</h3>
-                        <select class="input-premium" style="font-size: 0.75rem;"><option>Last 30 Days</option><option>Last 7 Days</option></select>
                     </div>
                     <div class="chart-container"><canvas id="revenueChart"></canvas></div>
                 </div>
@@ -155,6 +188,7 @@
                 </div>
             </section>
 
+            <!-- CHAT TAB -->
             <section id="tickets" class="tab-content">
                 <div class="ticket-layout">
                     <div class="ticket-sidebar">
@@ -177,7 +211,7 @@
                             <div class="chat-messages" id="chat-messages"></div>
                             <div class="chat-input-area">
                                 <button class="btn btn-ghost"><i data-lucide="paperclip"></i></button>
-                                <input type="text" id="chat-input" class="input-premium" style="flex:1" placeholder="Type your message...">
+                                <input type="text" id="chat-input" class="input-premium" style="flex:1" placeholder="Type your message..." onkeypress="if(event.key==='Enter') sendMessage()">
                                 <button class="btn btn-primary" onclick="sendMessage()">Send <i data-lucide="send" style="width:14px"></i></button>
                             </div>
                         </div>
@@ -185,13 +219,14 @@
                 </div>
             </section>
 
+            <!-- PRODUCTS TAB -->
             <section id="products" class="tab-content">
                 <div class="glass-card" style="margin-bottom: 2rem;">
                     <h3 style="margin-bottom: 1.5rem; font-size: 1rem;">Manage Catalog</h3>
                     <form id="product-form" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; align-items: end;">
                         <div style="display:flex; flex-direction:column; gap: 8px;"><label style="font-size: 0.75rem; color: var(--text-secondary);">Product Name</label><input type="text" id="p-name" class="input-premium" required></div>
                         <div style="display:flex; flex-direction:column; gap: 8px;"><label style="font-size: 0.75rem; color: var(--text-secondary);">Price (€)</label><input type="number" step="0.01" id="p-price" class="input-premium" required></div>
-                        <div style="display:flex; flex-direction:column; gap: 8px;"><label style="font-size: 0.75rem; color: var(--text-secondary);">Stock Quantity</label><input type="number" id="p-stock" class="input-premium" required></div>
+                        <div style="display:flex; flex-direction:column; gap: 8px;"><label style="font-size: 0.75rem; color: var(--text-secondary);">Stock</label><input type="text" id="p-stock" class="input-premium" required></div>
                         <div style="display:flex; flex-direction:column; gap: 8px;"><label style="font-size: 0.75rem; color: var(--text-secondary);">Description</label><input type="text" id="p-desc" class="input-premium"></div>
                         <button type="submit" class="btn btn-primary"><i data-lucide="plus"></i> Add Product</button>
                     </form>
@@ -199,6 +234,7 @@
                 <div class="product-grid" id="product-grid"></div>
             </section>
 
+            <!-- TRANSACTIONS TAB -->
             <section id="transactions" class="tab-content">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
                     <h3 style="font-size: 1rem;">Recent Transactions</h3>
@@ -209,16 +245,21 @@
                 </div>
             </section>
 
+            <!-- AUDIENCE TAB -->
             <section id="audience" class="tab-content">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
                     <h3 style="font-size: 1rem;">User Management</h3>
-                    <div style="display:flex; gap: 10px;"><input type="text" id="user-search" class="input-premium" placeholder="Search username..." oninput="filterUsers()"></div>
+                    <div style="display:flex; gap: 10px;">
+                        <input type="text" id="user-search" class="input-premium" placeholder="Search username..." oninput="filterUsers()" style="margin-bottom:0;">
+                        <button class="btn btn-primary" onclick="loadMembers()"><i data-lucide="refresh-cw"></i> Load DB</button>
+                    </div>
                 </div>
-                <div class="table-wrapper glass-card" style="padding: 0;">
+                <div class="table-wrapper glass-card" style="padding: 0; max-height: 600px; overflow-y: auto;">
                     <table><thead><tr><th>User</th><th>Joined</th><th>Total Spent</th><th>Actions</th></tr></thead><tbody id="user-table-body"></tbody></table>
                 </div>
             </section>
 
+            <!-- DEVTOOLS TAB -->
             <section id="devtools" class="tab-content">
                 <div class="kpi-grid" style="margin-bottom: 2rem;">
                     <div class="glass-card kpi-card"><span class="kpi-label">API Ping</span><span class="kpi-value" id="dev-ping">--ms</span></div>
@@ -230,7 +271,7 @@
                     <div class="glass-card">
                         <div style="display:flex; justify-content: space-between; align-items:center; margin-bottom: 1rem;">
                             <h3 style="font-size: 0.9rem;">Database Raw JSON</h3>
-                            <button class="btn btn-primary" style="padding: 4px 8px; font-size: 0.7rem;" onclick="forceSync()">Force Sync</button>
+                            <button class="btn btn-primary" style="padding: 4px 8px; font-size: 0.7rem;" onclick="forceSync()">Force Override Cloud</button>
                         </div>
                         <textarea id="db-json" class="json-editor"></textarea>
                     </div>
@@ -239,13 +280,14 @@
         </div>
     </main>
 
+    <!-- MODAL -->
     <div id="tx-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); backdrop-filter:blur(4px); z-index:1000; align-items:center; justify-content:center;">
         <div class="glass-card" style="width: 400px; animation: fadeIn 0.2s ease;">
             <h3 style="margin-bottom: 1.5rem;">Create Manual Transaction</h3>
             <form id="manual-tx-form" style="display:flex; flex-direction:column; gap: 1rem;">
-                <input type="text" id="tx-user" class="input-premium" placeholder="Username" required>
-                <input type="text" id="tx-prod" class="input-premium" placeholder="Product Name" required>
-                <input type="number" step="0.01" id="tx-amt" class="input-premium" placeholder="Amount (€)" required>
+                <input type="text" id="tx-user" class="input-premium" placeholder="Username" required style="margin-bottom:0;">
+                <input type="text" id="tx-prod" class="input-premium" placeholder="Product Name" required style="margin-bottom:0;">
+                <input type="number" step="0.01" id="tx-amt" class="input-premium" placeholder="Amount (€)" required style="margin-bottom:0;">
                 <div style="display:flex; gap: 10px; justify-content: flex-end; margin-top: 1rem;">
                     <button type="button" class="btn btn-ghost" onclick="toggleModal('tx-modal')">Cancel</button>
                     <button type="submit" class="btn btn-primary">Confirm</button>
@@ -259,7 +301,6 @@
         let PIN = '${DASHBOARD_PIN}';
         let SERVER_CSRF_TOKEN = '${SERVER_CSRF_TOKEN}';
 
-        // === BACKUP NETTOYÉ (SANS TOUT CE QUI EST MEMBRES) ===
         const MANUAL_BACKUP = {
             "revenue":{"2026-07-03":15,"2026-07-04":25,"2026-07-05":55,"2026-07-06":40,"2026-07-07":10},
             "total_revenue":145,
@@ -268,62 +309,23 @@
             "product_sales":{"1":6,"2":3,"3":3,"4":4,"5":2,"6":9,"7":3,"8":2,"9":1,"13":1,"14":1,"15":1},
             "recent_transactions":[
                 {"username":"Manual Entry","product":"Custom Amount","price":10,"date":"7/7/2026, 1:51:00 AM"},
-                {"username":"Manual Entry","product":"Custom Amount","price":5,"date":"7/6/2026, 8:37:00 PM"},
-                {"username":"Manual Entry","product":"Custom Amount","price":10,"date":"7/6/2026, 12:59:00 PM"},
-                {"username":"Manual Entry","product":"Custom Amount","price":20,"date":"7/6/2026, 11:27:00 AM"},
-                {"username":"Manual Entry","product":"Custom Amount","price":5,"date":"7/6/2026, 11:05:00 AM"},
-                {"username":"blake0850","product":"Boobs","price":5,"date":"7/5/2026, 5:19:34 PM"},
-                {"username":"blake0850","product":"3-Min Video","price":10,"date":"7/5/2026, 9:12:26 AM"},
-                {"username":"ifw.emerson","product":"3-Min Video","price":10,"date":"7/5/2026, 12:40:57 AM"},
-                {"username":"ifw.emerson","product":"Boobs","price":5,"date":"7/5/2026, 12:37:08 AM"},
-                {"username":"2fly2high._18652","product":"3-Min Video","price":10,"date":"7/5/2026, 12:27:17 AM"},
-                {"username":"itsjustme0924","product":"Friends Nude","price":15,"date":"7/5/2026, 12:06:59 AM"},
-                {"username":"olivier770548","product":"Lingerie Try-On","price":5,"date":"7/4/2026, 6:51:03 PM"},
-                {"username":"ryznlu","product":"3-Min Video","price":10,"date":"7/4/2026, 6:44:12 PM"},
-                {"username":"snesh.hideo","product":"Shower / Bath","price":10,"date":"7/4/2026, 3:53:08 PM"},
-                {"username":"artek15","product":"Lingerie Try-On","price":5,"date":"7/4/2026, 2:43:55 PM"},
-                {"username":"fentheaven","product":"Boobs","price":5,"date":"7/4/2026, 1:46:56 PM"},
-                {"username":"snesh.hideo","product":"3-Min Video","price":10,"date":"7/4/2026, 9:03:05 AM"},
-                {"username":"shadoz2fly","product":"3-Min Video","price":10,"date":"7/4/2026, 6:34:27 AM"},
-                {"username":"shadoz2fly","product":"Shower / Bath","price":10,"date":"7/4/2026, 6:33:51 AM"},
-                {"username":"goofy_kid14.","product":"Full Body","price":5,"date":"7/4/2026, 4:42:05 AM"},
-                {"username":"ryznlu","product":"Lingerie Try-On","price":5,"date":"03/07/2026 19:11:32"},
-                {"username":"voxi1_3","product":"5-Min Video","price":10,"date":"03/07/2026 06:55:07"}
+                {"username":"Manual Entry","product":"Custom Amount","price":5,"date":"7/6/2026, 8:37:00 PM"}
             ],
-            "custom_requests":[
-                {"id":"1783389113246","username":"keepitahuncho","userId":"452237597520035850","product":"Sexting","date":"7/7/2026, 1:51:53 AM","status":"pending"},
-                {"id":"1783370379133","username":"justbiz8090","userId":"1522689068457136259","product":"Custom Request","date":"7/6/2026, 8:39:39 PM","status":"pending"},
-                {"id":"1783369514644","username":"js.evan007","userId":"1203839673751969863","product":"Custom Request","date":"7/6/2026, 8:25:14 PM","status":"pending"},
-                {"id":"1783342781925","username":"not_bxndz","userId":"1326446219723018293","product":"Custom Request","date":"7/6/2026, 12:59:41 PM","status":"pending"},
-                {"id":"1783337272218","username":"dtapz978","userId":"859211193922748426","product":"Custom Request","date":"7/6/2026, 11:27:52 AM","status":"pending"},
-                {"id":"1783160948278","username":"snesh.hideo","product":"Custom Request","date":"7/4/2026, 10:29:08 AM","status":"recording"},
-                {"id":"1783156406852","username":"snesh.hideo","product":"Custom Request","date":"7/4/2026, 9:13:26 AM","status":"pending"}
-            ],
-            "promo_codes":{"REFYOFW5G":{"discount":100,"limit":1,"used":0,"createdAt":"7/5/2026"},"REFGWN0C0":{"discount":100,"limit":1,"used":0,"createdAt":"7/5/2026"},"REFP5E3YA":{"discount":100,"limit":1,"used":0,"createdAt":"7/5/2026"},"REFAL6SP4":{"discount":100,"limit":1,"used":0,"createdAt":"7/5/2026"},"REFPFHD58":{"discount":100,"limit":1,"used":0,"createdAt":"7/5/2026"},"REFNOWYC1":{"discount":100,"limit":1,"used":0,"createdAt":"7/5/2026"},"REFX9YIK8":{"discount":100,"limit":1,"used":0,"createdAt":"7/6/2026"},"REFVOUZA7":{"discount":100,"limit":1,"used":0,"createdAt":"7/6/2026"},"REF74OB46":{"discount":100,"limit":1,"used":0,"createdAt":"7/6/2026"},"REFX78P1C":{"discount":100,"limit":1,"used":0,"createdAt":"7/6/2026"},"REFWUYJF1":{"discount":100,"limit":1,"used":0,"createdAt":"7/6/2026"},"REF4L08DK":{"discount":100,"limit":1,"used":0,"createdAt":"7/6/2026"},"REF2DJV6K":{"discount":100,"limit":1,"used":0,"createdAt":"7/6/2026"}},
-            "ticket_tags":{"1523653853558603850":"red"},
+            "custom_requests":[],
+            "promo_codes":{},
+            "ticket_tags":{},
             "analytics":{"tickets_opened":76,"hourly_sales":[4,0,0,0,1,0,2,0,1,2,0,0,1,14,2,1,0,1,2,1,0,1,1,1]},
-            "settings":{"invite_reward_threshold":1000,"maintenance":{"active":false,"endsAt":0,"channelId":"1520823312618623036"},"flashSale":{"active":false,"discount":0,"endsAt":0}},
-            "products":{"1":{"name":"Boobs","price":"5","link":"https://oavqyazsogotcigjysml.supabase.co/storage/v1/object/public/vip-content/boobs.jpeg","category":"✨ PHOTOS","stock":"∞"},"2":{"name":"Ass","price":"5","link":"https://oavqyazsogotcigjysml.supabase.co/storage/v1/object/public/vip-content/ass.jpeg","category":"✨ PHOTOS"},"3":{"name":"Full Body","price":"5","link":"https://oavqyazsogotcigjysml.supabase.co/storage/v1/object/public/vip-content/test1.png","category":"✨ PHOTOS"},"4":{"name":"Lingerie Try-On","price":"5","link":"https://oavqyazsogotcigjysml.supabase.co/storage/v1/object/public/vip-content/lingerie1.jpg","category":"✨ PHOTOS"},"5":{"name":"Mirror Pic","price":"5","link":"https://oavqyazsogotcigjysml.supabase.co/storage/v1/object/public/vip-content/mirrorpic.jpg","category":"✨ PHOTOS","stock":"∞","desc":""},"6":{"name":"3-Min Video","price":"10","link":"https://oavqyazsogotcigjysml.supabase.co/storage/v1/object/public/vip-content/3min.mp4","category":"🔥 VIDEOS"},"7":{"name":"Shower / Bath","price":"10","link":"https://drive.google.com/ton_lien_shower","category":"🔥 VIDEOS"},"8":{"name":"Friends Nude","price":"15","link":"https://oavqyazsogotcigjysml.supabase.co/storage/v1/object/public/vip-content/friendnude1.jpeg","category":"💦 SPECIAL","stock":"∞","desc":""},"9":{"name":"Surprise Pack","price":"15","link":"https://drive.google.com/ton_lien_surprisepack","category":"💦 SPECIAL"},"10":{"name":"Sexting","price":"Custom","link":"","category":"💌 PERSONALIZED"},"11":{"name":"Custom Request","price":"Custom","link":"","category":"💌 PERSONALIZED"},"12":{"name":"Whole menu","price":"70","link":"","category":"✨ NEW ITEMS"},"13":{"name":"Mutual fingering with my friend (video)","price":"20","link":"test.com","category":"✨ NEW ITEMS","stock":"∞","desc":"A 4min video of me and my hg fingering eachother until they bot squirt"},"14":{"name":"Montly VIP pass (nudes and videos everyday)","price":"15","link":"","category":"✨ NEW ITEMS","stock":"∞","desc":""},"15":{"name":"Trans hg video nude","price":"15","link":"https://oavqyazsogotcigjysml.supabase.co/storage/v1/object/public/vip-content/transhg.mp4","category":"✨ NEW ITEMS","stock":"∞","desc":""}},
-            "buy_links":{"1":{"label":"💳 Buy €5","url":"https://www.eneba.com/rewarble-rewarble-revolut-5-gbp-voucher-global"},"2":{"label":"💳 Buy €10","url":"https://www.eneba.com/rewarble-rewarble-revolut-10-gbp-voucher-global"},"3":{"label":"💳 Buy €15","url":"https://www.eneba.com/rewarble-rewarble-revolut-15-gbp-voucher-global"},"4":{"label":"💳 Buy €20","url":"https://www.eneba.com/rewarble-rewarble-revolut-10-gbp-voucher-global"},"51783122081973":{"label":"💳 Buy €30","url":"https://www.g2a.com/paypal-gift-card-30-gbp-by-rewarble-global-i10000339995035"},"61783122153026":{"label":"💳 Buy €70","url":"https://www.g2a.com/paypal-gift-card-70-gbp-by-rewarble-global-i10000339995118"}},
+            "settings":{"invite_reward_threshold":1000,"maintenance":{"active":false,"endsAt":0,"channelId":""},"flashSale":{"active":false,"discount":0,"endsAt":0}},
+            "products":{"1":{"name":"Boobs","price":"5","category":"✨ PHOTOS","stock":"∞"}},
+            "buy_links":{},
             "pending_reviews":[],
-            "activity_feed":[{"type":"ticket","message":"🎧 New support ticket opened by lily_woods02","time":1783445368489},{"type":"join","message":"👋 fabianx06 joined the server","time":1783445204429},{"type":"review","message":"⭐ New 5/5 review submitted by lily_woods02","time":1783444844430},{"type":"ticket","message":"🎫 New shop ticket opened by lily_woods02","time":1783444806101},{"type":"join","message":"👋 tobi046066 joined the server","time":1783444477564},{"type":"ticket","message":"🎫 New shop ticket opened by dan2538866.","time":1783444316576},{"type":"join","message":"👋 nj33megatron joined the server","time":1783444278239},{"type":"review","message":"⭐ New 5/5 review submitted by keepitahuncho","time":1783444246514},{"type":"join","message":"👋 dexterdadude joined the server","time":1783444190952},{"type":"join","message":"👋 rrkap1003 joined the server","time":1783443688189},{"type":"review","message":"⭐ New 5/5 review submitted by lily_woods02","time":1783443291624},{"type":"ticket","message":"🎧 New support ticket opened by lily_woods02","time":1783443237319},{"type":"sale","message":"💰 €10 Manual Sale: Manual Entry bought Custom Amount","time":1783442699009},{"type":"sale","message":"💰 €5 Manual Sale: Manual Entry bought Custom Amount","time":1783442682779},{"type":"sale","message":"💰 €10 Manual Sale: Manual Entry bought Custom Amount","time":1783442643371},{"type":"sale","message":"💰 €10 Manual Sale: Manual Entry bought Custom Amount","time":1783442603850},{"type":"sale","message":"💰 €10 Manual Sale: Manual Entry bought Custom Amount","time":1783442560706},{"type":"sale","message":"💰 €20 Manual Sale: Manual Entry bought Custom Amount","time":1783442543912},{"type":"sale","message":"💰 €5 Manual Sale: Manual Entry bought Custom Amount","time":1783442488975},{"type":"join","message":"👋 lee_99999 joined the server","time":1783442455590},{"type":"join","message":"👋 daddyrico71 joined the server","time":1783441620931},{"type":"join","message":"👋 wrld.of.kam joined the server","time":1783441214549},{"type":"join","message":"👋 unnownnn_ joined the server","time":1783440804168},{"type":"ticket","message":"🎧 New support ticket opened by keepitahuncho","time":1783440325274},{"type":"join","message":"👋 bgjhjhgfgvv joined the server","time":1783440269626},{"type":"ticket","message":"🎫 New shop ticket opened by lily_woods02","time":1783440202019},{"type":"join","message":"👋 bigpapirolando joined the server","time":1783436733409},{"type":"ticket","message":"🎫 New shop ticket opened by lily_woods02","time":1783436565789},{"type":"join","message":"👋 azzurri98 joined the server","time":1783436321022},{"type":"join","message":"👋 graham_0509 joined the server","time":1783436020830}]
+            "activity_feed":[]
         };
 
-        // --- State Management ---
         const state = {
             currentTab: 'overview',
             activeTicketId: null,
-            data: {
-                todayRevenue: 0,
-                totalRevenue: 0,
-                conversionRate: 0,
-                activeTickets: 0,
-                products: {},
-                transactions: [],
-                activity: [],
-                revenueHistory: {},
-                users: []
-            },
+            data: { todayRevenue: 0, totalRevenue: 0, conversionRate: 0, activeTickets: 0, products: {}, transactions: [], activity: [], revenueHistory: {}, users: [] },
             chart: null
         };
 
@@ -343,14 +345,13 @@
             const startTime = performance.now();
             try {
                 const response = await fetch(endpoint, { ...options, headers: { 'Content-Type': 'application/json', ...options.headers } });
-                const endTime = performance.now();
-                const latency = Math.round(endTime - startTime);
+                const latency = Math.round(performance.now() - startTime);
                 document.getElementById('latency-val').innerText = `${latency}ms`;
                 document.getElementById('dev-ping').innerText = `${latency}ms`;
                 if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
                 return await response.json();
             } catch (err) {
-                notify(err.message, 'error');
+                // notify(err.message, 'error');
                 return null;
             }
         }
@@ -360,7 +361,7 @@
                 method: 'POST',
                 body: JSON.stringify({ action, pin: PIN, csrf: SERVER_CSRF_TOKEN, ...payload })
             });
-            if (result) { notify(`Action ${action} completed successfully`); syncData(); }
+            if (result) { notify(`Action completed`); syncData(); }
             return result;
         }
 
@@ -373,6 +374,9 @@
                 document.getElementById(tab).classList.add('active');
                 document.getElementById('current-tab-title').innerText = item.innerText.trim();
                 state.currentTab = tab;
+
+                if(tab === 'tickets') loadTickets();
+                if(tab === 'audience' && state.data.users.length === 0) loadMembers();
             });
         });
 
@@ -393,7 +397,7 @@
             gradient.addColorStop(1, 'rgba(14, 165, 233, 0)');
             state.chart = new Chart(ctx, {
                 type: 'line',
-                data: { labels, datasets: [{ label: 'Daily Revenue', data: values, borderColor: '#0ea5e9', borderWidth: 3, fill: true, backgroundColor: gradient, tension: 0.4, pointRadius: 4, pointBackgroundColor: '#0ea5e9' }] },
+                data: { labels: labels.length ? labels : ['No data'], datasets: [{ label: 'Daily Revenue', data: values.length ? values : [0], borderColor: '#0ea5e9', borderWidth: 3, fill: true, backgroundColor: gradient, tension: 0.4, pointRadius: 4, pointBackgroundColor: '#0ea5e9' }] },
                 options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: { color: '#71717a' } }, y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#71717a' } } } }
             });
         }
@@ -401,8 +405,8 @@
         function updatePulseFeed() {
             const feed = document.getElementById('activity-feed');
             const header = `<h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem;">Live Pulse</h3>`;
-            const items = state.data.activity.map(act => `<div class="pulse-item"><div class="pulse-icon"><i data-lucide="activity" style="width:14px"></i></div><div><div style="font-weight:500">${act.type}</div><div style="font-size:0.75rem; color:var(--text-muted)">${act.message} • ${act.time}</div></div></div>`).join('');
-            feed.innerHTML = header + items;
+            const items = state.data.activity.map(act => `<div class="pulse-item"><div class="pulse-icon"><i data-lucide="activity" style="width:14px"></i></div><div><div style="font-weight:500">${act.type.toUpperCase()}</div><div style="font-size:0.75rem; color:var(--text-muted)">${escapeHTML(act.message)}</div></div></div>`).join('');
+            feed.innerHTML = header + (items || '<p style="color:var(--text-muted)">No recent activity.</p>');
             lucide.createIcons();
         }
 
@@ -410,7 +414,7 @@
             const tickets = await apiRequest('/api/tickets');
             if (!tickets) return;
             const list = document.getElementById('ticket-list');
-            list.innerHTML = tickets.map(t => `<div class="ticket-item ${state.activeTicketId === t.id ? 'active' : ''}" onclick="selectTicket('${t.id}', '${t.name}')"><span style="font-weight:500">${t.name}</span><i data-lucide="chevron-right" style="width:14px; opacity:0.5"></i></div>`).join('');
+            list.innerHTML = tickets.map(t => `<div class="ticket-item ${state.activeTicketId === t.id ? 'active' : ''}" onclick="selectTicket('${t.id}', '${escapeHTML(t.name)}')"><span style="font-weight:500">${escapeHTML(t.name)}</span><i data-lucide="chevron-right" style="width:14px; opacity:0.5"></i></div>`).join('');
             lucide.createIcons();
         }
 
@@ -427,7 +431,7 @@
             const messages = await apiRequest(`/api/tickets/messages?channelId=${channelId}`);
             if (!messages) return;
             const container = document.getElementById('chat-messages');
-            container.innerHTML = messages.map(m => `<div class="msg ${m.isBot ? 'msg-bot' : 'msg-user'}"><span class="msg-meta">${m.author}</span>${m.content}</div>`).join('');
+            container.innerHTML = messages.map(m => `<div class="msg ${m.isBot ? 'msg-bot' : 'msg-user'}"><span class="msg-meta">${escapeHTML(m.author)}</span>${escapeHTML(m.content)}</div>`).join('');
             container.scrollTop = container.scrollHeight;
         }
 
@@ -441,12 +445,14 @@
         }
 
         async function triggerQuickAction(type) {
+            if(!state.activeTicketId) return notify('Select a ticket first', 'error');
             const messages = { wait: "Please hold on a moment, a staff member will be with you shortly!", review: "We'd love your feedback! Could you please leave a review on our store?" };
             await performAction('send_ticket_message', { channelId: state.activeTicketId, message: messages[type] });
             loadMessages(state.activeTicketId);
         }
 
         async function closeTicket() {
+            if (!state.activeTicketId) return;
             if (confirm('Are you sure you want to close this ticket?')) {
                 await performAction('close_channel', { channelId: state.activeTicketId });
                 state.activeTicketId = null;
@@ -459,13 +465,13 @@
         function renderProducts() {
             const grid = document.getElementById('product-grid');
             const productsArray = Object.entries(state.data.products).map(([id, p]) => ({ id, ...p }));
-            grid.innerHTML = productsArray.map((p, idx) => `<div class="glass-card product-card"><div class="product-header"><div class="product-icon"><i data-lucide="package"></i></div><div style="display:flex; gap:5px"><button class="btn btn-ghost" style="padding:4px" onclick="editProduct('${p.id}')"><i data-lucide="edit-2" style="width:12px"></i></button><button class="btn btn-ghost" style="padding:4px; color:var(--accent-danger)" onclick="deleteProduct('${p.id}')"><i data-lucide="trash" style="width:12px"></i></button></div></div><div style="font-weight:600; font-size:1.1rem">${p.name}</div><div style="color:var(--accent-success); font-weight:700">${currencyFormatter.format(p.price)}</div><div style="font-size:0.8rem; color:var(--text-secondary)">Stock: ${p.stock}</div><div style="font-size:0.8rem; opacity:0.7">${p.desc || 'No description'}</div></div>`).join('');
+            grid.innerHTML = productsArray.map((p) => `<div class="glass-card product-card"><div class="product-header"><div class="product-icon"><i data-lucide="package"></i></div><div style="display:flex; gap:5px"><button class="btn btn-ghost" style="padding:4px" onclick="deleteProduct('${p.id}')"><i data-lucide="trash" style="width:12px; color:var(--accent-danger)"></i></button></div></div><div style="font-weight:600; font-size:1.1rem">${escapeHTML(p.name)}</div><div style="color:var(--accent-success); font-weight:700">€${p.price}</div><div style="font-size:0.8rem; color:var(--text-secondary)">Stock: ${p.stock}</div></div>`).join('');
             lucide.createIcons();
         }
 
         document.getElementById('product-form').onsubmit = async (e) => {
             e.preventDefault();
-            const payload = { name: document.getElementById('p-name').value, price: parseFloat(document.getElementById('p-price').value), stock: parseInt(document.getElementById('p-stock').value), desc: document.getElementById('p-desc').value };
+            const payload = { name: document.getElementById('p-name').value, price: parseFloat(document.getElementById('p-price').value), stock: document.getElementById('p-stock').value, desc: document.getElementById('p-desc').value };
             await performAction('add_product', payload);
             e.target.reset();
         };
@@ -475,60 +481,170 @@
         function renderTransactions() {
             const body = document.getElementById('tx-table-body');
             if (!state.data.transactions || state.data.transactions.length === 0) {
-                body.innerHTML = `<tr><td colspan="5" style="text-align:center; opacity:0.5;">Aucune transaction trouvée</td></tr>`;
+                body.innerHTML = `<tr><td colspan="5" style="text-align:center; opacity:0.5;">No transactions</td></tr>`;
                 return;
             }
-            body.innerHTML = state.data.transactions.map(tx => `<tr><td>${tx.username || tx.customer || 'Unknown'}</td><td>${tx.product || 'N/A'}</td><td style="color:var(--accent-success); font-weight:600">${currencyFormatter.format(tx.price || 0)}</td><td>${tx.date || 'N/A'}</td><td><span class="status-pill" style="font-size:0.6rem">Completed</span></td></tr>`).join('');
+            body.innerHTML = state.data.transactions.map(tx => `<tr><td>${escapeHTML(tx.username)}</td><td>${escapeHTML(tx.product)}</td><td style="color:var(--accent-success); font-weight:600">€${tx.price}</td><td>${tx.date}</td><td><span class="status-pill" style="font-size:0.6rem">Completed</span></td></tr>`).join('');
+        }
+
+        async function loadMembers() {
+            notify('Loading member database...');
+            const users = await apiRequest('/api/members');
+            if (users) {
+                state.data.users = users;
+                renderAudience();
+                notify('Database loaded!');
+            }
+        }
+
+        function filterUsers() {
+            const query = document.getElementById('user-search').value.toLowerCase();
+            const rows = document.querySelectorAll('#user-table-body tr');
+            rows.forEach(row => {
+                const username = row.cells[0].innerText.toLowerCase();
+                row.style.display = username.includes(query) ? '' : 'none';
+            });
         }
 
         function renderAudience() {
             const body = document.getElementById('user-table-body');
-            body.innerHTML = state.data.users.map(u => `<tr><td><div style="display:flex; align-items:center; gap:10px"><img src="${u.avatar || 'https://via.placeholder.com/32'}" style="width:32px; height:32px; border-radius:50%">${u.username}</div></td><td>${u.joined || '--'}</td><td>${currencyFormatter.format(u.spent || 0)}</td><td><div style="display:flex; gap:5px"><button class="btn btn-ghost" style="padding:4px 8px" onclick="modUser('${u.id}', 'warn')">Warn</button><button class="btn btn-ghost" style="padding:4px 8px; color:var(--accent-danger)" onclick="modUser('${u.id}', 'ban')">Ban</button></div></td></tr>`).join('');
+            if (!state.data.users || state.data.users.length === 0) {
+                body.innerHTML = '<tr><td colspan="4" style="text-align:center; opacity:0.5;">No users found. Click Load DB.</td></tr>';
+                return;
+            }
+            body.innerHTML = state.data.users.map(u => `<tr><td><div style="display:flex; align-items:center; gap:10px"><img src="${u.avatar}" style="width:32px; height:32px; border-radius:50%">${escapeHTML(u.username)}</div></td><td>${u.joinedAt}</td><td style="color:var(--accent-success)">${currencyFormatter.format(u.totalSpent)}</td><td><div style="display:flex; gap:5px"><button class="btn btn-ghost btn-sm" onclick="modUser('${u.id}', 'warn')">Warn</button><button class="btn btn-ghost btn-sm" style="color:var(--accent-danger)" onclick="modUser('${u.id}', 'ban')">Ban</button></div></td></tr>`).join('');
         }
 
-        async function modUser(id, action) { if (confirm(`Are you sure you want to ${action} this user?`)) await performAction(action, { userId: id }); }
+        async function modUser(id, action) { 
+            let extra = {};
+            if(action === 'warn') {
+                extra.reason = prompt("Reason for warning?");
+                if(!extra.reason) return;
+            }
+            if (confirm(`Execute ${action} on user?`)) await performAction(action, { userId: id, ...extra }); 
+        }
 
         function forceSync() {
             const json = document.getElementById('db-json').value;
-            try { JSON.parse(json); performAction('force_sync_db', { rawJson: json }); } catch (e) { notify('Invalid JSON format', 'error'); }
+            try { 
+                JSON.parse(json); 
+                performAction('update_raw_db', { json: json }); 
+            } catch (e) { notify('Invalid JSON format', 'error'); }
         }
 
         async function syncData() {
             const data = await apiRequest('/api/init-data');
             if (!data) return;
+            
+            let calcTotalRev = 0;
+            if(data.memoryStats && data.memoryStats.revenue) {
+                Object.values(data.memoryStats.revenue).forEach(val => calcTotalRev += parseFloat(val));
+            }
+
             state.data = {
                 todayRevenue: data.todayRevenue || 0,
-                totalRevenue: (data.memoryStats && data.memoryStats.total_revenue) ? data.memoryStats.total_revenue : 0,
-                conversionRate: data.dropOffRate ? (100 - parseFloat(data.dropOffRate)).toFixed(1) : 0,
+                totalRevenue: calcTotalRev,
+                conversionRate: data.conversionRate || 0,
                 activeTickets: data.activeTickets || 0,
                 products: (data.memoryStats && data.memoryStats.products) ? data.memoryStats.products : {},
                 transactions: (data.memoryStats && Array.isArray(data.memoryStats.recent_transactions)) ? data.memoryStats.recent_transactions : [],
                 activity: (data.memoryStats && Array.isArray(data.memoryStats.activity_feed)) ? data.memoryStats.activity_feed : [],
                 revenueHistory: (data.memoryStats && data.memoryStats.revenue) ? data.memoryStats.revenue : {},
-                users: (data.memoryStats && Array.isArray(data.memoryStats.users)) ? data.memoryStats.users : []
+                users: state.data.users // Keep existing users to not clear the table
             };
             updateKPIs();
             updateRevenueChart();
             updatePulseFeed();
             renderProducts();
             renderTransactions();
-            renderAudience();
             if (state.currentTab === 'devtools') document.getElementById('db-json').value = JSON.stringify(data.memoryStats, null, 4);
         }
 
-        function init() {
+        function toggleModal(id) { const m = document.getElementById(id); m.style.display = (m.style.display === 'none' || m.style.display === '') ? 'flex' : 'none'; }
+
+        // --- SPLASH SCREEN & INITIALIZATION LOGIC ---
+        async function init() {
             lucide.createIcons();
             document.getElementById('db-json').value = JSON.stringify(MANUAL_BACKUP, null, 4);
-            syncData();
+            
+            let progress = 0;
+            const loadBar = document.getElementById('loader-bar');
+            const loadTxt = document.getElementById('loader-percentage');
+            const splash = document.getElementById('loading-screen');
+            
+            setTimeout(() => {
+                document.getElementById('premium-logo')?.classList.add('show');
+                document.getElementById('premium-subtitle')?.classList.add('show');
+                document.getElementById('loader-wrapper')?.classList.add('show');
+            }, 100);
+            
+            const loadInterval = setInterval(() => {
+                if(progress < 90) { 
+                    progress += Math.random() * 5; 
+                    if(progress > 90) progress = 90; 
+                    if(loadBar) loadBar.style.width = progress + '%';
+                    if(loadTxt) loadTxt.innerText = Math.floor(progress).toString().padStart(2, '0') + '%';
+                }
+            }, 50);
+
+            // Fetch security token and first data
+            await fetch('/api/init-data').then(res => res.json()).then(data => {
+                SERVER_CSRF_TOKEN = data.CSRF || SERVER_CSRF_TOKEN;
+                syncData();
+            }).catch(e => console.error(e));
+            
+            clearInterval(loadInterval);
+            let finishInterval = setInterval(() => {
+                progress += 5;
+                if(progress >= 100) {
+                    progress = 100;
+                    clearInterval(finishInterval);
+                    if(loadBar) loadBar.style.width = '100%';
+                    if(loadTxt) loadTxt.innerText = '100%';
+                    
+                    setTimeout(() => {
+                        document.getElementById('loader-wrapper').style.opacity = '0';
+                        document.getElementById('loader-percentage').style.opacity = '0';
+                        
+                        setTimeout(() => {
+                            document.getElementById('welcome-text')?.classList.add('show');
+                        }, 500);
+                        
+                        setTimeout(() => {
+                            if(splash) {
+                                splash.style.transform = 'scale(1.1) translateY(-20px)';
+                                splash.style.opacity = '0';
+                                splash.style.pointerEvents = 'none';
+                            }
+                            setTimeout(() => {
+                                if(splash) splash.style.display = 'none'; 
+                                // Reveal dashboard
+                                document.getElementById('dashboard-container').style.display = 'block';
+                                updateRevenueChart();
+                            }, 1000);
+                        }, 2000);
+                    }, 400);
+                } else {
+                    if(loadBar) loadBar.style.width = progress + '%';
+                    if(loadTxt) loadTxt.innerText = Math.floor(progress).toString().padStart(2, '0') + '%';
+                }
+            }, 30);
+
             setInterval(syncData, 15000);
+            
             document.getElementById('manual-tx-form').onsubmit = async (e) => {
                 e.preventDefault();
-                await performAction('create_manual_tx', { username: document.getElementById('tx-user').value, product: document.getElementById('tx-prod').value, price: parseFloat(document.getElementById('tx-amt').value) });
+                await performAction('create_manual_tx', { 
+                    username: document.getElementById('tx-user').value, 
+                    product: document.getElementById('tx-prod').value, 
+                    price: parseFloat(document.getElementById('tx-amt').value),
+                    date: new Date().toISOString()
+                });
                 toggleModal('tx-modal');
+                e.target.reset();
             };
         }
 
-        function toggleModal(id) { const m = document.getElementById(id); m.style.display = (m.style.display === 'none') ? 'flex' : 'none'; }
         window.onload = init;
     </script>
 </body>
