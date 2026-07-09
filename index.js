@@ -5,8 +5,8 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
-process.on('unhandledRejection', (reason, p) => { console.log(' [ANTI-CRASH] Unhandled Rejection/Catch', reason); });
-process.on('uncaughtException', (err, origin) => { console.log(' [ANTI-CRASH] Uncaught Exception/Catch', err); });
+process.on('unhandledRejection', (reason, p) => { systemLog('ERROR', 'SYSTEM', `Unhandled Rejection: ${reason}`); });
+process.on('uncaughtException', (err, origin) => { systemLog('CRITICAL', 'SYSTEM', `Uncaught Exception: ${err.message}`); });
 
 // === [ANCHOR: CONFIG_AND_CONSTANTS] ===
 const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
@@ -33,6 +33,37 @@ const TEST_VOUCHERS = { "GOYAVE5": 5 };
 const channelStates = new Map();
 const STATS_FILE = path.join(__dirname, 'stats.json');
 const guildInvites = new Map(); 
+
+// === [ANCHOR: SYSTEM_LOGGING_ENGINE] ===
+const MAX_LOGS = 500;
+let globalLogs = [];
+
+function redactSecrets(text) {
+    if (typeof text !== 'string') text = String(text);
+    const secrets = [DISCORD_BOT_TOKEN, REWARBLE_API_KEY, DASHBOARD_PIN].filter(Boolean);
+    secrets.forEach(secret => {
+        text = text.split(secret).join('[REDACTED]');
+    });
+    return text;
+}
+
+function systemLog(level, component, message) {
+    const now = new Date();
+    const timeStr = now.toTimeString().split(' ')[0]; 
+    const safeMessage = redactSecrets(message);
+    
+    globalLogs.push({ time: timeStr, level, component, message: safeMessage });
+    if (globalLogs.length > MAX_LOGS) globalLogs.shift();
+
+    console.log(`[${timeStr}] [${level}] [${component}] ${safeMessage}`);
+
+    if (level === 'ERROR' || level === 'CRITICAL') {
+        try {
+            const logLine = `[${now.toISOString()}] [${level}] [${component}] ${safeMessage}\n`;
+            fs.appendFileSync(path.join(__dirname, 'errors.log'), logLine);
+        } catch(e) {}
+    }
+}
 
 // === [ANCHOR: MEMORY_CACHE_AND_DB] ===
 let memoryStats = { 
@@ -91,7 +122,10 @@ async function loadCloudStats() {
     }
     const url = process.env.UPSTASH_REDIS_REST_URL;
     const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-    if (!url || !token) return console.log("⚠️ Upstash variables missing.");
+    if (!url || !token) {
+        systemLog('WARN', 'UPSTASH', 'Upstash variables missing. Running local-only mode.');
+        return;
+    }
     try {
         const cleanUrl = url.endsWith('/') ? url.slice(0, -1) : url;
         const res = await axios.get(`${cleanUrl}/get/bot_stats`, { headers: { Authorization: `Bearer ${token}` } });
@@ -119,10 +153,11 @@ async function loadCloudStats() {
                 }
                 memoryStats.total_revenue = total;
             }
-            
-            console.log("✅ Database synchronized with the Cloud.");
+            systemLog('INFO', 'UPSTASH', 'Database successfully synchronized with the Cloud.');
         }
-    } catch (e) { console.error("❌ Cloud GET Error :", e.message); }
+    } catch (e) { 
+        systemLog('ERROR', 'UPSTASH', `Cloud GET Error: ${e.message}`); 
+    }
 }
 
 async function syncCloud() {
@@ -142,6 +177,7 @@ async function syncCloud() {
         if (!fs.existsSync(backupFilePath)) {
             // S'il n'y a pas encore de sauvegarde pour aujourd'hui, on la crée
             fs.writeFileSync(backupFilePath, dataStr);
+            systemLog('INFO', 'BACKUP', `Daily physical backup created: ${backupFileName}`);
             
             // Nettoyage des anciennes sauvegardes pour ne garder que les 7 plus récentes
             const files = fs.readdirSync(__dirname);
@@ -150,10 +186,11 @@ async function syncCloud() {
             if (backups.length > 7) {
                 const oldestBackup = backups[0];
                 fs.unlinkSync(path.join(__dirname, oldestBackup));
+                systemLog('DEBUG', 'BACKUP', `Cleaned up old backup: ${oldestBackup}`);
             }
         }
     } catch (e) {
-        console.error("❌ Local Data Save Error :", e.message);
+        systemLog('ERROR', 'BACKUP', `Local Data Save Error: ${e.message}`);
     }
 
     // Sauvegarde Cloud (Upstash)
@@ -165,7 +202,9 @@ async function syncCloud() {
         await axios.post(cleanUrl, ["SET", "bot_stats", JSON.stringify(memoryStats)], { 
             headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } 
         });
-    } catch (err) { console.error("❌ Cloud Sync Error :", err.message); }
+    } catch (err) { 
+        systemLog('ERROR', 'UPSTASH', `Cloud Sync Error: ${err.message}`); 
+    }
 }
 
 async function checkSubscriptions() {
@@ -184,6 +223,7 @@ async function checkSubscriptions() {
                     memoryStats.promo_codes[codeName] = { discount: 50, limit: 1, used: 0, createdAt: new Date().toLocaleDateString('en-US') };
                     
                     await member.send(`🛑 **Your VIP Pass has expired.** You lost access to exclusive content. To thank you for your past support, here is a **-50% OFF** promo code valid for 1 use: \`${codeName}\`. Renew your pass in the shop!`).catch(() => {});
+                    systemLog('INFO', 'VIP', `VIP pass expired for user ${userId}. Comeback promo sent.`);
                 }
             } catch(e) {}
             delete memoryStats.subscriptions[userId];
@@ -222,6 +262,7 @@ function logStat(type, value = 1, extraData = null) {
             
             addActivity('sale', `💰 €${value} Sale: ${extraData.username} bought ${extraData.productName}`);
             notifyAdminPhone('NOUVELLE VENTE', `💰 +${value}€\n👤 Client: ${extraData.username}\n📦 Produit: ${extraData.productName}`);
+            systemLog('INFO', 'STORE', `Sale executed: €${value} - ${extraData.username} acquired ${extraData.productName}`);
         }
     } else if (type === 'joins') {
         memoryStats.joins[today] = (memoryStats.joins[today] || 0) + value;
@@ -249,6 +290,7 @@ function logStat(type, value = 1, extraData = null) {
         if (!Array.isArray(memoryStats.custom_requests)) memoryStats.custom_requests = [];
         memoryStats.custom_requests.unshift({ id: Date.now().toString(), username: extraData.username, userId: extraData.userId, product: extraData.productName, date: new Date().toLocaleString('en-US'), status: 'pending' });
         notifyAdminPhone('NOUVELLE CUSTOM REQUEST', `💌 ${extraData.username} a demandé: ${extraData.productName}\n➡️ Vérifie le tableau Kanban sur le Dashboard.`);
+        systemLog('INFO', 'CUSTOM_REQ', `Custom request logged for ${extraData.username}: ${extraData.productName}`);
     }
     memoryStats.last_update = Date.now();
     syncCloud(); 
@@ -292,7 +334,7 @@ async function sendShopSetup(channel) {
     }
 
     const shopEmbed = new EmbedBuilder()
-        .setColor('#10b981') // Green Embed Color
+        .setColor('#10b981')
         .setTitle('💎 VIP EXCLUSIVE MENU & PRICES 💎')
         .setDescription('> *Instant automatic delivery directly in your DMs!* 🚀\n\n━━━━━━━━━━━━━━━━━━━━━━');
     
@@ -307,15 +349,28 @@ async function sendShopSetup(channel) {
     shopEmbed.setFooter({ text: 'Powered by Nexus Premium • Secure & Automatic 🔒' });
 
     await channel.send({ embeds: [shopEmbed], components: componentsToSend }).catch(() => {});
+    systemLog('INFO', 'DISCORD_UI', 'Shop interface pushed to Discord successfully.');
 }
 
 // === [ANCHOR: DISCORD_BOT_CLIENT_INIT] ===
 const client = new Client({ 
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildPresences, GatewayIntentBits.GuildInvites],
-    partials: [Partials.GuildMember, Partials.User, Partials.Message]
+    partials: [Partials.GuildMember, Partials.User, Partials.Message],
+    rest: { timeout: 60000, retries: 5 } // Sécurité: Tolérance maximale aux latences de l'API
+});
+
+client.on('error', error => {
+    systemLog('ERROR', 'DISCORD_CORE', `Network Error: ${error.message}`);
+    console.error('⚠️ Discord Client Network Error:', error.message);
+});
+
+client.on('shardDisconnect', (event, id) => {
+    systemLog('WARN', 'DISCORD_CORE', `Shard ${id} disconnected. Attempting auto-reconnect...`);
+    console.log(`❌ Shard ${id} déconnecté de Discord. Tentative de reconnexion automatique...`);
 });
 
 client.once('ready', () => {
+    systemLog('INFO', 'DISCORD_CORE', `Bot logged in successfully as ${client.user.tag}`);
     console.log(`✅ Bot logged in as ${client.user.tag}`);
     loadCloudStats();
     client.guilds.cache.forEach(async guild => {
@@ -335,6 +390,7 @@ client.once('ready', () => {
                 if (!(e.response && (e.response.status === 400 || e.response.status === 402 || e.response.status === 401))) down = true;
             }
             if (down) {
+                systemLog('WARN', 'REWARBLE_API', 'API appears unreachable during routine heartbeat check.');
                 const admin = await client.users.fetch(ADMIN_DISCORD_ID).catch(()=>null);
                 if (admin) admin.send("🚨 **SYSTEM ALERT** 🚨\n- The Rewarble API is currently DOWN or unreachable. Purchases might fail.").catch(()=>{});
             }
@@ -358,10 +414,12 @@ client.on('interactionCreate', async (interaction) => {
                         .setColor('#10b981')
                         .setTitle('🚧 Shop Under Maintenance')
                         .setDescription(`Our system is currently undergoing updates or restocking.\n\n⏳ **Expected return:** <t:${unixTime}:R>.\n\nPlease try again later. Your codes and purchases are perfectly safe!`);
+                    systemLog('DEBUG', 'MAINTENANCE', `Blocked interaction from user ${interaction.user.username} due to active lockout.`);
                     return interaction.reply({ embeds: [embed], ephemeral: true }).catch(()=>{});
                 }
             } else {
                 memoryStats.settings.maintenance.active = false;
+                systemLog('INFO', 'MAINTENANCE', 'Maintenance period expired automatically.');
                 syncCloud();
             }
         }
@@ -391,6 +449,7 @@ client.on('interactionCreate', async (interaction) => {
             });
             addActivity('review', `⭐ New ${numRating}/5 review submitted by ${interaction.user.username}`);
             notifyAdminPhone('NOUVELLE REVIEW', `⭐ ${numRating}/5 par ${interaction.user.username}\nEn attente de validation sur le dashboard.`);
+            systemLog('INFO', 'REVIEWS', `New review submitted by ${interaction.user.username} [${numRating} Stars]`);
             syncCloud();
 
             return await interaction.reply({ content: "✅ **Thank you!** Your review has been submitted to our team for moderation.", ephemeral: true }).catch(()=>{});
@@ -400,6 +459,7 @@ client.on('interactionCreate', async (interaction) => {
         if (interaction.isButton()) {
             if (memoryStats.blacklist && memoryStats.blacklist.includes(interaction.user.id)) {
                 await interaction.deferReply({ flags: 64 }).catch(() => {});
+                systemLog('DEBUG', 'SECURITY', `Blacklisted user ${interaction.user.username} attempted interaction.`);
                 return await interaction.editReply({ content: "❌ You have been blacklisted from using the shop and support system." }).catch(()=>{});
             }
             
@@ -460,6 +520,7 @@ client.on('interactionCreate', async (interaction) => {
 
                 if (channel) {
                     addActivity('ticket', `🎫 New shop ticket opened by ${interaction.user.username}`);
+                    systemLog('INFO', 'TICKET_SYS', `Shop ticket generated for ${interaction.user.username}`);
                     channelStates.set(channel.id, { validated: false, processing: false, promo: null, redeemed: false });
                     await channel.send(`👋 Welcome <@${interaction.user.id}>!\n\n**Please paste your Rewarble voucher code or Promo Code below.**`).catch(() => {});
                     await interaction.editReply({ content: `✅ Room ready: <#${channel.id}>` }).catch(() => {});
@@ -487,6 +548,7 @@ client.on('interactionCreate', async (interaction) => {
 
                 if (channel) {
                     addActivity('ticket', `🎧 New support ticket opened by ${interaction.user.username}`);
+                    systemLog('INFO', 'TICKET_SYS', `Support ticket generated for ${interaction.user.username}`);
                     await channel.send(`🎧 **Support Ticket for <@${interaction.user.id}>**`).catch(() => {});
                     await interaction.editReply({ content: `✅ Support room created: <#${channel.id}>` }).catch(() => {});
                 }
@@ -615,7 +677,9 @@ client.on('interactionCreate', async (interaction) => {
                 }
             }
         }
-    } catch (globalError) {}
+    } catch (globalError) {
+        systemLog('ERROR', 'INTERACTION', `Failed processing interaction: ${globalError.message}`);
+    }
 });
 
 // === [ANCHOR: DISCORD_MESSAGE_HANDLER] ===
@@ -648,14 +712,13 @@ client.on('messageCreate', async (message) => {
             if (promoApplied || TEST_VOUCHERS[input] || input.length >= 8) {
                 try {
                     let voucherValue = 0; 
+                    systemLog('DEBUG', 'VALIDATION', `Verifying code entry for user ${message.author.username}`);
 
                     if (!promoApplied && !TEST_VOUCHERS[input]) {
                         const apiResponse = await axios.post(REWARBLE_API_URL, { code: input }, { headers: { 'Authorization': `Bearer ${REWARBLE_API_KEY}` } }).catch(err => {
                             if (err.response && err.response.status === 402) { throw new Error("REWARBLE_402_INSUFFICIENT_FUNDS"); }
                             throw err;
                         });
-                        
-                        console.log("🛠️ [REWARBLE] API RESPONSE DATA:", apiResponse.data);
 
                         // 🔍 RECHERCHE DE SÉCURITÉ MAXIMALE ET RECURSIVE DANS L'OBJET RETOURNÉ
                         let rawData = apiResponse.data;
@@ -739,13 +802,18 @@ client.on('messageCreate', async (message) => {
                     else if (isUserVIP) replyMsg = `👑 **VIP Status Active! (-20% on all items). Code Value: €${voucherValue}.**\nSelect your item below:`;
 
                     await message.reply({ content: replyMsg, components: [new ActionRowBuilder().addComponents(menu)] });
+                    systemLog('INFO', 'VALIDATION', `Code successfully validated for ${message.author.username} (Value: ${voucherValue})`);
                 } catch (e) { 
                     state.processing = false; 
                     if (e.message === "REWARBLE_402_INSUFFICIENT_FUNDS") {
+                        systemLog('ERROR', 'REWARBLE_API', `402 Payment Required - Balance is depleted.`);
                         message.reply("⚠️ **Rewarble Error (402) :** Insufficient API balance.");
                         const adminUser = await client.users.fetch(ADMIN_DISCORD_ID).catch(() => null);
                         if (adminUser) adminUser.send("🚨 **CRITICAL REWARBLE ALERT:** Insufficient balance!").catch(() => {});
-                    } else message.reply("❌ Invalid code."); 
+                    } else {
+                        systemLog('WARN', 'VALIDATION', `Invalid code attempted by ${message.author.username}`);
+                        message.reply("❌ Invalid code."); 
+                    }
                 }
             } else state.processing = false;
         }
@@ -777,6 +845,7 @@ client.on('guildMemberAdd', async (member) => {
                 memoryStats.promo_codes[codeName] = { discount: 100, limit: 1, used: 0, createdAt: new Date().toLocaleDateString('en-US') };
                 const inviterUser = await client.users.fetch(inviterId).catch(()=>null);
                 if (inviterUser) inviterUser.send(`🎉 **CONGRATULATIONS!** You invited ${threshold} people and unlocked a FREE product!\n\nHere is your personal 100% OFF Promo Code:\n\`${codeName}\``).catch(()=>{});
+                systemLog('INFO', 'REFERRAL', `User ${inviterUser?.username || inviterId} reached threshold and unlocked 100% code.`);
             }
             syncCloud();
         }
@@ -817,10 +886,13 @@ http.createServer(async (req, res) => {
                 if (data.pin === DASHBOARD_PIN) {
                     bruteForceLocks.delete(clientIp);
                     res.writeHead(200, { 'Set-Cookie': `auth=${DASHBOARD_PIN}; Max-Age=2592000; HttpOnly; Path=/`, 'Content-Type': 'application/json' });
+                    systemLog('INFO', 'SECURITY', `Successful admin dashboard login from IP: ${clientIp}`);
                     return res.end(JSON.stringify({ success: true }));
                 } else {
                     lock.attempts++; if (lock.attempts >= 5) lock.lockout = now + 15 * 60 * 1000;
-                    bruteForceLocks.set(clientIp, lock); res.writeHead(401).end(JSON.stringify({ success: false }));
+                    bruteForceLocks.set(clientIp, lock); 
+                    systemLog('WARN', 'SECURITY', `Failed login attempt from IP: ${clientIp}`);
+                    res.writeHead(401).end(JSON.stringify({ success: false }));
                 }
             } catch(e) { res.writeHead(400).end('Bad Request'); }
         }); return;
@@ -832,6 +904,12 @@ http.createServer(async (req, res) => {
     }
 
     // === [ANCHOR: API_ROUTES_GET] ===
+    if (req.url === '/api/logs' && req.method === 'GET') {
+        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify(globalLogs));
+    }
+
     if (req.url === '/api/init-data' && req.method === 'GET') {
         if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         let memberCount = "N/A"; let onlineCount = "N/A"; let activeTickets = 0;
@@ -851,6 +929,7 @@ http.createServer(async (req, res) => {
 
     if (req.url === '/api/export' && req.method === 'GET') {
         if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
+        systemLog('INFO', 'DASHBOARD', 'Transaction ledger exported to CSV.');
         let csv = "\uFEFFDate,Customer,Product,Price\n"; 
         if (Array.isArray(memoryStats.recent_transactions)) {
             memoryStats.recent_transactions.forEach(tx => {
@@ -940,6 +1019,8 @@ http.createServer(async (req, res) => {
             rewarbleLatency = Date.now() - startRewarble;
         }
 
+        systemLog('DEBUG', 'DIAGNOSTICS', `Scan complete. DB: ${upstashLatency}ms | GW: ${rewarbleLatency}ms | WS: ${client.ws.ping}ms`);
+
         res.writeHead(200, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({
             upstash: { status: upstashStatus, latency: upstashLatency },
@@ -988,6 +1069,8 @@ http.createServer(async (req, res) => {
                 const guild = client.guilds.cache.first();
                 if (!guild) return res.writeHead(404).end('Guild not found');
 
+                systemLog('DEBUG', 'DASHBOARD', `Executed admin action: ${data.action}`);
+
                 if (data.action === 'edit_stat') {
                     const val = data.value;
                     if (data.key === 'today_rev') {
@@ -1027,6 +1110,7 @@ http.createServer(async (req, res) => {
                         }
                         const memberToDM = await guild.members.fetch(review.userId).catch(()=>null);
                         if(memberToDM) await memberToDM.send(`🎉 **Good news!** Your review for **${review.product}** has been approved and published.\nThank you for your feedback!`).catch(()=>{});
+                        systemLog('INFO', 'REVIEWS', `Review ID ${data.id} approved by admin.`);
                     }
                 }
                 else if (data.action === 'reject_review') {
@@ -1038,6 +1122,7 @@ http.createServer(async (req, res) => {
                         }
                         memoryStats.pending_reviews = memoryStats.pending_reviews.filter(r => r.id !== data.id);
                         syncCloud();
+                        systemLog('INFO', 'REVIEWS', `Review ID ${data.id} rejected. Reason: ${data.reason}`);
                     }
                 }
                 else if (data.action === 'toggle_maintenance') {
@@ -1056,6 +1141,7 @@ http.createServer(async (req, res) => {
 
                     if (state) {
                         memoryStats.settings.maintenance.endsAt = Date.now() + (duration * 60000);
+                        systemLog('WARN', 'MAINTENANCE', `System locked out. Expected return in ${duration} minutes.`);
                         if (announceChannel) {
                             const unixTime = Math.floor(memoryStats.settings.maintenance.endsAt / 1000);
                             const mEmbed = new EmbedBuilder()
@@ -1066,6 +1152,7 @@ http.createServer(async (req, res) => {
                         }
                     } else {
                         memoryStats.settings.maintenance.endsAt = 0;
+                        systemLog('INFO', 'MAINTENANCE', `System lockout disengaged. Operations resumed.`);
                         if (announceChannel) {
                             const mEmbed = new EmbedBuilder()
                                 .setColor('#10b981')
@@ -1105,6 +1192,7 @@ http.createServer(async (req, res) => {
                     if (!channel) throw new Error("Channel not found on server.");
                     if (!data.message) throw new Error("Message content missing.");
                     await channel.send(data.message);
+                    systemLog('INFO', 'DISCORD_CORE', `Global broadcast sent to channel ${data.channelId}`);
                 }
                 else if (data.action === 'react_ticket_message') {
                     const channel = guild.channels.cache.get(data.channelId);
@@ -1194,6 +1282,7 @@ http.createServer(async (req, res) => {
                     if (memoryStats.activity_feed.length > 30) memoryStats.activity_feed.pop();
 
                     syncCloud();
+                    systemLog('INFO', 'STORE', `Manual transaction logged for ${username} - €${price}`);
                 }
                 else if (data.action === 'refund_tx') {
                     if (Array.isArray(memoryStats.recent_transactions)) {
@@ -1225,6 +1314,7 @@ http.createServer(async (req, res) => {
                             }
 
                             syncCloud();
+                            systemLog('WARN', 'STORE', `Transaction refunded for ${tx.username} - €${tx.price}`);
                         } else throw new Error("Transaction not found");
                     }
                 }
@@ -1233,6 +1323,7 @@ http.createServer(async (req, res) => {
                         const oldCat = memoryStats.products[data.id].category || "✨ ITEMS";
                         memoryStats.products[data.id] = { name: data.name, price: data.price, link: data.link, category: oldCat, stock: data.stock || "∞", desc: data.desc, upsellId: data.upsellId, upsellDiscount: data.upsellDiscount };
                         syncCloud();
+                        systemLog('INFO', 'CATALOG', `Product matrix updated: Asset ID ${data.id}`);
                     }
                 }
                 else if (data.action === 'add_product') {
@@ -1240,6 +1331,7 @@ http.createServer(async (req, res) => {
                     const newId = (Object.keys(memoryStats.products).length + 1).toString();
                     memoryStats.products[newId] = { name: data.name, price: data.price, link: data.link, category: "✨ NEW ITEMS", stock: data.stock || "∞", desc: data.desc, upsellId: data.upsellId, upsellDiscount: data.upsellDiscount };
                     syncCloud();
+                    systemLog('INFO', 'CATALOG', `New asset injected into matrix: ${data.name}`);
                 }
                 else if (data.action === 'delete_product') {
                     if (memoryStats.products && memoryStats.products[data.id]) {
@@ -1277,10 +1369,19 @@ http.createServer(async (req, res) => {
                 }
                 else if (['ban', 'kick', 'mute'].includes(data.action)) {
                     const target = await guild.members.fetch(data.userId).catch(() => null);
-                    if (data.action === 'ban') await guild.members.ban(data.userId, { reason: data.reason });
+                    if (data.action === 'ban') {
+                        await guild.members.ban(data.userId, { reason: data.reason });
+                        systemLog('CRITICAL', 'MODERATION', `User ${data.userId} permanently banned.`);
+                    }
                     else if (target) {
-                        if (data.action === 'kick') await target.kick(data.reason);
-                        if (data.action === 'mute') await target.timeout(parseInt(data.duration) * 60 * 1000, data.reason);
+                        if (data.action === 'kick') {
+                            await target.kick(data.reason);
+                            systemLog('WARN', 'MODERATION', `User ${data.userId} expelled from node.`);
+                        }
+                        if (data.action === 'mute') {
+                            await target.timeout(parseInt(data.duration) * 60 * 1000, data.reason);
+                            systemLog('WARN', 'MODERATION', `User ${data.userId} timeout engaged for ${data.duration}m.`);
+                        }
                     }
                 }
                 else if (data.action === 'warn') {
@@ -1288,7 +1389,7 @@ http.createServer(async (req, res) => {
                     if (!memoryStats.warns[data.userId]) memoryStats.warns[data.userId] = [];
                     memoryStats.warns[data.userId].push({ reason: data.reason || "Warn", date: new Date().toLocaleString('en-US') });
                     syncCloud();
-                    
+                    systemLog('WARN', 'MODERATION', `Warning logged for User ${data.userId}.`);
                     const targetUser = await client.users.fetch(data.userId).catch(() => null);
                     if (targetUser) {
                         await targetUser.send(`⚠️ **Warning:**\n\n**Reason:** ${data.reason || "Not specified"}`).catch(() => {});
@@ -1305,6 +1406,7 @@ http.createServer(async (req, res) => {
                     if (memoryStats.blacklist.includes(data.userId)) { memoryStats.blacklist = memoryStats.blacklist.filter(id => id !== data.userId); } 
                     else { memoryStats.blacklist.push(data.userId); }
                     syncCloud();
+                    systemLog('WARN', 'SECURITY', `Blacklist state toggled for User ${data.userId}`);
                 }
                 else if (data.action === 'close_channel') {
                     const c = guild.channels.cache.get(data.channelId);
@@ -1346,6 +1448,7 @@ http.createServer(async (req, res) => {
                     
                     memoryStats.promo_codes[codeName] = { discount: discount, limit: limit, used: 0, createdAt: new Date().toLocaleDateString('en-US') };
                     syncCloud();
+                    systemLog('INFO', 'STORE', `Voucher Code ${codeName} generated (-${discount}% | ${limit} uses).`);
                 }
                 else if (data.action === 'delete_promo') {
                     if (memoryStats.promo_codes && memoryStats.promo_codes[data.name]) { delete memoryStats.promo_codes[data.name]; syncCloud(); }
@@ -1378,6 +1481,7 @@ http.createServer(async (req, res) => {
                             } catch(e) {}
                         }
                         syncCloud();
+                        systemLog('INFO', 'VIP', `Added ${days} VIP days to user ${data.userId}.`);
                     }
                 }
                 else if (data.action === 'revoke_vip') {
@@ -1395,6 +1499,7 @@ http.createServer(async (req, res) => {
                         const newStats = JSON.parse(data.json);
                         memoryStats = newStats;
                         syncCloud();
+                        systemLog('CRITICAL', 'SYSTEM', `Core memory matrix overridden by raw JSON upload.`);
                     } catch(e) {
                         return res.writeHead(400).end('Invalid JSON format');
                     }
@@ -1518,6 +1623,19 @@ http.createServer(async (req, res) => {
             "        .chat-input-area { display: flex; padding: 20px; background: rgba(0,0,0,0.2); border-top: 0.5px solid rgba(255,255,255,0.05); gap: 15px; align-items: center; }",
             "        .chat-input-area input[type='text'] { flex: 1; margin: 0; border-radius: 16px; }",
             "        ",
+            "        /* LOG TERMINAL UI */",
+            "        .terminal-box { background: #050505; border: 0.5px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 20px; height: 600px; overflow-y: auto; font-family: 'Courier New', Courier, monospace; font-size: 0.85em; color: #a1a1aa; box-shadow: inset 0 0 30px rgba(0,0,0,0.8); }",
+            "        .terminal-box::-webkit-scrollbar { width: 6px; } .terminal-box::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); }",
+            "        .log-line { margin-bottom: 6px; line-height: 1.5; word-wrap: break-word; }",
+            "        .log-time { color: #64748b; margin-right: 10px; }",
+            "        .log-comp { color: #0ea5e9; font-weight: bold; margin-right: 10px; }",
+            "        .log-lvl { margin-right: 10px; font-weight: bold; }",
+            "        .log-INFO .log-lvl { color: #10b981; }",
+            "        .log-WARN .log-lvl { color: #f59e0b; } .log-WARN { color: #fde68a; }",
+            "        .log-ERROR .log-lvl { color: #ef4444; } .log-ERROR { color: #fca5a5; }",
+            "        .log-CRITICAL .log-lvl { color: #ff0000; background:rgba(255,0,0,0.2); padding:0 4px; } .log-CRITICAL { color: #ff0000; font-weight:bold; }",
+            "        .log-DEBUG .log-lvl { color: #8b5cf6; }",
+            "        ",
             "        #toast { position:fixed; bottom: 20px; left: 50%; transform: translate(-50%, 150px) scale(0.9); background: rgba(28, 28, 30, 0.9); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); color: white; padding: 14px 24px; border-radius: 20px; font-weight: 500; font-size: 0.95em; display: flex; align-items: center; gap: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 0.5px solid rgba(255,255,255,0.1); opacity: 0; transition: all 0.5s cubic-bezier(0.25, 1, 0.5, 1); z-index: 10000; pointer-events: none; }",
             "        #toast.show { transform: translate(-50%, 0) scale(1); opacity: 1; }",
             "        ",
@@ -1572,6 +1690,7 @@ http.createServer(async (req, res) => {
             "        <button class='nav-btn' onclick='window.switchTab(\"audience\", this)'>Audience</button>",
             "        <button class='nav-btn' onclick='window.switchTab(\"moderation\", this)'>Moderation</button>",
             "        <button class='nav-btn' onclick='window.switchTab(\"monitoring\", this)'>Diagnostics</button>",
+            "        <button class='nav-btn' onclick='window.switchTab(\"terminal\", this)'>🖥️ Terminal</button>",
             "        <button class='nav-btn' onclick='window.switchTab(\"backups\", this)'>Backups</button>",
             "        <button class='nav-btn' onclick='window.switchTab(\"admin\", this)'>Settings <span class='nav-badge' id='badge-admin'>0</span></button>",
             "    </nav>",
@@ -1801,6 +1920,17 @@ http.createServer(async (req, res) => {
             "                </div>",
             "            </div>",
             "                ",
+            "            <div id='terminal' class='tab-content'>",
+            "                <div class='box' style='background:#050505;'>",
+            "                    <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;'>",
+            "                        <h2 style='margin:0; font-family:monospace; color:var(--accent-green);'>root@nexus:~# system_logs</h2>",
+            "                        <button class='admin-btn' onclick='window.fetchLogs()'>🔄 Refresh</button>",
+            "                    </div>",
+            "                    <div class='terminal-box' id='terminal-output'>",
+            "                        <div style='color:var(--accent-green);'>Establishing secure connection to core logging engine...</div>",
+            "                    </div>",
+            "                </div>",
+            "            </div>",
             "            ",
             "            <div id='admin' class='tab-content'>",
             "                <div class='box'>",
@@ -1860,7 +1990,7 @@ http.createServer(async (req, res) => {
             "    ",
             "    <script>",
             "        let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, userGoal=500, salesChart, hourlyChart, topProdChart, catChart, dowChartInst, funnelChartInst; ",
-            "        let allMembersData = []; let isMembersLoaded = false; let activeChatChannel = null; let chatPollInterval = null;",
+            "        let allMembersData = []; let isMembersLoaded = false; let activeChatChannel = null; let chatPollInterval = null; let terminalInterval = null;",
             "        let trackedTickets = 0, trackedReviews = 0, trackedSales = 0;",
             "        ",
             "        window.customPrompt = function(title, message, placeholder = '', defaultValue = '') {",
@@ -2229,7 +2359,49 @@ http.createServer(async (req, res) => {
             "",
             "        window.triggerShopRefresh = async function() { await window.executeAction({action:'refresh_setup'}, false); };",
             "        ",
-            "        window.switchTab = function(tabId, btn) { document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active')); document.querySelectorAll('.nav-btn').forEach(el=>el.classList.remove('active')); document.getElementById(tabId).classList.add('active'); btn.classList.add('active'); document.getElementById('current-tab-title').innerText = btn.innerText.replace(/[0-9]/g, '').replace('💬', '').replace('⚙️', '').replace('📋', '').replace('🎟️', '').replace('👑', '').replace('🛍️', '').replace('💳', '').replace('📈', '').replace('📊', '').replace('👥', '').replace('🛡️', '').replace('📡', '').replace('💾', '').trim(); if(window.innerWidth <= 900) { window.closeSidebar(); } if(tabId === 'moderation' && !isMembersLoaded) window.loadAllMembers(); if(tabId === 'livechat'){ window.loadTicketsForChat(); if(activeChatChannel && !chatPollInterval){ chatPollInterval = setInterval(window.fetchChatMessages, 3000); } } else { if(chatPollInterval){ clearInterval(chatPollInterval); chatPollInterval = null; } } if(tabId === 'analytics'){ renderAnalyticsCharts(); } if(tabId === 'overview'){ window.renderSalesChart(7); } };",
+            "        window.fetchLogs = async function() {",
+            "            try {",
+            "                const res = await fetch('/api/logs');",
+            "                if (res.ok) {",
+            "                    const logs = await res.json();",
+            "                    const out = document.getElementById('terminal-output');",
+            "                    const isScrolledToBottom = out.scrollHeight - out.clientHeight <= out.scrollTop + 50;",
+            "                    let html = '';",
+            "                    logs.forEach(l => {",
+            "                        html += `<div class='log-line log-${l.level}'><span class='log-time'>[${l.time}]</span><span class='log-lvl'>[${l.level}]</span><span class='log-comp'>[${l.component}]</span> ${escapeHTML(l.message)}</div>`;",
+            "                    });",
+            "                    out.innerHTML = html || \"<div style='color:#64748b;'>Awaiting telemetry...</div>\";",
+            "                    if (isScrolledToBottom) out.scrollTop = out.scrollHeight;",
+            "                }",
+            "            } catch(e) {}",
+            "        };",
+            "        ",
+            "        window.switchTab = function(tabId, btn) {",
+            "            document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));",
+            "            document.querySelectorAll('.nav-btn').forEach(el=>el.classList.remove('active'));",
+            "            document.getElementById(tabId).classList.add('active');",
+            "            btn.classList.add('active');",
+            "            ",
+            "            if(window.innerWidth <= 900) { window.closeSidebar(); }",
+            "            if(tabId === 'moderation' && !isMembersLoaded) window.loadAllMembers();",
+            "            ",
+            "            if(tabId === 'livechat'){",
+            "                window.loadTicketsForChat();",
+            "                if(activeChatChannel && !chatPollInterval){ chatPollInterval = setInterval(window.fetchChatMessages, 3000); }",
+            "            } else {",
+            "                if(chatPollInterval){ clearInterval(chatPollInterval); chatPollInterval = null; }",
+            "            }",
+            "            ",
+            "            if(tabId === 'terminal') {",
+            "                window.fetchLogs();",
+            "                if(!terminalInterval) terminalInterval = setInterval(window.fetchLogs, 3000);",
+            "            } else {",
+            "                if(terminalInterval) { clearInterval(terminalInterval); terminalInterval = null; }",
+            "            }",
+            "            ",
+            "            if(tabId === 'analytics'){ renderAnalyticsCharts(); }",
+            "            if(tabId === 'overview'){ window.renderSalesChart(7); }",
+            "        };",
             "        ",
             "        function showToast(msg, type='success') { const t=document.getElementById('toast'); t.innerHTML = (type==='error'?'❌':'✅') + ' <span style=\"letter-spacing:0.5px;\">' + msg + '</span>'; t.style.borderColor = type === 'error' ? 'rgba(239,68,68,0.5)' : 'rgba(16,185,129,0.5)'; t.style.boxShadow = type === 'error' ? '0 10px 30px rgba(239,68,68,0.2)' : '0 10px 30px rgba(16,185,129,0.2)'; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 3000); }",
             "        ",
@@ -2400,11 +2572,9 @@ http.createServer(async (req, res) => {
 }).listen(process.env.PORT || 3000);
 
 // === [ANCHOR: STARTUP_DEBUG] ===
-console.log('🔍 Starting bot...');
+systemLog('INFO', 'SYSTEM', 'Starting Nexus Bot instance...');
 console.log('Token:', DISCORD_BOT_TOKEN ? '✅ Présent' : '❌ Manquant');
 
-client.on('error', err => console.error('❌ ERREUR CONNEXION:', err.message));
-client.on('disconnect', () => console.log('⚠️ Bot déconnecté'));
-client.on('ready', () => console.log(`✅ Bot logged in as ${client.user.tag}`));
-
-client.login(DISCORD_BOT_TOKEN);
+client.login(DISCORD_BOT_TOKEN).catch(e => {
+    systemLog('CRITICAL', 'DISCORD_CORE', `Failed to login to Discord: ${e.message}`);
+});
