@@ -14,11 +14,14 @@ const REWARBLE_API_KEY = process.env.REWARBLE_API_KEY;
 const REVIEW_CHANNEL_ID = "1521625370929922078"; 
 const SHOP_CHANNEL_ID = "1520803761130311970"; 
 // 👑 VIP Role ID
-const VIP_ROLE_ID = "REMPLACE_AVEC_ID_ROLE_VIP"; 
+const VIP_ROLE_ID = process.env.VIP_ROLE_ID || null; 
 
 if (!DISCORD_BOT_TOKEN) {
     console.error("❌ CRITICAL ERROR: DISCORD_BOT_TOKEN is missing!");
     process.exit(1);
+}
+if (!VIP_ROLE_ID) {
+    console.warn("⚠️ VIP_ROLE_ID is missing. VIP role sync will be disabled.");
 }
 
 const REWARBLE_API_URL = "https://api.rewarble.com/client/1.00/redeem"; 
@@ -26,6 +29,7 @@ const ADMIN_DISCORD_ID = "1520551977854042114";
 const CATEGORY_CUSTOMER_ID = "1521540733226713249";
 const CATEGORY_SUPPORT_ID = "1521541155005796484";
 const DASHBOARD_PIN = "1206"; 
+const AUTH_COOKIE_PREFIX = 'auth=';
 const MONTHLY_GOAL = 500; 
 
 const TEST_VOUCHERS = { "GOYAVE5": 5 };
@@ -148,7 +152,7 @@ async function checkSubscriptions() {
             try {
                 const member = await guild.members.fetch(userId).catch(() => null);
                 if (member) {
-                    await member.roles.remove(VIP_ROLE_ID).catch(() => {});
+                    if (VIP_ROLE_ID) await member.roles.remove(VIP_ROLE_ID).catch(() => {});
                     const codeName = "COMEBACK-" + Math.random().toString(36).substring(2, 6).toUpperCase();
                     if (!memoryStats.promo_codes) memoryStats.promo_codes = {};
                     memoryStats.promo_codes[codeName] = { discount: 50, limit: 1, used: 0, createdAt: new Date().toLocaleDateString('en-US') };
@@ -471,7 +475,6 @@ client.on('interactionCreate', async (interaction) => {
                 if (state.redeemed) {
                     return await interaction.reply({ content: "❌ **SECURITY ALERT:** This code has already been redeemed for a product.", ephemeral: true }).catch(()=>{});
                 }
-                state.redeemed = true; 
             }
 
             // 💥 DESTRUCTION VISUELLE DE L'UI
@@ -481,6 +484,7 @@ client.on('interactionCreate', async (interaction) => {
             if (!product) return;
             
             const promo = state ? state.promo : null;
+            if (state) state.redeemed = true;
 
             if (product.price === "Custom") {
                 logStat('custom_request', 0, { username: interaction.user.username, userId: interaction.user.id, productName: product.name });
@@ -506,7 +510,11 @@ client.on('interactionCreate', async (interaction) => {
 
                 // DOUBLE VERIFICATION DE SECURITE AU MOMENT DE L'ACHAT
                 if (!promo && state && state.voucherValue !== undefined && state.voucherValue !== Infinity && finalPrice > state.voucherValue) {
-                    return interaction.channel.send(`❌ **Error:** This product (€${finalPrice}) exceeds your voucher value (€${state.voucherValue}). Transaction aborted.`).catch(()=>{});
+                    state.redeemed = false;
+                    if (interaction.channel) {
+                        await interaction.channel.send(`❌ **Error:** This product (€${finalPrice}) exceeds your voucher value (€${state.voucherValue}). Transaction aborted.`).catch(()=>{});
+                    }
+                    return;
                 }
 
                 if (product.stock && product.stock !== "∞") {
@@ -548,7 +556,7 @@ client.on('interactionCreate', async (interaction) => {
 
                     try {
                         const member = await interaction.guild.members.fetch(interaction.user.id);
-                        await member.roles.add(VIP_ROLE_ID).catch(()=>{});
+                        if (VIP_ROLE_ID) await member.roles.add(VIP_ROLE_ID).catch(()=>{});
                         
                         const reviewRowVIP = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`review_${selected}`).setLabel('⭐ Leave a Review').setStyle(ButtonStyle.Secondary));
                         await interaction.user.send({ content: "👑 **WELCOME TO VIP!** Your 30-Day pass is now active. Enjoy your exclusive content and 20% off all future purchases in the shop!", components: [reviewRowVIP] }).catch(()=>{});
@@ -654,7 +662,7 @@ client.on('messageCreate', async (message) => {
                             }
                         }
                     } else if (TEST_VOUCHERS[input]) {
-                        voucherValue = parseFloat(TEST_VOUVHERS[input]); 
+                        voucherValue = parseFloat(TEST_VOUCHERS[input]); 
                     } else if (promoApplied) {
                         voucherValue = Infinity; 
                     }
@@ -775,7 +783,13 @@ http.createServer(async (req, res) => {
     if (rl.count > 200) return res.writeHead(429).end('Too Many Requests');
 
     const cookie = req.headers.cookie || '';
-    const isAuthenticated = cookie.includes(`auth=${DASHBOARD_PIN}`);
+    const authCookie = cookie.split(';').map(c => c.trim()).find(c => c.startsWith(AUTH_COOKIE_PREFIX));
+    let authValue = '';
+    if (authCookie) {
+        try { authValue = decodeURIComponent(authCookie.slice(AUTH_COOKIE_PREFIX.length)); } 
+        catch (e) { authValue = ''; console.warn('⚠️ Invalid auth cookie encoding:', e.message); }
+    }
+    const isAuthenticated = authValue === DASHBOARD_PIN;
 
     if (req.url === '/api/login' && req.method === 'POST') {
         let body = ''; req.on('data', chunk => body += chunk);
@@ -786,7 +800,11 @@ http.createServer(async (req, res) => {
                 const data = JSON.parse(body);
                 if (data.pin === DASHBOARD_PIN) {
                     bruteForceLocks.delete(clientIp);
-                    res.writeHead(200, { 'Set-Cookie': `auth=${DASHBOARD_PIN}; Max-Age=2592000; HttpOnly; Path=/`, 'Content-Type': 'application/json' });
+                    const trustProxy = process.env.TRUST_PROXY === 'true';
+                    const isSecureRequest = !!req.socket?.encrypted || (trustProxy && req.headers['x-forwarded-proto'] === 'https');
+                    const cookieParts = [`auth=${encodeURIComponent(DASHBOARD_PIN)}`, 'Max-Age=2592000', 'HttpOnly', 'Path=/', 'SameSite=Strict'];
+                    if (isSecureRequest) cookieParts.push('Secure');
+                    res.writeHead(200, { 'Set-Cookie': cookieParts.join('; '), 'Content-Type': 'application/json' });
                     return res.end(JSON.stringify({ success: true }));
                 } else {
                     lock.attempts++; if (lock.attempts >= 5) lock.lockout = now + 15 * 60 * 1000;
@@ -816,7 +834,7 @@ http.createServer(async (req, res) => {
         const todayStr = new Date().toISOString().split('T')[0];
         let monthRevenue = 0; Object.keys(memoryStats.revenue).forEach(date => { if(date.startsWith(todayStr.substring(0, 7))) monthRevenue += memoryStats.revenue[date]; });
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify({ memoryStats, maintenance: memoryStats.settings?.maintenance, pendingReviewsCount: memoryStats.pending_reviews?.length || 0, activeTickets: activeTickets, todayRevenue: memoryStats.revenue[todayStr] || 0, monthRevenue, ticketsOpened: memoryStats.analytics?.tickets_opened || 0, dropOffRate: memoryStats.analytics?.tickets_opened > 0 ? (100 - (memoryStats.total_transactions / memoryStats.analytics.tickets_opened) * 100).toFixed(1) : 0, peakHourStr: "N/A", conversionRate: ((memoryStats.total_transactions / (memoryStats.total_joins || 1)) * 100).toFixed(1), retentionRate: memberCount !== "N/A" ? ((memberCount / (memberCount + (memoryStats.total_leaves || 0))) * 100).toFixed(1) : "N/A", onlineCount, memberCount, MONTHLY_GOAL, PIN: DASHBOARD_PIN }));
+        return res.end(JSON.stringify({ memoryStats, maintenance: memoryStats.settings?.maintenance, pendingReviewsCount: memoryStats.pending_reviews?.length || 0, activeTickets: activeTickets, todayRevenue: memoryStats.revenue[todayStr] || 0, monthRevenue, ticketsOpened: memoryStats.analytics?.tickets_opened || 0, dropOffRate: memoryStats.analytics?.tickets_opened > 0 ? (100 - (memoryStats.total_transactions / memoryStats.analytics.tickets_opened) * 100).toFixed(1) : 0, peakHourStr: "N/A", conversionRate: ((memoryStats.total_transactions / (memoryStats.total_joins || 1)) * 100).toFixed(1), retentionRate: memberCount !== "N/A" ? ((memberCount / (memberCount + (memoryStats.total_leaves || 0))) * 100).toFixed(1) : "N/A", onlineCount, memberCount, MONTHLY_GOAL }));
     }
 
     if (req.url === '/api/export' && req.method === 'GET') {
@@ -1144,8 +1162,18 @@ http.createServer(async (req, res) => {
                 else if (data.action === 'delete_product') {
                     if (memoryStats.products && memoryStats.products[data.id]) {
                         delete memoryStats.products[data.id];
-                        const newProducts = {}; let counter = 1;
-                        for (const key in memoryStats.products) { newProducts[counter.toString()] = memoryStats.products[key]; counter++; }
+                        const newProducts = {};
+                        const numericProducts = Object.entries(memoryStats.products)
+                            .filter(([key]) => /^\d+$/.test(key))
+                            .sort((a, b) => parseInt(a[0]) - parseInt(b[0]));
+                        let counter = 1;
+                        for (const [, value] of numericProducts) {
+                            newProducts[counter.toString()] = value;
+                            counter++;
+                        }
+                        for (const [key, value] of Object.entries(memoryStats.products)) {
+                            if (!/^\d+$/.test(key)) newProducts[key] = value;
+                        }
                         memoryStats.products = newProducts;
                         syncCloud();
                     }
@@ -1274,7 +1302,7 @@ http.createServer(async (req, res) => {
                             };
                             try {
                                 const member = await guild.members.fetch(data.userId);
-                                await member.roles.add(VIP_ROLE_ID);
+                                if (VIP_ROLE_ID) await member.roles.add(VIP_ROLE_ID);
                             } catch(e) {}
                         }
                         syncCloud();
@@ -1285,7 +1313,7 @@ http.createServer(async (req, res) => {
                         delete memoryStats.subscriptions[data.userId];
                         try {
                             const member = await guild.members.fetch(data.userId);
-                            await member.roles.remove(VIP_ROLE_ID);
+                            if (VIP_ROLE_ID) await member.roles.remove(VIP_ROLE_ID);
                         } catch(e) {}
                         syncCloud();
                     }
