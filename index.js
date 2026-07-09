@@ -14,14 +14,11 @@ const REWARBLE_API_KEY = process.env.REWARBLE_API_KEY;
 const REVIEW_CHANNEL_ID = "1521625370929922078"; 
 const SHOP_CHANNEL_ID = "1520803761130311970"; 
 // 👑 VIP Role ID
-const VIP_ROLE_ID = process.env.VIP_ROLE_ID || null; 
+const VIP_ROLE_ID = "REMPLACE_AVEC_ID_ROLE_VIP"; 
 
 if (!DISCORD_BOT_TOKEN) {
     console.error("❌ CRITICAL ERROR: DISCORD_BOT_TOKEN is missing!");
     process.exit(1);
-}
-if (!VIP_ROLE_ID) {
-    console.warn("⚠️ VIP_ROLE_ID is missing. VIP role sync will be disabled.");
 }
 
 const REWARBLE_API_URL = "https://api.rewarble.com/client/1.00/redeem"; 
@@ -29,7 +26,6 @@ const ADMIN_DISCORD_ID = "1520551977854042114";
 const CATEGORY_CUSTOMER_ID = "1521540733226713249";
 const CATEGORY_SUPPORT_ID = "1521541155005796484";
 const DASHBOARD_PIN = "1206"; 
-const AUTH_COOKIE_PREFIX = 'auth=';
 const MONTHLY_GOAL = 500; 
 
 const TEST_VOUCHERS = { "GOYAVE5": 5 };
@@ -53,15 +49,15 @@ let memoryStats = {
 
 // 📦 INTEGRATION: Stock initialized to infinity ("∞")
 const INITIAL_PRODUCTS = {
-    "1": { name: "Photo Pack 1", price: "5", link: "https://drive.google.com/ton_lien", category: "✨ PHOTOS", stock: "∞", upsellId: "6", upsellDiscount: 20 }, 
-    "2": { name: "Photo Pack 2", price: "5", link: "https://drive.google.com/ton_lien", category: "✨ PHOTOS", stock: "∞" },
-    "3": { name: "Full Body", price: "5", link: "https://drive.google.com/ton_lien", category: "✨ PHOTOS", stock: "∞" }, 
-    "4": { name: "Try-On Pack", price: "5", link: "https://drive.google.com/ton_lien", category: "✨ PHOTOS", stock: "∞" },
-    "5": { name: "Mirror Pic", price: "5", link: "https://drive.google.com/ton_lien", category: "✨ PHOTOS", stock: "∞" }, 
-    "6": { name: "5-Min Video", price: "10", link: "https://drive.google.com/ton_lien", category: "🔥 VIDEOS", stock: "∞" },
-    "7": { name: "Shower / Bath", price: "10", link: "https://drive.google.com/ton_lien", category: "🔥 VIDEOS", stock: "∞" }, 
-    "8": { name: "Friends Pack", price: "15", link: "https://drive.google.com/ton_lien", category: "💦 SPECIAL", stock: "∞" },
-    "9": { name: "Surprise Pack", price: "15", link: "https://drive.google.com/ton_lien", category: "💦 SPECIAL", stock: "∞" }, 
+    "1": { name: "Boobs", price: "5", link: "https://drive.google.com/ton_lien_boobs", category: "✨ PHOTOS", stock: "∞" }, 
+    "2": { name: "Ass", price: "5", link: "https://drive.google.com/ton_lien_ass", category: "✨ PHOTOS", stock: "∞" },
+    "3": { name: "Full Body", price: "5", link: "https://drive.google.com/ton_lien_fullbody", category: "✨ PHOTOS", stock: "∞" }, 
+    "4": { name: "Lingerie Try-On", price: "5", link: "https://drive.google.com/ton_lien_lingerie", category: "✨ PHOTOS", stock: "∞" },
+    "5": { name: "Mirror Pic", price: "5", link: "https://drive.google.com/ton_lien_mirror", category: "✨ PHOTOS", stock: "∞" }, 
+    "6": { name: "5-Min Video", price: "10", link: "https://drive.google.com/ton_lien_video5min", category: "🔥 VIDEOS", stock: "∞" },
+    "7": { name: "Shower / Bath", price: "10", link: "https://drive.google.com/ton_lien_shower", category: "🔥 VIDEOS", stock: "∞" }, 
+    "8": { name: "Friends Nude", price: "15", link: "https://drive.google.com/ton_lien_friends", category: "💦 SPECIAL", stock: "∞" },
+    "9": { name: "Surprise Pack", price: "15", link: "https://drive.google.com/ton_lien_surprisepack", category: "💦 SPECIAL", stock: "∞" }, 
     "10": { name: "Sexting", price: "Custom", link: "", category: "💌 PERSONALIZED", stock: "∞" },
     "11": { name: "Custom Request", price: "Custom", link: "", category: "💌 PERSONALIZED", stock: "∞" },
     "VIP": { name: "👑 VIP Pass 30 Days", price: "20", link: "Welcome to VIP!", category: "👑 SUBSCRIPTION", stock: "∞" }
@@ -75,13 +71,6 @@ const INITIAL_BUY_LINKS = {
 };
 
 // === [ANCHOR: CLOUD_SYNC_FUNCTIONS] ===
-async function notifyAdminPhone(title, msg) {
-    try {
-        const admin = await client.users.fetch(ADMIN_DISCORD_ID);
-        if (admin) await admin.send(`📱 **NOTIFICATION SYSTÈME**\n**${title}**\n> ${msg}`);
-    } catch(e) {}
-}
-
 function addActivity(type, message) {
     if (!memoryStats.activity_feed) memoryStats.activity_feed = [];
     memoryStats.activity_feed.unshift({ type, message, time: Date.now() });
@@ -107,7 +96,6 @@ async function loadCloudStats() {
             if (!memoryStats.subscriptions) memoryStats.subscriptions = {};
             if (!memoryStats.pending_reviews) memoryStats.pending_reviews = [];
             if (!memoryStats.activity_feed) memoryStats.activity_feed = [];
-            if (!memoryStats.custom_requests) memoryStats.custom_requests = [];
             if (!memoryStats.overrides) memoryStats.overrides = {};
             if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } };
             if (!memoryStats.settings.maintenance) memoryStats.settings.maintenance = { active: false, endsAt: 0, channelId: "" };
@@ -152,7 +140,7 @@ async function checkSubscriptions() {
             try {
                 const member = await guild.members.fetch(userId).catch(() => null);
                 if (member) {
-                    if (VIP_ROLE_ID) await member.roles.remove(VIP_ROLE_ID).catch(() => {});
+                    await member.roles.remove(VIP_ROLE_ID).catch(() => {});
                     const codeName = "COMEBACK-" + Math.random().toString(36).substring(2, 6).toUpperCase();
                     if (!memoryStats.promo_codes) memoryStats.promo_codes = {};
                     memoryStats.promo_codes[codeName] = { discount: 50, limit: 1, used: 0, createdAt: new Date().toLocaleDateString('en-US') };
@@ -195,7 +183,6 @@ function logStat(type, value = 1, extraData = null) {
             if (memoryStats.recent_transactions.length > 50) memoryStats.recent_transactions.pop();
             
             addActivity('sale', `💰 €${value} Sale: ${extraData.username} bought ${extraData.productName}`);
-            notifyAdminPhone('NOUVELLE VENTE', `💰 +${value}€\n👤 Client: ${extraData.username}\n📦 Produit: ${extraData.productName}`);
         }
     } else if (type === 'joins') {
         memoryStats.joins[today] = (memoryStats.joins[today] || 0) + value;
@@ -221,8 +208,7 @@ function logStat(type, value = 1, extraData = null) {
         }
     } else if (type === 'custom_request') {
         if (!Array.isArray(memoryStats.custom_requests)) memoryStats.custom_requests = [];
-        memoryStats.custom_requests.unshift({ id: Date.now().toString(), username: extraData.username, userId: extraData.userId, product: extraData.productName, date: new Date().toLocaleString('en-US'), status: 'pending' });
-        notifyAdminPhone('NOUVELLE CUSTOM REQUEST', `💌 ${extraData.username} a demandé: ${extraData.productName}\n➡️ Vérifie le tableau Kanban sur le Dashboard.`);
+        memoryStats.custom_requests.unshift({ id: Date.now().toString(), username: extraData.username, product: extraData.productName, date: new Date().toLocaleString('en-US'), status: 'pending' });
     }
     memoryStats.last_update = Date.now();
     syncCloud(); 
@@ -364,7 +350,6 @@ client.on('interactionCreate', async (interaction) => {
                 date: new Date().toLocaleString('en-US')
             });
             addActivity('review', `⭐ New ${numRating}/5 review submitted by ${interaction.user.username}`);
-            notifyAdminPhone('NOUVELLE REVIEW', `⭐ ${numRating}/5 par ${interaction.user.username}\nEn attente de validation sur le dashboard.`);
             syncCloud();
 
             return await interaction.reply({ content: "✅ **Thank you!** Your review has been submitted to our team for moderation.", ephemeral: true }).catch(()=>{});
@@ -475,6 +460,7 @@ client.on('interactionCreate', async (interaction) => {
                 if (state.redeemed) {
                     return await interaction.reply({ content: "❌ **SECURITY ALERT:** This code has already been redeemed for a product.", ephemeral: true }).catch(()=>{});
                 }
+                state.redeemed = true; 
             }
 
             // 💥 DESTRUCTION VISUELLE DE L'UI
@@ -484,14 +470,17 @@ client.on('interactionCreate', async (interaction) => {
             if (!product) return;
             
             const promo = state ? state.promo : null;
-            if (state) state.redeemed = true;
 
             if (product.price === "Custom") {
-                logStat('custom_request', 0, { username: interaction.user.username, userId: interaction.user.id, productName: product.name });
+                logStat('custom_request', 0, { username: interaction.user.username, productName: product.name });
                 if (interaction.channel) {
                     await interaction.channel.send(`📩 **Custom request registered!** An admin will review it. Closing ticket in 10 seconds...`).catch(() => {});
                     setTimeout(() => { channelStates.delete(interaction.channel.id); interaction.channel.delete().catch(()=>{}); }, 10000);
                 }
+                try {
+                    const admin = await client.users.fetch(ADMIN_DISCORD_ID);
+                    if (admin) await admin.send(`🔔 **Custom Request** from <@${interaction.user.id}>: ${product.name}`).catch(() => {});
+                } catch (err) {}
             } else {
                 let finalPrice = parseInt(product.price);
                 let isVIPPurchase = selected === "VIP" || (product.category && product.category.includes("SUBSCRIPTION"));
@@ -510,11 +499,7 @@ client.on('interactionCreate', async (interaction) => {
 
                 // DOUBLE VERIFICATION DE SECURITE AU MOMENT DE L'ACHAT
                 if (!promo && state && state.voucherValue !== undefined && state.voucherValue !== Infinity && finalPrice > state.voucherValue) {
-                    state.redeemed = false;
-                    if (interaction.channel) {
-                        await interaction.channel.send(`❌ **Error:** This product (€${finalPrice}) exceeds your voucher value (€${state.voucherValue}). Transaction aborted.`).catch(()=>{});
-                    }
-                    return;
+                    return interaction.channel.send(`❌ **Error:** This product (€${finalPrice}) exceeds your voucher value (€${state.voucherValue}). Transaction aborted.`).catch(()=>{});
                 }
 
                 if (product.stock && product.stock !== "∞") {
@@ -524,23 +509,6 @@ client.on('interactionCreate', async (interaction) => {
 
                 logStat('revenue', finalPrice, { productId: selected, productName: product.name, username: interaction.user.username });
                 
-                // 🚀 UPSELL ENGINE LOGIC
-                let upsellEmbed = null;
-                if (product.upsellId && memoryStats.products[product.upsellId]) {
-                    const upsellProduct = memoryStats.products[product.upsellId];
-                    const uDiscount = product.upsellDiscount || 20;
-                    
-                    const codeName = "UPSELL-" + Math.random().toString(36).substring(2, 8).toUpperCase();
-                    if (!memoryStats.promo_codes) memoryStats.promo_codes = {};
-                    memoryStats.promo_codes[codeName] = { discount: uDiscount, limit: 1, used: 0, createdAt: new Date().toLocaleDateString('en-US') };
-                    syncCloud();
-                    
-                    upsellEmbed = new EmbedBuilder()
-                        .setColor('#00f0ff')
-                        .setTitle('🎁 OFFRE EXCLUSIVE DEBLOCQUÉE !')
-                        .setDescription(`Parce que tu as acheté **${product.name}**, tu as droit à une offre unique !\n\nObtiens **${upsellProduct.name}** avec **-${uDiscount}% de réduction**.\n\n👉 Utilise ce code promo lors de ton prochain achat :\n\`${codeName}\`\n\n*(Code valable pour 1 seule utilisation)*`);
-                }
-
                 if (isVIPPurchase) {
                     const now = Date.now();
                     const thirtyDays = 30 * 24 * 60 * 60 * 1000;
@@ -556,7 +524,7 @@ client.on('interactionCreate', async (interaction) => {
 
                     try {
                         const member = await interaction.guild.members.fetch(interaction.user.id);
-                        if (VIP_ROLE_ID) await member.roles.add(VIP_ROLE_ID).catch(()=>{});
+                        await member.roles.add(VIP_ROLE_ID).catch(()=>{});
                         
                         const reviewRowVIP = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`review_${selected}`).setLabel('⭐ Leave a Review').setStyle(ButtonStyle.Secondary));
                         await interaction.user.send({ content: "👑 **WELCOME TO VIP!** Your 30-Day pass is now active. Enjoy your exclusive content and 20% off all future purchases in the shop!", components: [reviewRowVIP] }).catch(()=>{});
@@ -575,20 +543,15 @@ client.on('interactionCreate', async (interaction) => {
                 );
 
                 try {
-                    let dmMessages = { embeds: [successEmbed], components: [reviewRow] };
-                    await interaction.user.send(dmMessages);
-                    if (upsellEmbed) await interaction.user.send({ embeds: [upsellEmbed] });
-                    
+                    await interaction.user.send({ embeds: [successEmbed], components: [reviewRow] });
                     if (interaction.channel) {
                         await interaction.channel.send("✅ **Product delivered to your DMs!** Closing ticket in 5 seconds...").catch(()=>{});
                         setTimeout(() => { channelStates.delete(interaction.channel.id); interaction.channel.delete().catch(()=>{}); }, 5000);
                     }
                 } catch (e) { 
                     if (interaction.channel) {
-                        let chMsg = { content: "⚠️ **Warning: Could not DM you.** Here is your product. Ticket closes in 30 seconds.", embeds: [successEmbed], components: [reviewRow] };
-                        await interaction.channel.send(chMsg).catch(()=>{}); 
-                        if(upsellEmbed) await interaction.channel.send({ embeds: [upsellEmbed] }).catch(()=>{});
-                        setTimeout(() => { channelStates.delete(interaction.channel.id); interaction.channel.delete().catch(()=>{}); }, 30000);
+                        await interaction.channel.send({ content: "⚠️ **Warning: Could not DM you.** Here is your product. Ticket closes in 15 seconds.", embeds: [successEmbed], components: [reviewRow] }).catch(()=>{}); 
+                        setTimeout(() => { channelStates.delete(interaction.channel.id); interaction.channel.delete().catch(()=>{}); }, 15000);
                     } 
                 }
             }
@@ -635,31 +598,13 @@ client.on('messageCreate', async (message) => {
                         
                         console.log("🛠️ [REWARBLE] API RESPONSE DATA:", apiResponse.data);
 
-                        // 🔍 RECHERCHE DE SÉCURITÉ MAXIMALE ET RECURSIVE DANS L'OBJET RETOURNÉ
-                        let rawData = apiResponse.data;
-                        if (rawData) {
-                            if (rawData.value !== undefined) voucherValue = parseFloat(rawData.value);
-                            else if (rawData.amount !== undefined) voucherValue = parseFloat(rawData.amount);
-                            else if (rawData.voucher && rawData.voucher.value !== undefined) voucherValue = parseFloat(rawData.voucher.value);
-                            else if (rawData.voucher && rawData.voucher.amount !== undefined) voucherValue = parseFloat(rawData.voucher.amount);
-                            else if (rawData.data && rawData.data.value !== undefined) voucherValue = parseFloat(rawData.data.value);
-                            else if (rawData.data && rawData.data.amount !== undefined) voucherValue = parseFloat(rawData.data.amount);
-                            else {
-                                const deepSearch = (obj) => {
-                                    for (let key in obj) {
-                                        if ((key === 'value' || key === 'amount') && !isNaN(parseFloat(obj[key])) && parseFloat(obj[key]) > 0) {
-                                            return parseFloat(obj[key]);
-                                        }
-                                        if (typeof obj[key] === 'object' && obj[key] !== null) {
-                                            let deepVal = deepSearch(obj[key]);
-                                            if (deepVal) return deepVal;
-                                        }
-                                    }
-                                    return null;
-                                };
-                                let detectedValue = deepSearch(rawData);
-                                voucherValue = detectedValue !== null ? detectedValue : 0;
-                            }
+                        if (apiResponse.data && apiResponse.data.value) {
+                            voucherValue = parseFloat(apiResponse.data.value);
+                        } else if (apiResponse.data && apiResponse.data.amount) {
+                            voucherValue = parseFloat(apiResponse.data.amount);
+                        } else {
+                            // SÉCURITÉ MAXIMALE : Si la structure est inconnue, on fixe à 0
+                            voucherValue = 0; 
                         }
                     } else if (TEST_VOUCHERS[input]) {
                         voucherValue = parseFloat(TEST_VOUCHERS[input]); 
@@ -783,13 +728,7 @@ http.createServer(async (req, res) => {
     if (rl.count > 200) return res.writeHead(429).end('Too Many Requests');
 
     const cookie = req.headers.cookie || '';
-    const authCookie = cookie.split(';').map(c => c.trim()).find(c => c.startsWith(AUTH_COOKIE_PREFIX));
-    let authValue = '';
-    if (authCookie) {
-        try { authValue = decodeURIComponent(authCookie.slice(AUTH_COOKIE_PREFIX.length)); } 
-        catch (e) { authValue = ''; console.warn('⚠️ Invalid auth cookie encoding:', e.message); }
-    }
-    const isAuthenticated = authValue === DASHBOARD_PIN;
+    const isAuthenticated = cookie.includes(`auth=${DASHBOARD_PIN}`);
 
     if (req.url === '/api/login' && req.method === 'POST') {
         let body = ''; req.on('data', chunk => body += chunk);
@@ -800,11 +739,7 @@ http.createServer(async (req, res) => {
                 const data = JSON.parse(body);
                 if (data.pin === DASHBOARD_PIN) {
                     bruteForceLocks.delete(clientIp);
-                    const trustProxy = process.env.TRUST_PROXY === 'true';
-                    const isSecureRequest = !!req.socket?.encrypted || (trustProxy && req.headers['x-forwarded-proto'] === 'https');
-                    const cookieParts = [`auth=${encodeURIComponent(DASHBOARD_PIN)}`, 'Max-Age=2592000', 'HttpOnly', 'Path=/', 'SameSite=Strict'];
-                    if (isSecureRequest) cookieParts.push('Secure');
-                    res.writeHead(200, { 'Set-Cookie': cookieParts.join('; '), 'Content-Type': 'application/json' });
+                    res.writeHead(200, { 'Set-Cookie': `auth=${DASHBOARD_PIN}; Max-Age=2592000; HttpOnly; Path=/`, 'Content-Type': 'application/json' });
                     return res.end(JSON.stringify({ success: true }));
                 } else {
                     lock.attempts++; if (lock.attempts >= 5) lock.lockout = now + 15 * 60 * 1000;
@@ -834,7 +769,7 @@ http.createServer(async (req, res) => {
         const todayStr = new Date().toISOString().split('T')[0];
         let monthRevenue = 0; Object.keys(memoryStats.revenue).forEach(date => { if(date.startsWith(todayStr.substring(0, 7))) monthRevenue += memoryStats.revenue[date]; });
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify({ memoryStats, maintenance: memoryStats.settings?.maintenance, pendingReviewsCount: memoryStats.pending_reviews?.length || 0, activeTickets: activeTickets, todayRevenue: memoryStats.revenue[todayStr] || 0, monthRevenue, ticketsOpened: memoryStats.analytics?.tickets_opened || 0, dropOffRate: memoryStats.analytics?.tickets_opened > 0 ? (100 - (memoryStats.total_transactions / memoryStats.analytics.tickets_opened) * 100).toFixed(1) : 0, peakHourStr: "N/A", conversionRate: ((memoryStats.total_transactions / (memoryStats.total_joins || 1)) * 100).toFixed(1), retentionRate: memberCount !== "N/A" ? ((memberCount / (memberCount + (memoryStats.total_leaves || 0))) * 100).toFixed(1) : "N/A", onlineCount, memberCount, MONTHLY_GOAL }));
+        return res.end(JSON.stringify({ memoryStats, maintenance: memoryStats.settings?.maintenance, pendingReviewsCount: memoryStats.pending_reviews?.length || 0, activeTickets: activeTickets, todayRevenue: memoryStats.revenue[todayStr] || 0, monthRevenue, ticketsOpened: memoryStats.analytics?.tickets_opened || 0, dropOffRate: memoryStats.analytics?.tickets_opened > 0 ? (100 - (memoryStats.total_transactions / memoryStats.analytics.tickets_opened) * 100).toFixed(1) : 0, peakHourStr: "N/A", conversionRate: ((memoryStats.total_transactions / (memoryStats.total_joins || 1)) * 100).toFixed(1), retentionRate: memberCount !== "N/A" ? ((memberCount / (memberCount + (memoryStats.total_leaves || 0))) * 100).toFixed(1) : "N/A", onlineCount, memberCount, MONTHLY_GOAL, PIN: DASHBOARD_PIN }));
     }
 
     if (req.url === '/api/export' && req.method === 'GET') {
@@ -976,6 +911,7 @@ http.createServer(async (req, res) => {
                 const guild = client.guilds.cache.first();
                 if (!guild) return res.writeHead(404).end('Guild not found');
 
+                // --- 📝 EDIT STATS (Real data & UI Overrides) ---
                 if (data.action === 'edit_stat') {
                     const val = data.value;
                     if (data.key === 'today_rev') {
@@ -1002,6 +938,7 @@ http.createServer(async (req, res) => {
                     }
                     syncCloud();
                 }
+                // --- MODERATION DES REVIEWS PENDING ---
                 else if (data.action === 'approve_review') {
                     if (!memoryStats.pending_reviews) memoryStats.pending_reviews = [];
                     const idx = memoryStats.pending_reviews.findIndex(r => r.id === data.id);
@@ -1028,6 +965,7 @@ http.createServer(async (req, res) => {
                         syncCloud();
                     }
                 }
+                // --------------------------------------
                 else if (data.action === 'toggle_maintenance') {
                     if (!memoryStats.settings) memoryStats.settings = {};
                     if (!memoryStats.settings.maintenance) memoryStats.settings.maintenance = { active: false, endsAt: 0, channelId: "" };
@@ -1149,31 +1087,21 @@ http.createServer(async (req, res) => {
                 else if (data.action === 'edit_product') {
                     if (memoryStats.products && memoryStats.products[data.id]) {
                         const oldCat = memoryStats.products[data.id].category || "✨ ITEMS";
-                        memoryStats.products[data.id] = { name: data.name, price: data.price, link: data.link, category: oldCat, stock: data.stock || "∞", desc: data.desc, upsellId: data.upsellId, upsellDiscount: data.upsellDiscount };
+                        memoryStats.products[data.id] = { name: data.name, price: data.price, link: data.link, category: oldCat, stock: data.stock || "∞", desc: data.desc };
                         syncCloud();
                     }
                 }
                 else if (data.action === 'add_product') {
                     if (!memoryStats.products) memoryStats.products = {};
                     const newId = (Object.keys(memoryStats.products).length + 1).toString();
-                    memoryStats.products[newId] = { name: data.name, price: data.price, link: data.link, category: "✨ NEW ITEMS", stock: data.stock || "∞", desc: data.desc, upsellId: data.upsellId, upsellDiscount: data.upsellDiscount };
+                    memoryStats.products[newId] = { name: data.name, price: data.price, link: data.link, category: "✨ NEW ITEMS", stock: data.stock || "∞", desc: data.desc };
                     syncCloud();
                 }
                 else if (data.action === 'delete_product') {
                     if (memoryStats.products && memoryStats.products[data.id]) {
                         delete memoryStats.products[data.id];
-                        const newProducts = {};
-                        const numericProducts = Object.entries(memoryStats.products)
-                            .filter(([key]) => /^\d+$/.test(key))
-                            .sort((a, b) => parseInt(a[0]) - parseInt(b[0]));
-                        let counter = 1;
-                        for (const [, value] of numericProducts) {
-                            newProducts[counter.toString()] = value;
-                            counter++;
-                        }
-                        for (const [key, value] of Object.entries(memoryStats.products)) {
-                            if (!/^\d+$/.test(key)) newProducts[key] = value;
-                        }
+                        const newProducts = {}; let counter = 1;
+                        for (const key in memoryStats.products) { newProducts[counter.toString()] = memoryStats.products[key]; counter++; }
                         memoryStats.products = newProducts;
                         syncCloud();
                     }
@@ -1238,20 +1166,10 @@ http.createServer(async (req, res) => {
                     const c = guild.channels.cache.get(data.channelId);
                     if (c) { channelStates.delete(c.id); await c.delete().catch(()=>{}); }
                 }
-                else if (data.action === 'move_custom_req') {
+                else if (data.action === 'resolve_req') {
                     if (Array.isArray(memoryStats.custom_requests)) {
                         const reqItem = memoryStats.custom_requests.find(r => r.id === data.id);
-                        if(reqItem) { 
-                            reqItem.status = data.status; 
-                            syncCloud(); 
-                            try {
-                                const targetUser = await client.users.fetch(reqItem.userId).catch(() => null);
-                                if (targetUser && data.status !== 'pending') {
-                                    let statusFr = data.status === 'recording' ? '🎥 Enregistrement en cours' : data.status === 'editing' ? '✂️ Montage en cours' : '✅ Commande Terminée';
-                                    await targetUser.send(`🔔 **Mise à jour de ta commande personnalisée (${reqItem.product}):**\nNouveau statut : **${statusFr}** !`).catch(()=>{});
-                                }
-                            } catch(e){}
-                        }
+                        if(reqItem) { reqItem.status = 'done'; syncCloud(); }
                     }
                 }
                 else if (data.action === 'announce') {
@@ -1302,7 +1220,7 @@ http.createServer(async (req, res) => {
                             };
                             try {
                                 const member = await guild.members.fetch(data.userId);
-                                if (VIP_ROLE_ID) await member.roles.add(VIP_ROLE_ID);
+                                await member.roles.add(VIP_ROLE_ID);
                             } catch(e) {}
                         }
                         syncCloud();
@@ -1313,7 +1231,7 @@ http.createServer(async (req, res) => {
                         delete memoryStats.subscriptions[data.userId];
                         try {
                             const member = await guild.members.fetch(data.userId);
-                            if (VIP_ROLE_ID) await member.roles.remove(VIP_ROLE_ID);
+                            await member.roles.remove(VIP_ROLE_ID);
                         } catch(e) {}
                         syncCloud();
                     }
@@ -1403,27 +1321,15 @@ http.createServer(async (req, res) => {
             "        .feed-item.sale { border-color: var(--accent-green); } .feed-item.ticket { border-color: var(--accent-orange); } .feed-item.review { border-color: var(--accent-purple); }",
             "        .feed-time { font-size: 0.75em; color: var(--accent-blue); min-width: 60px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; }",
             "        ",
-            "        /* SPLASH SCREEN FAST (CSS ONLY, NO JS REQUIRED TO HIDE) */",
-            "        .splash-screen { position: fixed; inset: 0; background: #030712; z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; pointer-events: all; animation: fadeOutSplash 0.5s ease forwards 1.5s; }",
-            "        @keyframes fadeOutSplash { 0% { opacity: 1; visibility: visible; } 100% { opacity: 0; visibility: hidden; pointer-events: none; z-index: -1; display: none; } }",
+            "        /* SPLASH SCREEN FAST */",
+            "        .splash-screen { position: fixed; inset: 0; background: #030712; z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; transition: opacity 0.5s ease; overflow: hidden; }",
             "        .loader-bar-fast { width: 250px; height: 3px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden; position: relative; margin-top: 20px; }",
-            "        .loader-bar-fast::after { content: ''; position: absolute; left: 0; top: 0; height: 100%; width: 100%; background: var(--accent-blue); animation: loadBarAnim 1.5s ease-in-out forwards; }",
+            "        .loader-bar-fast::after { content: ''; position: absolute; left: 0; top: 0; height: 100%; width: 100%; background: var(--accent-blue); animation: loadBarAnim 1s ease-in-out forwards; }",
             "        @keyframes loadBarAnim { 0% { width: 0%; } 100% { width: 100%; } }",
             "        ",
-            "        /* KANBAN UI */",
-            "        .kanban-board { display: flex; gap: 20px; overflow-x: auto; padding-bottom: 20px; align-items: stretch; min-height: 500px; }",
-            "        .kanban-col { background: rgba(0,0,0,0.2); border-radius: 16px; padding: 15px; min-width: 300px; flex: 1; border: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; gap: 15px; }",
-            "        .kanban-header { font-weight: 800; text-transform: uppercase; letter-spacing: 1px; padding-bottom: 10px; border-bottom: 2px solid; }",
-            "        .kanban-card { background: rgba(15,23,42,0.8); border: 1px solid rgba(255,255,255,0.05); padding: 15px; border-radius: 12px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); transition: transform 0.2s; }",
-            "        .kanban-card:hover { transform: translateY(-3px); border-color: rgba(255,255,255,0.15); }",
-            "        .kanban-actions { display: flex; gap: 5px; margin-top: auto; }",
-            "        .kanban-actions button { flex: 1; padding: 8px; font-size: 0.75em; }",
-            "        ",
-            "        /* LAYOUT & SIDEBAR - ANTI-BLUR MOBILE PROTOCOL FIXED */",
-            "        .dashboard-layout { display: flex; height: 100vh; overflow: hidden; animation: showDash 0.5s ease forwards 1.5s; opacity: 0; }",
-            "        @keyframes showDash { to { opacity: 1; } }",
-            "        .sidebar { width: 280px; background: #0c101d; border-right: 1px solid var(--border-color); padding: 25px 20px; display: flex; flex-direction: column; overflow-y: auto; z-index: 10000; flex-shrink: 0; transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1), margin-right 0.3s cubic-bezier(0.25, 1, 0.5, 1); -webkit-font-smoothing: antialiased; transform: translate3d(0, 0, 0); backface-visibility: hidden; }",
-            "        .sidebar-closed .sidebar { transform: translate3d(-280px, 0, 0); margin-right: -280px; }",
+            "        /* LAYOUT & SIDEBAR */",
+            "        .dashboard-layout { display: flex; height: 100vh; overflow: hidden; }",
+            "        .sidebar { width: 280px; background: rgba(15,23,42,0.8); border-right: 1px solid var(--border-color); padding: 25px 20px; display: flex; flex-direction: column; overflow-y: auto; backdrop-filter: blur(20px); z-index: 10; flex-shrink: 0; }",
             "        .sidebar-header { margin-bottom: 30px; text-align: left; }",
             "        .sidebar-header h2 { margin: 0; font-size: 2em; font-weight: 800; background: linear-gradient(135deg, #fff 0%, #38bdf8 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: 1px; }",
             "        .sidebar-header p { margin: 5px 0 0 0; color: var(--accent-blue); font-size: 0.85em; text-transform: uppercase; letter-spacing: 2px; font-weight: 600; }",
@@ -1431,12 +1337,8 @@ http.createServer(async (req, res) => {
             "        .nav-btn { width: 100%; text-align: left; padding: 12px 15px; margin-bottom: 5px; background: transparent; border: none; color: var(--text-main); font-size: 0.95em; font-weight: 600; border-radius: 12px; cursor: pointer; transition: all 0.3s; display: flex; justify-content: space-between; align-items: center; }",
             "        .nav-btn:hover { background: rgba(255,255,255,0.05); transform: translateX(5px); }",
             "        .nav-btn.active { background: linear-gradient(90deg, rgba(56,189,248,0.15) 0%, transparent 100%); border-left: 4px solid var(--accent-blue); color: var(--accent-blue); transform: translateX(5px); }",
-            "        .main-content { flex: 1; padding: 30px; overflow-y: auto; position: relative; transition: all 0.3s ease; }",
+            "        .main-content { flex: 1; padding: 30px; overflow-y: auto; position: relative; }",
             "        .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }",
-            "        .hamburger-btn { display: block; background: transparent; border: none; color: #fff; font-size: 1.8em; cursor: pointer; padding: 0; margin-right: 15px; transition: transform 0.2s; z-index: 10001; }",
-            "        .hamburger-btn:hover { color: var(--accent-blue); }",
-            "        .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 9999; backdrop-filter: blur(4px); opacity: 0; transition: opacity 0.3s ease; }",
-            "        .sidebar-overlay.show { display: block; opacity: 1; }",
             "        ",
             "        /* CHAT UI REFINED */",
             "        .chat-container { display: flex; height: 650px; gap: 25px; }",
@@ -1462,10 +1364,11 @@ http.createServer(async (req, res) => {
             "        @keyframes zoomIn { from { transform: scale(0.9); opacity:0; } to { transform: scale(1); opacity:1; } }",
             "        ",
             "        @media screen and (max-width: 900px) {",
-            "          .sidebar { position: fixed; top: 0; left: 0; height: 100vh; transform: translate3d(-100%, 0, 0); width: 280px; box-shadow: 20px 0 50px rgba(0,0,0,0.5); margin-right: 0 !important; transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1); }",
-            "          .sidebar.open { transform: translate3d(0, 0, 0); }",
-            "          .sidebar-closed .sidebar { transform: translate3d(-100%, 0, 0) !important; margin-right: 0 !important; }",
             "          .dashboard-layout { flex-direction: column; }",
+            "          .sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border-color); padding: 15px; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between; overflow: visible; }",
+            "          .sidebar-header { margin-bottom: 15px; width: 100%; text-align: center; }",
+            "          .nav-category { display: none; }",
+            "          .nav-btn { width: auto; flex: 1 1 calc(33% - 10px); justify-content: center; text-align: center; padding: 10px; font-size: 0.8em; }",
             "          .main-content { padding: 15px; }",
             "          .overview-grid, .chat-container { grid-template-columns: 1fr !important; flex-direction: column; height: auto; }",
             "          .ticket-list { height: 200px; }",
@@ -1475,7 +1378,7 @@ http.createServer(async (req, res) => {
             "<body>",
             "    <div id='toast'></div>",
             "    ",
-            "    ",
+            "    <!-- FAST LOADING SCREEN -->",
             "    <div id='loading-screen' class='splash-screen'>",
             "       <h1 style='color:var(--accent-blue); font-size: 3em; margin-bottom: 20px; letter-spacing: 4px; text-shadow: 0 0 20px rgba(0,240,255,0.5);'>NEXUS CORE</h1>",
             "       <div class='loader-bar-fast'></div>",
@@ -1493,10 +1396,9 @@ http.createServer(async (req, res) => {
             "        </div>",
             "    </div>",
             "",
-            "    ",
-            "    <div class='sidebar-overlay' id='sidebarOverlay' onclick='window.toggleSidebar()'></div>",
-            "    <div class='dashboard-layout' id='dashboard-container'>",
-            "       <aside class='sidebar' id='appSidebar'>",
+            "    <!-- NEW SIDEBAR LAYOUT -->",
+            "    <div class='dashboard-layout' id='dashboard-container' style='display:none;'>",
+            "       <aside class='sidebar'>",
             "           <div class='sidebar-header'>",
             "               <h2>NEXUS</h2>",
             "               <p>Executive</p>",
@@ -1507,7 +1409,6 @@ http.createServer(async (req, res) => {
             "           <button class='nav-btn' onclick='window.switchTab(\"transactions\", this)'><span>Transactions</span></button>",
             "           <div class='nav-category'>🛍️ Storefront</div>",
             "           <button class='nav-btn' onclick='window.switchTab(\"products\", this)'><span>Catalog & Gateways</span></button>",
-            "           <button class='nav-btn' onclick='window.switchTab(\"kanban\", this)'><span>📋 Custom Kanban</span></button>",
             "           <button class='nav-btn' onclick='window.switchTab(\"vip\", this)'><span>VIP Pass</span></button>",
             "           <button class='nav-btn' onclick='window.switchTab(\"referrals\", this)'><span>Promo & Referrals</span></button>",
             "           <div class='nav-category'>👥 Community</div>",
@@ -1521,10 +1422,7 @@ http.createServer(async (req, res) => {
             "",
             "       <main class='main-content'>",
             "           <div class='top-bar'>",
-            "               <div style='display:flex; align-items:center;'>",
-            "                   <button class='hamburger-btn' onclick='window.toggleSidebar()'>☰</button>",
-            "                   <h1 id='current-tab-title' style='margin:0; font-size:1.8em; font-weight:800;'>Overview</h1>",
-            "               </div>",
+            "               <h1 id='current-tab-title' style='margin:0; font-size:1.8em; font-weight:800;'>Overview</h1>",
             "               <div class='controls'>",
             "                   <button class='btn-icon' onclick='window.toggleMute()' id='audioBtn' title='Toggle Sound'>🔊</button>",
             "                   <button class='btn-icon' onclick='window.manualRefresh()' id='refreshBtn' title='Sync Data'>🔄</button>",
@@ -1532,7 +1430,7 @@ http.createServer(async (req, res) => {
             "               </div>",
             "           </div>",
             "",
-            "           ",
+            "           <!-- TABS CONTENT -->",
             "           <div id='overview' class='tab-content active'>",
             "               <div class='stats-grid'>",
             "                   <div class='card green' onclick='window.editStat(\"today_rev\")' style='cursor:pointer;' title='Click to edit'><h3>Today's Earnings</h3><div class='value money text-green' id='ui-today-rev'>€0</div></div>",
@@ -1561,16 +1459,6 @@ http.createServer(async (req, res) => {
             "                   <div class='box' style='margin:0; display:flex; flex-direction:column; overflow:hidden;'>",
             "                       <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:15px;'><h2 style='margin:0; border:none;'>⚡ Live Pulse</h2><div class='status-dot' style='margin:0;'></div></div>",
             "                       <div class='feed-container' id='target-feed' style='flex:1;'></div>",
-            "                   </div>",
-            "               </div>",
-            "           </div>",
-            "                ",
-            "           <div id='kanban' class='tab-content'>",
-            "               <div class='box'>",
-            "                   <h2 style='color:var(--accent-blue);'>📋 Gestion des Commandes Personnalisées</h2>",
-            "                   <p class='text-muted'>Fais glisser virtuellement les commandes pour prévenir le client automatiquement par DM Discord.</p>",
-            "                   <div class='kanban-board' id='target-kanban'>",
-            "                       ",
             "                   </div>",
             "               </div>",
             "           </div>",
@@ -1637,17 +1525,12 @@ http.createServer(async (req, res) => {
             "                   <div style='display:flex; gap:20px; flex-wrap:wrap; margin-bottom:15px;'>",
             "                       <input type='hidden' id='editProdId'>",
             "                       <input type='text' id='newProdName' placeholder='Asset Designation (e.g. VIP Pack)' style='flex:1; min-width:200px;'>",
-            "                       <input type='text' id='newProdPrice' placeholder='Value (€)' style='width:100px;'>",
-            "                       <input type='text' id='newProdStock' placeholder='Inventory (∞)' style='width:100px;'>",
+            "                       <input type='text' id='newProdPrice' placeholder='Value (€)' style='width:150px;'>",
+            "                       <input type='text' id='newProdStock' placeholder='Inventory (∞)' style='width:120px;'>",
             "                   </div>",
             "                   <div style='display:flex; gap:20px; flex-wrap:wrap; margin-bottom:15px;'>",
             "                       <input type='text' id='newProdDesc' placeholder='Asset Description (e.g. Premium 4K Photos)' style='flex:1; min-width:250px;'>",
             "                       <input type='text' id='newProdLink' placeholder='Secure Delivery Node (Drive, Mega...)' style='flex:1; min-width:250px;'>",
-            "                   </div>",
-            "                   <div style='display:flex; gap:20px; flex-wrap:wrap; margin-bottom:15px; padding:15px; border-radius:12px; background:rgba(56,189,248,0.05); border:1px solid rgba(56,189,248,0.2);'>",
-            "                       <strong style='color:var(--accent-blue); display:flex; align-items:center;'>🚀 Auto-Upsell :</strong>",
-            "                       <input type='text' id='newProdUpsellId' placeholder='ID Produit Upsell (ex: 6)' style='width:180px;'>",
-            "                       <input type='number' id='newProdUpsellDiscount' placeholder='% Réduction' style='width:150px;'>",
             "                   </div>",
             "                   <div style='display:flex; gap:15px; margin-top:20px;'>",
             "                       <button class='admin-btn' style='margin:0; padding:15px 30px;' onclick='window.saveProduct()' id='saveProdBtn'>➕ Inject Asset</button>",
@@ -1674,124 +1557,109 @@ http.createServer(async (req, res) => {
             "                       <button class='admin-btn' style='margin:0; background:rgba(239, 68, 68, 0.1); border-color:var(--accent-red); color:var(--accent-red); display:none;' onclick='window.cancelEditLink()' id='cancelEditLinkBtn'>Abort</button>",
             "                   </div>",
             "                   <div style='overflow-x:auto; margin-top:20px;'><table><thead><tr><th>Label</th><th>Endpoint URL</th><th>Actions</th></tr></thead><tbody id='target-buy-links'></tbody></table></div>",
-            "                </div>",
-            "            </div>",
+            "               </div>",
+            "           </div>",
             "                ",
-            "            <div id='audience' class='tab-content'>",
-            "                <div style='display:grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap:25px;'>",
-            "                    <div class='box'><h2>📥 Inbound Traffic</h2><div style='overflow-x:auto; margin-top:15px;'><table><thead><tr><th>Client ID</th><th>Timestamp</th></tr></thead><tbody id='target-joins'></tbody></table></div></div>",
-            "                    <div class='box'><h2>👋 Outbound Traffic</h2><div style='overflow-x:auto; margin-top:15px;'><table><thead><tr><th>Client ID</th><th>Session Duration</th><th>Timestamp</th></tr></thead><tbody id='target-leaves'></tbody></table></div></div>",
-            "                </div>",
-            "            </div>",
+            "           <div id='audience' class='tab-content'>",
+            "               <div style='display:grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap:25px;'>",
+            "                   <div class='box'><h2>📥 Inbound Traffic</h2><div style='overflow-x:auto; margin-top:15px;'><table><thead><tr><th>Client ID</th><th>Timestamp</th></tr></thead><tbody id='target-joins'></tbody></table></div></div>",
+            "                   <div class='box'><h2>👋 Outbound Traffic</h2><div style='overflow-x:auto; margin-top:15px;'><table><thead><tr><th>Client ID</th><th>Session Duration</th><th>Timestamp</th></tr></thead><tbody id='target-leaves'></tbody></table></div></div>",
+            "               </div>",
+            "           </div>",
             "",
-            "            <div id='referrals' class='tab-content'>",
-            "                <div class='box'>",
-            "                    <h2>🎟️ Custom Vouchers & Promo Codes</h2>",
-            "                    <div style='display:flex; gap:15px; flex-wrap:wrap; margin-top:20px;'><input type='text' id='promoName' placeholder='VOUCHER_CODE' style='flex:1; min-width:200px;'><input type='number' id='promoDiscount' placeholder='Discount %' style='width:150px;'><input type='number' id='promoLimit' placeholder='Max Uses' style='width:150px;'><button class='admin-btn' style='margin:0; padding:15px 30px;' onclick='window.createPromo()'>➕ Generate</button></div>",
-            "                    <div style='overflow-x:auto; margin-top:25px;'><table><thead><tr><th>Voucher</th><th>Discount</th><th>Integrity</th><th>Action</th></tr></thead><tbody id='target-promos'></tbody></table></div>",
-            "                </div>",
-            "                ",
-            "                <div class='box'>",
-            "                    <h2>🔗 Referral Architecture</h2>",
-            "                    <p class='text-muted'>Define the required invite threshold to unlock a 100% discount node.</p>",
-            "                    <div style='display:flex; gap:15px; align-items:center; margin-top:20px;'><input type='number' id='ref-threshold' style='width:120px; text-align:center;'><button class='admin-btn' style='margin:0;' onclick='window.updateRefThreshold()'>💾 Update Protocol</button></div>",
-            "                </div>",
-            "                <div class='box'>",
-            "                    <h2>🏆 Top Affiliates</h2>",
-            "                    <div style='overflow-x:auto; margin-top:20px;'><table><thead><tr><th>Affiliate ID</th><th>Nodes Captured</th><th>Payouts</th><th>Recent Targets</th><th>Action</th></tr></thead><tbody id='target-referrals'></tbody></table></div>",
-            "                </div>",
-            "            </div>",
+            "           <div id='referrals' class='tab-content'>",
+            "               <div class='box'>",
+            "                   <h2>🎟️ Custom Vouchers & Promo Codes</h2>",
+            "                   <div style='display:flex; gap:15px; flex-wrap:wrap; margin-top:20px;'><input type='text' id='promoName' placeholder='VOUCHER_CODE' style='flex:1; min-width:200px;'><input type='number' id='promoDiscount' placeholder='Discount %' style='width:150px;'><input type='number' id='promoLimit' placeholder='Max Uses' style='width:150px;'><button class='admin-btn' style='margin:0; padding:15px 30px;' onclick='window.createPromo()'>➕ Generate</button></div>",
+            "                   <div style='overflow-x:auto; margin-top:25px;'><table><thead><tr><th>Voucher</th><th>Discount</th><th>Integrity</th><th>Action</th></tr></thead><tbody id='target-promos'></tbody></table></div>",
+            "               </div>",
+            "               <div class='box'>",
+            "                   <h2>🔗 Referral Architecture</h2>",
+            "                   <p class='text-muted'>Define the required invite threshold to unlock a 100% discount node.</p>",
+            "                   <div style='display:flex; gap:15px; align-items:center; margin-top:20px;'><input type='number' id='ref-threshold' style='width:120px; text-align:center;'><button class='admin-btn' style='margin:0;' onclick='window.updateRefThreshold()'>💾 Update Protocol</button></div>",
+            "               </div>",
+            "               <div class='box'>",
+            "                   <h2>🏆 Top Affiliates</h2>",
+            "                   <div style='overflow-x:auto; margin-top:20px;'><table><thead><tr><th>Affiliate ID</th><th>Nodes Captured</th><th>Payouts</th><th>Recent Targets</th><th>Action</th></tr></thead><tbody id='target-referrals'></tbody></table></div>",
+            "               </div>",
+            "           </div>",
             "",
-            "            <div id='moderation' class='tab-content'>",
-            "                <div class='box'>",
-            "                    <h2>🔎 Client Directory</h2>",
-            "                    <p class='text-muted'>Global surveillance and access control matrix.</p>",
-            "                    <div style='display:flex; flex-wrap:wrap; gap:15px; margin-top:20px; align-items:center;'>",
-            "                        <input type='text' id='memberSearchInput' placeholder='Query ID or designation...' style='margin-top:0; flex:1; min-width:250px;' oninput='window.sortMembersLocally()'>",
-            "                        <select id='memberStatusSelect' style='margin-top:0; width:180px;' onchange='window.sortMembersLocally()'>",
-            "                            <option value='all'>🌍 Global View</option>",
-            "                            <option value='online'>🟢 Active Only</option>",
-            "                        </select>",
-            "                        <select id='memberSortSelect' style='margin-top:0; width:180px;' onchange='window.sortMembersLocally()'>",
-            "                            <option value='recent'>🔽 Newest Nodes</option>",
-            "                            <option value='oldest'>🔼 Oldest Nodes</option>",
-            "                            <option value='spent_desc'>💰 High Value</option>",
-            "                            <option value='spent_asc'>💸 Low Value</option>",
-            "                            <option value='warns'>⚠️ High Risk</option>",
-            "                        </select>",
-            "                        <button class='admin-btn' style='margin-top:0; height:50px;' onclick='window.loadAllMembers()'>🔄 Sync Database</button>",
-            "                    </div>",
-            "                    <div id='memberResults' style='margin-top:30px;'></div>",
-            "                </div>",
-            "            </div>",
+            "           <div id='moderation' class='tab-content'>",
+            "               <div class='box'>",
+            "                   <h2>🔎 Client Directory</h2>",
+            "                   <p class='text-muted'>Global surveillance and access control matrix.</p>",
+            "                   <div style='display:flex; flex-wrap:wrap; gap:15px; margin-top:20px; align-items:center;'>",
+            "                       <input type='text' id='memberSearchInput' placeholder='Query ID or designation...' style='margin-top:0; flex:1; min-width:250px;' oninput='window.sortMembersLocally()'>",
+            "                       <select id='memberStatusSelect' style='margin-top:0; width:180px;' onchange='window.sortMembersLocally()'>",
+            "                           <option value='all'>🌍 Global View</option>",
+            "                           <option value='online'>🟢 Active Only</option>",
+            "                       </select>",
+            "                       <select id='memberSortSelect' style='margin-top:0; width:180px;' onchange='window.sortMembersLocally()'>",
+            "                           <option value='recent'>🔽 Newest Nodes</option>",
+            "                           <option value='oldest'>🔼 Oldest Nodes</option>",
+            "                           <option value='spent_desc'>💰 High Value</option>",
+            "                           <option value='spent_asc'>💸 Low Value</option>",
+            "                           <option value='warns'>⚠️ High Risk</option>",
+            "                       </select>",
+            "                       <button class='admin-btn' style='margin-top:0; height:50px;' onclick='window.loadAllMembers()'>🔄 Sync Database</button>",
+            "                   </div>",
+            "                   <div id='memberResults' style='margin-top:30px;'></div>",
+            "               </div>",
+            "           </div>",
             "",
-            "            <div id='monitoring' class='tab-content'>",
-            "                <div class='box'>",
-            "                    <h2>📡 Subsystem Diagnostics</h2>",
-            "                    <p class='text-muted'>Real-time monitoring of external APIs and latency vectors.</p>",
-            "                    <button class='admin-btn' style='margin-top:20px;' onclick='window.runDiagnostics()'>🔄 Initiate Scan</button>",
-            "                    <div class='stats-grid' style='margin-top:30px;'>",
-            "                        <div class='card' id='card-upstash'><h3>Upstash Cluster</h3><div class='value' id='ui-upstash-status' style='font-size:1.5em; text-shadow:none;'>⚪ Standby</div><p class='text-muted' id='ui-upstash-ping' style='margin-top:10px;'>Latency: -- ms</p></div>",
-            "                        <div class='card' id='card-rewarble'><h3>Rewarble Gateway</h3><div class='value' id='ui-rewarble-status' style='font-size:1.5em; text-shadow:none;'>⚪ Standby</div><p class='text-muted' id='ui-rewarble-ping' style='margin-top:10px;'>Latency: -- ms</p></div>",
-            "                        <div class='card' id='card-discord'><h3>Discord WebSocket</h3><div class='value text-blue' id='ui-discord-ws' style='font-size:1.5em;'>-- ms</div><p class='text-muted' style='margin-top:10px;'>Gateway Ping</p></div>",
-            "                    </div>",
-            "                    <div style='margin-top:40px; background:rgba(0,240,255,0.03); padding:30px; border-radius:20px; border:1px solid rgba(0,240,255,0.1);'>",
-            "                        <h3 style='color:var(--accent-blue); margin-top:0;'>⚡ End-to-End Latency Vector</h3>",
-            "                        <p class='text-muted'>Measures round-trip execution speed from dashboard click to Discord network parsing.</p>",
-            "                        <div style='display:flex; align-items:center; gap:30px; margin-top:25px;'><button class='admin-btn' style='margin:0; padding:15px 30px; background:rgba(0,240,255,0.1); color:var(--accent-blue); border-color:var(--accent-blue);' onclick='window.testActionLatency()'>⚡ Execute Ping</button><div id='latency-result' style='font-size:2em; font-weight:800; color:var(--text-main); font-family:monospace;'>-- ms</div></div>",
-            "                    </div>",
-            "                </div>",
-            "            </div>",
+            "           <div id='monitoring' class='tab-content'>",
+            "               <div class='box'>",
+            "                   <h2>📡 Subsystem Diagnostics</h2>",
+            "                   <p class='text-muted'>Real-time monitoring of external APIs and latency vectors.</p>",
+            "                   <button class='admin-btn' style='margin-top:20px;' onclick='window.runDiagnostics()'>🔄 Initiate Scan</button>",
+            "                   <div class='stats-grid' style='margin-top:30px;'>",
+            "                       <div class='card' id='card-upstash'><h3>Upstash Cluster</h3><div class='value' id='ui-upstash-status' style='font-size:1.5em; text-shadow:none;'>⚪ Standby</div><p class='text-muted' id='ui-upstash-ping' style='margin-top:10px;'>Latency: -- ms</p></div>",
+            "                       <div class='card' id='card-rewarble'><h3>Rewarble Gateway</h3><div class='value' id='ui-rewarble-status' style='font-size:1.5em; text-shadow:none;'>⚪ Standby</div><p class='text-muted' id='ui-rewarble-ping' style='margin-top:10px;'>Latency: -- ms</p></div>",
+            "                       <div class='card' id='card-discord'><h3>Discord WebSocket</h3><div class='value text-blue' id='ui-discord-ws' style='font-size:1.5em;'>-- ms</div><p class='text-muted' style='margin-top:10px;'>Gateway Ping</p></div>",
+            "                   </div>",
+            "                   <div style='margin-top:40px; background:rgba(0,240,255,0.03); padding:30px; border-radius:20px; border:1px solid rgba(0,240,255,0.1);'>",
+            "                       <h3 style='color:var(--accent-blue); margin-top:0;'>⚡ End-to-End Latency Vector</h3>",
+            "                       <p class='text-muted'>Measures round-trip execution speed from dashboard click to Discord network parsing.</p>",
+            "                       <div style='display:flex; align-items:center; gap:30px; margin-top:25px;'><button class='admin-btn' style='margin:0; padding:15px 30px; background:rgba(0,240,255,0.1); color:var(--accent-blue); border-color:var(--accent-blue);' onclick='window.testActionLatency()'>⚡ Execute Ping</button><div id='latency-result' style='font-size:2em; font-weight:800; color:var(--text-main); font-family:monospace;'>-- ms</div></div>",
+            "                   </div>",
+            "               </div>",
+            "           </div>",
             "                ",
-            "            ",
-            "            <div id='admin' class='tab-content'>",
-            "                <div class='box' style='border:1px solid rgba(0,240,255,0.2); background:rgba(0,240,255,0.02);'>",
-            "                    <h2 style='color:var(--accent-blue); margin-top:0; border-bottom-color:rgba(0,240,255,0.1);'>⏳ Review Queue</h2>",
-            "                    <p class='text-muted'>Client feedback awaiting validation before public broadcast.</p>",
-            "                    <div style='overflow-x:auto; margin-top:20px;'>",
-            "                        <table><thead><tr><th>Timestamp</th><th>Client ID</th><th>Asset</th><th>Score</th><th>Data</th><th>Execute</th></tr></thead><tbody id='target-pending-reviews'></tbody></table>",
-            "                    </div>",
-            "                </div>",
+            "           <!-- 🌟 ADMIN CONFIG TAB -->",
+            "           <div id='admin' class='tab-content'>",
+            "               <div class='box' style='border:1px solid rgba(0,240,255,0.2); background:rgba(0,240,255,0.02);'>",
+            "                   <h2 style='color:var(--accent-blue); margin-top:0; border-bottom-color:rgba(0,240,255,0.1);'>⏳ Review Queue</h2>",
+            "                   <p class='text-muted'>Client feedback awaiting validation before public broadcast.</p>",
+            "                   <div style='overflow-x:auto; margin-top:20px;'>",
+            "                       <table><thead><tr><th>Timestamp</th><th>Client ID</th><th>Asset</th><th>Score</th><th>Data</th><th>Execute</th></tr></thead><tbody id='target-pending-reviews'></tbody></table>",
+            "                   </div>",
+            "               </div>",
             "                ",
-            "                <div class='box' style='border:1px solid rgba(249,115,22,0.2); background:rgba(249,115,22,0.02);'>",
-            "                    <h2 style='color:var(--accent-orange); margin-top:0; border-bottom-color:rgba(249,115,22,0.1);'>🚧 Lockout Protocol (Maintenance)</h2>",
-            "                    <p class='text-muted'>Suspend all inbound commercial transactions globally.</p>",
-            "                    <div style='display:flex; gap:15px; flex-wrap:wrap; margin-top:20px; align-items:center;'>",
-            "                        <input type='number' id='maint-duration' placeholder='T-Minus (Mins)' value='60' style='width:180px; border-color:rgba(249,115,22,0.3);'>",
-            "                        <input type='text' id='maint-channel' placeholder='Broadcast Channel ID (Optional)' style='flex:1; min-width:250px; border-color:rgba(249,115,22,0.3);'>",
-            "                        <button class='admin-btn' style='margin:0; background:rgba(249,115,22,0.2); color:var(--accent-orange); border-color:var(--accent-orange);' onclick='window.toggleMaintenance(true)'>⏸️ Engage Lockout</button>",
-            "                        <button class='admin-btn' style='margin:0; background:rgba(16,185,129,0.1); color:var(--accent-green); border-color:var(--accent-green);' onclick='window.toggleMaintenance(false)'>▶️ Disengage</button>",
-            "                    </div>",
-            "                </div>",
+            "               <div class='box' style='border:1px solid rgba(249,115,22,0.2); background:rgba(249,115,22,0.02);'>",
+            "                   <h2 style='color:var(--accent-orange); margin-top:0; border-bottom-color:rgba(249,115,22,0.1);'>🚧 Lockout Protocol (Maintenance)</h2>",
+            "                   <p class='text-muted'>Suspend all inbound commercial transactions globally.</p>",
+            "                   <div style='display:flex; gap:15px; flex-wrap:wrap; margin-top:20px; align-items:center;'>",
+            "                       <input type='number' id='maint-duration' placeholder='T-Minus (Mins)' value='60' style='width:180px; border-color:rgba(249,115,22,0.3);'>",
+            "                       <input type='text' id='maint-channel' placeholder='Broadcast Channel ID (Optional)' style='flex:1; min-width:250px; border-color:rgba(249,115,22,0.3);'>",
+            "                       <button class='admin-btn' style='margin:0; background:rgba(249,115,22,0.2); color:var(--accent-orange); border-color:var(--accent-orange);' onclick='window.toggleMaintenance(true)'>⏸️ Engage Lockout</button>",
+            "                       <button class='admin-btn' style='margin:0; background:rgba(16,185,129,0.1); color:var(--accent-green); border-color:var(--accent-green);' onclick='window.toggleMaintenance(false)'>▶️ Disengage</button>",
+            "                   </div>",
+            "               </div>",
             "               ",
-            "                <div class='box'>",
-            "                    <h2><h2>🌟 Manual Injection (Reviews)</h2>",
-            "                    <div style='display:flex; gap:15px; margin-bottom:15px; margin-top:20px;'><input type='text' id='rev-author' placeholder='Client Designation' style='flex:1;'><select id='rev-rating' style='flex:1;'><option value='5'>5/5 ⭐ - Optimal</option><option value='4'>4/5 ⭐ - Sub-optimal</option><option value='3'>3/5 ⭐ - Acceptable</option><option value='2'>2/5 ⭐ - Flawed</option><option value='1'>1/5 ⭐ - Critical</option></select></div>",
-            "                    <textarea id='rev-msg' placeholder='Inject feedback string...' style='margin-bottom:15px; min-height:100px;'></textarea>",
-            "                    <button class='admin-btn' style='background:rgba(16,185,129,0.1); color:var(--accent-green); border-color:var(--accent-green); width:100%; padding:15px;' onclick='window.sendReview()'>📤 Broadcast to Network</button>",
-            "                </div>",
-            "            </div>",
+            "               <div class='box'>",
+            "                   <h2>🌟 Manual Injection (Reviews)</h2>",
+            "                   <div style='display:flex; gap:15px; margin-bottom:15px; margin-top:20px;'><input type='text' id='rev-author' placeholder='Client Designation' style='flex:1;'><select id='rev-rating' style='flex:1;'><option value='5'>5/5 ⭐ - Optimal</option><option value='4'>4/5 ⭐ - Sub-optimal</option><option value='3'>3/5 ⭐ - Acceptable</option><option value='2'>2/5 ⭐ - Flawed</option><option value='1'>1/5 ⭐ - Critical</option></select></div>",
+            "                   <textarea id='rev-msg' placeholder='Inject feedback string...' style='margin-bottom:15px; min-height:100px;'></textarea>",
+            "                   <button class='admin-btn' style='background:rgba(16,185,129,0.1); color:var(--accent-green); border-color:var(--accent-green); width:100%; padding:15px;' onclick='window.sendReview()'>📤 Broadcast to Network</button>",
+            "               </div>",
+            "           </div>",
             "       </main>",
             "    </div>",
             "",
-            "    ",
+            "    <!-- [ANCHOR: DASHBOARD_JS_LOGIC] -->",
             "    <script>",
-            "        let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, userGoal=500, salesChart, hourlyChart, topProdChart, catChart, dowChartInst, funnelChartInst; ",
+            "        let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, userGoal=500, salesChart, hourlyChart, topProdChart, catChart; ",
             "        let allMembersData = []; let isMembersLoaded = false; let activeChatChannel = null; let chatPollInterval = null;",
-            "        let trackedTickets = 0, trackedReviews = 0, trackedSales = 0;",
-            "        ",
-            "        window.toggleSidebar = function() { ",
-            "            const sb = document.getElementById('appSidebar'); ",
-            "            const ov = document.getElementById('sidebarOverlay'); ",
-            "            const container = document.getElementById('dashboard-container'); ",
-            "            if(window.innerWidth <= 900) { ",
-            "                sb.classList.toggle('open'); ",
-            "                if(sb.classList.contains('open')) { ov.classList.add('show'); } else { ov.classList.remove('show'); } ",
-            "            } else { ",
-            "                container.classList.toggle('sidebar-closed'); ",
-            "            } ",
-            "        };",
-            "        window.closeSidebar = function() { document.getElementById('appSidebar').classList.remove('open'); document.getElementById('sidebarOverlay').classList.remove('show'); };",
             "        ",
             "        window.customPrompt = function(title, message, placeholder = '', defaultValue = '') {",
             "            return new Promise((resolve) => {",
@@ -1865,19 +1733,30 @@ http.createServer(async (req, res) => {
             "           } catch(e) {}",
             "        }",
             "",
+            "        let dataPayload = null;",
+            "        ",
             "        async function initDashboard(){",
-            "           try{",
-            "               const res = await fetch('/api/init-data');",
-            "               if(res.ok) {",
-            "                   const data = await res.json();",
-            "                   processInitData(data);",
+            "           const ls = document.getElementById('loading-screen');",
+            "           setTimeout(async () => {",
+            "               try{",
+            "                   const res = await fetch('/api/init-data');",
+            "                   if(res.ok) {",
+            "                       const data = await res.json();",
+            "                       processInitData(data);",
+            "                   }",
+            "               } catch(e){ console.error('API Error'); }",
+            "               if(ls) {",
+            "                   ls.style.opacity = '0';",
+            "                   setTimeout(() => { ls.style.display = 'none'; document.getElementById('dashboard-container').style.display = 'flex'; window.renderSalesChart(7); }, 500);",
+            "               } else {",
+            "                   document.getElementById('dashboard-container').style.display = 'flex';",
+            "                   window.renderSalesChart(7);",
             "               }",
-            "           } catch(e){ console.error('API Error'); }",
-            "           if(typeof window.renderSalesChart === 'function') window.renderSalesChart(7);",
+            "           }, 1200);",
             "        }",
             "        ",
             "        function processInitData(data) { ",
-            "            rawStats=data.memoryStats || {}; PRODUCT_DATA=data.PRODUCT_DATA || {}; currentMonthRevenue=data.monthRevenue || 0; PIN=data.PIN || ''; lastTxCount=rawStats.total_transactions||0; ",
+            "            rawStats=data.memoryStats; PRODUCT_DATA=data.PRODUCT_DATA; currentMonthRevenue=data.monthRevenue; PIN=data.PIN; lastTxCount=rawStats.total_transactions||0; ",
             "            ",
             "            let calcTotalRev = 0;",
             "            if(rawStats.revenue) {",
@@ -1886,14 +1765,14 @@ http.createServer(async (req, res) => {
             "            rawStats.total_revenue = calcTotalRev;",
             "",
             "            let overrides = rawStats.overrides || {};",
-            "            document.getElementById('ui-today-rev').innerText = overrides['today_rev'] || ('€'+(data.todayRevenue || 0));",
+            "            document.getElementById('ui-today-rev').innerText = overrides['today_rev'] || ('€'+data.todayRevenue);",
             "            document.getElementById('ui-total-rev').innerText = overrides['total_rev'] || ('€'+(rawStats.total_revenue || 0));",
-            "            document.getElementById('ui-conv-rate').innerText = overrides['conv_rate'] || ((data.conversionRate||0)+'%');",
-            "            document.getElementById('ui-online-total').innerHTML = overrides['online_total'] || ((data.onlineCount||0) + ' <span style=\"font-size:0.5em;color:var(--text-muted);\">/ ' + (data.memberCount||0) + '</span>');",
-            "            document.getElementById('ui-retention').innerText = overrides['retention'] || ((data.retentionRate||0)+'%');",
-            "            document.getElementById('ui-tickets-opened').innerText = overrides['tickets'] || (data.ticketsOpened||0);",
-            "            document.getElementById('ui-dropoff').innerText = overrides['dropoff'] || ((data.dropOffRate||0)+'%');",
-            "            document.getElementById('ui-peak-hour').innerText = overrides['peak'] || (data.peakHourStr||'N/A');",
+            "            document.getElementById('ui-conv-rate').innerText = overrides['conv_rate'] || (data.conversionRate+'%');",
+            "            document.getElementById('ui-online-total').innerHTML = overrides['online_total'] || (data.onlineCount + ' <span style=\"font-size:0.5em;color:var(--text-muted);\">/ ' + data.memberCount + '</span>');",
+            "            document.getElementById('ui-retention').innerText = overrides['retention'] || (data.retentionRate+'%');",
+            "            document.getElementById('ui-tickets-opened').innerText = overrides['tickets'] || data.ticketsOpened;",
+            "            document.getElementById('ui-dropoff').innerText = overrides['dropoff'] || (data.dropOffRate+'%');",
+            "            document.getElementById('ui-peak-hour').innerText = overrides['peak'] || data.peakHourStr;",
             "            ",
             "            trackedTickets = data.activeTickets || 0; trackedReviews = data.pendingReviewsCount || 0; trackedSales = rawStats.total_transactions || 0; ",
             "            buildStaticTables(); renderAnalyticsCharts(); updateMaintenanceBadge(data.maintenance); updateBadgesAndFeed(data); ",
@@ -1949,8 +1828,7 @@ http.createServer(async (req, res) => {
             "                  let pPrice = p.price==='Custom'?'Custom':'€'+p.price; ",
             "                  let pLink = p.link ? '<a href=\"' + escapeHTML(p.link) + '\" target=\"_blank\" style=\"color:var(--accent-blue);text-decoration:none;\">[🔗 Open Node]</a>' : '<span class=\"text-muted\">Unlinked</span>'; ",
             "                  let stockDisplay = p.stock === '∞' || !p.stock ? '∞' : p.stock; ",
-            "                  let upsellDisplay = p.upsellId ? `<br><span style='color:var(--accent-purple);font-size:0.8em;'>🚀 Upsell: #${p.upsellId} (-${p.upsellDiscount||20}%)</span>` : '';",
-            "                  let pDesc = p.desc ? '<div class=\"prod-desc\">' + escapeHTML(p.desc) + upsellDisplay + '</div>' : '<div class=\"prod-desc\" style=\"font-style:italic; opacity:0.5;\">Awaiting parameters...'+upsellDisplay+'</div>';",
+            "                  let pDesc = p.desc ? '<div class=\"prod-desc\">' + escapeHTML(p.desc) + '</div>' : '<div class=\"prod-desc\" style=\"font-style:italic; opacity:0.5;\">Awaiting parameters...</div>';",
             "                  prodHtml+= '<div class=\"product-card\"><div class=\"prod-header\"><div class=\"prod-title\">' + icon + ' ' + escapeHTML(p.name) + '</div><div class=\"prod-id\">ID: ' + id + '</div></div><div class=\"prod-price\">' + pPrice + ' <span class=\"prod-stock\">INV: ' + escapeHTML(stockDisplay) + '</span></div>' + pDesc + '<div class=\"prod-link\">' + pLink + '</div><div class=\"prod-actions\"><button class=\"admin-btn\" style=\"background:rgba(255,255,255,0.05); border-color:rgba(255,255,255,0.1);\" onclick=\"window.editProduct(\\'' + id + '\\')\">✏️ Edit</button><button class=\"admin-btn\" style=\"background:rgba(239, 68, 68, 0.1); border-color:var(--accent-red); color:var(--accent-red);\" onclick=\"window.deleteProduct(\\'' + id + '\\')\">🗑️ Purge</button></div></div>'; ",
             "              }); ",
             "          } ",
@@ -2029,35 +1907,8 @@ http.createServer(async (req, res) => {
             "              prHtml='<tr><td colspan=\"6\" class=\"text-muted text-center\">Queue clear.</td></tr>'; ",
             "          } ",
             "          document.getElementById('target-pending-reviews').innerHTML=prHtml; ",
-            "",
-            "          let kPending='', kRec='', kEdit='', kDone='';",
-            "          if(rawStats.custom_requests && rawStats.custom_requests.length>0) {",
-            "              rawStats.custom_requests.forEach(req => {",
-            "                  let html = `<div class='kanban-card'>",
-            "                      <div style='font-size:0.8em;color:var(--text-muted);display:flex;justify-content:space-between'><span>\${req.date}</span></div>",
-            "                      <strong style='color:var(--accent-blue);font-size:1.1em'>\${escapeHTML(req.username)}</strong>",
-            "                      <div style='color:#fff;margin-bottom:10px'>\${escapeHTML(req.product)}</div>",
-            "                      <div class='kanban-actions'>`;",
-            "                  if(req.status === 'pending') { html += `<button class='admin-btn' style='background:rgba(249,115,22,0.1);color:var(--accent-orange)' onclick='window.moveReq(\"\${req.id}\",\"recording\")'>🎥 Enregistrer</button>`; }",
-            "                  else if(req.status === 'recording') { html += `<button class='admin-btn' style='background:rgba(168,85,247,0.1);color:var(--accent-purple)' onclick='window.moveReq(\"\${req.id}\",\"editing\")'>✂️ Monter</button>`; }",
-            "                  else if(req.status === 'editing') { html += `<button class='admin-btn' style='background:rgba(16,185,129,0.1);color:var(--accent-green)' onclick='window.moveReq(\"\${req.id}\",\"done\")'>✅ Terminer</button>`; }",
-            "                  html += `</div></div>`;",
-            "                  if(req.status === 'pending') kPending += html;",
-            "                  else if(req.status === 'recording') kRec += html;",
-            "                  else if(req.status === 'editing') kEdit += html;",
-            "                  else if(req.status === 'done') kDone += html;",
-            "              });",
-            "          }",
-            "          document.getElementById('target-kanban').innerHTML=`",
-            "              <div class='kanban-col'><div class='kanban-header text-blue' style='border-color:var(--accent-blue)'>📬 NOUVELLES DEMANDES</div>\安排\${kPending||'<p class=\"text-muted\">Vide</p>'}</div>",
-            "              <div class='kanban-col'><div class='kanban-header text-orange' style='border-color:var(--accent-orange)'>🎥 ENREGISTREMENT</div>\${kRec||'<p class=\"text-muted\">Vide</p>'}</div>",
-            "              <div class='kanban-col'><div class='kanban-header text-purple' style='border-color:var(--accent-purple)'>✂️ MONTAGE / EDIT</div>\${kEdit||'<p class=\"text-muted\">Vide</p>'}</div>",
-            "              <div class='kanban-col'><div class='kanban-header text-green' style='border-color:var(--accent-green)'>✅ TERMINÉ</div>\安排\${kDone||'<p class=\"text-muted\">Vide</p>'}</div>",
-            "          `;",
             "        }",
             "            ",
-            "        window.moveReq = async function(id, status) { await window.executeAction({action:'move_custom_req', id: id, status: status}, false); };",
-            "        ",
             "        window.editStat = async function(key) {",
             "            const val = await window.customPrompt('OVERRIDE STAT', 'Enter new value (leave empty to revert to auto):', '', '');",
             "            if (val !== null) { await window.executeAction({action:'edit_stat', key: key, value: val}); }",
@@ -2078,8 +1929,6 @@ http.createServer(async (req, res) => {
             "            document.getElementById('newProdStock').value = p.stock || '∞'; ",
             "            document.getElementById('newProdLink').value = p.link; ",
             "            document.getElementById('newProdDesc').value = p.desc || ''; ",
-            "            document.getElementById('newProdUpsellId').value = p.upsellId || ''; ",
-            "            document.getElementById('newProdUpsellDiscount').value = p.upsellDiscount || ''; ",
             "            document.getElementById('saveProdBtn').innerText = '💾 Patch Asset'; ",
             "            document.getElementById('cancelEditBtn').style.display = 'block'; ",
             "            window.scrollTo({top:0, behavior:'smooth'}); ",
@@ -2092,8 +1941,6 @@ http.createServer(async (req, res) => {
             "            document.getElementById('newProdStock').value = ''; ",
             "            document.getElementById('newProdLink').value = ''; ",
             "            document.getElementById('newProdDesc').value = ''; ",
-            "            document.getElementById('newProdUpsellId').value = ''; ",
-            "            document.getElementById('newProdUpsellDiscount').value = ''; ",
             "            document.getElementById('saveProdBtn').innerText = '➕ Inject Asset'; ",
             "            document.getElementById('cancelEditBtn').style.display = 'none'; ",
             "        };",
@@ -2105,23 +1952,21 @@ http.createServer(async (req, res) => {
             "            const s = document.getElementById('newProdStock').value || '∞'; ",
             "            const l = document.getElementById('newProdLink').value; ",
             "            const d = document.getElementById('newProdDesc').value; ",
-            "            const uid = document.getElementById('newProdUpsellId').value; ",
-            "            const udisc = document.getElementById('newProdUpsellDiscount').value; ",
             "            if(!n||!p) return showToast('Designation & Value required', 'error'); ",
-            "            if(id) { await window.executeAction({action:'edit_product', id:id, name:n, price:p, stock:s, link:l, desc:d, upsellId:uid, upsellDiscount:udisc}, false); } ",
-            "            else { await window.executeAction({action:'add_product', name:n, price:p, stock:s, link:l, desc:d, upsellId:uid, upsellDiscount:udisc}, false); } ",
+            "            if(id) { await window.executeAction({action:'edit_product', id:id, name:n, price:p, stock:s, link:l, desc:d}, true); } ",
+            "            else { await window.executeAction({action:'add_product', name:n, price:p, stock:s, link:l, desc:d}, true); } ",
             "        };",
             "        ",
-            "        window.deleteProduct = async function(id) { if(await window.customConfirm('ASSET PURGE', 'Purge asset from network?')) await window.executeAction({action:'delete_product', id:id}, false); };",
+            "        window.deleteProduct = async function(id) { if(await window.customConfirm('ASSET PURGE', 'Purge asset from network?')) await window.executeAction({action:'delete_product', id:id}, true); };",
             "        ",
             "        window.editBuyLink = function(id) { const l = rawStats.buy_links[id]; if(!l) return; document.getElementById('editLinkId').value = id; document.getElementById('newLinkLabel').value = l.label; document.getElementById('newLinkUrl').value = l.url; document.getElementById('saveLinkBtn').innerText = '💾 Patch Gateway'; document.getElementById('cancelEditLinkBtn').style.display = 'block'; };",
             "        window.cancelEditLink = function() { document.getElementById('editLinkId').value = ''; document.getElementById('newLinkLabel').value = ''; document.getElementById('newLinkUrl').value = ''; document.getElementById('saveLinkBtn').innerText = '➕ Link Gateway'; document.getElementById('cancelEditLinkBtn').style.display = 'none'; };",
-            "        window.saveBuyLink = async function() { const id = document.getElementById('editLinkId').value; const label = document.getElementById('newLinkLabel').value; const url = document.getElementById('newLinkUrl').value; if(!label || !url) return showToast('Label & URL required', 'error'); if(id) { await window.executeAction({action:'edit_buy_link', id:id, label:label, url:url}, false); } else { await window.executeAction({action:'add_buy_link', label:label, url:url}, false); } };",
-            "        window.deleteBuyLink = async function(id) { if(await window.customConfirm('GATEWAY SEVER', 'Sever this gateway link?')) await window.executeAction({action:'delete_buy_link', id:id}, false); };",
+            "        window.saveBuyLink = async function() { const id = document.getElementById('editLinkId').value; const label = document.getElementById('newLinkLabel').value; const url = document.getElementById('newLinkUrl').value; if(!label || !url) return showToast('Label & URL required', 'error'); if(id) { await window.executeAction({action:'edit_buy_link', id:id, label:label, url:url}, true); } else { await window.executeAction({action:'add_buy_link', label:label, url:url}, true); } };",
+            "        window.deleteBuyLink = async function(id) { if(await window.customConfirm('GATEWAY SEVER', 'Sever this gateway link?')) await window.executeAction({action:'delete_buy_link', id:id}, true); };",
             "",
             "        window.triggerShopRefresh = async function() { await window.executeAction({action:'refresh_setup'}, false); };",
             "        ",
-            "        window.switchTab = function(tabId, btn) { document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active')); document.querySelectorAll('.nav-btn').forEach(el=>el.classList.remove('active')); document.getElementById(tabId).classList.add('active'); btn.classList.add('active'); document.getElementById('current-tab-title').innerText = btn.innerText.replace(/[0-9]/g, '').replace('💬', '').replace('⚙️', '').replace('📋', '').trim(); if(window.innerWidth <= 900) { window.closeSidebar(); } if(tabId === 'moderation' && !isMembersLoaded) window.loadAllMembers(); if(tabId === 'livechat'){ window.loadTicketsForChat(); if(activeChatChannel && !chatPollInterval){ chatPollInterval = setInterval(window.fetchChatMessages, 3000); } } else { if(chatPollInterval){ clearInterval(chatPollInterval); chatPollInterval = null; } } if(tabId === 'analytics'){ renderAnalyticsCharts(); } if(tabId === 'overview'){ window.renderSalesChart(7); } };",
+            "        window.switchTab = function(tabId, btn) { document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active')); document.querySelectorAll('.nav-btn').forEach(el=>el.classList.remove('active')); document.getElementById(tabId).classList.add('active'); btn.classList.add('active'); document.getElementById('current-tab-title').innerText = btn.innerText.replace(/[0-9]/g, '').replace('💬', '').replace('⚙️', '').trim(); if(tabId === 'moderation' && !isMembersLoaded) window.loadAllMembers(); if(tabId === 'livechat'){ window.loadTicketsForChat(); if(activeChatChannel && !chatPollInterval){ chatPollInterval = setInterval(window.fetchChatMessages, 3000); } } else { if(chatPollInterval){ clearInterval(chatPollInterval); chatPollInterval = null; } } if(tabId === 'analytics'){ renderAnalyticsCharts(); } if(tabId === 'overview'){ window.renderSalesChart(7); } };",
             "        ",
             "        function showToast(msg, type='success') { const t=document.getElementById('toast'); t.innerHTML = (type==='error'?'❌':'✅') + ' <span style=\"letter-spacing:0.5px;\">' + msg + '</span>'; t.style.borderColor = type === 'error' ? 'rgba(239,68,68,0.5)' : 'rgba(16,185,129,0.5)'; t.style.boxShadow = type === 'error' ? '0 10px 30px rgba(239,68,68,0.2)' : '0 10px 30px rgba(16,185,129,0.2)'; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 3000); }",
             "        ",
@@ -2180,7 +2025,7 @@ http.createServer(async (req, res) => {
             "                            '</div>' +",
             "                            '<div style=\"margin-bottom:20px; padding-top:15px; border-top:1px solid rgba(255,255,255,0.05);\">' +",
             "                                '<label style=\"font-size:0.8rem; font-weight:600; text-transform:uppercase; letter-spacing:1px; color:var(--accent-blue); display:block; margin-bottom:10px;\">📝 Admin Directives:</label>' +",
-            "                                '<textarea id=\"note-' + m.id + '\" placeholder=\"Inject private private parameters...\" style=\"min-height:60px; background:rgba(0,0,0,0.5);\" onblur=\"window.saveUserNote(\\'' + m.id + '\\')\">' + safeNote + '</textarea>' +",
+            "                                '<textarea id=\"note-' + m.id + '\" placeholder=\"Inject private parameters...\" style=\"min-height:60px; background:rgba(0,0,0,0.5);\" onblur=\"window.saveUserNote(\\'' + m.id + '\\')\">' + safeNote + '</textarea>' +",
             "                            '</div>' +",
             "                            '<div style=\"border-top:1px solid rgba(255,255,255,0.05); padding-top:15px;\">' +",
             "                                '<span style=\"font-size:0.8rem; font-weight:600; text-transform:uppercase; letter-spacing:1px; color:var(--text-muted); display:block; margin-bottom:12px;\">⚡ Execute Command:</span>' +",
@@ -2215,18 +2060,15 @@ http.createServer(async (req, res) => {
             "",
             "        window.createPromo = async function() { const name = document.getElementById('promoName').value.trim().toUpperCase(); const discount = parseInt(document.getElementById('promoDiscount').value); const limit = parseInt(document.getElementById('promoLimit').value); if(!name || isNaN(discount) || isNaN(limit)) { return showToast('Invalid parameters', 'error'); } if(discount < 1 || discount > 100) return showToast('Discount 1-100', 'error'); await window.executeAction({ action: 'create_promo', name: name, discount: discount, limit: limit }); };",
             "        window.deletePromo = async function(code) { if(await window.customConfirm('VOUCHER PURGE', 'Purge voucher ' + decodeURIComponent(code) + '?')) { await window.executeAction({ action: 'delete_promo', name: decodeURIComponent(code) }); } };",
-            "        window.updateRefThreshold = function() { const val = document.getElementById('ref-threshold').value; if(val) window.executeAction({action:'update_ref_threshold', threshold: val}); };",
+            "        window.updateRefThreshold = async function() { const val = document.getElementById('ref-threshold').value; if(val) await window.executeAction({action:'update_ref_threshold', threshold: val}); };",
             "        window.openDirectContact = async function(id) { const msg = await window.customPrompt('DIRECT MESSAGE', 'Input DM payload:'); if(msg) await window.executeAction({action:'send_dm', userId: id, message: msg}); };",
             "        window.saveUserNote = async function(id) { const note = document.getElementById('note-'+id).value; fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'save_note', userId: id, note: note, pin: PIN }) }).then(r => { if(r.ok) showToast('Saved'); }); };",
             "        window.manageVip = async function(userId, action) { if(action === 'add') { await window.executeAction({action: 'add_vip_days', userId: userId, days: 7}); } else if(action === 'revoke') { if(await window.customConfirm('VIP REVOKE', 'Revoke VIP status for this node?')) { await window.executeAction({action: 'revoke_vip', userId: userId}); } } };",
             "",
-            "        if(typeof Chart !== 'undefined') {",
-            "            Chart.defaults.color = '#64748b'; Chart.defaults.font.family = 'Inter, monospace';",
-            "        }",
-            "        window.renderSalesChart = function(days) { if(typeof Chart === 'undefined') return; let dates = Object.keys(rawStats.revenue || {}).sort(); let values = dates.map(d => rawStats.revenue[d]); if (days > 0 && dates.length > days) { dates = dates.slice(-days); values = values.slice(-days); } const ctxSales = document.getElementById('salesChart').getContext('2d'); let grad = ctxSales.createLinearGradient(0,0,0,400); grad.addColorStop(0, 'rgba(56, 189, 248, 0.4)'); grad.addColorStop(1, 'transparent'); if(salesChart) salesChart.destroy(); salesChart = new Chart(ctxSales, { type: 'line', data: { labels: dates.length?dates:['No Data'], datasets: [{ data: values.length?values:[0], borderColor: '#38bdf8', backgroundColor: grad, fill: true, tension: 0.4, pointHoverBackgroundColor: '#fff', pointHoverBorderColor: 'rgba(56, 189, 248, 1)', pointHoverBorderWidth: 4, pointRadius: 2, pointHitRadius: 20 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 2000, easing: 'easeOutExpo' }, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { grid: { color: 'rgba(255,255,255,0.02)'}, border: { dash: [4, 4] } } } } }); };",
+            "        Chart.defaults.color = '#64748b'; Chart.defaults.font.family = 'Inter, monospace';",
+            "        window.renderSalesChart = function(days) { let dates = Object.keys(rawStats.revenue || {}).sort(); let values = dates.map(d => rawStats.revenue[d]); if (days > 0 && dates.length > days) { dates = dates.slice(-days); values = values.slice(-days); } const ctxSales = document.getElementById('salesChart').getContext('2d'); let grad = ctxSales.createLinearGradient(0,0,0,400); grad.addColorStop(0, 'rgba(56, 189, 248, 0.4)'); grad.addColorStop(1, 'transparent'); if(salesChart) salesChart.destroy(); salesChart = new Chart(ctxSales, { type: 'line', data: { labels: dates.length?dates:['No Data'], datasets: [{ data: values.length?values:[0], borderColor: '#38bdf8', backgroundColor: grad, fill: true, tension: 0.4, pointHoverBackgroundColor: '#fff', pointHoverBorderColor: 'rgba(56, 189, 248, 1)', pointHoverBorderWidth: 4, pointRadius: 2, pointHitRadius: 20 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 2000, easing: 'easeOutExpo' }, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { grid: { color: 'rgba(255,255,255,0.02)'}, border: { dash: [4, 4] } } } } }); };",
             "        window.updateSalesChart = function(days) { window.renderSalesChart(days); };",
             "        function renderAnalyticsCharts() { ",
-            "           if(typeof Chart === 'undefined') return;",
             "           const ctxHourly = document.getElementById('hourlyChart').getContext('2d'); if(hourlyChart) hourlyChart.destroy(); hourlyChart = new Chart(ctxHourly, { type: 'bar', data: { labels: Array.from({length: 24}, (_, i) => i+'h'), datasets: [{ label: 'Sales', data: rawStats.analytics.hourly_sales || Array(24).fill(0), backgroundColor: '#a855f7', hoverBackgroundColor: '#d946ef', borderRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutExpo' }, plugins: { legend: { display: false } }, scales: { y: { grid: { color: 'rgba(255,255,255,0.02)' } }, x: { grid: { display: false } } } } });",
             "           const prodIds = Object.keys(rawStats.product_sales || {}); const prodLabels = prodIds.map(id => rawStats.products[id] ? rawStats.products[id].name : 'Unknown'); const prodData = Object.values(rawStats.product_sales || {}); const ctxTopProd = document.getElementById('topProductsBarChart').getContext('2d'); if(topProdChart) topProdChart.destroy(); topProdChart = new Chart(ctxTopProd, { type: 'bar', data: { labels: prodLabels.length?prodLabels:['No Data'], datasets: [{ label: 'Sales', data: prodData.length?prodData:[0], backgroundColor: '#38bdf8', hoverBackgroundColor: '#fff', borderRadius: 4 }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutExpo' }, plugins: { legend: { display: false } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.02)' } }, y: { grid: { display: false } } } } });",
             "           const catRevs = {}; Object.entries(rawStats.product_sales || {}).forEach(([id, count]) => { const p = rawStats.products[id]; if(p && p.price !== 'Custom'){ const cat = p.category || 'Other'; if(!catRevs[cat]) catRevs[cat] = 0; catRevs[cat] += (parseInt(p.price) * count); } }); const ctxCat = document.getElementById('categoryRevenueChart').getContext('2d'); if(catChart) catChart.destroy(); catChart = new Chart(ctxCat, { type: 'polarArea', data: { labels: Object.keys(catRevs).length?Object.keys(catRevs):['No Data'], datasets: [{ data: Object.values(catRevs).length?Object.values(catRevs):[0], backgroundColor: ['#FF1493', '#38bdf8', '#10b981', '#f97316', '#a855f7'], hoverBackgroundColor: ['#fff', '#fff', '#fff', '#fff', '#fff'], borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { animateScale: true, animateRotate: true, duration: 1500, easing: 'easeOutExpo' }, plugins: { legend: { position: 'right', labels: {color: '#94a3b8', font: { family: 'monospace' }} } } } });",
@@ -2234,37 +2076,12 @@ http.createServer(async (req, res) => {
             "           const dowSales = { 'Sun':0, 'Mon':0, 'Tue':0, 'Wed':0, 'Thu':0, 'Fri':0, 'Sat':0 }; const daysArr = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']; Object.entries(rawStats.revenue || {}).forEach(([dateStr, val]) => { const d = new Date(dateStr); if(!isNaN(d)) { dowSales[daysArr[d.getDay()]] += parseFloat(val); } }); const ctxDow = document.getElementById('dowChart').getContext('2d'); if(window.dowChartInst) window.dowChartInst.destroy(); window.dowChartInst = new Chart(ctxDow, { type: 'bar', data: { labels: daysArr, datasets: [{ label: 'Revenue (€)', data: daysArr.map(d=>dowSales[d]), backgroundColor: '#10b981', hoverBackgroundColor: '#34d399', borderRadius: 6 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { grid: { color: 'rgba(255,255,255,0.05)' } }, x: { grid: { display: false } } } } });",
             "           const ticketsOpened = rawStats.analytics?.tickets_opened || 0; const salesClosed = rawStats.total_transactions || 0; const ctxFunnel = document.getElementById('funnelChart').getContext('2d'); if(window.funnelChartInst) window.funnelChartInst.destroy(); window.funnelChartInst = new Chart(ctxFunnel, { type: 'doughnut', data: { labels: ['Tickets Opened (No Purchase)', 'Successful Sales'], datasets: [{ data: [Math.max(0, ticketsOpened - salesClosed), salesClosed], backgroundColor: ['rgba(239, 68, 68, 0.8)', 'rgba(56, 189, 248, 0.8)'], hoverOffset: 4, borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8' } } } } });",
             "        }",
-            "        initDashboard();",
             "    </script>",
             "</body>",
             "</html>"
         ].join('\n');
         return res.end(dashboardHTML);
     } else { res.writeHead(200, { 'Content-Type': 'text/plain' }); res.end('API Bot'); }
-}).listen(process.env.PORT || 10000, () => {
-    console.log(`✅ Server démarré sur le port ${process.env.PORT || 10000}`);
-});
-
-// === [ANCHOR: STARTUP_DEBUG] ===
-console.log('🔍 Starting bot...');
-console.log('Token:', DISCORD_BOT_TOKEN ? '✅ Présent' : '❌ Manquant');
-console.log('Intents configurés ✅');
-
-let isConnected = false;
-
-client.on('ready', () => {
-    isConnected = true;
-    console.log(`✅ Bot logged in as ${client.user.tag}`);
-});
-
-client.on('error', err => console.error('❌ ERREUR:', err.message));
-client.on('shardError', err => console.error('❌ SHARD ERROR:', err.message));
-
-setTimeout(() => {
-    if (!isConnected) {
-        console.error('❌ TIMEOUT: Bot n\'a pas pu se connecter après 15 secondes');
-        console.error('Vérifiez: 1) Token valide 2) Intents activés 3) Bot sur le serveur');
-    }
-}, 15000);
+}).listen(process.env.PORT || 3000);
 
 client.login(DISCORD_BOT_TOKEN);
