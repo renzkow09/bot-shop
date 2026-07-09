@@ -1509,7 +1509,7 @@ http.createServer(async (req, res) => {
             "               </div>",
             "               <div class='controls'>",
             "                   <button class='btn-icon' onclick='window.toggleMute()' id='audioBtn' title='Toggle Sound'>🔊</button>",
-            "                   <button class='btn-icon' onclick='window.manualRefresh()' id='refreshBtn' title='Sync Data'>🔄</button>",
+            "                   <button class='btn-icon' onclick='window.manualRefresh()' id='refreshBtn' title='Sync Data'>🔄Refresh</button>",
             "                   <div class='bot-status'><div class='status-dot'></div> Online</div>",
             "               </div>",
             "           </div>",
