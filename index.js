@@ -786,7 +786,7 @@ http.createServer(async (req, res) => {
     let authValue = '';
     if (authCookie) {
         try { authValue = decodeURIComponent(authCookie.slice(5)); } 
-        catch (e) { authValue = ''; console.warn("⚠️ Invalid auth cookie encoding."); }
+        catch (e) { authValue = ''; console.warn('⚠️ Invalid auth cookie encoding:', e.message); }
     }
     const isAuthenticated = authValue === DASHBOARD_PIN;
 
@@ -799,7 +799,8 @@ http.createServer(async (req, res) => {
                 const data = JSON.parse(body);
                 if (data.pin === DASHBOARD_PIN) {
                     bruteForceLocks.delete(clientIp);
-                    const isSecureRequest = !!req.socket?.encrypted;
+                    const trustProxy = process.env.TRUST_PROXY === 'true';
+                    const isSecureRequest = !!req.socket?.encrypted || (trustProxy && req.headers['x-forwarded-proto'] === 'https');
                     const cookieParts = [`auth=${encodeURIComponent(DASHBOARD_PIN)}`, 'Max-Age=2592000', 'HttpOnly', 'Path=/', 'SameSite=Strict'];
                     if (isSecureRequest) cookieParts.push('Secure');
                     res.writeHead(200, { 'Set-Cookie': cookieParts.join('; '), 'Content-Type': 'application/json' });
