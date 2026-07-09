@@ -49,15 +49,15 @@ let memoryStats = {
 
 // 📦 INTEGRATION: Stock initialized to infinity ("∞")
 const INITIAL_PRODUCTS = {
-    "1": { name: "Boobs", price: "5", link: "https://drive.google.com/ton_lien_boobs", category: "✨ PHOTOS", stock: "∞" }, 
-    "2": { name: "Ass", price: "5", link: "https://drive.google.com/ton_lien_ass", category: "✨ PHOTOS", stock: "∞" },
-    "3": { name: "Full Body", price: "5", link: "https://drive.google.com/ton_lien_fullbody", category: "✨ PHOTOS", stock: "∞" }, 
-    "4": { name: "Lingerie Try-On", price: "5", link: "https://drive.google.com/ton_lien_lingerie", category: "✨ PHOTOS", stock: "∞" },
-    "5": { name: "Mirror Pic", price: "5", link: "https://drive.google.com/ton_lien_mirror", category: "✨ PHOTOS", stock: "∞" }, 
-    "6": { name: "5-Min Video", price: "10", link: "https://drive.google.com/ton_lien_video5min", category: "🔥 VIDEOS", stock: "∞" },
-    "7": { name: "Shower / Bath", price: "10", link: "https://drive.google.com/ton_lien_shower", category: "🔥 VIDEOS", stock: "∞" }, 
-    "8": { name: "Friends Nude", price: "15", link: "https://drive.google.com/ton_lien_friends", category: "💦 SPECIAL", stock: "∞" },
-    "9": { name: "Surprise Pack", price: "15", link: "https://drive.google.com/ton_lien_surprisepack", category: "💦 SPECIAL", stock: "∞" }, 
+    "1": { name: "Photo Pack 1", price: "5", link: "https://drive.google.com/ton_lien", category: "✨ PHOTOS", stock: "∞", upsellId: "6", upsellDiscount: 20 }, 
+    "2": { name: "Photo Pack 2", price: "5", link: "https://drive.google.com/ton_lien", category: "✨ PHOTOS", stock: "∞" },
+    "3": { name: "Full Body", price: "5", link: "https://drive.google.com/ton_lien", category: "✨ PHOTOS", stock: "∞" }, 
+    "4": { name: "Try-On Pack", price: "5", link: "https://drive.google.com/ton_lien", category: "✨ PHOTOS", stock: "∞" },
+    "5": { name: "Mirror Pic", price: "5", link: "https://drive.google.com/ton_lien", category: "✨ PHOTOS", stock: "∞" }, 
+    "6": { name: "5-Min Video", price: "10", link: "https://drive.google.com/ton_lien", category: "🔥 VIDEOS", stock: "∞" },
+    "7": { name: "Shower / Bath", price: "10", link: "https://drive.google.com/ton_lien", category: "🔥 VIDEOS", stock: "∞" }, 
+    "8": { name: "Friends Pack", price: "15", link: "https://drive.google.com/ton_lien", category: "💦 SPECIAL", stock: "∞" },
+    "9": { name: "Surprise Pack", price: "15", link: "https://drive.google.com/ton_lien", category: "💦 SPECIAL", stock: "∞" }, 
     "10": { name: "Sexting", price: "Custom", link: "", category: "💌 PERSONALIZED", stock: "∞" },
     "11": { name: "Custom Request", price: "Custom", link: "", category: "💌 PERSONALIZED", stock: "∞" },
     "VIP": { name: "👑 VIP Pass 30 Days", price: "20", link: "Welcome to VIP!", category: "👑 SUBSCRIPTION", stock: "∞" }
@@ -71,6 +71,13 @@ const INITIAL_BUY_LINKS = {
 };
 
 // === [ANCHOR: CLOUD_SYNC_FUNCTIONS] ===
+async function notifyAdminPhone(title, msg) {
+    try {
+        const admin = await client.users.fetch(ADMIN_DISCORD_ID);
+        if (admin) await admin.send(`📱 **NOTIFICATION SYSTÈME**\n**${title}**\n> ${msg}`);
+    } catch(e) {}
+}
+
 function addActivity(type, message) {
     if (!memoryStats.activity_feed) memoryStats.activity_feed = [];
     memoryStats.activity_feed.unshift({ type, message, time: Date.now() });
@@ -96,6 +103,7 @@ async function loadCloudStats() {
             if (!memoryStats.subscriptions) memoryStats.subscriptions = {};
             if (!memoryStats.pending_reviews) memoryStats.pending_reviews = [];
             if (!memoryStats.activity_feed) memoryStats.activity_feed = [];
+            if (!memoryStats.custom_requests) memoryStats.custom_requests = [];
             if (!memoryStats.overrides) memoryStats.overrides = {};
             if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } };
             if (!memoryStats.settings.maintenance) memoryStats.settings.maintenance = { active: false, endsAt: 0, channelId: "" };
@@ -183,6 +191,7 @@ function logStat(type, value = 1, extraData = null) {
             if (memoryStats.recent_transactions.length > 50) memoryStats.recent_transactions.pop();
             
             addActivity('sale', `💰 €${value} Sale: ${extraData.username} bought ${extraData.productName}`);
+            notifyAdminPhone('NOUVELLE VENTE', `💰 +${value}€\n👤 Client: ${extraData.username}\n📦 Produit: ${extraData.productName}`);
         }
     } else if (type === 'joins') {
         memoryStats.joins[today] = (memoryStats.joins[today] || 0) + value;
@@ -208,7 +217,8 @@ function logStat(type, value = 1, extraData = null) {
         }
     } else if (type === 'custom_request') {
         if (!Array.isArray(memoryStats.custom_requests)) memoryStats.custom_requests = [];
-        memoryStats.custom_requests.unshift({ id: Date.now().toString(), username: extraData.username, product: extraData.productName, date: new Date().toLocaleString('en-US'), status: 'pending' });
+        memoryStats.custom_requests.unshift({ id: Date.now().toString(), username: extraData.username, userId: extraData.userId, product: extraData.productName, date: new Date().toLocaleString('en-US'), status: 'pending' });
+        notifyAdminPhone('NOUVELLE CUSTOM REQUEST', `💌 ${extraData.username} a demandé: ${extraData.productName}\n➡️ Vérifie le tableau Kanban sur le Dashboard.`);
     }
     memoryStats.last_update = Date.now();
     syncCloud(); 
@@ -350,6 +360,7 @@ client.on('interactionCreate', async (interaction) => {
                 date: new Date().toLocaleString('en-US')
             });
             addActivity('review', `⭐ New ${numRating}/5 review submitted by ${interaction.user.username}`);
+            notifyAdminPhone('NOUVELLE REVIEW', `⭐ ${numRating}/5 par ${interaction.user.username}\nEn attente de validation sur le dashboard.`);
             syncCloud();
 
             return await interaction.reply({ content: "✅ **Thank you!** Your review has been submitted to our team for moderation.", ephemeral: true }).catch(()=>{});
@@ -472,15 +483,11 @@ client.on('interactionCreate', async (interaction) => {
             const promo = state ? state.promo : null;
 
             if (product.price === "Custom") {
-                logStat('custom_request', 0, { username: interaction.user.username, productName: product.name });
+                logStat('custom_request', 0, { username: interaction.user.username, userId: interaction.user.id, productName: product.name });
                 if (interaction.channel) {
                     await interaction.channel.send(`📩 **Custom request registered!** An admin will review it. Closing ticket in 10 seconds...`).catch(() => {});
                     setTimeout(() => { channelStates.delete(interaction.channel.id); interaction.channel.delete().catch(()=>{}); }, 10000);
                 }
-                try {
-                    const admin = await client.users.fetch(ADMIN_DISCORD_ID);
-                    if (admin) await admin.send(`🔔 **Custom Request** from <@${interaction.user.id}>: ${product.name}`).catch(() => {});
-                } catch (err) {}
             } else {
                 let finalPrice = parseInt(product.price);
                 let isVIPPurchase = selected === "VIP" || (product.category && product.category.includes("SUBSCRIPTION"));
@@ -509,6 +516,23 @@ client.on('interactionCreate', async (interaction) => {
 
                 logStat('revenue', finalPrice, { productId: selected, productName: product.name, username: interaction.user.username });
                 
+                // 🚀 UPSELL ENGINE LOGIC
+                let upsellEmbed = null;
+                if (product.upsellId && memoryStats.products[product.upsellId]) {
+                    const upsellProduct = memoryStats.products[product.upsellId];
+                    const uDiscount = product.upsellDiscount || 20;
+                    
+                    const codeName = "UPSELL-" + Math.random().toString(36).substring(2, 8).toUpperCase();
+                    if (!memoryStats.promo_codes) memoryStats.promo_codes = {};
+                    memoryStats.promo_codes[codeName] = { discount: uDiscount, limit: 1, used: 0, createdAt: new Date().toLocaleDateString('en-US') };
+                    syncCloud();
+                    
+                    upsellEmbed = new EmbedBuilder()
+                        .setColor('#00f0ff')
+                        .setTitle('🎁 OFFRE EXCLUSIVE DEBLOCQUÉE !')
+                        .setDescription(`Parce que tu as acheté **${product.name}**, tu as droit à une offre unique !\n\nObtiens **${upsellProduct.name}** avec **-${uDiscount}% de réduction**.\n\n👉 Utilise ce code promo lors de ton prochain achat :\n\`${codeName}\`\n\n*(Code valable pour 1 seule utilisation)*`);
+                }
+
                 if (isVIPPurchase) {
                     const now = Date.now();
                     const thirtyDays = 30 * 24 * 60 * 60 * 1000;
@@ -543,15 +567,20 @@ client.on('interactionCreate', async (interaction) => {
                 );
 
                 try {
-                    await interaction.user.send({ embeds: [successEmbed], components: [reviewRow] });
+                    let dmMessages = { embeds: [successEmbed], components: [reviewRow] };
+                    await interaction.user.send(dmMessages);
+                    if (upsellEmbed) await interaction.user.send({ embeds: [upsellEmbed] });
+                    
                     if (interaction.channel) {
                         await interaction.channel.send("✅ **Product delivered to your DMs!** Closing ticket in 5 seconds...").catch(()=>{});
                         setTimeout(() => { channelStates.delete(interaction.channel.id); interaction.channel.delete().catch(()=>{}); }, 5000);
                     }
                 } catch (e) { 
                     if (interaction.channel) {
-                        await interaction.channel.send({ content: "⚠️ **Warning: Could not DM you.** Here is your product. Ticket closes in 15 seconds.", embeds: [successEmbed], components: [reviewRow] }).catch(()=>{}); 
-                        setTimeout(() => { channelStates.delete(interaction.channel.id); interaction.channel.delete().catch(()=>{}); }, 15000);
+                        let chMsg = { content: "⚠️ **Warning: Could not DM you.** Here is your product. Ticket closes in 30 seconds.", embeds: [successEmbed], components: [reviewRow] };
+                        await interaction.channel.send(chMsg).catch(()=>{}); 
+                        if(upsellEmbed) await interaction.channel.send({ embeds: [upsellEmbed] }).catch(()=>{});
+                        setTimeout(() => { channelStates.delete(interaction.channel.id); interaction.channel.delete().catch(()=>{}); }, 30000);
                     } 
                 }
             }
@@ -911,7 +940,6 @@ http.createServer(async (req, res) => {
                 const guild = client.guilds.cache.first();
                 if (!guild) return res.writeHead(404).end('Guild not found');
 
-                // --- 📝 EDIT STATS (Real data & UI Overrides) ---
                 if (data.action === 'edit_stat') {
                     const val = data.value;
                     if (data.key === 'today_rev') {
@@ -938,7 +966,6 @@ http.createServer(async (req, res) => {
                     }
                     syncCloud();
                 }
-                // --- MODERATION DES REVIEWS PENDING ---
                 else if (data.action === 'approve_review') {
                     if (!memoryStats.pending_reviews) memoryStats.pending_reviews = [];
                     const idx = memoryStats.pending_reviews.findIndex(r => r.id === data.id);
@@ -965,7 +992,6 @@ http.createServer(async (req, res) => {
                         syncCloud();
                     }
                 }
-                // --------------------------------------
                 else if (data.action === 'toggle_maintenance') {
                     if (!memoryStats.settings) memoryStats.settings = {};
                     if (!memoryStats.settings.maintenance) memoryStats.settings.maintenance = { active: false, endsAt: 0, channelId: "" };
@@ -1087,14 +1113,14 @@ http.createServer(async (req, res) => {
                 else if (data.action === 'edit_product') {
                     if (memoryStats.products && memoryStats.products[data.id]) {
                         const oldCat = memoryStats.products[data.id].category || "✨ ITEMS";
-                        memoryStats.products[data.id] = { name: data.name, price: data.price, link: data.link, category: oldCat, stock: data.stock || "∞", desc: data.desc };
+                        memoryStats.products[data.id] = { name: data.name, price: data.price, link: data.link, category: oldCat, stock: data.stock || "∞", desc: data.desc, upsellId: data.upsellId, upsellDiscount: data.upsellDiscount };
                         syncCloud();
                     }
                 }
                 else if (data.action === 'add_product') {
                     if (!memoryStats.products) memoryStats.products = {};
                     const newId = (Object.keys(memoryStats.products).length + 1).toString();
-                    memoryStats.products[newId] = { name: data.name, price: data.price, link: data.link, category: "✨ NEW ITEMS", stock: data.stock || "∞", desc: data.desc };
+                    memoryStats.products[newId] = { name: data.name, price: data.price, link: data.link, category: "✨ NEW ITEMS", stock: data.stock || "∞", desc: data.desc, upsellId: data.upsellId, upsellDiscount: data.upsellDiscount };
                     syncCloud();
                 }
                 else if (data.action === 'delete_product') {
@@ -1166,10 +1192,20 @@ http.createServer(async (req, res) => {
                     const c = guild.channels.cache.get(data.channelId);
                     if (c) { channelStates.delete(c.id); await c.delete().catch(()=>{}); }
                 }
-                else if (data.action === 'resolve_req') {
+                else if (data.action === 'move_custom_req') {
                     if (Array.isArray(memoryStats.custom_requests)) {
                         const reqItem = memoryStats.custom_requests.find(r => r.id === data.id);
-                        if(reqItem) { reqItem.status = 'done'; syncCloud(); }
+                        if(reqItem) { 
+                            reqItem.status = data.status; 
+                            syncCloud(); 
+                            try {
+                                const targetUser = await client.users.fetch(reqItem.userId).catch(() => null);
+                                if (targetUser && data.status !== 'pending') {
+                                    let statusFr = data.status === 'recording' ? '🎥 Enregistrement en cours' : data.status === 'editing' ? '✂️ Montage en cours' : '✅ Commande Terminée';
+                                    await targetUser.send(`🔔 **Mise à jour de ta commande personnalisée (${reqItem.product}):**\nNouveau statut : **${statusFr}** !`).catch(()=>{});
+                                }
+                            } catch(e){}
+                        }
                     }
                 }
                 else if (data.action === 'announce') {
@@ -1321,24 +1357,43 @@ http.createServer(async (req, res) => {
             "        .feed-item.sale { border-color: var(--accent-green); } .feed-item.ticket { border-color: var(--accent-orange); } .feed-item.review { border-color: var(--accent-purple); }",
             "        .feed-time { font-size: 0.75em; color: var(--accent-blue); min-width: 60px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; }",
             "        ",
-            "        /* SPLASH SCREEN FAST */",
-            "        .splash-screen { position: fixed; inset: 0; background: #030712; z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; transition: opacity 0.5s ease; overflow: hidden; }",
-            "        .loader-bar-fast { width: 250px; height: 3px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden; position: relative; margin-top: 20px; }",
-            "        .loader-bar-fast::after { content: ''; position: absolute; left: 0; top: 0; height: 100%; width: 100%; background: var(--accent-blue); animation: loadBarAnim 1s ease-in-out forwards; }",
-            "        @keyframes loadBarAnim { 0% { width: 0%; } 100% { width: 100%; } }",
+            "        /* SPLASH SCREEN - HACKER THEME */",
+            "        .splash-screen { position: fixed; inset: 0; background: #030712; z-index: 99999; display: flex; flex-direction: column; justify-content: center; align-items: center; pointer-events: none; transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1); }",
+            "        .splash-screen.hidden { opacity: 0; pointer-events: none; }",
+            "        #hackerCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: block; }",
+            "        .splash-content { position: relative; z-index: 2; text-align: center; }",
+            "        .splash-title { font-family: 'Courier New', monospace; font-size: 4rem; font-weight: 800; color: var(--accent-green); text-shadow: 0 0 20px rgba(16, 185, 129, 0.5), 0 0 60px rgba(16, 185, 129, 0.2); letter-spacing: 6px; margin: 0; opacity: 0; animation: fadeInTitle 1s ease forwards 0.5s; }",
+            "        .splash-sub { font-family: 'Courier New', monospace; font-size: 1.2rem; color: var(--accent-blue); text-shadow: 0 0 10px rgba(0, 240, 255, 0.3); letter-spacing: 4px; margin-top: 20px; opacity: 0; animation: fadeInTitle 1s ease forwards 1.2s; }",
+            "        .splash-welcome { font-family: 'Inter', sans-serif; font-size: 3.5rem; font-weight: 800; background: linear-gradient(135deg, #fff 0%, var(--accent-blue) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-top: 30px; opacity: 0; animation: fadeInTitle 1.2s ease forwards 2s; letter-spacing: 2px; }",
+            "        .splash-loader { width: 300px; height: 2px; background: rgba(255,255,255,0.05); margin-top: 40px; border-radius: 2px; overflow: hidden; position: relative; opacity: 0; animation: fadeInTitle 0.8s ease forwards 2.5s; }",
+            "        .splash-loader::after { content: ''; position: absolute; left: -100%; top: 0; height: 100%; width: 200%; background: linear-gradient(90deg, transparent, var(--accent-green), transparent); animation: loadBar 2.5s ease-in-out forwards; }",
+            "        @keyframes fadeInTitle { to { opacity: 1; } }",
+            "        @keyframes loadBar { 0% { left: -100%; } 100% { left: 100%; } }",
             "        ",
-            "        /* LAYOUT & SIDEBAR */",
-            "        .dashboard-layout { display: flex; height: 100vh; overflow: hidden; }",
-            "        .sidebar { width: 280px; background: rgba(15,23,42,0.8); border-right: 1px solid var(--border-color); padding: 25px 20px; display: flex; flex-direction: column; overflow-y: auto; backdrop-filter: blur(20px); z-index: 10; flex-shrink: 0; }",
-            "        .sidebar-header { margin-bottom: 30px; text-align: left; }",
-            "        .sidebar-header h2 { margin: 0; font-size: 2em; font-weight: 800; background: linear-gradient(135deg, #fff 0%, #38bdf8 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: 1px; }",
-            "        .sidebar-header p { margin: 5px 0 0 0; color: var(--accent-blue); font-size: 0.85em; text-transform: uppercase; letter-spacing: 2px; font-weight: 600; }",
-            "        .nav-category { font-size: 0.75em; text-transform: uppercase; color: var(--text-muted); letter-spacing: 1.5px; margin: 25px 0 10px 5px; font-weight: 800; }",
-            "        .nav-btn { width: 100%; text-align: left; padding: 12px 15px; margin-bottom: 5px; background: transparent; border: none; color: var(--text-main); font-size: 0.95em; font-weight: 600; border-radius: 12px; cursor: pointer; transition: all 0.3s; display: flex; justify-content: space-between; align-items: center; }",
-            "        .nav-btn:hover { background: rgba(255,255,255,0.05); transform: translateX(5px); }",
-            "        .nav-btn.active { background: linear-gradient(90deg, rgba(56,189,248,0.15) 0%, transparent 100%); border-left: 4px solid var(--accent-blue); color: var(--accent-blue); transform: translateX(5px); }",
-            "        .main-content { flex: 1; padding: 30px; overflow-y: auto; position: relative; }",
-            "        .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }",
+            "        /* SIDEBAR COLLAPSIBLE */",
+            "        .dashboard-layout { display: flex; height: 100vh; overflow: hidden; transition: filter 0.8s ease, opacity 0.8s ease; filter: blur(8px); opacity: 0.7; }",
+            "        .dashboard-layout.unblur { filter: blur(0); opacity: 1; }",
+            "        .sidebar { width: 280px; background: rgba(15,23,42,0.8); border-right: 1px solid var(--border-color); padding: 25px 20px; display: flex; flex-direction: column; overflow-y: auto; backdrop-filter: blur(20px); z-index: 10000; flex-shrink: 0; transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), width 0.4s cubic-bezier(0.4, 0, 0.2, 1); }",
+            "        .sidebar.collapsed { transform: translateX(-100%); width: 0; padding: 0; overflow: hidden; border-right: none; }",
+            "        .sidebar:not(.collapsed) { transform: translateX(0); }",
+            "        .main-content { flex: 1; padding: 30px; overflow-y: auto; position: relative; transition: margin-left 0.4s cubic-bezier(0.4, 0, 0.2, 1); }",
+            "        /* When sidebar is collapsed, main content takes full width */",
+            "        .sidebar.collapsed + .main-content { margin-left: 0; }",
+            "        .sidebar-toggle-btn { background: rgba(15,23,42,0.8); border: 1px solid rgba(255,255,255,0.1); color: var(--text-main); padding: 8px 12px; border-radius: 8px; cursor: pointer; font-size: 1.2rem; transition: all 0.3s; backdrop-filter: blur(10px); }",
+            "        .sidebar-toggle-btn:hover { background: rgba(255,255,255,0.1); border-color: var(--accent-blue); }",
+            "        ",
+            "        /* KANBAN UI */",
+            "        .kanban-board { display: flex; gap: 20px; overflow-x: auto; padding-bottom: 20px; align-items: stretch; min-height: 500px; }",
+            "        .kanban-col { background: rgba(0,0,0,0.2); border-radius: 16px; padding: 15px; min-width: 300px; flex: 1; border: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; gap: 15px; }",
+            "        .kanban-header { font-weight: 800; text-transform: uppercase; letter-spacing: 1px; padding-bottom: 10px; border-bottom: 2px solid; }",
+            "        .kanban-card { background: rgba(15,23,42,0.8); border: 1px solid rgba(255,255,255,0.05); padding: 15px; border-radius: 12px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); transition: transform 0.2s; }",
+            "        .kanban-card:hover { transform: translateY(-3px); border-color: rgba(255,255,255,0.15); }",
+            "        .kanban-actions { display: flex; gap: 5px; margin-top: auto; }",
+            "        .kanban-actions button { flex: 1; padding: 8px; font-size: 0.75em; }",
+            "        ",
+            "        /* LAYOUT & SIDEBAR (mobile override) */",
+            "        .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 9999; backdrop-filter: blur(4px); opacity: 0; transition: opacity 0.3s ease; }",
+            "        .sidebar-overlay.show { display: block; opacity: 1; }",
             "        ",
             "        /* CHAT UI REFINED */",
             "        .chat-container { display: flex; height: 650px; gap: 25px; }",
@@ -1364,11 +1419,10 @@ http.createServer(async (req, res) => {
             "        @keyframes zoomIn { from { transform: scale(0.9); opacity:0; } to { transform: scale(1); opacity:1; } }",
             "        ",
             "        @media screen and (max-width: 900px) {",
+            "          .sidebar { position: fixed; top: 0; left: 0; height: 100vh; transform: translateX(-100%); width: 280px; box-shadow: 20px 0 50px rgba(0,0,0,0.5); }",
+            "          .sidebar.open { transform: translateX(0); }",
+            "          .sidebar.collapsed { transform: translateX(-100%) !important; }",
             "          .dashboard-layout { flex-direction: column; }",
-            "          .sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border-color); padding: 15px; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between; overflow: visible; }",
-            "          .sidebar-header { margin-bottom: 15px; width: 100%; text-align: center; }",
-            "          .nav-category { display: none; }",
-            "          .nav-btn { width: auto; flex: 1 1 calc(33% - 10px); justify-content: center; text-align: center; padding: 10px; font-size: 0.8em; }",
             "          .main-content { padding: 15px; }",
             "          .overview-grid, .chat-container { grid-template-columns: 1fr !important; flex-direction: column; height: auto; }",
             "          .ticket-list { height: 200px; }",
@@ -1378,11 +1432,95 @@ http.createServer(async (req, res) => {
             "<body>",
             "    <div id='toast'></div>",
             "    ",
-            "    <!-- FAST LOADING SCREEN -->",
+            "    <!-- NEXUS SPLASH SCREEN - HACKER STYLE -->",
             "    <div id='loading-screen' class='splash-screen'>",
-            "       <h1 style='color:var(--accent-blue); font-size: 3em; margin-bottom: 20px; letter-spacing: 4px; text-shadow: 0 0 20px rgba(0,240,255,0.5);'>NEXUS CORE</h1>",
-            "       <div class='loader-bar-fast'></div>",
+            "        <canvas id='hackerCanvas'></canvas>",
+            "        <div class='splash-content'>",
+            "            <div class='splash-title'>⚡ NEXUS CORE ⚡</div>",
+            "            <div class='splash-sub'>• SYSTEM INITIALIZING •</div>",
+            "            <div class='splash-welcome'>WELCOME ISSAM</div>",
+            "            <div class='splash-loader'></div>",
+            "        </div>",
             "    </div>",
+            "    <script>",
+            "    (function() {",
+            "        const canvas = document.getElementById('hackerCanvas');",
+            "        const ctx = canvas.getContext('2d');",
+            "        let width, height;",
+            "        function resize() {",
+            "            width = canvas.width = window.innerWidth;",
+            "            height = canvas.height = window.innerHeight;",
+            "        }",
+            "        window.addEventListener('resize', resize);",
+            "        resize();",
+            "",
+            "        const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!@#$%^&*()_+-=[]{}|;:,.<>?';",
+            "        const columns = Math.floor(width / 16);",
+            "        const drops = [];",
+            "        for (let i = 0; i < columns; i++) {",
+            "            drops[i] = Math.floor(Math.random() * -100);",
+            "        }",
+            "        const maxSpeed = 2.5;",
+            "        const minSpeed = 0.8;",
+            "        const speedFactors = [];",
+            "        for (let i = 0; i < columns; i++) {",
+            "            speedFactors[i] = minSpeed + Math.random() * (maxSpeed - minSpeed);",
+            "        }",
+            "",
+            "        function draw() {",
+            "            ctx.fillStyle = 'rgba(3, 7, 18, 0.05)';",
+            "            ctx.fillRect(0, 0, width, height);",
+            "            ctx.font = '14px monospace';",
+            "            ctx.textAlign = 'center';",
+            "",
+            "            for (let i = 0; i < drops.length; i++) {",
+            "                const char = chars[Math.floor(Math.random() * chars.length)];",
+            "                const x = i * 16 + 8;",
+            "                const y = drops[i] * 16;",
+            "                const brightness = 0.3 + 0.7 * (1 - Math.abs((y % (height * 1.5)) / (height * 1.5)));",
+            "                const green = Math.floor(100 + 155 * brightness);",
+            "                const blue = Math.floor(50 + 100 * brightness);",
+            "                const alpha = 0.3 + 0.7 * brightness;",
+            "                ctx.fillStyle = `rgba(${30}, ${green}, ${blue}, ${alpha})`;",
+            "                ctx.shadowColor = `rgba(0, 255, 0, ${0.1 * brightness})`;",
+            "                ctx.shadowBlur = 8;",
+            "                ctx.fillText(char, x, y);",
+            "                ctx.shadowBlur = 0;",
+            "",
+            "                drops[i] += speedFactors[i];",
+            "                if (drops[i] * 16 > height + 30) {",
+            "                    drops[i] = -Math.random() * 30;",
+            "                }",
+            "            }",
+            "            requestAnimationFrame(draw);",
+            "        }",
+            "        draw();",
+            "",
+            "        // Hide splash after dashboard data loads, with delay for longer intro",
+            "        async function checkReady() {",
+            "            try {",
+            "                const res = await fetch('/api/init-data');",
+            "                if (res.ok) {",
+            "                    // Wait an extra 1.5s for longer intro",
+            "                    setTimeout(() => {",
+            "                        document.getElementById('loading-screen').classList.add('hidden');",
+            "                        document.querySelector('.dashboard-layout').classList.add('unblur');",
+            "                    }, 1500);",
+            "                } else {",
+            "                    setTimeout(checkReady, 300);",
+            "                }",
+            "            } catch(e) {",
+            "                setTimeout(checkReady, 300);",
+            "            }",
+            "        }",
+            "        // Fallback : hide after 6s (longer)",
+            "        setTimeout(() => {",
+            "            document.getElementById('loading-screen').classList.add('hidden');",
+            "            document.querySelector('.dashboard-layout').classList.add('unblur');",
+            "        }, 6000);",
+            "        checkReady();",
+            "    })();",
+            "    </script>",
             "",
             "    <div class='modal' id='premium-dialog' style='display:none; position:fixed; inset:0; background:rgba(3,7,18,0.85); backdrop-filter:blur(20px); z-index:10001; justify-content:center; align-items:center;'>",
             "        <div class='modal-content' style='background:rgba(15,23,42,0.8); padding:40px; border-radius:24px; border:1px solid rgba(0,240,255,0.2); width:90%; max-width:450px; text-align:left; box-shadow:0 20px 60px rgba(0,0,0,0.8), inset 0 0 20px rgba(0,240,255,0.05); animation:fadeInSmooth 0.4s ease-out;'>",
@@ -1396,9 +1534,10 @@ http.createServer(async (req, res) => {
             "        </div>",
             "    </div>",
             "",
-            "    <!-- NEW SIDEBAR LAYOUT -->",
-            "    <div class='dashboard-layout' id='dashboard-container' style='display:none;'>",
-            "       <aside class='sidebar'>",
+            "    <!-- NEW SIDEBAR LAYOUT (ALWAYS IN DOM TO PREVENT CHART.JS CRASH) -->",
+            "    <div class='sidebar-overlay' id='sidebarOverlay' onclick='window.toggleSidebar()'></div>",
+            "    <div class='dashboard-layout' id='dashboard-container'>",
+            "       <aside class='sidebar' id='appSidebar'>",
             "           <div class='sidebar-header'>",
             "               <h2>NEXUS</h2>",
             "               <p>Executive</p>",
@@ -1409,6 +1548,7 @@ http.createServer(async (req, res) => {
             "           <button class='nav-btn' onclick='window.switchTab(\"transactions\", this)'><span>Transactions</span></button>",
             "           <div class='nav-category'>🛍️ Storefront</div>",
             "           <button class='nav-btn' onclick='window.switchTab(\"products\", this)'><span>Catalog & Gateways</span></button>",
+            "           <button class='nav-btn' onclick='window.switchTab(\"kanban\", this)'><span>📋 Custom Kanban</span></button>",
             "           <button class='nav-btn' onclick='window.switchTab(\"vip\", this)'><span>VIP Pass</span></button>",
             "           <button class='nav-btn' onclick='window.switchTab(\"referrals\", this)'><span>Promo & Referrals</span></button>",
             "           <div class='nav-category'>👥 Community</div>",
@@ -1422,8 +1562,11 @@ http.createServer(async (req, res) => {
             "",
             "       <main class='main-content'>",
             "           <div class='top-bar'>",
-            "               <h1 id='current-tab-title' style='margin:0; font-size:1.8em; font-weight:800;'>Overview</h1>",
-            "               <div class='controls'>",
+            "               <div style='display:flex; align-items:center; gap:15px;'>",
+            "                   <button class='sidebar-toggle-btn' onclick='window.toggleSidebar()' id='sidebarToggleBtn' title='Toggle Sidebar'>☰</button>",
+            "                   <h1 id='current-tab-title' style='margin:0; font-size:1.8em; font-weight:800;'>Overview</h1>",
+            "               </div>",
+            "               <div class='controls' style='display:flex; align-items:center; gap:15px;'>",
             "                   <button class='btn-icon' onclick='window.toggleMute()' id='audioBtn' title='Toggle Sound'>🔊</button>",
             "                   <button class='btn-icon' onclick='window.manualRefresh()' id='refreshBtn' title='Sync Data'>🔄</button>",
             "                   <div class='bot-status'><div class='status-dot'></div> Online</div>",
@@ -1459,6 +1602,16 @@ http.createServer(async (req, res) => {
             "                   <div class='box' style='margin:0; display:flex; flex-direction:column; overflow:hidden;'>",
             "                       <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:15px;'><h2 style='margin:0; border:none;'>⚡ Live Pulse</h2><div class='status-dot' style='margin:0;'></div></div>",
             "                       <div class='feed-container' id='target-feed' style='flex:1;'></div>",
+            "                   </div>",
+            "               </div>",
+            "           </div>",
+            "                ",
+            "           <div id='kanban' class='tab-content'>",
+            "               <div class='box'>",
+            "                   <h2 style='color:var(--accent-blue);'>📋 Gestion des Commandes Personnalisées</h2>",
+            "                   <p class='text-muted'>Fais glisser virtuellement les commandes pour prévenir le client automatiquement par DM Discord.</p>",
+            "                   <div class='kanban-board' id='target-kanban'>",
+            "                       <!-- Kanban columns will be injected here -->",
             "                   </div>",
             "               </div>",
             "           </div>",
@@ -1525,12 +1678,17 @@ http.createServer(async (req, res) => {
             "                   <div style='display:flex; gap:20px; flex-wrap:wrap; margin-bottom:15px;'>",
             "                       <input type='hidden' id='editProdId'>",
             "                       <input type='text' id='newProdName' placeholder='Asset Designation (e.g. VIP Pack)' style='flex:1; min-width:200px;'>",
-            "                       <input type='text' id='newProdPrice' placeholder='Value (€)' style='width:150px;'>",
-            "                       <input type='text' id='newProdStock' placeholder='Inventory (∞)' style='width:120px;'>",
+            "                       <input type='text' id='newProdPrice' placeholder='Value (€)' style='width:100px;'>",
+            "                       <input type='text' id='newProdStock' placeholder='Inventory (∞)' style='width:100px;'>",
             "                   </div>",
             "                   <div style='display:flex; gap:20px; flex-wrap:wrap; margin-bottom:15px;'>",
             "                       <input type='text' id='newProdDesc' placeholder='Asset Description (e.g. Premium 4K Photos)' style='flex:1; min-width:250px;'>",
             "                       <input type='text' id='newProdLink' placeholder='Secure Delivery Node (Drive, Mega...)' style='flex:1; min-width:250px;'>",
+            "                   </div>",
+            "                   <div style='display:flex; gap:20px; flex-wrap:wrap; margin-bottom:15px; padding:15px; border-radius:12px; background:rgba(56,189,248,0.05); border:1px solid rgba(56,189,248,0.2);'>",
+            "                       <strong style='color:var(--accent-blue); display:flex; align-items:center;'>🚀 Auto-Upsell :</strong>",
+            "                       <input type='text' id='newProdUpsellId' placeholder='ID Produit Upsell (ex: 6)' style='width:180px;'>",
+            "                       <input type='number' id='newProdUpsellDiscount' placeholder='% Réduction' style='width:150px;'>",
             "                   </div>",
             "                   <div style='display:flex; gap:15px; margin-top:20px;'>",
             "                       <button class='admin-btn' style='margin:0; padding:15px 30px;' onclick='window.saveProduct()' id='saveProdBtn'>➕ Inject Asset</button>",
@@ -1658,8 +1816,30 @@ http.createServer(async (req, res) => {
             "",
             "    <!-- [ANCHOR: DASHBOARD_JS_LOGIC] -->",
             "    <script>",
-            "        let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, userGoal=500, salesChart, hourlyChart, topProdChart, catChart; ",
+            "        let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, userGoal=500, salesChart, hourlyChart, topProdChart, catChart, dowChartInst, funnelChartInst; ",
             "        let allMembersData = []; let isMembersLoaded = false; let activeChatChannel = null; let chatPollInterval = null;",
+            "        let trackedTickets = 0, trackedReviews = 0, trackedSales = 0;",
+            "        ",
+            "        window.toggleSidebar = function() {",
+            "            const sb = document.getElementById('appSidebar');",
+            "            const ov = document.getElementById('sidebarOverlay');",
+            "            // Toggle collapsed class for desktop",
+            "            sb.classList.toggle('collapsed');",
+            "            // For mobile, also handle overlay",
+            "            if (window.innerWidth <= 900) {",
+            "                sb.classList.toggle('open');",
+            "                if (sb.classList.contains('open')) { ov.classList.add('show'); } else { ov.classList.remove('show'); }",
+            "            } else {",
+            "                // On desktop, no overlay",
+            "                ov.classList.remove('show');",
+            "            }",
+            "        };",
+            "        window.closeSidebar = function() {",
+            "            const sb = document.getElementById('appSidebar');",
+            "            const ov = document.getElementById('sidebarOverlay');",
+            "            sb.classList.remove('open', 'collapsed');",
+            "            ov.classList.remove('show');",
+            "        };",
             "        ",
             "        window.customPrompt = function(title, message, placeholder = '', defaultValue = '') {",
             "            return new Promise((resolve) => {",
@@ -1733,30 +1913,19 @@ http.createServer(async (req, res) => {
             "           } catch(e) {}",
             "        }",
             "",
-            "        let dataPayload = null;",
-            "        ",
             "        async function initDashboard(){",
-            "           const ls = document.getElementById('loading-screen');",
-            "           setTimeout(async () => {",
-            "               try{",
-            "                   const res = await fetch('/api/init-data');",
-            "                   if(res.ok) {",
-            "                       const data = await res.json();",
-            "                       processInitData(data);",
-            "                   }",
-            "               } catch(e){ console.error('API Error'); }",
-            "               if(ls) {",
-            "                   ls.style.opacity = '0';",
-            "                   setTimeout(() => { ls.style.display = 'none'; document.getElementById('dashboard-container').style.display = 'flex'; window.renderSalesChart(7); }, 500);",
-            "               } else {",
-            "                   document.getElementById('dashboard-container').style.display = 'flex';",
-            "                   window.renderSalesChart(7);",
+            "           try{",
+            "               const res = await fetch('/api/init-data');",
+            "               if(res.ok) {",
+            "                   const data = await res.json();",
+            "                   processInitData(data);",
             "               }",
-            "           }, 1200);",
+            "           } catch(e){ console.error('API Error'); }",
+            "           if(typeof window.renderSalesChart === 'function') window.renderSalesChart(7);",
             "        }",
             "        ",
             "        function processInitData(data) { ",
-            "            rawStats=data.memoryStats; PRODUCT_DATA=data.PRODUCT_DATA; currentMonthRevenue=data.monthRevenue; PIN=data.PIN; lastTxCount=rawStats.total_transactions||0; ",
+            "            rawStats=data.memoryStats || {}; PRODUCT_DATA=data.PRODUCT_DATA || {}; currentMonthRevenue=data.monthRevenue || 0; PIN=data.PIN || ''; lastTxCount=rawStats.total_transactions||0; ",
             "            ",
             "            let calcTotalRev = 0;",
             "            if(rawStats.revenue) {",
@@ -1765,14 +1934,14 @@ http.createServer(async (req, res) => {
             "            rawStats.total_revenue = calcTotalRev;",
             "",
             "            let overrides = rawStats.overrides || {};",
-            "            document.getElementById('ui-today-rev').innerText = overrides['today_rev'] || ('€'+data.todayRevenue);",
+            "            document.getElementById('ui-today-rev').innerText = overrides['today_rev'] || ('€'+(data.todayRevenue || 0));",
             "            document.getElementById('ui-total-rev').innerText = overrides['total_rev'] || ('€'+(rawStats.total_revenue || 0));",
-            "            document.getElementById('ui-conv-rate').innerText = overrides['conv_rate'] || (data.conversionRate+'%');",
-            "            document.getElementById('ui-online-total').innerHTML = overrides['online_total'] || (data.onlineCount + ' <span style=\"font-size:0.5em;color:var(--text-muted);\">/ ' + data.memberCount + '</span>');",
-            "            document.getElementById('ui-retention').innerText = overrides['retention'] || (data.retentionRate+'%');",
-            "            document.getElementById('ui-tickets-opened').innerText = overrides['tickets'] || data.ticketsOpened;",
-            "            document.getElementById('ui-dropoff').innerText = overrides['dropoff'] || (data.dropOffRate+'%');",
-            "            document.getElementById('ui-peak-hour').innerText = overrides['peak'] || data.peakHourStr;",
+            "            document.getElementById('ui-conv-rate').innerText = overrides['conv_rate'] || ((data.conversionRate||0)+'%');",
+            "            document.getElementById('ui-online-total').innerHTML = overrides['online_total'] || ((data.onlineCount||0) + ' <span style=\"font-size:0.5em;color:var(--text-muted);\">/ ' + (data.memberCount||0) + '</span>');",
+            "            document.getElementById('ui-retention').innerText = overrides['retention'] || ((data.retentionRate||0)+'%');",
+            "            document.getElementById('ui-tickets-opened').innerText = overrides['tickets'] || (data.ticketsOpened||0);",
+            "            document.getElementById('ui-dropoff').innerText = overrides['dropoff'] || ((data.dropOffRate||0)+'%');",
+            "            document.getElementById('ui-peak-hour').innerText = overrides['peak'] || (data.peakHourStr||'N/A');",
             "            ",
             "            trackedTickets = data.activeTickets || 0; trackedReviews = data.pendingReviewsCount || 0; trackedSales = rawStats.total_transactions || 0; ",
             "            buildStaticTables(); renderAnalyticsCharts(); updateMaintenanceBadge(data.maintenance); updateBadgesAndFeed(data); ",
@@ -1828,7 +1997,8 @@ http.createServer(async (req, res) => {
             "                  let pPrice = p.price==='Custom'?'Custom':'€'+p.price; ",
             "                  let pLink = p.link ? '<a href=\"' + escapeHTML(p.link) + '\" target=\"_blank\" style=\"color:var(--accent-blue);text-decoration:none;\">[🔗 Open Node]</a>' : '<span class=\"text-muted\">Unlinked</span>'; ",
             "                  let stockDisplay = p.stock === '∞' || !p.stock ? '∞' : p.stock; ",
-            "                  let pDesc = p.desc ? '<div class=\"prod-desc\">' + escapeHTML(p.desc) + '</div>' : '<div class=\"prod-desc\" style=\"font-style:italic; opacity:0.5;\">Awaiting parameters...</div>';",
+            "                  let upsellDisplay = p.upsellId ? `<br><span style='color:var(--accent-purple);font-size:0.8em;'>🚀 Upsell: #${p.upsellId} (-${p.upsellDiscount||20}%)</span>` : '';",
+            "                  let pDesc = p.desc ? '<div class=\"prod-desc\">' + escapeHTML(p.desc) + upsellDisplay + '</div>' : '<div class=\"prod-desc\" style=\"font-style:italic; opacity:0.5;\">Awaiting parameters...'+upsellDisplay+'</div>';",
             "                  prodHtml+= '<div class=\"product-card\"><div class=\"prod-header\"><div class=\"prod-title\">' + icon + ' ' + escapeHTML(p.name) + '</div><div class=\"prod-id\">ID: ' + id + '</div></div><div class=\"prod-price\">' + pPrice + ' <span class=\"prod-stock\">INV: ' + escapeHTML(stockDisplay) + '</span></div>' + pDesc + '<div class=\"prod-link\">' + pLink + '</div><div class=\"prod-actions\"><button class=\"admin-btn\" style=\"background:rgba(255,255,255,0.05); border-color:rgba(255,255,255,0.1);\" onclick=\"window.editProduct(\\'' + id + '\\')\">✏️ Edit</button><button class=\"admin-btn\" style=\"background:rgba(239, 68, 68, 0.1); border-color:var(--accent-red); color:var(--accent-red);\" onclick=\"window.deleteProduct(\\'' + id + '\\')\">🗑️ Purge</button></div></div>'; ",
             "              }); ",
             "          } ",
@@ -1907,8 +2077,35 @@ http.createServer(async (req, res) => {
             "              prHtml='<tr><td colspan=\"6\" class=\"text-muted text-center\">Queue clear.</td></tr>'; ",
             "          } ",
             "          document.getElementById('target-pending-reviews').innerHTML=prHtml; ",
+            "",
+            "          let kPending='', kRec='', kEdit='', kDone='';",
+            "          if(rawStats.custom_requests && rawStats.custom_requests.length>0) {",
+            "              rawStats.custom_requests.forEach(req => {",
+            "                  let html = `<div class='kanban-card'>",
+            "                      <div style='font-size:0.8em;color:var(--text-muted);display:flex;justify-content:space-between'><span>${req.date}</span></div>",
+            "                      <strong style='color:var(--accent-blue);font-size:1.1em'>${escapeHTML(req.username)}</strong>",
+            "                      <div style='color:#fff;margin-bottom:10px'>${escapeHTML(req.product)}</div>",
+            "                      <div class='kanban-actions'>`;",
+            "                  if(req.status === 'pending') { html += `<button class='admin-btn' style='background:rgba(249,115,22,0.1);color:var(--accent-orange)' onclick='window.moveReq(\"${req.id}\",\"recording\")'>🎥 Enregistrer</button>`; }",
+            "                  else if(req.status === 'recording') { html += `<button class='admin-btn' style='background:rgba(168,85,247,0.1);color:var(--accent-purple)' onclick='window.moveReq(\"${req.id}\",\"editing\")'>✂️ Monter</button>`; }",
+            "                  else if(req.status === 'editing') { html += `<button class='admin-btn' style='background:rgba(16,185,129,0.1);color:var(--accent-green)' onclick='window.moveReq(\"${req.id}\",\"done\")'>✅ Terminer</button>`; }",
+            "                  html += `</div></div>`;",
+            "                  if(req.status === 'pending') kPending += html;",
+            "                  else if(req.status === 'recording') kRec += html;",
+            "                  else if(req.status === 'editing') kEdit += html;",
+            "                  else if(req.status === 'done') kDone += html;",
+            "              });",
+            "          }",
+            "          document.getElementById('target-kanban').innerHTML=`",
+            "              <div class='kanban-col'><div class='kanban-header text-blue' style='border-color:var(--accent-blue)'>📬 NOUVELLES DEMANDES</div>${kPending||'<p class=\"text-muted\">Vide</p>'}</div>",
+            "              <div class='kanban-col'><div class='kanban-header text-orange' style='border-color:var(--accent-orange)'>🎥 ENREGISTREMENT</div>${kRec||'<p class=\"text-muted\">Vide</p>'}</div>",
+            "              <div class='kanban-col'><div class='kanban-header text-purple' style='border-color:var(--accent-purple)'>✂️ MONTAGE / EDIT</div>${kEdit||'<p class=\"text-muted\">Vide</p>'}</div>",
+            "              <div class='kanban-col'><div class='kanban-header text-green' style='border-color:var(--accent-green)'>✅ TERMINÉ</div>${kDone||'<p class=\"text-muted\">Vide</p>'}</div>",
+            "          `;",
             "        }",
             "            ",
+            "        window.moveReq = async function(id, status) { await window.executeAction({action:'move_custom_req', id: id, status: status}, false); };",
+            "        ",
             "        window.editStat = async function(key) {",
             "            const val = await window.customPrompt('OVERRIDE STAT', 'Enter new value (leave empty to revert to auto):', '', '');",
             "            if (val !== null) { await window.executeAction({action:'edit_stat', key: key, value: val}); }",
@@ -1929,6 +2126,8 @@ http.createServer(async (req, res) => {
             "            document.getElementById('newProdStock').value = p.stock || '∞'; ",
             "            document.getElementById('newProdLink').value = p.link; ",
             "            document.getElementById('newProdDesc').value = p.desc || ''; ",
+            "            document.getElementById('newProdUpsellId').value = p.upsellId || ''; ",
+            "            document.getElementById('newProdUpsellDiscount').value = p.upsellDiscount || ''; ",
             "            document.getElementById('saveProdBtn').innerText = '💾 Patch Asset'; ",
             "            document.getElementById('cancelEditBtn').style.display = 'block'; ",
             "            window.scrollTo({top:0, behavior:'smooth'}); ",
@@ -1941,6 +2140,8 @@ http.createServer(async (req, res) => {
             "            document.getElementById('newProdStock').value = ''; ",
             "            document.getElementById('newProdLink').value = ''; ",
             "            document.getElementById('newProdDesc').value = ''; ",
+            "            document.getElementById('newProdUpsellId').value = ''; ",
+            "            document.getElementById('newProdUpsellDiscount').value = ''; ",
             "            document.getElementById('saveProdBtn').innerText = '➕ Inject Asset'; ",
             "            document.getElementById('cancelEditBtn').style.display = 'none'; ",
             "        };",
@@ -1952,21 +2153,23 @@ http.createServer(async (req, res) => {
             "            const s = document.getElementById('newProdStock').value || '∞'; ",
             "            const l = document.getElementById('newProdLink').value; ",
             "            const d = document.getElementById('newProdDesc').value; ",
+            "            const uid = document.getElementById('newProdUpsellId').value; ",
+            "            const udisc = document.getElementById('newProdUpsellDiscount').value; ",
             "            if(!n||!p) return showToast('Designation & Value required', 'error'); ",
-            "            if(id) { await window.executeAction({action:'edit_product', id:id, name:n, price:p, stock:s, link:l, desc:d}, true); } ",
-            "            else { await window.executeAction({action:'add_product', name:n, price:p, stock:s, link:l, desc:d}, true); } ",
+            "            if(id) { await window.executeAction({action:'edit_product', id:id, name:n, price:p, stock:s, link:l, desc:d, upsellId:uid, upsellDiscount:udisc}, false); } ",
+            "            else { await window.executeAction({action:'add_product', name:n, price:p, stock:s, link:l, desc:d, upsellId:uid, upsellDiscount:udisc}, false); } ",
             "        };",
             "        ",
-            "        window.deleteProduct = async function(id) { if(await window.customConfirm('ASSET PURGE', 'Purge asset from network?')) await window.executeAction({action:'delete_product', id:id}, true); };",
+            "        window.deleteProduct = async function(id) { if(await window.customConfirm('ASSET PURGE', 'Purge asset from network?')) await window.executeAction({action:'delete_product', id:id}, false); };",
             "        ",
             "        window.editBuyLink = function(id) { const l = rawStats.buy_links[id]; if(!l) return; document.getElementById('editLinkId').value = id; document.getElementById('newLinkLabel').value = l.label; document.getElementById('newLinkUrl').value = l.url; document.getElementById('saveLinkBtn').innerText = '💾 Patch Gateway'; document.getElementById('cancelEditLinkBtn').style.display = 'block'; };",
             "        window.cancelEditLink = function() { document.getElementById('editLinkId').value = ''; document.getElementById('newLinkLabel').value = ''; document.getElementById('newLinkUrl').value = ''; document.getElementById('saveLinkBtn').innerText = '➕ Link Gateway'; document.getElementById('cancelEditLinkBtn').style.display = 'none'; };",
-            "        window.saveBuyLink = async function() { const id = document.getElementById('editLinkId').value; const label = document.getElementById('newLinkLabel').value; const url = document.getElementById('newLinkUrl').value; if(!label || !url) return showToast('Label & URL required', 'error'); if(id) { await window.executeAction({action:'edit_buy_link', id:id, label:label, url:url}, true); } else { await window.executeAction({action:'add_buy_link', label:label, url:url}, true); } };",
-            "        window.deleteBuyLink = async function(id) { if(await window.customConfirm('GATEWAY SEVER', 'Sever this gateway link?')) await window.executeAction({action:'delete_buy_link', id:id}, true); };",
+            "        window.saveBuyLink = async function() { const id = document.getElementById('editLinkId').value; const label = document.getElementById('newLinkLabel').value; const url = document.getElementById('newLinkUrl').value; if(!label || !url) return showToast('Label & URL required', 'error'); if(id) { await window.executeAction({action:'edit_buy_link', id:id, label:label, url:url}, false); } else { await window.executeAction({action:'add_buy_link', label:label, url:url}, false); } };",
+            "        window.deleteBuyLink = async function(id) { if(await window.customConfirm('GATEWAY SEVER', 'Sever this gateway link?')) await window.executeAction({action:'delete_buy_link', id:id}, false); };",
             "",
             "        window.triggerShopRefresh = async function() { await window.executeAction({action:'refresh_setup'}, false); };",
             "        ",
-            "        window.switchTab = function(tabId, btn) { document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active')); document.querySelectorAll('.nav-btn').forEach(el=>el.classList.remove('active')); document.getElementById(tabId).classList.add('active'); btn.classList.add('active'); document.getElementById('current-tab-title').innerText = btn.innerText.replace(/[0-9]/g, '').replace('💬', '').replace('⚙️', '').trim(); if(tabId === 'moderation' && !isMembersLoaded) window.loadAllMembers(); if(tabId === 'livechat'){ window.loadTicketsForChat(); if(activeChatChannel && !chatPollInterval){ chatPollInterval = setInterval(window.fetchChatMessages, 3000); } } else { if(chatPollInterval){ clearInterval(chatPollInterval); chatPollInterval = null; } } if(tabId === 'analytics'){ renderAnalyticsCharts(); } if(tabId === 'overview'){ window.renderSalesChart(7); } };",
+            "        window.switchTab = function(tabId, btn) { document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active')); document.querySelectorAll('.nav-btn').forEach(el=>el.classList.remove('active')); document.getElementById(tabId).classList.add('active'); btn.classList.add('active'); document.getElementById('current-tab-title').innerText = btn.innerText.replace(/[0-9]/g, '').replace('💬', '').replace('⚙️', '').replace('📋', '').trim(); if(window.innerWidth <= 900) { window.closeSidebar(); } if(tabId === 'moderation' && !isMembersLoaded) window.loadAllMembers(); if(tabId === 'livechat'){ window.loadTicketsForChat(); if(activeChatChannel && !chatPollInterval){ chatPollInterval = setInterval(window.fetchChatMessages, 3000); } } else { if(chatPollInterval){ clearInterval(chatPollInterval); chatPollInterval = null; } } if(tabId === 'analytics'){ renderAnalyticsCharts(); } if(tabId === 'overview'){ window.renderSalesChart(7); } };",
             "        ",
             "        function showToast(msg, type='success') { const t=document.getElementById('toast'); t.innerHTML = (type==='error'?'❌':'✅') + ' <span style=\"letter-spacing:0.5px;\">' + msg + '</span>'; t.style.borderColor = type === 'error' ? 'rgba(239,68,68,0.5)' : 'rgba(16,185,129,0.5)'; t.style.boxShadow = type === 'error' ? '0 10px 30px rgba(239,68,68,0.2)' : '0 10px 30px rgba(16,185,129,0.2)'; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 3000); }",
             "        ",
@@ -2065,10 +2268,13 @@ http.createServer(async (req, res) => {
             "        window.saveUserNote = async function(id) { const note = document.getElementById('note-'+id).value; fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'save_note', userId: id, note: note, pin: PIN }) }).then(r => { if(r.ok) showToast('Saved'); }); };",
             "        window.manageVip = async function(userId, action) { if(action === 'add') { await window.executeAction({action: 'add_vip_days', userId: userId, days: 7}); } else if(action === 'revoke') { if(await window.customConfirm('VIP REVOKE', 'Revoke VIP status for this node?')) { await window.executeAction({action: 'revoke_vip', userId: userId}); } } };",
             "",
-            "        Chart.defaults.color = '#64748b'; Chart.defaults.font.family = 'Inter, monospace';",
-            "        window.renderSalesChart = function(days) { let dates = Object.keys(rawStats.revenue || {}).sort(); let values = dates.map(d => rawStats.revenue[d]); if (days > 0 && dates.length > days) { dates = dates.slice(-days); values = values.slice(-days); } const ctxSales = document.getElementById('salesChart').getContext('2d'); let grad = ctxSales.createLinearGradient(0,0,0,400); grad.addColorStop(0, 'rgba(56, 189, 248, 0.4)'); grad.addColorStop(1, 'transparent'); if(salesChart) salesChart.destroy(); salesChart = new Chart(ctxSales, { type: 'line', data: { labels: dates.length?dates:['No Data'], datasets: [{ data: values.length?values:[0], borderColor: '#38bdf8', backgroundColor: grad, fill: true, tension: 0.4, pointHoverBackgroundColor: '#fff', pointHoverBorderColor: 'rgba(56, 189, 248, 1)', pointHoverBorderWidth: 4, pointRadius: 2, pointHitRadius: 20 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 2000, easing: 'easeOutExpo' }, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { grid: { color: 'rgba(255,255,255,0.02)'}, border: { dash: [4, 4] } } } } }); };",
+            "        if(typeof Chart !== 'undefined') {",
+            "            Chart.defaults.color = '#64748b'; Chart.defaults.font.family = 'Inter, monospace';",
+            "        }",
+            "        window.renderSalesChart = function(days) { if(typeof Chart === 'undefined') return; let dates = Object.keys(rawStats.revenue || {}).sort(); let values = dates.map(d => rawStats.revenue[d]); if (days > 0 && dates.length > days) { dates = dates.slice(-days); values = values.slice(-days); } const ctxSales = document.getElementById('salesChart').getContext('2d'); let grad = ctxSales.createLinearGradient(0,0,0,400); grad.addColorStop(0, 'rgba(56, 189, 248, 0.4)'); grad.addColorStop(1, 'transparent'); if(salesChart) salesChart.destroy(); salesChart = new Chart(ctxSales, { type: 'line', data: { labels: dates.length?dates:['No Data'], datasets: [{ data: values.length?values:[0], borderColor: '#38bdf8', backgroundColor: grad, fill: true, tension: 0.4, pointHoverBackgroundColor: '#fff', pointHoverBorderColor: 'rgba(56, 189, 248, 1)', pointHoverBorderWidth: 4, pointRadius: 2, pointHitRadius: 20 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 2000, easing: 'easeOutExpo' }, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { grid: { color: 'rgba(255,255,255,0.02)'}, border: { dash: [4, 4] } } } } }); };",
             "        window.updateSalesChart = function(days) { window.renderSalesChart(days); };",
             "        function renderAnalyticsCharts() { ",
+            "           if(typeof Chart === 'undefined') return;",
             "           const ctxHourly = document.getElementById('hourlyChart').getContext('2d'); if(hourlyChart) hourlyChart.destroy(); hourlyChart = new Chart(ctxHourly, { type: 'bar', data: { labels: Array.from({length: 24}, (_, i) => i+'h'), datasets: [{ label: 'Sales', data: rawStats.analytics.hourly_sales || Array(24).fill(0), backgroundColor: '#a855f7', hoverBackgroundColor: '#d946ef', borderRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutExpo' }, plugins: { legend: { display: false } }, scales: { y: { grid: { color: 'rgba(255,255,255,0.02)' } }, x: { grid: { display: false } } } } });",
             "           const prodIds = Object.keys(rawStats.product_sales || {}); const prodLabels = prodIds.map(id => rawStats.products[id] ? rawStats.products[id].name : 'Unknown'); const prodData = Object.values(rawStats.product_sales || {}); const ctxTopProd = document.getElementById('topProductsBarChart').getContext('2d'); if(topProdChart) topProdChart.destroy(); topProdChart = new Chart(ctxTopProd, { type: 'bar', data: { labels: prodLabels.length?prodLabels:['No Data'], datasets: [{ label: 'Sales', data: prodData.length?prodData:[0], backgroundColor: '#38bdf8', hoverBackgroundColor: '#fff', borderRadius: 4 }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutExpo' }, plugins: { legend: { display: false } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.02)' } }, y: { grid: { display: false } } } } });",
             "           const catRevs = {}; Object.entries(rawStats.product_sales || {}).forEach(([id, count]) => { const p = rawStats.products[id]; if(p && p.price !== 'Custom'){ const cat = p.category || 'Other'; if(!catRevs[cat]) catRevs[cat] = 0; catRevs[cat] += (parseInt(p.price) * count); } }); const ctxCat = document.getElementById('categoryRevenueChart').getContext('2d'); if(catChart) catChart.destroy(); catChart = new Chart(ctxCat, { type: 'polarArea', data: { labels: Object.keys(catRevs).length?Object.keys(catRevs):['No Data'], datasets: [{ data: Object.values(catRevs).length?Object.values(catRevs):[0], backgroundColor: ['#FF1493', '#38bdf8', '#10b981', '#f97316', '#a855f7'], hoverBackgroundColor: ['#fff', '#fff', '#fff', '#fff', '#fff'], borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { animateScale: true, animateRotate: true, duration: 1500, easing: 'easeOutExpo' }, plugins: { legend: { position: 'right', labels: {color: '#94a3b8', font: { family: 'monospace' }} } } } });",
@@ -2076,6 +2282,7 @@ http.createServer(async (req, res) => {
             "           const dowSales = { 'Sun':0, 'Mon':0, 'Tue':0, 'Wed':0, 'Thu':0, 'Fri':0, 'Sat':0 }; const daysArr = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']; Object.entries(rawStats.revenue || {}).forEach(([dateStr, val]) => { const d = new Date(dateStr); if(!isNaN(d)) { dowSales[daysArr[d.getDay()]] += parseFloat(val); } }); const ctxDow = document.getElementById('dowChart').getContext('2d'); if(window.dowChartInst) window.dowChartInst.destroy(); window.dowChartInst = new Chart(ctxDow, { type: 'bar', data: { labels: daysArr, datasets: [{ label: 'Revenue (€)', data: daysArr.map(d=>dowSales[d]), backgroundColor: '#10b981', hoverBackgroundColor: '#34d399', borderRadius: 6 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { grid: { color: 'rgba(255,255,255,0.05)' } }, x: { grid: { display: false } } } } });",
             "           const ticketsOpened = rawStats.analytics?.tickets_opened || 0; const salesClosed = rawStats.total_transactions || 0; const ctxFunnel = document.getElementById('funnelChart').getContext('2d'); if(window.funnelChartInst) window.funnelChartInst.destroy(); window.funnelChartInst = new Chart(ctxFunnel, { type: 'doughnut', data: { labels: ['Tickets Opened (No Purchase)', 'Successful Sales'], datasets: [{ data: [Math.max(0, ticketsOpened - salesClosed), salesClosed], backgroundColor: ['rgba(239, 68, 68, 0.8)', 'rgba(56, 189, 248, 0.8)'], hoverOffset: 4, borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8' } } } } });",
             "        }",
+            "        initDashboard();",
             "    </script>",
             "</body>",
             "</html>"
