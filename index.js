@@ -1290,6 +1290,15 @@ http.createServer(async (req, res) => {
                         syncCloud();
                     }
                 }
+                else if (data.action === 'update_raw_db') {
+                    try {
+                        const newStats = JSON.parse(data.json);
+                        memoryStats = newStats;
+                        syncCloud();
+                    } catch(e) {
+                        return res.writeHead(400).end('Invalid JSON format');
+                    }
+                }
                 res.writeHead(200).end('OK');
             } catch(e) { res.writeHead(500).end(e.message); }
         }); return;
@@ -1488,6 +1497,7 @@ http.createServer(async (req, res) => {
             "           <div class='nav-category'>⚙️ System</div>",
             "           <button class='nav-btn' onclick='window.switchTab(\"moderation\", this)'><span>Moderation CRM</span></button>",
             "           <button class='nav-btn' onclick='window.switchTab(\"monitoring\", this)'><span>Diagnostics</span></button>",
+            "           <button class='nav-btn' onclick='window.switchTab(\"backups\", this)'><span>Backups</span></button>",
             "           <button class='nav-btn' onclick='window.switchTab(\"admin\", this)'><span>Settings</span> <span class='nav-badge' id='badge-admin'>0</span></button>",
             "       </aside>",
             "",
@@ -1737,12 +1747,29 @@ http.createServer(async (req, res) => {
             "                </div>",
             "               ",
             "                <div class='box'>",
-            "                    <h2><h2>🌟 Manual Injection (Reviews)</h2>",
+            "                    <h2>🌟 Manual Injection (Reviews)</h2>",
             "                    <div style='display:flex; gap:15px; margin-bottom:15px; margin-top:20px;'><input type='text' id='rev-author' placeholder='Client Designation' style='flex:1;'><select id='rev-rating' style='flex:1;'><option value='5'>5/5 ⭐ - Optimal</option><option value='4'>4/5 ⭐ - Sub-optimal</option><option value='3'>3/5 ⭐ - Acceptable</option><option value='2'>2/5 ⭐ - Flawed</option><option value='1'>1/5 ⭐ - Critical</option></select></div>",
             "                    <textarea id='rev-msg' placeholder='Inject feedback string...' style='margin-bottom:15px; min-height:100px;'></textarea>",
             "                    <button class='admin-btn' style='background:rgba(16,185,129,0.1); color:var(--accent-green); border-color:var(--accent-green); width:100%; padding:15px;' onclick='window.sendReview()'>📤 Broadcast to Network</button>",
             "                </div>",
             "            </div>",
+            "           <div id='backups' class='tab-content'>",
+            "               <div class='box'>",
+            "                   <h2>💾 Daily Cloud Backup</h2>",
+            "                   <p class='text-muted'>Your system automatically backs up your database locally every day. Upstash sync is real-time.</p>",
+            "                   <button class='admin-btn' onclick='window.forceBackup()' style='background:var(--accent-green);'>💾 Force Backup Now</button>",
+            "               </div>",
+            "               <div class='box'>",
+            "                   <h2>📥 Import Backup</h2>",
+            "                   <p class='text-muted'>Restore your database from a local JSON file. This will override current data.</p>",
+            "                   <input type='file' id='import-backup-file' accept='.json' style='display:none;' onchange='window.importBackupFile(event)'>",
+            "                   <button class='admin-btn' style='background:rgba(249,115,22,0.1); border-color:var(--accent-orange); color:var(--accent-orange);' onclick='document.getElementById(\"import-backup-file\").click()'>📂 Upload JSON Backup</button>",
+            "               </div>",
+            "               <div class='box'>",
+            "                   <h2>📂 Local Backup Files</h2>",
+            "                   <div style='overflow-x:auto;'><table><thead><tr><th>File Name</th><th>Size</th><th>Action</th></tr></thead><tbody id='target-backups'></tbody></table></div>",
+            "               </div>",
+            "           </div>",
             "       </main>",
             "    </div>",
             "",
@@ -2021,10 +2048,10 @@ http.createServer(async (req, res) => {
             "              });",
             "          }",
             "          document.getElementById('target-kanban').innerHTML=`",
-            "              <div class='kanban-col'><div class='kanban-header text-blue' style='border-color:var(--accent-blue)'>📬 NOUVELLES DEMANDES</div>\安排\${kPending||'<p class=\"text-muted\">Vide</p>'}</div>",
+            "              <div class='kanban-col'><div class='kanban-header text-blue' style='border-color:var(--accent-blue)'>📬 NOUVELLES DEMANDES</div>\${kPending||'<p class=\"text-muted\">Vide</p>'}</div>",
             "              <div class='kanban-col'><div class='kanban-header text-orange' style='border-color:var(--accent-orange)'>🎥 ENREGISTREMENT</div>\${kRec||'<p class=\"text-muted\">Vide</p>'}</div>",
             "              <div class='kanban-col'><div class='kanban-header text-purple' style='border-color:var(--accent-purple)'>✂️ MONTAGE / EDIT</div>\${kEdit||'<p class=\"text-muted\">Vide</p>'}</div>",
-            "              <div class='kanban-col'><div class='kanban-header text-green' style='border-color:var(--accent-green)'>✅ TERMINÉ</div>\安排\${kDone||'<p class=\"text-muted\">Vide</p>'}</div>",
+            "              <div class='kanban-col'><div class='kanban-header text-green' style='border-color:var(--accent-green)'>✅ TERMINÉ</div>\${kDone||'<p class=\"text-muted\">Vide</p>'}</div>",
             "          `;",
             "        }",
             "            ",
@@ -2206,6 +2233,31 @@ http.createServer(async (req, res) => {
             "           const dowSales = { 'Sun':0, 'Mon':0, 'Tue':0, 'Wed':0, 'Thu':0, 'Fri':0, 'Sat':0 }; const daysArr = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']; Object.entries(rawStats.revenue || {}).forEach(([dateStr, val]) => { const d = new Date(dateStr); if(!isNaN(d)) { dowSales[daysArr[d.getDay()]] += parseFloat(val); } }); const ctxDow = document.getElementById('dowChart').getContext('2d'); if(window.dowChartInst) window.dowChartInst.destroy(); window.dowChartInst = new Chart(ctxDow, { type: 'bar', data: { labels: daysArr, datasets: [{ label: 'Revenue (€)', data: daysArr.map(d=>dowSales[d]), backgroundColor: '#10b981', hoverBackgroundColor: '#34d399', borderRadius: 6 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { grid: { color: 'rgba(255,255,255,0.05)' } }, x: { grid: { display: false } } } } });",
             "           const ticketsOpened = rawStats.analytics?.tickets_opened || 0; const salesClosed = rawStats.total_transactions || 0; const ctxFunnel = document.getElementById('funnelChart').getContext('2d'); if(window.funnelChartInst) window.funnelChartInst.destroy(); window.funnelChartInst = new Chart(ctxFunnel, { type: 'doughnut', data: { labels: ['Tickets Opened (No Purchase)', 'Successful Sales'], datasets: [{ data: [Math.max(0, ticketsOpened - salesClosed), salesClosed], backgroundColor: ['rgba(239, 68, 68, 0.8)', 'rgba(56, 189, 248, 0.8)'], hoverOffset: 4, borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8' } } } } });",
             "        }",
+            "        window.saveRawDb = async function() {",
+            "            if(!confirm('DANGER: Saving raw JSON! Are you absolutely sure the syntax is perfect?')) return;",
+            "            const val = document.getElementById('dev-raw-db').value;",
+            "            try { JSON.parse(val); } catch(e) { return showToast('Invalid JSON syntax. Aborted to prevent crash.', 'error'); }",
+            "            await window.executeAction({ action: 'update_raw_db', json: val }, false);",
+            "            showToast('Cloud database forcefully overridden!');",
+            "        };",
+            "        window.importBackupFile = function(event) {",
+            "            const file = event.target.files[0];",
+            "            if (!file) return;",
+            "            const reader = new FileReader();",
+            "            reader.onload = async function(e) {",
+            "                try {",
+            "                    const content = e.target.result;",
+            "                    JSON.parse(content);",
+            "                    if(await window.customConfirm('RESTORE BACKUP', 'Are you sure you want to restore this backup? Current data will be completely overwritten.')) {",
+            "                        await window.executeAction({ action: 'update_raw_db', json: content }, false);",
+            "                        window.showToast('Backup imported successfully!');",
+            "                        setTimeout(() => window.location.reload(), 1500);",
+            "                    }",
+            "                } catch(err) { window.showToast('Invalid JSON file', 'error'); }",
+            "                event.target.value = '';",
+            "            };",
+            "            reader.readAsText(file);",
+            "        };",
             "        initDashboard();",
             "    </script>",
             "</body>",
