@@ -14,7 +14,7 @@ const REWARBLE_API_KEY = process.env.REWARBLE_API_KEY;
 const REVIEW_CHANNEL_ID = "1521625370929922078"; 
 const SHOP_CHANNEL_ID = "1520803761130311970"; 
 // 👑 VIP Role ID
-const VIP_ROLE_ID = process.env.VIP_ROLE_ID || ""; 
+const VIP_ROLE_ID = process.env.VIP_ROLE_ID || null; 
 
 if (!DISCORD_BOT_TOKEN) {
     console.error("❌ CRITICAL ERROR: DISCORD_BOT_TOKEN is missing!");
@@ -474,18 +474,21 @@ client.on('interactionCreate', async (interaction) => {
                 if (state.redeemed) {
                     return await interaction.reply({ content: "❌ **SECURITY ALERT:** This code has already been redeemed for a product.", ephemeral: true }).catch(()=>{});
                 }
+                state.redeemed = true;
             }
 
             // 💥 DESTRUCTION VISUELLE DE L'UI
             await interaction.update({ content: "📦 **Processing your order... The menu has been locked.**", components: [] }).catch(() => {});
 
             const selected = interaction.values[0]; const product = memoryStats.products[selected]; 
-            if (!product) return;
+            if (!product) {
+                if (state) state.redeemed = false;
+                return;
+            }
             
             const promo = state ? state.promo : null;
 
             if (product.price === "Custom") {
-                if (state) state.redeemed = true;
                 logStat('custom_request', 0, { username: interaction.user.username, userId: interaction.user.id, productName: product.name });
                 if (interaction.channel) {
                     await interaction.channel.send(`📩 **Custom request registered!** An admin will review it. Closing ticket in 10 seconds...`).catch(() => {});
@@ -507,12 +510,11 @@ client.on('interactionCreate', async (interaction) => {
 
                 if (appliedDiscount > 0) finalPrice = Math.max(0, finalPrice - (finalPrice * appliedDiscount / 100));
 
-                if (state) state.redeemed = true;
                 // DOUBLE VERIFICATION DE SECURITE AU MOMENT DE L'ACHAT
                 if (!promo && state && state.voucherValue !== undefined && state.voucherValue !== Infinity && finalPrice > state.voucherValue) {
+                    state.redeemed = false;
                     if (interaction.channel) {
-                        await interaction.channel.send(`❌ **Error:** This product (€${finalPrice}) exceeds your voucher value (€${state.voucherValue}). Transaction aborted. Closing ticket in 10 seconds...`).catch(()=>{});
-                        setTimeout(() => { channelStates.delete(interaction.channel.id); interaction.channel.delete().catch(()=>{}); }, 10000);
+                        await interaction.channel.send(`❌ **Error:** This product (€${finalPrice}) exceeds your voucher value (€${state.voucherValue}). Transaction aborted.`).catch(()=>{});
                     }
                     return;
                 }
@@ -784,7 +786,10 @@ http.createServer(async (req, res) => {
 
     const cookie = req.headers.cookie || '';
     const authCookie = cookie.split(';').map(c => c.trim()).find(c => c.startsWith('auth='));
-    const authValue = authCookie ? decodeURIComponent(authCookie.slice(5)) : '';
+    let authValue = '';
+    if (authCookie) {
+        try { authValue = decodeURIComponent(authCookie.slice(5)); } catch (e) { authValue = ''; }
+    }
     const isAuthenticated = authValue === DASHBOARD_PIN;
 
     if (req.url === '/api/login' && req.method === 'POST') {
