@@ -29,6 +29,7 @@ const ADMIN_DISCORD_ID = "1520551977854042114";
 const CATEGORY_CUSTOMER_ID = "1521540733226713249";
 const CATEGORY_SUPPORT_ID = "1521541155005796484";
 const DASHBOARD_PIN = "1206"; 
+const AUTH_COOKIE_PREFIX = 'auth=';
 const MONTHLY_GOAL = 500; 
 
 const TEST_VOUCHERS = { "GOYAVE5": 5 };
@@ -483,9 +484,9 @@ client.on('interactionCreate', async (interaction) => {
             if (!product) return;
             
             const promo = state ? state.promo : null;
+            if (state) state.redeemed = true;
 
             if (product.price === "Custom") {
-                if (state) state.redeemed = true;
                 logStat('custom_request', 0, { username: interaction.user.username, userId: interaction.user.id, productName: product.name });
                 if (interaction.channel) {
                     await interaction.channel.send(`📩 **Custom request registered!** An admin will review it. Closing ticket in 10 seconds...`).catch(() => {});
@@ -509,12 +510,12 @@ client.on('interactionCreate', async (interaction) => {
 
                 // DOUBLE VERIFICATION DE SECURITE AU MOMENT DE L'ACHAT
                 if (!promo && state && state.voucherValue !== undefined && state.voucherValue !== Infinity && finalPrice > state.voucherValue) {
+                    state.redeemed = false;
                     if (interaction.channel) {
                         await interaction.channel.send(`❌ **Error:** This product (€${finalPrice}) exceeds your voucher value (€${state.voucherValue}). Transaction aborted.`).catch(()=>{});
                     }
                     return;
                 }
-                if (state) state.redeemed = true;
 
                 if (product.stock && product.stock !== "∞") {
                     let s = parseInt(product.stock);
@@ -782,10 +783,10 @@ http.createServer(async (req, res) => {
     if (rl.count > 200) return res.writeHead(429).end('Too Many Requests');
 
     const cookie = req.headers.cookie || '';
-    const authCookie = cookie.split(';').map(c => c.trim()).find(c => c.startsWith('auth='));
+    const authCookie = cookie.split(';').map(c => c.trim()).find(c => c.startsWith(AUTH_COOKIE_PREFIX));
     let authValue = '';
     if (authCookie) {
-        try { authValue = decodeURIComponent(authCookie.slice(5)); } 
+        try { authValue = decodeURIComponent(authCookie.slice(AUTH_COOKIE_PREFIX.length)); } 
         catch (e) { authValue = ''; console.warn('⚠️ Invalid auth cookie encoding:', e.message); }
     }
     const isAuthenticated = authValue === DASHBOARD_PIN;
