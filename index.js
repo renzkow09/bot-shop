@@ -697,60 +697,154 @@ client.on('messageCreate', async (message) => {
         }
 
         if (message.channel?.name?.startsWith('shop-')) {
-            const state = channelStates.get(message.channel.id); if (!state || state.validated || state.processing) return;
-            const input = message.content.trim().toUpperCase();
+            // CORRECTION 1 : Si le bot a redémarré, on recrée l'état de la mémoire au lieu de bloquer le ticket
+            let state = channelStates.get(message.channel.id); 
+            if (!state) {
+                state = { validated: false, processing: false, promo: null, redeemed: false };
+                channelStates.set(message.channel.id, state);
+            }
+            
+            // Si le code a déjà été validé ou est en cours de traitement, on ignore.
+            if (state.validated || state.processing) return;
 
-            state.processing = true; 
+            const input = message.content.trim().toUpperCase();
+            state.processing = true; // On verrouille le ticket pendant le calcul
             let promoApplied = null;
 
-            if (memoryStats.promo_codes && memoryStats.promo_codes[input]) {
-                const promo = memoryStats.promo_codes[input];
-                if (promo.used < promo.limit) promoApplied = { name: input, discount: promo.discount };
-                else { state.processing = false; return message.reply("❌ Sorry, this code has reached its usage limit!").catch(()=>{}); }
-            }
-
-            if (promoApplied || TEST_VOUCHERS[input] || input.length >= 8) {
-                try {
-                    let voucherValue = 0; 
-                    systemLog('DEBUG', 'VALIDATION', `Verifying code entry for user ${message.author.username}`);
-
-                    if (!promoApplied && !TEST_VOUCHERS[input]) {
-                        const apiResponse = await axios.post(REWARBLE_API_URL, { code: input }, { headers: { 'Authorization': `Bearer ${REWARBLE_API_KEY}` } }).catch(err => {
-                            if (err.response && err.response.status === 402) { throw new Error("REWARBLE_402_INSUFFICIENT_FUNDS"); }
-                            throw err;
-                        });
-
-                        // 🔍 RECHERCHE DE SÉCURITÉ MAXIMALE ET RECURSIVE DANS L'OBJET RETOURNÉ
-                        let rawData = apiResponse.data;
-                        if (rawData) {
-                            if (rawData.value !== undefined) voucherValue = parseFloat(rawData.value);
-                            else if (rawData.amount !== undefined) voucherValue = parseFloat(rawData.amount);
-                            else if (rawData.voucher && rawData.voucher.value !== undefined) voucherValue = parseFloat(rawData.voucher.value);
-                            else if (rawData.voucher && rawData.voucher.amount !== undefined) voucherValue = parseFloat(rawData.voucher.amount);
-                            else if (rawData.data && rawData.data.value !== undefined) voucherValue = parseFloat(rawData.data.value);
-                            else if (rawData.data && rawData.data.amount !== undefined) voucherValue = parseFloat(rawData.data.amount);
-                            else {
-                                const deepSearch = (obj) => {
-                                    for (let key in obj) {
-                                        if ((key === 'value' || key === 'amount') && !isNaN(parseFloat(obj[key])) && parseFloat(obj[key]) > 0) {
-                                            return parseFloat(obj[key]);
-                                        }
-                                        if (typeof obj[key] === 'object' && obj[key] !== null) {
-                                            let deepVal = deepSearch(obj[key]);
-                                            if (deepVal) return deepVal;
-                                        }
-                                    }
-                                    return null;
-                                };
-                                let detectedValue = deepSearch(rawData);
-                                voucherValue = detectedValue !== null ? detectedValue : 0;
-                            }
-                        }
-                    } else if (TEST_VOUCHERS[input]) {
-                        voucherValue = parseFloat(TEST_VOUVHERS[input]); 
-                    } else if (promoApplied) {
-                        voucherValue = Infinity; 
+            try {
+                if (memoryStats.promo_codes && memoryStats.promo_codes[input]) {
+                    const promo = memoryStats.promo_codes[input];
+                    if (promo.used < promo.limit) promoApplied = { name: input, discount: promo.discount };
+                    else { 
+                        state.processing = false; 
+                        return message.reply("❌ Sorry, this code has reached its usage limit!").catch(()=>{}); 
                     }
+                }
+
+                // CORRECTION 2 : On répond à l'utilisateur au lieu de le ghoster si c'est invalide
+                if (!promoApplied && !TEST_VOUCHERS[input] && input.length < 8) {
+                    state.processing = false;
+                    return message.reply("❌ Invalid format. Please enter a valid Rewarble code or Promo code.").catch(()=>{});
+                }
+
+                let voucherValue = 0; 
+                systemLog('DEBUG', 'VALIDATION', `Verifying code entry for user ${message.author.username}`);
+
+                if (!promoApplied && !TEST_VOUCHERS[input]) {
+                    // CORRECTION 3 : Ajout d'un TIMEOUT STRIQUE (8s) pour éviter le blocage infini du bot
+                    const apiResponse = await axios.post(REWARBLE_API_URL, { code: input }, { 
+                        headers: { 'Authorization': `Bearer ${REWARBLE_API_KEY}` },
+                        timeout: 8000 
+                    }).catch(err => {
+                        if (err.response && err.response.status === 402) { throw new Error("REWARBLE_402_INSUFFICIENT_FUNDS"); }
+                        throw err; // Renvoie l'erreur vers notre catch de sécurité plus bas
+                    });
+
+                    let rawData = apiResponse.data;
+                    if (rawData) {
+                        if (rawData.value !== undefined) voucherValue = parseFloat(rawData.value);
+                        else if (rawData.amount !== undefined) voucherValue = parseFloat(rawData.amount);
+                        else if (rawData.voucher && rawData.voucher.value !== undefined) voucherValue = parseFloat(rawData.voucher.value);
+                        else if (rawData.voucher && rawData.voucher.amount !== undefined) voucherValue = parseFloat(rawData.voucher.amount);
+                        else if (rawData.data && rawData.data.value !== undefined) voucherValue = parseFloat(rawData.data.value);
+                        else if (rawData.data && rawData.data.amount !== undefined) voucherValue = parseFloat(rawData.data.amount);
+                        else {
+                            const deepSearch = (obj) => {
+                                for (let key in obj) {
+                                    if ((key === 'value' || key === 'amount') && !isNaN(parseFloat(obj[key])) && parseFloat(obj[key]) > 0) {
+                                        return parseFloat(obj[key]);
+                                    }
+                                    if (typeof obj[key] === 'object' && obj[key] !== null) {
+                                        let deepVal = deepSearch(obj[key]);
+                                        if (deepVal) return deepVal;
+                                    }
+                                }
+                                return null;
+                            };
+                            let detectedValue = deepSearch(rawData);
+                            voucherValue = detectedValue !== null ? detectedValue : 0;
+                        }
+                    }
+                } else if (TEST_VOUCHERS[input]) {
+                    // CORRECTION 4 : Correction de la typo TEST_VOUCHERS
+                    voucherValue = parseFloat(TEST_VOUCHERS[input]); 
+                } else if (promoApplied) {
+                    voucherValue = Infinity; 
+                }
+                
+                state.validated = true; 
+                state.processing = false; // Fin du verrouillage
+                state.promo = promoApplied; 
+                state.voucherValue = voucherValue; 
+                
+                const menu = new StringSelectMenuBuilder().setCustomId('product_select').setPlaceholder('Select your product...');
+                const isUserVIP = memoryStats.subscriptions && memoryStats.subscriptions[message.author.id];
+
+                let availableItems = 0; 
+
+                for (const [id, prod] of Object.entries(memoryStats.products)) { 
+                    if (prod.stock && prod.stock !== "∞" && parseInt(prod.stock) <= 0) continue;
+
+                    let finalPriceStr = "€" + prod.price;
+                    let numericFinalPrice = 0;
+
+                    if (prod.price === "Custom") {
+                        finalPriceStr = "Custom";
+                    } else {
+                        let originalPrice = parseInt(prod.price);
+                        let discountToApply = 0;
+                        let isVIPItem = id === "VIP" || (prod.category && prod.category.includes("SUBSCRIPTION"));
+
+                        if (!isVIPItem && isUserVIP) { discountToApply = 20; } 
+                        else if (promoApplied) { discountToApply = promoApplied.discount; }
+
+                        if (discountToApply > 0) {
+                            numericFinalPrice = Math.max(0, originalPrice - (originalPrice * discountToApply / 100));
+                            finalPriceStr = `€${numericFinalPrice.toFixed(2)} (-${discountToApply}%)`;
+                        } else {
+                            numericFinalPrice = originalPrice;
+                        }
+                    }
+
+                    if (!promoApplied && prod.price !== "Custom" && numericFinalPrice > voucherValue) {
+                        continue; 
+                    }
+
+                    availableItems++;
+                    menu.addOptions(new StringSelectMenuOptionBuilder().setLabel(prod.name).setDescription(`Price: ${finalPriceStr}`).setValue(id)); 
+                }
+                
+                if (availableItems === 0) {
+                    state.validated = false; 
+                    return message.reply(`❌ **Insufficient Funds.** Your code is valid, but its value (**€${voucherValue}**) is too low to purchase any available items.`).catch(()=>{});
+                }
+
+                let replyMsg = `✅ **Code validated! Value detected: €${voucherValue}.**\nPlease select an item you can afford below:`;
+                if (promoApplied) replyMsg = `✅ **Promo Code Accepted (-${promoApplied.discount}%)! Select your item below:**`;
+                else if (isUserVIP) replyMsg = `👑 **VIP Status Active! (-20% on all items). Code Value: €${voucherValue}.**\nSelect your item below:`;
+
+                await message.reply({ content: replyMsg, components: [new ActionRowBuilder().addComponents(menu)] }).catch(()=>{});
+                systemLog('INFO', 'VALIDATION', `Code successfully validated for ${message.author.username} (Value: ${voucherValue})`);
+
+            } catch (e) { 
+                // CORRECTION 5 : On s'assure ABSOLUMENT de déverrouiller le channel en cas de crash !
+                state.processing = false; 
+                
+                if (e.message === "REWARBLE_402_INSUFFICIENT_FUNDS") {
+                    systemLog('ERROR', 'REWARBLE_API', `402 Payment Required - Balance is depleted.`);
+                    message.reply("⚠️ **Rewarble Error (402) :** Insufficient API balance.").catch(()=>{});
+                    const adminUser = await client.users.fetch(ADMIN_DISCORD_ID).catch(() => null);
+                    if (adminUser) adminUser.send("🚨 **CRITICAL REWARBLE ALERT:** Insufficient balance!").catch(() => {});
+                } else {
+                    systemLog('WARN', 'VALIDATION', `Invalid code or network error for ${message.author.username}: ${e.message}`);
+                    message.reply("❌ Invalid code or API timeout. Please check your voucher and try again.").catch(()=>{}); 
+                }
+            }
+        }
+    } catch (globalError) {
+        systemLog('ERROR', 'MESSAGE_CREATE', `Fatal error processing message: ${globalError.message}`);
+    }
+});
                     
                     state.validated = true; state.processing = false; state.promo = promoApplied; 
                     state.voucherValue = voucherValue; 
