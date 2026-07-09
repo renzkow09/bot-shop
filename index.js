@@ -507,11 +507,15 @@ client.on('interactionCreate', async (interaction) => {
 
                 if (appliedDiscount > 0) finalPrice = Math.max(0, finalPrice - (finalPrice * appliedDiscount / 100));
 
+                if (state) state.redeemed = true;
                 // DOUBLE VERIFICATION DE SECURITE AU MOMENT DE L'ACHAT
                 if (!promo && state && state.voucherValue !== undefined && state.voucherValue !== Infinity && finalPrice > state.voucherValue) {
-                    return interaction.channel.send(`❌ **Error:** This product (€${finalPrice}) exceeds your voucher value (€${state.voucherValue}). Transaction aborted.`).catch(()=>{});
+                    if (interaction.channel) {
+                        await interaction.channel.send(`❌ **Error:** This product (€${finalPrice}) exceeds your voucher value (€${state.voucherValue}). Transaction aborted. Closing ticket in 10 seconds...`).catch(()=>{});
+                        setTimeout(() => { channelStates.delete(interaction.channel.id); interaction.channel.delete().catch(()=>{}); }, 10000);
+                    }
+                    return;
                 }
-                if (state) state.redeemed = true;
 
                 if (product.stock && product.stock !== "∞") {
                     let s = parseInt(product.stock);
@@ -792,7 +796,7 @@ http.createServer(async (req, res) => {
                 const data = JSON.parse(body);
                 if (data.pin === DASHBOARD_PIN) {
                     bruteForceLocks.delete(clientIp);
-                    const isSecureRequest = req.headers['x-forwarded-proto'] === 'https' || !!req.socket?.encrypted;
+                    const isSecureRequest = !!req.socket?.encrypted;
                     const cookieParts = [`auth=${encodeURIComponent(DASHBOARD_PIN)}`, 'Max-Age=2592000', 'HttpOnly', 'Path=/', 'SameSite=Strict'];
                     if (isSecureRequest) cookieParts.push('Secure');
                     res.writeHead(200, { 'Set-Cookie': cookieParts.join('; '), 'Content-Type': 'application/json' });
