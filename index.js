@@ -1099,9 +1099,14 @@ http.createServer(async (req, res) => {
                     const price = parseFloat(data.price);
                     if (isNaN(price) || price < 0) throw new Error("Invalid price");
                     
-                    const txDate = data.date ? new Date(data.date) : new Date();
-                    const dateStrDisplay = txDate.toLocaleString('en-US');
-                    const dateKey = txDate.toISOString().split('T')[0];
+                    let dateStrDisplay = data.dateStrDisplay;
+                    let dateKey = data.dateKey;
+                    
+                    if (!dateStrDisplay || !dateKey) {
+                        const txDate = data.dateInput ? new Date(data.dateInput) : new Date();
+                        dateStrDisplay = txDate.toLocaleString('en-US');
+                        dateKey = txDate.toISOString().split('T')[0];
+                    }
                     
                     const username = (data.username && data.username.trim() !== '') ? data.username.trim() : "Manual Entry";
                     const product = (data.product && data.product.trim() !== '') ? data.product.trim() : "Custom Amount";
@@ -1128,6 +1133,24 @@ http.createServer(async (req, res) => {
                         if(!memoryStats.user_history[username]) memoryStats.user_history[username] = [];
                         memoryStats.user_history[username].unshift({ product: product, price: price, date: dateStrDisplay });
                         if(memoryStats.user_history[username].length > 20) memoryStats.user_history[username].pop();
+                    }
+
+                    if (!memoryStats.analytics) memoryStats.analytics = { tickets_opened: 0, hourly_sales: Array(24).fill(0) };
+                    let hour = new Date().getHours();
+                    if (data.dateInput) hour = new Date(data.dateInput).getHours();
+                    memoryStats.analytics.hourly_sales[hour] = (memoryStats.analytics.hourly_sales[hour] || 0) + 1;
+
+                    if (product !== "Custom Amount") {
+                        let matchedProdId = null;
+                        for (const [id, pData] of Object.entries(memoryStats.products)) {
+                            if (pData.name.toLowerCase() === product.toLowerCase()) {
+                                matchedProdId = id; break;
+                            }
+                        }
+                        if (matchedProdId) {
+                            if(!memoryStats.product_sales) memoryStats.product_sales = {};
+                            memoryStats.product_sales[matchedProdId] = (memoryStats.product_sales[matchedProdId] || 0) + 1;
+                        }
                     }
 
                     if (!memoryStats.activity_feed) memoryStats.activity_feed = [];
@@ -1778,7 +1801,7 @@ http.createServer(async (req, res) => {
             "               <div class='box'>",
             "                   <h2>💾 Daily Cloud Backup</h2>",
             "                   <p class='text-muted'>Your system automatically backs up your database locally every day. Upstash sync is real-time.</p>",
-            "                   <button class='admin-btn' onclick='window.forceBackup()'>💾 Force Backup Now</button>",
+            "                   <button class='admin-btn' onclick='window.forceBackup()' style='background:var(--accent-green);'>💾 Force Backup Now</button>",
             "               </div>",
             "               <div class='box'>",
             "                   <h2>📥 Import Backup</h2>",
@@ -1903,6 +1926,7 @@ http.createServer(async (req, res) => {
             "            ",
             "            trackedTickets = data.activeTickets || 0; trackedReviews = data.pendingReviewsCount || 0; trackedSales = rawStats.total_transactions || 0; ",
             "            buildStaticTables(); renderAnalyticsCharts(); updateMaintenanceBadge(data.maintenance); updateBadgesAndFeed(data); ",
+            "            if(typeof window.renderSalesChart === 'function') window.renderSalesChart(7);",
             "        }",
             "        ",
             "        function escapeHTML(str){ return str ? String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') : ''; }",
@@ -2124,14 +2148,30 @@ http.createServer(async (req, res) => {
             "        window.cancelEditLink = function() { document.getElementById('editLinkId').value = ''; document.getElementById('newLinkLabel').value = ''; document.getElementById('newLinkUrl').value = ''; document.getElementById('saveLinkBtn').innerText = '➕ Link Gateway'; document.getElementById('cancelEditLinkBtn').style.display = 'none'; };",
             "        window.saveBuyLink = async function() { const id = document.getElementById('editLinkId').value; const label = document.getElementById('newLinkLabel').value; const url = document.getElementById('newLinkUrl').value; if(!label || !url) return showToast('Label & URL required', 'error'); if(id) { await window.executeAction({action:'edit_buy_link', id:id, label:label, url:url}, false); } else { await window.executeAction({action:'add_buy_link', label:label, url:url}, false); } };",
             "        window.deleteBuyLink = async function(id) { if(await window.customConfirm('GATEWAY SEVER', 'Sever this gateway link?')) await window.executeAction({action:'delete_buy_link', id:id}, false); };",
-            "        ",
+            "",
             "        window.createManualTx = async function() {",
             "            const user = document.getElementById('manTxUser').value;",
             "            const prod = document.getElementById('manTxProd').value;",
             "            const price = parseFloat(document.getElementById('manTxPrice').value);",
-            "            const dateStr = document.getElementById('manTxDate').value;",
-            "            if(!user || !prod || isNaN(price) || !dateStr) return showToast('Veuillez remplir tous les champs', 'error');",
-            "            await window.executeAction({ action: 'create_manual_tx', username: user, product: prod, price: price, date: new Date(dateStr).toISOString() }, false);",
+            "            const dateInput = document.getElementById('manTxDate').value;",
+            "            if(!user || !prod || isNaN(price)) return showToast('Veuillez remplir tous les champs', 'error');",
+            "            ",
+            "            let displayDate = ''; let dateKey = ''; let dInput = '';",
+            "            if (dateInput) {",
+            "                const d = new Date(dateInput);",
+            "                displayDate = d.toLocaleString('en-US');",
+            "                dateKey = dateInput.split('T')[0];",
+            "                dInput = dateInput;",
+            "            } else {",
+            "                const d = new Date();",
+            "                displayDate = d.toLocaleString('en-US');",
+            "                const offset = d.getTimezoneOffset() * 60000;",
+            "                dateKey = new Date(d.getTime() - offset).toISOString().split('T')[0];",
+            "                dInput = d.toISOString();",
+            "            }",
+            "            ",
+            "            await window.executeAction({ action: 'create_manual_tx', username: user, product: prod, price: price, dateStrDisplay: displayDate, dateKey: dateKey, dateInput: dInput }, false);",
+            "            ",
             "            document.getElementById('manTxUser').value = '';",
             "            document.getElementById('manTxProd').value = '';",
             "            document.getElementById('manTxPrice').value = '';",
@@ -2140,7 +2180,7 @@ http.createServer(async (req, res) => {
             "",
             "        window.triggerShopRefresh = async function() { await window.executeAction({action:'refresh_setup'}, false); };",
             "        ",
-            "        window.switchTab = function(tabId, btn) { document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active')); document.querySelectorAll('.nav-btn').forEach(el=>el.classList.remove('active')); document.getElementById(tabId).classList.add('active'); btn.classList.add('active'); if(tabId === 'moderation' && !isMembersLoaded) window.loadAllMembers(); if(tabId === 'livechat'){ window.loadTicketsForChat(); if(activeChatChannel && !chatPollInterval){ chatPollInterval = setInterval(window.fetchChatMessages, 3000); } } else { if(chatPollInterval){ clearInterval(chatPollInterval); chatPollInterval = null; } } if(tabId === 'analytics'){ renderAnalyticsCharts(); } if(tabId === 'overview'){ window.renderSalesChart(7); } };",
+            "        window.switchTab = function(tabId, btn) { document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active')); document.querySelectorAll('.nav-btn').forEach(el=>el.classList.remove('active')); document.getElementById(tabId).classList.add('active'); btn.classList.add('active'); document.getElementById('current-tab-title').innerText = btn.innerText.replace(/[0-9]/g, '').replace('💬', '').replace('⚙️', '').replace('📋', '').trim(); if(window.innerWidth <= 900) { window.closeSidebar(); } if(tabId === 'moderation' && !isMembersLoaded) window.loadAllMembers(); if(tabId === 'livechat'){ window.loadTicketsForChat(); if(activeChatChannel && !chatPollInterval){ chatPollInterval = setInterval(window.fetchChatMessages, 3000); } } else { if(chatPollInterval){ clearInterval(chatPollInterval); chatPollInterval = null; } } if(tabId === 'analytics'){ renderAnalyticsCharts(); } if(tabId === 'overview'){ window.renderSalesChart(7); } };",
             "        ",
             "        function showToast(msg, type='success') { const t=document.getElementById('toast'); t.innerHTML = (type==='error'?'❌':'✅') + ' <span style=\"letter-spacing:0.5px;\">' + msg + '</span>'; t.style.borderColor = type === 'error' ? 'rgba(239,68,68,0.5)' : 'rgba(16,185,129,0.5)'; t.style.boxShadow = type === 'error' ? '0 10px 30px rgba(239,68,68,0.2)' : '0 10px 30px rgba(16,185,129,0.2)'; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 3000); }",
             "        ",
