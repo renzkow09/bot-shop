@@ -1369,6 +1369,9 @@ http.createServer(async (req, res) => {
                         return res.writeHead(400).end('Invalid JSON format');
                     }
                 }
+                else if (data.action === 'force_backup') {
+                    await syncCloud();
+                }
                 res.writeHead(200).end('OK');
             } catch(e) { res.writeHead(500).end(e.message); }
         }); return;
@@ -2300,12 +2303,9 @@ http.createServer(async (req, res) => {
             "        }",
             "        window.renderSalesChart = function(days) { if(typeof Chart === 'undefined') return; let dates = Object.keys(rawStats.revenue || {}).sort(); let values = dates.map(d => rawStats.revenue[d]); if (days > 0 && dates.length > days) { dates = dates.slice(-days); values = values.slice(-days); } const ctxSales = document.getElementById('salesChart').getContext('2d'); let grad = ctxSales.createLinearGradient(0,0,0,400); grad.addColorStop(0, 'rgba(16, 185, 129, 0.4)'); grad.addColorStop(1, 'transparent'); if(salesChart) salesChart.destroy(); salesChart = new Chart(ctxSales, { type: 'line', data: { labels: dates.length?dates:['No Data'], datasets: [{ data: values.length?values:[0], borderColor: '#10b981', backgroundColor: grad, fill: true, tension: 0.4, pointHoverBackgroundColor: '#fff', pointHoverBorderColor: 'rgba(16, 185, 129, 1)', pointHoverBorderWidth: 4, pointRadius: 0, pointHitRadius: 20 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, plugins: { legend: { display: false } }, interaction: { intersect: false, mode: 'index' }, scales: { x: { display: false }, y: { grid: { color: 'rgba(255,255,255,0.05)'}, border: { dash: [4, 4], display: false } } } } }); };",
             "        window.updateSalesChart = function(days) { ",
-            "            if(document.getElementById('btn-chart-7')) document.getElementById('btn-chart-7').style.background = days === 7 ? 'var(--accent-green)' : 'rgba(255,255,255,0.1)';",
-            "            if(document.getElementById('btn-chart-7')) document.getElementById('btn-chart-7').style.color = days === 7 ? '#000' : '#fff';",
-            "            if(document.getElementById('btn-chart-30')) document.getElementById('btn-chart-30').style.background = days === 30 ? 'var(--accent-green)' : 'rgba(255,255,255,0.1)';",
-            "            if(document.getElementById('btn-chart-30')) document.getElementById('btn-chart-30').style.color = days === 30 ? '#000' : '#fff';",
-            "            if(document.getElementById('btn-chart-all')) document.getElementById('btn-chart-all').style.background = days === 0 ? 'var(--accent-green)' : 'rgba(255,255,255,0.1)';",
-            "            if(document.getElementById('btn-chart-all')) document.getElementById('btn-chart-all').style.color = days === 0 ? '#000' : '#fff';",
+            "            if(document.getElementById('btn-chart-7')) document.getElementById('btn-chart-7').className = days === 7 ? 'admin-btn btn-green' : 'admin-btn';",
+            "            if(document.getElementById('btn-chart-30')) document.getElementById('btn-chart-30').className = days === 30 ? 'admin-btn btn-green' : 'admin-btn';",
+            "            if(document.getElementById('btn-chart-all')) document.getElementById('btn-chart-all').className = days === 0 ? 'admin-btn btn-green' : 'admin-btn';",
             "            window.renderSalesChart(days); ",
             "        };",
             "        function renderAnalyticsCharts() { ",
@@ -2317,6 +2317,24 @@ http.createServer(async (req, res) => {
             "           const dowSales = { 'Sun':0, 'Mon':0, 'Tue':0, 'Wed':0, 'Thu':0, 'Fri':0, 'Sat':0 }; const daysArr = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']; Object.entries(rawStats.revenue || {}).forEach(([dateStr, val]) => { const d = new Date(dateStr); if(!isNaN(d)) { dowSales[daysArr[d.getDay()]] += parseFloat(val); } }); const ctxDow = document.getElementById('dowChart').getContext('2d'); if(window.dowChartInst) window.dowChartInst.destroy(); window.dowChartInst = new Chart(ctxDow, { type: 'bar', data: { labels: daysArr, datasets: [{ label: 'Revenue (€)', data: daysArr.map(d=>dowSales[d]), backgroundColor: '#10b981', hoverBackgroundColor: '#34d399', borderRadius: 8 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { grid: { color: 'rgba(255,255,255,0.05)' }, border: {display: false} }, x: { grid: { display: false }, border: {display: false} } } } });",
             "           const ticketsOpened = rawStats.analytics?.tickets_opened || 0; const salesClosed = rawStats.total_transactions || 0; const ctxFunnel = document.getElementById('funnelChart').getContext('2d'); if(window.funnelChartInst) window.funnelChartInst.destroy(); window.funnelChartInst = new Chart(ctxFunnel, { type: 'doughnut', data: { labels: ['Tickets Opened (No Purchase)', 'Successful Sales'], datasets: [{ data: [Math.max(0, ticketsOpened - salesClosed), salesClosed], backgroundColor: ['rgba(239, 68, 68, 0.8)', 'rgba(16, 185, 129, 0.8)'], hoverOffset: 4, borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '75%', plugins: { legend: { position: 'bottom', labels: { color: '#8e8e93' } } } } });",
             "        }",
+            "        window.forceBackup = async function() {",
+            "            if(!confirm('Force a manual cloud sync and download local backup?')) return;",
+            "            try {",
+            "                await window.executeAction({ action: 'force_backup' }, false);",
+            "                const blob = new Blob([JSON.stringify(rawStats, null, 4)], { type: 'application/json' });",
+            "                const url = URL.createObjectURL(blob);",
+            "                const a = document.createElement('a');",
+            "                a.href = url;",
+            "                a.download = 'nexus_backup_' + new Date().toISOString().split('T')[0] + '.json';",
+            "                document.body.appendChild(a);",
+            "                a.click();",
+            "                document.body.removeChild(a);",
+            "                URL.revokeObjectURL(url);",
+            "                showToast('Backup successful & downloaded!');",
+            "            } catch(e) {",
+            "                showToast('Backup failed', 'error');",
+            "            }",
+            "        };",
             "        window.saveRawDb = async function() {",
             "            if(!confirm('DANGER: Saving raw JSON! Are you absolutely sure the syntax is perfect?')) return;",
             "            const val = document.getElementById('dev-raw-db').value;",
@@ -2334,10 +2352,10 @@ http.createServer(async (req, res) => {
             "                    JSON.parse(content);",
             "                    if(await window.customConfirm('RESTORE BACKUP', 'Are you sure you want to restore this backup? Current data will be completely overwritten.')) {",
             "                        await window.executeAction({ action: 'update_raw_db', json: content }, false);",
-            "                        window.showToast('Backup imported successfully!');",
+            "                        showToast('Backup imported successfully!');",
             "                        setTimeout(() => window.location.reload(), 1500);",
             "                    }",
-            "                } catch(err) { window.showToast('Invalid JSON file', 'error'); }",
+            "                } catch(err) { showToast('Invalid JSON file', 'error'); }",
             "                event.target.value = '';",
             "            };",
             "            reader.readAsText(file);",
