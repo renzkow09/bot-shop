@@ -2224,5 +2224,3 @@ client.on('disconnect', () => console.log('⚠️ Bot déconnecté'));
 client.on('ready', () => console.log(`✅ Bot logged in as ${client.user.tag}`));
 
 client.login(DISCORD_BOT_TOKEN);
-
-client.login(DISCORD_BOT_TOKEN);
