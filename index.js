@@ -474,21 +474,18 @@ client.on('interactionCreate', async (interaction) => {
                 if (state.redeemed) {
                     return await interaction.reply({ content: "❌ **SECURITY ALERT:** This code has already been redeemed for a product.", ephemeral: true }).catch(()=>{});
                 }
-                state.redeemed = true;
             }
 
             // 💥 DESTRUCTION VISUELLE DE L'UI
             await interaction.update({ content: "📦 **Processing your order... The menu has been locked.**", components: [] }).catch(() => {});
 
             const selected = interaction.values[0]; const product = memoryStats.products[selected]; 
-            if (!product) {
-                if (state) state.redeemed = false;
-                return;
-            }
+            if (!product) return;
             
             const promo = state ? state.promo : null;
 
             if (product.price === "Custom") {
+                if (state) state.redeemed = true;
                 logStat('custom_request', 0, { username: interaction.user.username, userId: interaction.user.id, productName: product.name });
                 if (interaction.channel) {
                     await interaction.channel.send(`📩 **Custom request registered!** An admin will review it. Closing ticket in 10 seconds...`).catch(() => {});
@@ -512,12 +509,12 @@ client.on('interactionCreate', async (interaction) => {
 
                 // DOUBLE VERIFICATION DE SECURITE AU MOMENT DE L'ACHAT
                 if (!promo && state && state.voucherValue !== undefined && state.voucherValue !== Infinity && finalPrice > state.voucherValue) {
-                    state.redeemed = false;
                     if (interaction.channel) {
                         await interaction.channel.send(`❌ **Error:** This product (€${finalPrice}) exceeds your voucher value (€${state.voucherValue}). Transaction aborted.`).catch(()=>{});
                     }
                     return;
                 }
+                if (state) state.redeemed = true;
 
                 if (product.stock && product.stock !== "∞") {
                     let s = parseInt(product.stock);
@@ -788,7 +785,8 @@ http.createServer(async (req, res) => {
     const authCookie = cookie.split(';').map(c => c.trim()).find(c => c.startsWith('auth='));
     let authValue = '';
     if (authCookie) {
-        try { authValue = decodeURIComponent(authCookie.slice(5)); } catch (e) { authValue = ''; }
+        try { authValue = decodeURIComponent(authCookie.slice(5)); } 
+        catch (e) { authValue = ''; console.warn("⚠️ Invalid auth cookie encoding."); }
     }
     const isAuthenticated = authValue === DASHBOARD_PIN;
 
