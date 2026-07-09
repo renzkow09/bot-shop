@@ -126,7 +126,37 @@ async function loadCloudStats() {
 }
 
 async function syncCloud() {
-    try { fs.writeFileSync(STATS_FILE, JSON.stringify(memoryStats)); } catch (e) {}
+    try { 
+        const dataStr = JSON.stringify(memoryStats);
+        const tempFile = STATS_FILE + '.tmp';
+
+        // 1. Écriture Atomique (Incorruptible)
+        fs.writeFileSync(tempFile, dataStr);
+        fs.renameSync(tempFile, STATS_FILE);
+
+        // 2. Sauvegarde Rotative Automatique (Rolling Backup - 7 Jours)
+        const today = new Date().toISOString().split('T')[0]; // Format: YYYY-MM-DD
+        const backupFileName = `stats_backup_${today}.json`;
+        const backupFilePath = path.join(__dirname, backupFileName);
+
+        if (!fs.existsSync(backupFilePath)) {
+            // S'il n'y a pas encore de sauvegarde pour aujourd'hui, on la crée
+            fs.writeFileSync(backupFilePath, dataStr);
+            
+            // Nettoyage des anciennes sauvegardes pour ne garder que les 7 plus récentes
+            const files = fs.readdirSync(__dirname);
+            const backups = files.filter(f => f.startsWith('stats_backup_')).sort();
+            
+            if (backups.length > 7) {
+                const oldestBackup = backups[0];
+                fs.unlinkSync(path.join(__dirname, oldestBackup));
+            }
+        }
+    } catch (e) {
+        console.error("❌ Local Data Save Error :", e.message);
+    }
+
+    // Sauvegarde Cloud (Upstash)
     const url = process.env.UPSTASH_REDIS_REST_URL;
     const token = process.env.UPSTASH_REDIS_REST_TOKEN;
     if (!url || !token) return;
