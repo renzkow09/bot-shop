@@ -1448,7 +1448,7 @@ http.createServer(async (req, res) => {
             "        body { background: radial-gradient(circle at 20% 15%, rgba(10,132,255,0.12) 0%, rgba(10,132,255,0) 35%), radial-gradient(circle at 85% 0%, rgba(191,90,242,0.14) 0%, rgba(191,90,242,0) 30%), linear-gradient(180deg, #f7f9fc 0%, #e7ebf3 100%); color: var(--text-main); }",
             "        .dashboard-layout { margin: 18px; height: calc(100vh - 36px); border-radius: 24px; overflow: hidden; border: 1px solid rgba(15,23,42,0.12); box-shadow: 0 30px 90px rgba(15,23,42,0.2); background: rgba(255,255,255,0.5); backdrop-filter: blur(30px); }",
             "        .sidebar { background: linear-gradient(180deg, rgba(255,255,255,0.88) 0%, rgba(245,247,252,0.85) 100%); border-right: 1px solid rgba(15,23,42,0.08); }",
-            "        .sidebar-header h2, h1 { -webkit-text-fill-color: initial; background: none; color: #0f172a; text-shadow: none; }",
+            "        .sidebar-header h2, #current-tab-title { -webkit-text-fill-color: initial; background: none; color: #0f172a; text-shadow: none; }",
             "        .sidebar-header p, .nav-category { color: #7a8496; }",
             "        .nav-btn { color: #253043; border: 1px solid transparent; }",
             "        .nav-btn:hover { background: rgba(10,132,255,0.08); transform: translateX(0); }",
