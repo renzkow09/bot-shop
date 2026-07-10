@@ -938,7 +938,7 @@ http.createServer(async (req, res) => {
 
     if ((req.url === '/dashboard' || req.url === '/') && !isAuthenticated) {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        return res.end("<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no'><title>Nexus Core</title><style>:root { --accent: #10b981; --accent-rgb: 16, 185, 129; }body{font-family:-apple-system,BlinkMacSystemFont,'Inter',sans-serif;background:#000000;color:#f5f5f7;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;overflow:hidden;}.login-box{background:rgba(28,28,30,0.5);backdrop-filter:blur(30px);-webkit-backdrop-filter:blur(30px);padding:50px;border-radius:24px;border:1px solid rgba(255,255,255,0.08);text-align:center;box-shadow:0 20px 50px rgba(0,0,0,0.5);width:90%;max-width:420px;box-sizing:border-box; animation: slideUpFade 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity:0; transform:translateY(30px);}@keyframes slideUpFade { to { opacity:1; transform:translateY(0); } }@keyframes pulseLogo { 0% { text-shadow: 0 0 10px rgba(var(--accent-rgb), 0.2); } 50% { text-shadow: 0 0 25px rgba(var(--accent-rgb), 0.6); } 100% { text-shadow: 0 0 10px rgba(var(--accent-rgb), 0.2); } }h2{font-weight:700;letter-spacing:2px;color:#fff; margin-bottom:10px; animation: pulseLogo 3s infinite;}.subtitle { color: rgba(255,255,255,0.5); font-size: 0.85em; letter-spacing: 1px; margin-bottom: 30px; text-transform: uppercase; }input{background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.1);color:white;padding:18px;border-radius:16px;font-size:20px!important;text-align:center;letter-spacing:15px;width:100%;max-width:240px;margin:10px auto 30px auto;outline:none;transition:all 0.3s;display:block;}input:focus{border-color:var(--accent);box-shadow:0 0 15px rgba(var(--accent-rgb),0.3); background:rgba(255,255,255,0.05);}button{background:var(--accent);color:#000;border:none;padding:15px 40px;font-size:1em;border-radius:16px;cursor:pointer;font-weight:700;width:100%;transition:all 0.3s;text-transform:uppercase;letter-spacing:1px;}button:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(var(--accent-rgb),0.4);}button:active { transform:translateY(0); }.bg-anim { position:absolute; top:50%; left:50%; width: 120vw; height: 120vw; background: radial-gradient(circle, rgba(var(--accent-rgb), 0.03) 0%, transparent 60%); transform: translate(-50%, -50%); z-index: -1; pointer-events: none; }</style></head><body><div class='bg-anim'></div><div class='login-box'>  <h2>NEXUS</h2>  <div class='subtitle'>System Authentication</div>  <input type='password' id='pin' maxlength='4' placeholder='••••'>  <button onclick='login()' id='btn'>Authenticate</button>  <p id='err' style='color:#ff453a;display:none;margin-top:20px;font-weight:500; font-size:0.9em; animation:slideUpFade 0.3s ease forwards;'>Access Denied</p></div><script>const themes = {    green: { hex: '#10b981', rgb: '16, 185, 129' },    blue: { hex: '#0a84ff', rgb: '10, 132, 255' },    red: { hex: '#ff453a', rgb: '255, 69, 58' },    orange: { hex: '#ff9f0a', rgb: '255, 159, 10' }};const savedTheme = localStorage.getItem('nexus_theme') || 'green';const t = themes[savedTheme] || themes.green;document.documentElement.style.setProperty('--accent', t.hex);document.documentElement.style.setProperty('--accent-rgb', t.rgb);async function login(){  const btn = document.getElementById('btn');  btn.style.opacity = '0.5';  btn.innerText = 'Verifying...';  const res=await fetch('/api/login',{method:'POST',body:JSON.stringify({pin:document.getElementById('pin').value})});  if(res.ok) {    btn.style.background = '#fff';    btn.innerText = 'Granted';    setTimeout(() => location.reload(), 300);  } else {     btn.style.opacity = '1';    btn.innerText = 'Authenticate';    document.getElementById('err').style.display='block';    setTimeout(() => document.getElementById('err').style.display='none', 3000);  }} document.getElementById('pin').addEventListener('keypress', e=>{if(e.key==='Enter')login();});</script></body></html>");
+        return res.end("<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no'><title>Nexus Core</title><style>:root { --accent: #10b981; --accent-rgb: 16, 185, 129; }body{font-family:-apple-system,BlinkMacSystemFont,'Inter',sans-serif;background:#000000;color:#f5f5f7;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;overflow:hidden;}.login-box{background:rgba(28,28,30,0.5);backdrop-filter:blur(30px);-webkit-backdrop-filter:blur(30px);padding:50px;border-radius:24px;border:1px solid rgba(255,255,255,0.08);text-align:center;box-shadow:0 20px 50px rgba(0,0,0,0.5);width:90%;max-width:420px;box-sizing:border-box; animation: slideUpFade 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity:0; transform:translateY(30px);}@keyframes slideUpFade { to { opacity:1; transform:translateY(0); } }@keyframes pulseLogo { 0% { text-shadow: 0 0 10px rgba(var(--accent-rgb), 0.2); } 50% { text-shadow: 0 0 25px rgba(var(--accent-rgb), 0.6); } 100% { text-shadow: 0 0 10px rgba(var(--accent-rgb), 0.2); } }h2{font-weight:700;letter-spacing:2px;color:#fff; margin-bottom:10px; animation: pulseLogo 3s infinite;}.subtitle { color: rgba(255,255,255,0.5); font-size: 0.85em; letter-spacing: 1px; margin-bottom: 30px; text-transform: uppercase; }input{background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.1);color:white;padding:18px;border-radius:16px;font-size:20px!important;text-align:center;letter-spacing:15px;width:100%;max-width:240px;margin:10px auto 30px auto;outline:none;transition:all 0.3s;display:block;}input:focus{border-color:var(--accent);box-shadow:0 0 15px rgba(var(--accent-rgb),0.3); background:rgba(255,255,255,0.05);}button{background:var(--accent);color:#000;border:none;padding:15px 40px;font-size:1em;border-radius:16px;cursor:pointer;font-weight:700;width:100%;transition:all 0.3s;text-transform:uppercase;letter-spacing:1px;}button:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(var(--accent-rgb),0.4);}button:active { transform:translateY(0); }.bg-anim { position:absolute; top:50%; left:50%; width: 120vw; height: 120vw; background: radial-gradient(circle, rgba(var(--accent-rgb), 0.03) 0%, transparent 60%); transform: translate(-50%, -50%); z-index: -1; pointer-events: none; }</style><script>(function() {const themes = {green: { hex: '#10b981', rgb: '16, 185, 129', hover: '#34d399' },blue: { hex: '#0a84ff', rgb: '10, 132, 255', hover: '#47a3ff' },red: { hex: '#ff453a', rgb: '255, 69, 58', hover: '#ff6b63' },orange: { hex: '#ff9f0a', rgb: '255, 159, 10', hover: '#ffb340' }};const savedTheme = localStorage.getItem('nexus_theme');if (savedTheme && themes[savedTheme]) {const t = themes[savedTheme];document.documentElement.style.setProperty('--accent-green', t.hex);document.documentElement.style.setProperty('--accent-green-rgb', t.rgb);document.documentElement.style.setProperty('--accent-green-hover', t.hover);}})();</script></head><body><div class='bg-anim'></div><div class='login-box'>  <h2>NEXUS</h2>  <div class='subtitle'>System Authentication</div>  <input type='password' id='pin' maxlength='4' placeholder='••••'>  <button onclick='login()' id='btn'>Authenticate</button>  <p id='err' style='color:#ff453a;display:none;margin-top:20px;font-weight:500; font-size:0.9em; animation:slideUpFade 0.3s ease forwards;'>Access Denied</p></div><script>const themes = {    green: { hex: '#10b981', rgb: '16, 185, 129' },    blue: { hex: '#0a84ff', rgb: '10, 132, 255' },    red: { hex: '#ff453a', rgb: '255, 69, 58' },    orange: { hex: '#ff9f0a', rgb: '255, 159, 10' }};const savedTheme = localStorage.getItem('nexus_theme') || 'green';const t = themes[savedTheme] || themes.green;document.documentElement.style.setProperty('--accent', t.hex);document.documentElement.style.setProperty('--accent-rgb', t.rgb);async function login(){  const btn = document.getElementById('btn');  btn.style.opacity = '0.5';  btn.innerText = 'Verifying...';  const res=await fetch('/api/login',{method:'POST',body:JSON.stringify({pin:document.getElementById('pin').value})});  if(res.ok) {    btn.style.background = '#fff';    btn.innerText = 'Granted';    setTimeout(() => location.reload(), 300);  } else {     btn.style.opacity = '1';    btn.innerText = 'Authenticate';    document.getElementById('err').style.display='block';    setTimeout(() => document.getElementById('err').style.display='none', 3000);  }} document.getElementById('pin').addEventListener('keypress', e=>{if(e.key==='Enter')login();});</script></body></html>");
     }
 
     // === [ANCHOR: API_ROUTES_GET] ===
@@ -1578,6 +1578,25 @@ http.createServer(async (req, res) => {
         const dashboardHTML = `<!DOCTYPE html>
 <html lang='en'>
 <head>
+    <script>
+        (function() {
+            const themes = {
+                green: { hex: '#10b981', rgb: '16, 185, 129', hover: '#34d399' },
+                blue: { hex: '#0a84ff', rgb: '10, 132, 255', hover: '#47a3ff' },
+                red: { hex: '#ff453a', rgb: '255, 69, 58', hover: '#ff6b63' },
+                orange: { hex: '#ff9f0a', rgb: '255, 159, 10', hover: '#ffb340' }
+            };
+            try {
+                const savedTheme = localStorage.getItem('nexus_theme');
+                if (savedTheme && themes[savedTheme]) {
+                    const t = themes[savedTheme];
+                    document.documentElement.style.setProperty('--accent-green', t.hex);
+                    document.documentElement.style.setProperty('--accent-green-rgb', t.rgb);
+                    document.documentElement.style.setProperty('--accent-green-hover', t.hover);
+                }
+            } catch(e) {}
+        })();
+    </script>
     <meta charset='UTF-8'>
     <meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no'>
     <meta name='apple-mobile-web-app-capable' content='yes'>
@@ -1586,14 +1605,14 @@ http.createServer(async (req, res) => {
     <script src='https://cdn.jsdelivr.net/npm/chart.js'></script>
     <style>
         :root { 
-           --accent-green-hover: var(--accent-green-hover); 
+           --accent-green-hover: #34d399; 
            --bg-main: #000000; 
            --bg-card: rgba(28, 28, 30, 0.4); 
            --border-color: rgba(255, 255, 255, 0.08); 
            --text-main: #f5f5f7; 
            --text-muted: #8e8e93; 
            --accent-blue: #0a84ff; 
-           --accent-green: var(--accent-green);
+           --accent-green: #10b981;
            --accent-green-rgb: 16, 185, 129; 
            --accent-purple: #bf5af2; 
            --accent-orange: #ff9f0a; 
@@ -2157,11 +2176,10 @@ http.createServer(async (req, res) => {
         };
         
         // Auto-load theme
-        setTimeout(() => {
-            const savedTheme = localStorage.getItem('nexus_theme');
-            if(savedTheme) window.setTheme(savedTheme);
-            else window.setTheme('green');
-        }, 100);
+const savedTheme = localStorage.getItem('nexus_theme');
+if(savedTheme) window.setTheme(savedTheme);
+else window.setTheme('green');
+
 
         let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, userGoal=500, salesChart, hourlyChart, topProdChart, catChart, dowChartInst, funnelChartInst; 
         let allMembersData = []; let isMembersLoaded = false; let activeChatChannel = null; let chatPollInterval = null; let terminalInterval = null;
