@@ -22,6 +22,8 @@ if (!DISCORD_BOT_TOKEN) {
 }
 
 const REWARBLE_API_URL = "https://api.rewarble.com/client/1.00/redeem"; 
+
+let rewarbleCircuitBreaker = { fails: 0, nextTry: 0 };
 const ADMIN_DISCORD_ID = "1520551977854042114";
 const CATEGORY_CUSTOMER_ID = "1521540733226713249";
 const CATEGORY_SUPPORT_ID = "1521541155005796484";
@@ -696,6 +698,52 @@ client.on('messageCreate', async (message) => {
             if (message.content === '!close') { channelStates.delete(message.channel.id); await message.channel.delete().catch(() => {}); }
         }
 
+        if (message.channel?.name?.startsWith('shop-') || message.channel?.name?.startsWith('support-')) {
+            if (global.broadcastToDashboard) {
+                global.broadcastToDashboard('new_message', {
+                    channelId: message.channel.id,
+                    message: {
+                        id: message.id,
+                        content: message.content,
+                        author: message.author.username,
+                        isBot: message.author.bot,
+                        imageUrl: message.attachments.first() ? message.attachments.first().url : null
+                    }
+                });
+            }
+        }
+
+        if (message.channel?.name?.startsWith('support-') && !message.author.bot) {
+           try {
+               const { GoogleGenAI } = require('@google/genai');
+               if (process.env.GEMINI_API_KEY) {
+                   const ai = new GoogleGenAI({
+                       apiKey: process.env.GEMINI_API_KEY,
+                       httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+                   });
+                   const response = await ai.models.generateContent({
+                       model: "gemini-3.5-flash",
+                       contents: message.content,
+                       config: {
+                           systemInstruction: "You are an AI support agent. Detect the user's intent and provide a helpful, polite reply. Return JSON in the format: { \"intent\": \"brief summary\", \"suggested_reply\": \"detailed reply\" }",
+                           responseMimeType: "application/json"
+                       }
+                   });
+                   const intentData = JSON.parse(response.text.trim());
+                   
+                   const { EmbedBuilder } = require('discord.js');
+                   const embed = new EmbedBuilder()
+                       .setColor('#10b981')
+                       .setTitle('🤖 AI Support Agent')
+                       .setDescription(`**Intent Detected:** ${intentData.intent}\n\n**Suggestion:** ${intentData.suggested_reply}`)
+                       .setFooter({ text: 'This is an AI generated response.' });
+                   await message.reply({ embeds: [embed] }).catch(()=>{});
+               }
+           } catch (e) {
+               console.log("AI Error:", e.message);
+           }
+        }
+
         if (message.channel?.name?.startsWith('shop-')) {
             let state = channelStates.get(message.channel.id); 
             if (!state) {
@@ -728,28 +776,46 @@ client.on('messageCreate', async (message) => {
                 systemLog('DEBUG', 'VALIDATION', `Verifying code entry for user ${message.author.username}`);
 
                 if (!promoApplied && !TEST_VOUCHERS[input]) {
+                    if (Date.now() < rewarbleCircuitBreaker.nextTry) {
+                        message.reply("⚠️ **System Alert :** Rewarble API is currently unstable. Please try again in a few minutes.").catch(()=>{});
+                        state.processing = false;
+                        return;
+                    }
                     const apiResponse = await axios.post(REWARBLE_API_URL, { code: input }, { 
                         headers: { 'Authorization': `Bearer ${REWARBLE_API_KEY}` },
                         timeout: 8000 
-                    }).catch(err => {
+                    }).then(res => { rewarbleCircuitBreaker.fails = 0; return res; }).catch(err => {
                         if (err.response && err.response.status === 402) { throw new Error("REWARBLE_402_INSUFFICIENT_FUNDS"); }
+                        rewarbleCircuitBreaker.fails++;
+                        if (rewarbleCircuitBreaker.fails >= 5) {
+                            rewarbleCircuitBreaker.nextTry = Date.now() + 5 * 60 * 1000; // 5 min cooldown
+                            systemLog('CRITICAL', 'REWARBLE_API', `Circuit breaker tripped! Pausing API calls for 5 minutes.`);
+                        }
                         throw err; 
                     });
 
                     // 🔍 RECHERCHE DE SÉCURITÉ MAXIMALE POUR EXTRAIRE LA VALEUR
+                    
                     let rawData = apiResponse.data;
                     if (typeof rawData === 'string') {
                         try { rawData = JSON.parse(rawData); } catch(e) {}
                     }
+                    
+                    // Prevent falsely validating if the API returned an error string with 200 OK
+                    if (rawData && typeof rawData === 'object') {
+                        if (rawData.error || rawData.status === 'error' || rawData.status === 'failed' || rawData.success === false) {
+                            throw new Error(rawData.error || rawData.message || "Invalid voucher code or failed redemption");
+                        }
+                    }
+
                     if (rawData) {
                         const extractVal = (v) => {
                             if (v === null || v === undefined) return null;
-                            const parsed = parseFloat(String(v).replace(/,/g, '.').replace(/[^0-9.]/g, ''));
+                            const parsed = parseFloat(String(v).replace(/,/g, '.').replace(/[^0-9.-]/g, ''));
                             return (!isNaN(parsed) && parsed > 0) ? parsed : null;
                         };
-
-                        let foundVal = extractVal(rawData.value) || extractVal(rawData.amount) || 
-                                       (rawData.voucher && (extractVal(rawData.voucher.value) || extractVal(rawData.voucher.amount))) ||
+                        let foundVal = extractVal(rawData.value) || extractVal(rawData.amount) ||
+                                        (rawData.voucher && (extractVal(rawData.voucher.value) || extractVal(rawData.voucher.amount))) ||
                                        (rawData.data && (extractVal(rawData.data.value) || extractVal(rawData.data.amount)));
                         
                         if (foundVal) {
@@ -775,7 +841,12 @@ client.on('messageCreate', async (message) => {
                             voucherValue = detectedValue !== null ? detectedValue : 0;
                         }
                     }
+                    
+                    if (voucherValue === 0) {
+                         throw new Error("REWARBLE_ZERO_VALUE_OR_INVALID");
+                    }
                 } else if (TEST_VOUCHERS[input]) {
+
                     voucherValue = parseFloat(TEST_VOUCHERS[input]); 
                 } else if (promoApplied) {
                     voucherValue = Infinity; 
@@ -910,7 +981,32 @@ setInterval(() => {
     });
 }, 15 * 60 * 1000);
 
-http.createServer(async (req, res) => {
+
+const { WebSocketServer } = require('ws');
+const wss = new WebSocketServer({ noServer: true });
+
+wss.on('connection', (ws) => {
+    ws.isAlive = true;
+    ws.on('pong', () => { ws.isAlive = true; });
+});
+
+setInterval(() => {
+    wss.clients.forEach((ws) => {
+        if (!ws.isAlive) return ws.terminate();
+        ws.isAlive = false;
+        ws.ping();
+    });
+}, 30000);
+
+global.broadcastToDashboard = function(type, data) {
+    wss.clients.forEach((client) => {
+        if (client.readyState === 1) { // OPEN
+            client.send(JSON.stringify({ type, ...data }));
+        }
+    });
+};
+
+const server = http.createServer(async (req, res) => {
     const clientIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '127.0.0.1';
     const now = Date.now();
     let rl = rateLimits.get(clientIp) || { count: 0, resetTime: now + 60000 };
@@ -919,7 +1015,10 @@ http.createServer(async (req, res) => {
     if (rl.count > 200) return res.writeHead(429).end('Too Many Requests');
 
     const cookie = req.headers.cookie || '';
-    const isAuthenticated = cookie.includes(`auth=${DASHBOARD_PIN}`);
+    const isAuthenticated = (() => {
+        let match = cookie.match(/auth_session=([a-zA-Z0-9]+)/);
+        return match && global.activeAdminSessions && global.activeAdminSessions.has(match[1]);
+    })();
 
     if (req.url === '/api/login' && req.method === 'POST') {
         let body = ''; req.on('data', chunk => body += chunk);
@@ -930,7 +1029,10 @@ http.createServer(async (req, res) => {
                 const data = JSON.parse(body);
                 if (data.pin === DASHBOARD_PIN) {
                     bruteForceLocks.delete(clientIp);
-                    res.writeHead(200, { 'Set-Cookie': `auth=${DASHBOARD_PIN}; Max-Age=2592000; HttpOnly; Path=/`, 'Content-Type': 'application/json' });
+                    if(!global.activeAdminSessions) global.activeAdminSessions = new Set();
+                    const sessionToken = require('crypto').randomBytes(32).toString('hex');
+                    global.activeAdminSessions.add(sessionToken);
+                    res.writeHead(200, { 'Set-Cookie': `auth_session=${sessionToken}; Max-Age=2592000; HttpOnly; Path=/`, 'Content-Type': 'application/json' });
                     systemLog('INFO', 'SECURITY', `Successful admin dashboard login from IP: ${clientIp}`);
                     return res.end(JSON.stringify({ success: true }));
                 } else {
@@ -945,7 +1047,7 @@ http.createServer(async (req, res) => {
 
     if ((req.url === '/dashboard' || req.url === '/') && !isAuthenticated) {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        return res.end("<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no'><title>Nexus Core</title><style>:root { --accent: #10b981; --accent-rgb: 16, 185, 129; }body{font-family:-apple-system,BlinkMacSystemFont,'Inter',sans-serif;background:#000000;color:#f5f5f7;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;overflow:hidden;}.login-box{background:rgba(28,28,30,0.5);backdrop-filter:blur(30px);-webkit-backdrop-filter:blur(30px);padding:50px;border-radius:24px;border:1px solid rgba(255,255,255,0.08);text-align:center;box-shadow:0 20px 50px rgba(0,0,0,0.5);width:90%;max-width:420px;box-sizing:border-box; animation: slideUpFade 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity:0; transform:translateY(30px);}@keyframes slideUpFade { to { opacity:1; transform:translateY(0); } }@keyframes pulseLogo { 0% { text-shadow: 0 0 10px rgba(var(--accent-rgb), 0.2); } 50% { text-shadow: 0 0 25px rgba(var(--accent-rgb), 0.6); } 100% { text-shadow: 0 0 10px rgba(var(--accent-rgb), 0.2); } }h2{font-weight:700;letter-spacing:2px;color:#fff; margin-bottom:10px; animation: pulseLogo 3s infinite;}.subtitle { color: rgba(255,255,255,0.5); font-size: 0.85em; letter-spacing: 1px; margin-bottom: 30px; text-transform: uppercase; }input{background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.1);color:white;padding:18px;border-radius:16px;font-size:20px!important;text-align:center;letter-spacing:15px;width:100%;max-width:240px;margin:10px auto 30px auto;outline:none;transition:all 0.3s;display:block;}input:focus{border-color:var(--accent);box-shadow:0 0 15px rgba(var(--accent-rgb),0.3); background:rgba(255,255,255,0.05);}button{background:var(--accent);color:#000;border:none;padding:15px 40px;font-size:1em;border-radius:16px;cursor:pointer;font-weight:700;width:100%;transition:all 0.3s;text-transform:uppercase;letter-spacing:1px;}button:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(var(--accent-rgb),0.4);}button:active { transform:translateY(0); }.bg-anim { position:absolute; top:50%; left:50%; width: 120vw; height: 120vw; background: radial-gradient(circle, rgba(var(--accent-rgb), 0.03) 0%, transparent 60%); transform: translate(-50%, -50%); z-index: -1; pointer-events: none; }</style><script>(function() {const themes = {green: { hex: '#10b981', rgb: '16, 185, 129', hover: '#34d399' },blue: { hex: '#0a84ff', rgb: '10, 132, 255', hover: '#47a3ff' },red: { hex: '#ff453a', rgb: '255, 69, 58', hover: '#ff6b63' },orange: { hex: '#ff9f0a', rgb: '255, 159, 10', hover: '#ffb340' }};const savedTheme = localStorage.getItem('nexus_theme');if (savedTheme && themes[savedTheme]) {const t = themes[savedTheme];document.documentElement.style.setProperty('--accent-green', t.hex);document.documentElement.style.setProperty('--accent-green-rgb', t.rgb);document.documentElement.style.setProperty('--accent-green-hover', t.hover);}})();</script></head><body><div class='bg-anim'></div><div class='login-box'>  <h2>NEXUS</h2>  <div class='subtitle'>System Authentication</div>  <input type='password' id='pin' maxlength='4' placeholder='••••'>  <button onclick='login()' id='btn'>Authenticate</button>  <p id='err' style='color:#ff453a;display:none;margin-top:20px;font-weight:500; font-size:0.9em; animation:slideUpFade 0.3s ease forwards;'>Access Denied</p></div><script>const themes = {    green: { hex: '#10b981', rgb: '16, 185, 129' },    blue: { hex: '#0a84ff', rgb: '10, 132, 255' },    red: { hex: '#ff453a', rgb: '255, 69, 58' },    orange: { hex: '#ff9f0a', rgb: '255, 159, 10' }};const savedTheme = localStorage.getItem('nexus_theme') || 'green';const t = themes[savedTheme] || themes.green;document.documentElement.style.setProperty('--accent', t.hex);document.documentElement.style.setProperty('--accent-rgb', t.rgb);async function login(){  const btn = document.getElementById('btn');  btn.style.opacity = '0.5';  btn.innerText = 'Verifying...';  const res=await fetch('/api/login',{method:'POST',body:JSON.stringify({pin:document.getElementById('pin').value})});  if(res.ok) {    btn.style.background = '#fff';    btn.innerText = 'Granted';    setTimeout(() => location.reload(), 300);  } else {     btn.style.opacity = '1';    btn.innerText = 'Authenticate';    document.getElementById('err').style.display='block';    setTimeout(() => document.getElementById('err').style.display='none', 3000);  }} document.getElementById('pin').addEventListener('keypress', e=>{if(e.key==='Enter')login();});</script></body></html>");
+        return res.end("<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no'><title>Nexus Core</title><style>:root { --accent: #10b981; --accent-rgb: 16, 185, 129; }body{font-family:-apple-system,BlinkMacSystemFont,'Inter',sans-serif;background:#000000;color:#f5f5f7;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;overflow:hidden;}.login-box{background:rgba(28,28,30,0.5);backdrop-filter:blur(30px);-webkit-backdrop-filter:blur(30px);padding:50px;border-radius:24px;border:1px solid rgba(255,255,255,0.08);text-align:center;box-shadow:0 20px 50px rgba(0,0,0,0.5);width:90%;max-width:420px;box-sizing:border-box; animation: slideUpFade 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity:0; transform:translateY(30px);}@keyframes slideUpFade { to { opacity:1; transform:translateY(0); } }@keyframes pulseLogo { 0% { text-shadow: 0 0 10px rgba(var(--accent-rgb), 0.2); } 50% { text-shadow: 0 0 25px rgba(var(--accent-rgb), 0.6); } 100% { text-shadow: 0 0 10px rgba(var(--accent-rgb), 0.2); } }h2{font-weight:700;letter-spacing:2px;color:#fff; margin-bottom:10px; animation: pulseLogo 3s infinite;}.subtitle { color: rgba(255,255,255,0.5); font-size: 0.85em; letter-spacing: 1px; margin-bottom: 30px; text-transform: uppercase; }input{background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.1);color:white;padding:18px;border-radius:16px;font-size:20px!important;text-align:center;letter-spacing:15px;width:100%;max-width:240px;margin:10px auto 30px auto;outline:none;transition:all 0.3s;display:block;}input:focus{border-color:var(--accent);box-shadow:0 0 15px rgba(var(--accent-rgb),0.3); background:rgba(255,255,255,0.05);}button{background:var(--accent);color:#000;border:none;padding:15px 40px;font-size:1em;border-radius:16px;cursor:pointer;font-weight:700;width:100%;transition:all 0.3s;text-transform:uppercase;letter-spacing:1px;}button:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(var(--accent-rgb),0.4);}button:active { transform:translateY(0); }.bg-anim { position:absolute; top:50%; left:50%; width: 120vw; height: 120vw; background: radial-gradient(circle, rgba(var(--accent-rgb), 0.03) 0%, transparent 60%); transform: translate(-50%, -50%); z-index: -1; pointer-events: none; } @keyframes popupMenu { 0% { opacity: 0; transform: translateY(10px) scale(0.95); } 100% { opacity: 1; transform: translateY(0) scale(1); } } </style><script>(function() {const themes = {green: { hex: '#10b981', rgb: '16, 185, 129', hover: '#34d399' },blue: { hex: '#0a84ff', rgb: '10, 132, 255', hover: '#47a3ff' },red: { hex: '#ff453a', rgb: '255, 69, 58', hover: '#ff6b63' },orange: { hex: '#ff9f0a', rgb: '255, 159, 10', hover: '#ffb340' }};const savedTheme = localStorage.getItem('nexus_theme');if (savedTheme && themes[savedTheme]) {const t = themes[savedTheme];document.documentElement.style.setProperty('--accent-green', t.hex);document.documentElement.style.setProperty('--accent-green-rgb', t.rgb);document.documentElement.style.setProperty('--accent-green-hover', t.hover);}})();</script></head><body><div class='bg-anim'></div><div class='login-box'>  <h2>NEXUS</h2>  <div class='subtitle'>System Authentication</div>  <input type='password' id='pin' maxlength='4' placeholder='••••'>  <button onclick='login()' id='btn'>Authenticate</button>  <p id='err' style='color:#ff453a;display:none;margin-top:20px;font-weight:500; font-size:0.9em; animation:slideUpFade 0.3s ease forwards;'>Access Denied</p></div><script>const themes = {    green: { hex: '#10b981', rgb: '16, 185, 129' },    blue: { hex: '#0a84ff', rgb: '10, 132, 255' },    red: { hex: '#ff453a', rgb: '255, 69, 58' },    orange: { hex: '#ff9f0a', rgb: '255, 159, 10' }};const savedTheme = localStorage.getItem('nexus_theme') || 'green';const t = themes[savedTheme] || themes.green;document.documentElement.style.setProperty('--accent', t.hex);document.documentElement.style.setProperty('--accent-rgb', t.rgb);async function login(){  const btn = document.getElementById('btn');  btn.style.opacity = '0.5';  btn.innerText = 'Verifying...';  const res=await fetch('/api/login',{method:'POST',body:JSON.stringify({pin:document.getElementById('pin').value})});  if(res.ok) {    btn.style.background = '#fff';    btn.innerText = 'Granted';    setTimeout(() => location.reload(), 300);  } else {     btn.style.opacity = '1';    btn.innerText = 'Authenticate';    document.getElementById('err').style.display='block';    setTimeout(() => document.getElementById('err').style.display='none', 3000);  }} document.getElementById('pin').addEventListener('keypress', e=>{if(e.key==='Enter')login();});</script></body></html>");
     }
 
     // === [ANCHOR: API_ROUTES_GET] ===
@@ -967,7 +1069,7 @@ http.createServer(async (req, res) => {
             activeTickets = guild.channels.cache.filter(c => c.name.startsWith('shop-') || c.name.startsWith('support-')).size;
         }
         const todayStr = new Date().toISOString().split('T')[0];
-        let monthRevenue = 0; Object.keys(memoryStats.revenue).forEach(date => { if(date.startsWith(todayStr.substring(0, 7))) monthRevenue += memoryStats.revenue[date]; });
+        let monthRevenue = 0; if(memoryStats.revenue) Object.keys(memoryStats.revenue).forEach(date => { if(date.startsWith(todayStr.substring(0, 7))) monthRevenue += parseFloat(memoryStats.revenue[date]) || 0; });
         res.writeHead(200, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({ memoryStats, maintenance: memoryStats.settings?.maintenance, pendingReviewsCount: memoryStats.pending_reviews?.length || 0, activeTickets: activeTickets, todayRevenue: memoryStats.revenue[todayStr] || 0, monthRevenue, ticketsOpened: memoryStats.analytics?.tickets_opened || 0, dropOffRate: memoryStats.analytics?.tickets_opened > 0 ? (100 - (memoryStats.total_transactions / memoryStats.analytics.tickets_opened) * 100).toFixed(1) : 0, peakHourStr: "N/A", conversionRate: ((memoryStats.total_transactions / (memoryStats.total_joins || 1)) * 100).toFixed(1), retentionRate: memberCount !== "N/A" ? ((memberCount / (memberCount + (memoryStats.total_leaves || 0))) * 100).toFixed(1) : "N/A", onlineCount, memberCount, MONTHLY_GOAL, PIN: DASHBOARD_PIN }));
     }
@@ -1875,7 +1977,7 @@ http.createServer(async (req, res) => {
                            <div style='display:flex; gap:10px; padding: 15px; background: rgba(0,0,0,0.2); border-top: 0.5px solid rgba(255,255,255,0.05); flex-wrap: wrap;'>
                                <div style='position:relative; display:inline-block;' id='shortcuts-container'>
                                    <button class='admin-btn' style='margin:0; padding:6px 12px; display:flex; align-items:center; gap:5px;' onclick='const m = document.getElementById("shortcuts-menu"); m.style.display = m.style.display === "flex" ? "none" : "flex";'>⚡ Shortcuts</button>
-                                   <div id='shortcuts-menu' style='position:absolute; bottom:calc(100% + 5px); left:0; background:var(--bg-card); border:0.5px solid rgba(255,255,255,0.1); border-radius:12px; padding:10px; display:none; flex-direction:column; gap:5px; box-shadow:0 10px 30px rgba(0,0,0,0.5); z-index:100; min-width:150px; backdrop-filter:blur(10px);'>
+                                   <div id='shortcuts-menu' style='position:absolute; bottom:calc(100% + 5px); left:0; background:var(--bg-card); border:0.5px solid rgba(255,255,255,0.1); border-radius:12px; padding:10px; display:none; flex-direction:column; gap:5px; box-shadow:0 10px 30px rgba(0,0,0,0.5); z-index:100; min-width:150px; backdrop-filter:blur(10px); animation: popupMenu 0.2s ease-out forwards;'>
                                        <button class='admin-btn' style='margin:0; padding:6px 12px; width:100%; text-align:left;' onclick='window.sendQuickResponse("welcome"); this.parentElement.style.display="none";'>👋 Welcome</button>
                                        <button class='admin-btn' style='margin:0; padding:6px 12px; width:100%; text-align:left;' onclick='window.sendQuickResponse("wait"); this.parentElement.style.display="none";'>⏳ Wait</button>
                                        <button class='admin-btn' style='margin:0; padding:6px 12px; width:100%; text-align:left;' onclick='window.sendQuickResponse("resolved"); this.parentElement.style.display="none";'>✅ Resolved?</button>
@@ -2206,7 +2308,7 @@ else window.setTheme('green');
     return t[key];
 }
 let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, userGoal=500, salesChart, hourlyChart, topProdChart, catChart, dowChartInst, funnelChartInst; 
-        let allMembersData = []; let isMembersLoaded = false; let activeChatChannel = null; let chatPollInterval = null; let terminalInterval = null;
+        let allMembersData = []; let isMembersLoaded = false; let activeChatChannel = null; let chatPollInterval = null; let terminalInterval = null; let ws = null;
         let trackedTickets = 0, trackedReviews = 0, trackedSales = 0;
         
         window.calcCurrency = function(source) {
@@ -2292,7 +2394,17 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
            } catch(e) {}
         }
 
-        async function initDashboard(){
+        async function initDashboard() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(protocol + '//' + window.location.host + '/ws');
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                if (data.type === 'new_message' && data.channelId === activeChatChannel) {
+                    window.fetchChatMessages();
+                }
+            };
+            ws.onclose = () => { setTimeout(() => { ws = new WebSocket(protocol + '//' + window.location.host + '/ws'); }, 2000); };
+
            try{
                const res = await fetch('/api/init-data');
                if(res.ok) {
@@ -2323,7 +2435,10 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             if(document.getElementById('ui-peak-hour')) document.getElementById('ui-peak-hour').innerText = overrides['peak'] || (data.peakHourStr||'N/A');
             
             trackedTickets = data.activeTickets || 0; trackedReviews = data.pendingReviewsCount || 0; trackedSales = rawStats.total_transactions || 0; 
-            buildStaticTables(); renderAnalyticsCharts(); updateMaintenanceBadge(data.maintenance); updateBadgesAndFeed(data); 
+            try { buildStaticTables(); } catch(e) { console.error("buildStaticTables error:", e); }
+            try { renderAnalyticsCharts(); } catch(e) { console.error("renderAnalyticsCharts error:", e); }
+            try { updateMaintenanceBadge(data.maintenance); } catch(e) { console.error("updateMaintenanceBadge error:", e); }
+            try { updateBadgesAndFeed(data); } catch(e) { console.error("updateBadgesAndFeed error:", e); } 
             if(typeof window.renderSalesChart === 'function') window.renderSalesChart(7);
         }
         
@@ -2671,9 +2786,9 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             
             if(tabId === 'livechat'){
                 window.loadTicketsForChat();
-                if(activeChatChannel && !chatPollInterval){ chatPollInterval = setInterval(window.fetchChatMessages, 3000); }
+                // chatPollInterval replaced by websocket
             } else {
-                if(chatPollInterval){ clearInterval(chatPollInterval); chatPollInterval = null; }
+                // chatPollInterval replaced by websocket
             }
             
             if(tabId === 'terminal') {
@@ -2771,7 +2886,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         window.testActionLatency = async function() { const resultDiv = document.getElementById('latency-result'); resultDiv.innerText = 'Pinging...'; resultDiv.style.color = 'var(--text-muted)'; const startTime = Date.now(); try { const res = await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'ping_test', pin: PIN }) }); if (res.ok) { const totalTime = Date.now() - startTime; resultDiv.innerText = totalTime + ' ms'; if (totalTime < 500) resultDiv.style.color = getThemeVal('hex'); else if (totalTime < 1500) resultDiv.style.color = 'var(--accent-orange)'; else resultDiv.style.color = 'var(--accent-red)'; } else { resultDiv.innerText = 'Error'; resultDiv.style.color = 'var(--accent-red)'; } } catch(e) { resultDiv.innerText = 'Net Error'; resultDiv.style.color = 'var(--accent-red)'; } };
         
         window.loadTicketsForChat = async function() { try { const res = await fetch('/api/tickets'); const tickets = await res.json(); let html = ''; if(tickets.length === 0) { html = '<p class="text-muted text-center" style="margin-top:20px; font-family:inherit;">No active lines.</p>'; } else { const shopTickets = tickets.filter(t => t.name.startsWith('shop-')); const supportTickets = tickets.filter(t => t.name.startsWith('support-')); if(shopTickets.length > 0) { html += '<div style="font-size:0.85em; text-transform:uppercase; color:var(--accent-green); font-weight:700; margin: 10px 0 5px 5px; border-bottom: 0.5px solid rgba(var(--accent-green-rgb), 0.2); padding-bottom:5px; letter-spacing:0.5px;">🛒 Shop (' + shopTickets.length + ')</div>'; shopTickets.forEach(t => { const isActive = activeChatChannel === t.id ? 'active' : ''; html += '<div class="ticket-item ' + isActive + '" onclick="window.openTicketChat(\\'' + t.id + '\\')">' + escapeHTML(t.name) + '</div>'; }); } if(supportTickets.length > 0) { html += '<div style="font-size:0.85em; text-transform:uppercase; color:var(--accent-orange); font-weight:700; margin: 20px 0 5px 5px; border-bottom: 0.5px solid rgba(245, 158, 11, 0.2); padding-bottom:5px; letter-spacing:0.5px;">🎧 Support (' + supportTickets.length + ')</div>'; supportTickets.forEach(t => { const isActive = activeChatChannel === t.id ? 'active' : ''; html += '<div class="ticket-item ' + isActive + '" onclick="window.openTicketChat(\\'' + t.id + '\\')">' + escapeHTML(t.name) + '</div>'; }); } } if(document.getElementById('chat-ticket-list')) document.getElementById('chat-ticket-list').innerHTML = html; } catch(e) {} };
-        window.openTicketChat = function(channelId) { activeChatChannel = channelId; window.loadTicketsForChat(); if(document.getElementById('chat-messages-area')) document.getElementById('chat-messages-area').innerHTML = '<div style="margin:auto; color:var(--accent-green);"><div style="width:40px; height:40px; border:3px solid rgba(var(--accent-green-rgb), 0.1); border-top:3px solid var(--accent-green); border-radius:50%; animation:spin 1s linear infinite; margin:auto; box-shadow:0 0 15px rgba(var(--accent-green-rgb), 0.5);"></div></div>'; window.fetchChatMessages(); if(chatPollInterval) clearInterval(chatPollInterval); chatPollInterval = setInterval(window.fetchChatMessages, 3000); };
+        window.openTicketChat = function(channelId) { activeChatChannel = channelId; window.loadTicketsForChat(); if(document.getElementById('chat-messages-area')) document.getElementById('chat-messages-area').innerHTML = '<div style="margin:auto; color:var(--accent-green);"><div style="width:40px; height:40px; border:3px solid rgba(var(--accent-green-rgb), 0.1); border-top:3px solid var(--accent-green); border-radius:50%; animation:spin 1s linear infinite; margin:auto; box-shadow:0 0 15px rgba(var(--accent-green-rgb), 0.5);"></div></div>'; window.fetchChatMessages(); };
         window.fetchChatMessages = async function() { if(!activeChatChannel) return; try { const res = await fetch('/api/tickets/messages?channelId=' + activeChatChannel); const msgs = await res.json(); let html = ''; if(msgs.length === 0) html = '<p class="text-muted text-center" style="margin:auto; font-family:monospace;">Awaiting transmission...</p>'; else { msgs.forEach(m => { const bubbleClass = m.isBot ? 'bot' : 'user'; const imgHtml = m.imageUrl ? '<br><img src="' + escapeHTML(m.imageUrl) + '" class="chat-img-preview" style="max-width:100%; border-radius:12px; margin-top:10px; cursor:pointer; border:0.5px solid rgba(255,255,255,0.1);" onclick="window.open(\\'' + escapeHTML(m.imageUrl) + '\\')">' : ''; const actionsHtml = '<div class="chat-bubble-actions" style="display:none; position:absolute; top:-15px; ' + (m.isBot ? 'left:15px;' : 'right:15px;') + ' background:rgba(0,0,0,0.8); backdrop-filter:blur(10px); border:0.5px solid rgba(255,255,255,0.1); border-radius:12px; padding:4px 8px; gap:8px; box-shadow:0 5px 15px rgba(0,0,0,0.3);"><button style="background:none; border:none; cursor:pointer; font-size:1.1em; transition:transform 0.2s;" onclick="window.reactMessage(\\'' + m.id + '\\', \\'👍\\')">👍</button><button style="background:none; border:none; cursor:pointer; font-size:1.1em; transition:transform 0.2s;" onclick="window.reactMessage(\\'' + m.id + '\\', \\'❤️\\')">❤️</button></div>'; html += '<div class="chat-bubble ' + bubbleClass + '" onmouseover="this.querySelector(\\' .chat-bubble-actions\\').style.display=\\'flex\\'" onmouseout="this.querySelector(\\' .chat-bubble-actions\\').style.display=\\'none\\'"><div class="chat-author">' + escapeHTML(m.author) + '</div>' + escapeHTML(m.content) + imgHtml + actionsHtml + '</div>'; }); } const area = document.getElementById('chat-messages-area'); const isAtBottom = area.scrollHeight - area.scrollTop <= area.clientHeight + 100; area.innerHTML = html; if(isAtBottom) area.scrollTop = area.scrollHeight; } catch(e) {} };
         window.sendChatMessage = async function() { if(!activeChatChannel) return showToast('Select line first', 'error'); const input = document.getElementById('chat-input-text'); const fileInput = document.getElementById('chat-file-input'); const text = input.value.trim(); const file = fileInput.files[0]; if(!text && !file) return; input.value = ''; document.getElementById('attach-badge').style.display='none'; let base64 = null; if (file) { const reader = new FileReader(); reader.readAsDataURL(file); await new Promise(r => reader.onload = r); base64 = reader.result; fileInput.value = ''; } try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'send_ticket_message', channelId: activeChatChannel, message: text, imageBase64: base64, pin: PIN }) }); window.fetchChatMessages(); } catch(e) { showToast('Transmission Failed', 'error'); } };
         window.reactMessage = async function(msgId, emoji) { if(!activeChatChannel) return; try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'react_ticket_message', channelId: activeChatChannel, messageId: msgId, emoji: emoji, pin: PIN }) }); showToast('Reaction sent'); } catch (e) { showToast('Failure', 'error'); } };
@@ -2853,7 +2968,21 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
 </html>`;
         return res.end(dashboardHTML);
     } else { res.writeHead(200, { 'Content-Type': 'text/plain' }); res.end('API Bot'); }
-}).listen(process.env.PORT || 3000);
+});
+
+server.listen(process.env.PORT || 3000);
+
+server.on('upgrade', (request, socket, head) => {
+    const pathname = request.url;
+    if (pathname === '/ws') {
+        wss.handleUpgrade(request, socket, head, (ws) => {
+            wss.emit('connection', ws, request);
+        });
+    } else {
+        socket.destroy();
+    }
+});
+
 
 // === [ANCHOR: STARTUP_DEBUG] ===
 systemLog('INFO', 'SYSTEM', 'Starting Nexus Bot instance...');
