@@ -18,8 +18,7 @@ const SHOP_CHANNEL_ID = "1520803761130311970";
 const VIP_ROLE_ID = "REMPLACE_AVEC_ID_ROLE_VIP"; 
 
 if (!DISCORD_BOT_TOKEN) {
-    console.error("❌ CRITICAL ERROR: DISCORD_BOT_TOKEN is missing!");
-    process.exit(1);
+    console.error("⚠️ WARNING: DISCORD_BOT_TOKEN is missing! Bot will not connect to Discord.");
 }
 
 const REWARBLE_API_URL = "https://api.rewarble.com/client/1.00/redeem"; 
@@ -939,7 +938,7 @@ http.createServer(async (req, res) => {
 
     if ((req.url === '/dashboard' || req.url === '/') && !isAuthenticated) {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        return res.end("<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no'><title>Nexus Security</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Inter',sans-serif;background:#000000;color:#f5f5f7;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;}.login-box{background:rgba(28,28,30,0.5);backdrop-filter:blur(30px);-webkit-backdrop-filter:blur(30px);padding:50px;border-radius:24px;border:1px solid rgba(255,255,255,0.08);text-align:center;box-shadow:0 20px 50px rgba(0,0,0,0.5);width:90%;max-width:420px;box-sizing:border-box;}h2{font-weight:700;letter-spacing:1px;color:#fff;}input{background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.1);color:white;padding:18px;border-radius:16px;font-size:20px!important;text-align:center;letter-spacing:15px;width:100%;max-width:240px;margin:30px auto;outline:none;transition:all 0.3s;display:block;}input:focus{border-color:#10b981;box-shadow:0 0 15px rgba(16,185,129,0.2);}button{background:#10b981;color:#000;border:none;padding:15px 40px;font-size:1em;border-radius:16px;cursor:pointer;font-weight:700;width:100%;transition:all 0.3s;text-transform:uppercase;letter-spacing:1px;}button:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(16,185,129,0.3);}</style></head><body><div class='login-box'><h2>NEXUS CORE</h2><input type='password' id='pin' maxlength='4' placeholder='••••'><button onclick='login()'>Authenticate</button><p id='err' style='color:#ff453a;display:none;margin-top:20px;font-weight:500;'>Access Denied</p></div><script>async function login(){const res=await fetch('/api/login',{method:'POST',body:JSON.stringify({pin:document.getElementById('pin').value})});if(res.ok)location.reload();else document.getElementById('err').style.display='block';} document.getElementById('pin').addEventListener('keypress', e=>{if(e.key==='Enter')login();});</script></body></html>");
+        return res.end("<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no'><title>Nexus Core</title><style>:root { --accent: #10b981; --accent-rgb: 16, 185, 129; }body{font-family:-apple-system,BlinkMacSystemFont,'Inter',sans-serif;background:#000000;color:#f5f5f7;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;overflow:hidden;}.login-box{background:rgba(28,28,30,0.5);backdrop-filter:blur(30px);-webkit-backdrop-filter:blur(30px);padding:50px;border-radius:24px;border:1px solid rgba(255,255,255,0.08);text-align:center;box-shadow:0 20px 50px rgba(0,0,0,0.5);width:90%;max-width:420px;box-sizing:border-box; animation: slideUpFade 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity:0; transform:translateY(30px);}@keyframes slideUpFade { to { opacity:1; transform:translateY(0); } }@keyframes pulseLogo { 0% { text-shadow: 0 0 10px rgba(var(--accent-rgb), 0.2); } 50% { text-shadow: 0 0 25px rgba(var(--accent-rgb), 0.6); } 100% { text-shadow: 0 0 10px rgba(var(--accent-rgb), 0.2); } }h2{font-weight:700;letter-spacing:2px;color:#fff; margin-bottom:10px; animation: pulseLogo 3s infinite;}.subtitle { color: rgba(255,255,255,0.5); font-size: 0.85em; letter-spacing: 1px; margin-bottom: 30px; text-transform: uppercase; }input{background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.1);color:white;padding:18px;border-radius:16px;font-size:20px!important;text-align:center;letter-spacing:15px;width:100%;max-width:240px;margin:10px auto 30px auto;outline:none;transition:all 0.3s;display:block;}input:focus{border-color:var(--accent);box-shadow:0 0 15px rgba(var(--accent-rgb),0.3); background:rgba(255,255,255,0.05);}button{background:var(--accent);color:#000;border:none;padding:15px 40px;font-size:1em;border-radius:16px;cursor:pointer;font-weight:700;width:100%;transition:all 0.3s;text-transform:uppercase;letter-spacing:1px;}button:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(var(--accent-rgb),0.4);}button:active { transform:translateY(0); }.bg-anim { position:absolute; top:50%; left:50%; width: 120vw; height: 120vw; background: radial-gradient(circle, rgba(var(--accent-rgb), 0.03) 0%, transparent 60%); transform: translate(-50%, -50%); z-index: -1; pointer-events: none; }</style></head><body><div class='bg-anim'></div><div class='login-box'>  <h2>NEXUS</h2>  <div class='subtitle'>System Authentication</div>  <input type='password' id='pin' maxlength='4' placeholder='••••'>  <button onclick='login()' id='btn'>Authenticate</button>  <p id='err' style='color:#ff453a;display:none;margin-top:20px;font-weight:500; font-size:0.9em; animation:slideUpFade 0.3s ease forwards;'>Access Denied</p></div><script>const themes = {    green: { hex: '#10b981', rgb: '16, 185, 129' },    blue: { hex: '#0a84ff', rgb: '10, 132, 255' },    red: { hex: '#ff453a', rgb: '255, 69, 58' },    orange: { hex: '#ff9f0a', rgb: '255, 159, 10' }};const savedTheme = localStorage.getItem('nexus_theme') || 'green';const t = themes[savedTheme] || themes.green;document.documentElement.style.setProperty('--accent', t.hex);document.documentElement.style.setProperty('--accent-rgb', t.rgb);async function login(){  const btn = document.getElementById('btn');  btn.style.opacity = '0.5';  btn.innerText = 'Verifying...';  const res=await fetch('/api/login',{method:'POST',body:JSON.stringify({pin:document.getElementById('pin').value})});  if(res.ok) {    btn.style.background = '#fff';    btn.innerText = 'Granted';    setTimeout(() => location.reload(), 300);  } else {     btn.style.opacity = '1';    btn.innerText = 'Authenticate';    document.getElementById('err').style.display='block';    setTimeout(() => document.getElementById('err').style.display='none', 3000);  }} document.getElementById('pin').addEventListener('keypress', e=>{if(e.key==='Enter')login();});</script></body></html>");
     }
 
     // === [ANCHOR: API_ROUTES_GET] ===
@@ -1649,9 +1648,7 @@ http.createServer(async (req, res) => {
         .feed-time { font-size: 0.75em; color: var(--accent-green); min-width: 60px; font-weight: 600; text-transform: uppercase; }
         
         .splash-screen { position: fixed; inset: 0; background: #000; z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; pointer-events: all; animation: fadeOutSplash 0.6s cubic-bezier(0.25, 1, 0.5, 1) forwards 1.2s; }
-        @keyframes fadeOutSplash { 0% { opacity: 1; visibility: visible; } 100% { opacity: 0; visibility: hidden; pointer-events: none; z-index: -1; display: none; } }
-        .loader-bar-fast { width: 200px; height: 2px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden; position: relative; margin-top: 20px; }
-        .loader-bar-fast::after { content: ''; position: absolute; left: 0; top: 0; height: 100%; width: 100%; background: var(--accent-green); animation: loadBarAnim 1.2s cubic-bezier(0.25, 1, 0.5, 1) forwards; }
+        @keyframes fadeOutSplash { 0% { opacity: 1; visibility: visible; transform: scale(1); filter:blur(0); } 100% { opacity: 0; visibility: hidden; pointer-events: none; z-index: -1; display: none; transform: scale(1.1); filter:blur(10px); } }
         @keyframes loadBarAnim { 0% { width: 0%; } 100% { width: 100%; } }
         
         .kanban-board { display: flex; gap: 20px; overflow-x: auto; padding-bottom: 20px; align-items: stretch; min-height: 500px; }
@@ -1714,9 +1711,14 @@ http.createServer(async (req, res) => {
 <body>
     <div id='toast'></div>
     
-    <div id='loading-screen' class='splash-screen'>
-       <h1 style='font-size: 2em; margin-bottom: 15px; font-weight:700; color:#fff;'>NEXUS</h1>
-       <div class='loader-bar-fast'></div>
+    <div id='loading-screen' class='splash-screen' style='background: radial-gradient(circle at center, rgba(var(--accent-green-rgb), 0.1) 0%, #000 60%);'>
+       <div style='animation: zoomIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; display:flex; flex-direction:column; align-items:center;'>
+           <h1 style='font-size: 2.5em; margin-bottom: 5px; font-weight:800; color:#fff; letter-spacing:4px; text-shadow: 0 0 30px rgba(var(--accent-green-rgb), 0.8);'>NEXUS</h1>
+           <div style='font-size: 0.85em; color:rgba(255,255,255,0.5); letter-spacing:2px; text-transform:uppercase; margin-bottom: 30px;'>Core System Boot</div>
+           <div class='loader-bar-fast' style='width: 250px; height: 3px; background: rgba(255,255,255,0.05); border-radius: 4px; overflow:hidden;'>
+              <div style='width:100%; height:100%; background:var(--accent-green); animation: loadBarAnim 1.2s cubic-bezier(0.8, 0, 0.2, 1) forwards; box-shadow:0 0 15px var(--accent-green);'></div>
+           </div>
+       </div>
     </div>
 
     <div class='modal' id='premium-dialog' style='display:none;'>
@@ -2814,6 +2816,10 @@ http.createServer(async (req, res) => {
 systemLog('INFO', 'SYSTEM', 'Starting Nexus Bot instance...');
 console.log('Token:', DISCORD_BOT_TOKEN ? '✅ Présent' : '❌ Manquant');
 
-client.login(DISCORD_BOT_TOKEN).catch(e => {
-    systemLog('CRITICAL', 'DISCORD_CORE', `Failed to login to Discord: ${e.message}`);
-});
+if (DISCORD_BOT_TOKEN) {
+    client.login(DISCORD_BOT_TOKEN).catch(e => {
+        systemLog('CRITICAL', 'DISCORD_CORE', `Failed to login to Discord: ${e.message}`);
+    });
+} else {
+    systemLog('WARN', 'SYSTEM', 'Skipping Discord login because DISCORD_BOT_TOKEN is missing.');
+}
