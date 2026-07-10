@@ -718,11 +718,11 @@ client.on('messageCreate', async (message) => {
                const { GoogleGenAI } = require('@google/genai');
                if (process.env.GEMINI_API_KEY) {
                    const ai = new GoogleGenAI({
-                       apiKey: process.env.GEMINI_API_KEY,
+                       apiKey: (process.env.GEMINI_API_KEY || '').trim(),
                        httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
                    });
                    const response = await ai.models.generateContent({
-                       model: "gemini-3.5-flash",
+                       model: "gemini-2.0-flash",
                        contents: message.content,
                        config: {
                            systemInstruction: "You are an AI support agent. Detect the user's intent and provide a helpful, polite reply. Return JSON in the format: { \"intent\": \"brief summary\", \"suggested_reply\": \"detailed reply\" }",
@@ -741,6 +741,7 @@ client.on('messageCreate', async (message) => {
                }
            } catch (e) {
                console.log("AI Error:", e.message);
+               await message.reply("⚠️ **AI Support Error:** The Gemini API key is either missing or invalid. Please check the App Settings (Secrets) and provide a valid API key.").catch(()=>{});
            }
         }
 
