@@ -737,23 +737,30 @@ client.on('messageCreate', async (message) => {
                         throw err; 
                     });
 
+                    // 🔍 RECHERCHE DE SÉCURITÉ MAXIMALE POUR EXTRAIRE LA VALEUR
                     let rawData = apiResponse.data;
                     if (rawData) {
-                        if (rawData.value !== undefined) voucherValue = parseFloat(rawData.value);
-                        else if (rawData.amount !== undefined) voucherValue = parseFloat(rawData.amount);
-                        else if (rawData.voucher && rawData.voucher.value !== undefined) voucherValue = parseFloat(rawData.voucher.value);
-                        else if (rawData.voucher && rawData.voucher.amount !== undefined) voucherValue = parseFloat(rawData.voucher.amount);
-                        else if (rawData.data && rawData.data.value !== undefined) voucherValue = parseFloat(rawData.data.value);
-                        else if (rawData.data && rawData.data.amount !== undefined) voucherValue = parseFloat(rawData.data.amount);
-                        else {
+                        const extractVal = (v) => {
+                            if (v === null || v === undefined) return null;
+                            const parsed = parseFloat(String(v).replace(/,/g, '.').replace(/[^0-9.]/g, ''));
+                            return (!isNaN(parsed) && parsed > 0) ? parsed : null;
+                        };
+
+                        let foundVal = extractVal(rawData.value) || extractVal(rawData.amount) || 
+                                       (rawData.voucher && (extractVal(rawData.voucher.value) || extractVal(rawData.voucher.amount))) ||
+                                       (rawData.data && (extractVal(rawData.data.value) || extractVal(rawData.data.amount)));
+                        
+                        if (foundVal) {
+                            voucherValue = foundVal;
+                        } else {
                             const deepSearch = (obj) => {
                                 for (let key in obj) {
-                                    if ((key === 'value' || key === 'amount') && !isNaN(parseFloat(obj[key])) && parseFloat(obj[key]) > 0) {
-                                        return parseFloat(obj[key]);
-                                    }
                                     if (typeof obj[key] === 'object' && obj[key] !== null) {
                                         let deepVal = deepSearch(obj[key]);
-                                        if (deepVal) return deepVal;
+                                        if (deepVal !== null) return deepVal;
+                                    } else if ((key === 'value' || key === 'amount' || key === 'balance')) {
+                                        let val = extractVal(obj[key]);
+                                        if (val !== null) return val;
                                     }
                                 }
                                 return null;
@@ -885,6 +892,17 @@ client.on('guildMemberRemove', async (member) => {
 // === [ANCHOR: HTTP_SERVER_AND_AUTH] ===
 const rateLimits = new Map();
 const bruteForceLocks = new Map();
+
+// 🧹 GARBAGE COLLECTOR : Nettoie la mémoire des IPs inactives toutes les 15 minutes
+setInterval(() => {
+    const now = Date.now();
+    rateLimits.forEach((value, key) => {
+        if (now > value.resetTime) rateLimits.delete(key);
+    });
+    bruteForceLocks.forEach((value, key) => {
+        if (now > value.lockout) bruteForceLocks.delete(key);
+    });
+}, 15 * 60 * 1000);
 
 http.createServer(async (req, res) => {
     const clientIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '127.0.0.1';
