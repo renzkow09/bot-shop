@@ -394,7 +394,7 @@ client.once('ready', () => {
                 const admin = await client.users.fetch(ADMIN_DISCORD_ID).catch(()=>null);
                 if (admin) admin.send("🚨 **SYSTEM ALERT** 🚨\n- The Rewarble API is currently DOWN or unreachable. Purchases might fail.").catch(()=>{});
             }
-        } catch(e){}
+        } catch(e){ try{ window.showToast('Runtime Error', 'error'); }catch(ex){} console.error('Silent error caught:', e); }
     }, 15 * 60 * 1000);
 });
 
@@ -738,6 +738,9 @@ client.on('messageCreate', async (message) => {
 
                     // 🔍 RECHERCHE DE SÉCURITÉ MAXIMALE POUR EXTRAIRE LA VALEUR
                     let rawData = apiResponse.data;
+                    if (typeof rawData === 'string') {
+                        try { rawData = JSON.parse(rawData); } catch(e) {}
+                    }
                     if (rawData) {
                         const extractVal = (v) => {
                             if (v === null || v === undefined) return null;
@@ -752,14 +755,18 @@ client.on('messageCreate', async (message) => {
                         if (foundVal) {
                             voucherValue = foundVal;
                         } else {
+                            const validKeys = ['value', 'amount', 'balance', 'payout', 'revenue', 'price', 'credit', 'reward', 'total', 'face', 'money', 'eur', 'usd', 'gbp', 'net', 'gross', 'denomination', 'sum', 'cash'];
                             const deepSearch = (obj) => {
                                 for (let key in obj) {
                                     if (typeof obj[key] === 'object' && obj[key] !== null) {
                                         let deepVal = deepSearch(obj[key]);
                                         if (deepVal !== null) return deepVal;
-                                    } else if ((key === 'value' || key === 'amount' || key === 'balance')) {
-                                        let val = extractVal(obj[key]);
-                                        if (val !== null) return val;
+                                    } else {
+                                        let lk = key.toLowerCase();
+                                        if (validKeys.some(vk => lk.includes(vk))) {
+                                            let val = extractVal(obj[key]);
+                                            if (val !== null) return val;
+                                        }
                                     }
                                 }
                                 return null;
@@ -1484,7 +1491,7 @@ http.createServer(async (req, res) => {
                                     let statusFr = data.status === 'recording' ? '🎥 Enregistrement en cours' : data.status === 'editing' ? '✂️ Montage en cours' : '✅ Commande Terminée';
                                     await targetUser.send(`🔔 **Mise à jour de ta commande personnalisée (${reqItem.product}):**\nNouveau statut : **${statusFr}** !`).catch(()=>{});
                                 }
-                            } catch(e){}
+                            } catch(e){ try{ window.showToast('Runtime Error', 'error'); }catch(ex){} console.error('Silent error caught:', e); }
                         }
                     }
                 }
@@ -1866,10 +1873,16 @@ http.createServer(async (req, res) => {
                                </div>
                            </div>
                            <div style='display:flex; gap:10px; padding: 15px; background: rgba(0,0,0,0.2); border-top: 0.5px solid rgba(255,255,255,0.05); flex-wrap: wrap;'>
-                               <button class='admin-btn' style='margin:0; padding:6px 12px;' onclick='window.sendQuickResponse("welcome")'>👋 Welcome</button>
-                               <button class='admin-btn' style='margin:0; padding:6px 12px;' onclick='window.sendQuickResponse("wait")'>⏳ Wait</button>
-                               <button class='admin-btn' style='margin:0; padding:6px 12px;' onclick='window.sendQuickResponse("resolved")'>✅ Resolved?</button>
-                               <button class='admin-btn' style='margin:0; padding:6px 12px; color:var(--accent-red);' onclick='window.sendQuickResponse("close")'>🔒 Close</button>
+                               <div style='position:relative; display:inline-block;' id='shortcuts-container'>
+                                   <button class='admin-btn' style='margin:0; padding:6px 12px; display:flex; align-items:center; gap:5px;' onclick='const m = document.getElementById("shortcuts-menu"); m.style.display = m.style.display === "flex" ? "none" : "flex";'>⚡ Shortcuts</button>
+                                   <div id='shortcuts-menu' style='position:absolute; bottom:calc(100% + 5px); left:0; background:var(--bg-card); border:0.5px solid rgba(255,255,255,0.1); border-radius:12px; padding:10px; display:none; flex-direction:column; gap:5px; box-shadow:0 10px 30px rgba(0,0,0,0.5); z-index:100; min-width:150px; backdrop-filter:blur(10px);'>
+                                       <button class='admin-btn' style='margin:0; padding:6px 12px; width:100%; text-align:left;' onclick='window.sendQuickResponse("welcome"); this.parentElement.style.display="none";'>👋 Welcome</button>
+                                       <button class='admin-btn' style='margin:0; padding:6px 12px; width:100%; text-align:left;' onclick='window.sendQuickResponse("wait"); this.parentElement.style.display="none";'>⏳ Wait</button>
+                                       <button class='admin-btn' style='margin:0; padding:6px 12px; width:100%; text-align:left;' onclick='window.sendQuickResponse("resolved"); this.parentElement.style.display="none";'>✅ Resolved?</button>
+                                       <button class='admin-btn' style='margin:0; padding:6px 12px; width:100%; text-align:left;' onclick='window.sendQuickResponse("review"); this.parentElement.style.display="none";'>⭐ Review</button>
+                                       <button class='admin-btn' style='margin:0; padding:6px 12px; color:var(--accent-red); width:100%; text-align:left;' onclick='window.sendQuickResponse("close"); this.parentElement.style.display="none";'>🔒 Close</button>
+                                   </div>
+                               </div>
                            </div>
                            <div class='chat-input-area'>
                                <div class='chat-attachment-wrapper'>
@@ -2248,7 +2261,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         
         // 🌟 AUDIO ENGINE (Premium Chord Generation)
         let isMuted = false;
-        window.toggleMute = function() { isMuted = !isMuted; document.getElementById('audioBtn').innerText = isMuted ? '🔇' : '🔊'; };
+        window.toggleMute = function() { isMuted = !isMuted; if(document.getElementById('audioBtn')) document.getElementById('audioBtn').innerText = isMuted ? '🔇' : '🔊'; };
         let audioCtx = null;
         function initAudio() {
            try {
@@ -2286,7 +2299,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                    const data = await res.json();
                    processInitData(data);
                }
-           } catch(e){}
+           } catch(e){ try{ window.showToast('Runtime Error', 'error'); }catch(ex){} console.error('Silent error caught:', e); }
            if(typeof window.renderSalesChart === 'function') window.renderSalesChart(7);
         }
         
@@ -2300,14 +2313,14 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             rawStats.total_revenue = calcTotalRev;
 
             let overrides = rawStats.overrides || {};
-            document.getElementById('ui-today-rev').innerText = overrides['today_rev'] || ('£'+(data.todayRevenue || 0));
-            document.getElementById('ui-total-rev').innerText = overrides['total_rev'] || ('£'+(rawStats.total_revenue || 0));
-            document.getElementById('ui-conv-rate').innerText = overrides['conv_rate'] || ((data.conversionRate||0)+'%');
-            document.getElementById('ui-online-total').innerHTML = overrides['online_total'] || ((data.onlineCount||0) + ' <span style="font-size:0.5em;color:var(--text-muted);">/ ' + (data.memberCount||0) + '</span>');
-            document.getElementById('ui-retention').innerText = overrides['retention'] || ((data.retentionRate||0)+'%');
-            document.getElementById('ui-tickets-opened').innerText = overrides['tickets'] || (data.ticketsOpened||0);
-            document.getElementById('ui-dropoff').innerText = overrides['dropoff'] || ((data.dropOffRate||0)+'%');
-            document.getElementById('ui-peak-hour').innerText = overrides['peak'] || (data.peakHourStr||'N/A');
+            if(document.getElementById('ui-today-rev')) document.getElementById('ui-today-rev').innerText = overrides['today_rev'] || ('£'+(data.todayRevenue || 0));
+            if(document.getElementById('ui-total-rev')) document.getElementById('ui-total-rev').innerText = overrides['total_rev'] || ('£'+(rawStats.total_revenue || 0));
+            if(document.getElementById('ui-conv-rate')) document.getElementById('ui-conv-rate').innerText = overrides['conv_rate'] || ((data.conversionRate||0)+'%');
+            if(document.getElementById('ui-online-total')) document.getElementById('ui-online-total').innerHTML = overrides['online_total'] || ((data.onlineCount||0) + ' <span style="font-size:0.5em;color:var(--text-muted);">/ ' + (data.memberCount||0) + '</span>');
+            if(document.getElementById('ui-retention')) document.getElementById('ui-retention').innerText = overrides['retention'] || ((data.retentionRate||0)+'%');
+            if(document.getElementById('ui-tickets-opened')) document.getElementById('ui-tickets-opened').innerText = overrides['tickets'] || (data.ticketsOpened||0);
+            if(document.getElementById('ui-dropoff')) document.getElementById('ui-dropoff').innerText = overrides['dropoff'] || ((data.dropOffRate||0)+'%');
+            if(document.getElementById('ui-peak-hour')) document.getElementById('ui-peak-hour').innerText = overrides['peak'] || (data.peakHourStr||'N/A');
             
             trackedTickets = data.activeTickets || 0; trackedReviews = data.pendingReviewsCount || 0; trackedSales = rawStats.total_transactions || 0; 
             buildStaticTables(); renderAnalyticsCharts(); updateMaintenanceBadge(data.maintenance); updateBadgesAndFeed(data); 
@@ -2340,7 +2353,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                     feedHtml += '<div class="feed-item ' + f.type + '"><div class="feed-time">' + timeStr + '</div><div>' + escapeHTML(f.message) + '</div></div>'; 
                 }); 
             } else { feedHtml = '<p class="text-muted text-center" style="margin-top:20px;">No recent activity.</p>'; } 
-            document.getElementById('target-feed').innerHTML = feedHtml; 
+            if(document.getElementById('target-feed')) document.getElementById('target-feed').innerHTML = feedHtml; 
         }
 
         function buildStaticTables(){
@@ -2350,7 +2363,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                   txHtml+= '<tr><td>' + escapeHTML(tx.username) + '</td><td>' + escapeHTML(tx.product) + '</td><td class="text-green font-bold">£' + tx.price + '</td><td class="text-muted">' + tx.date + '</td><td><button class="admin-btn" style="padding:6px 12px; color:var(--accent-red); margin:0;" onclick="window.refundTx(\\'' + tx.date + '\\', \\'' + escapeHTML(tx.username).replace(/'/g, "\\\\'") + '\\')">Refund</button></td></tr>'; 
               }); 
           } 
-          document.getElementById('target-tx').innerHTML=txHtml;
+          if(document.getElementById('target-tx')) document.getElementById('target-tx').innerHTML = txHtml;
 
           let prodHtml=''; 
           if(rawStats.products){ 
@@ -2369,7 +2382,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                   prodHtml+= '<div class="product-card"><div class="prod-header"><div class="prod-title">' + icon + ' ' + escapeHTML(p.name) + '</div><div class="prod-id">ID: ' + id + '</div></div><div class="prod-price">' + pPrice + ' <span class="prod-stock">INV: ' + escapeHTML(stockDisplay) + '</span></div>' + pDesc + '<div class="prod-link">' + pLink + '</div><div class="prod-actions"><button class="admin-btn" onclick="window.editProduct(\\'' + id + '\\')">✏️ Edit</button><button class="admin-btn" style="color:var(--accent-red);" onclick="window.deleteProduct(\\'' + id + '\\')">🗑️ Purge</button></div></div>'; 
               }); 
           } 
-          document.getElementById('target-products').innerHTML=prodHtml;
+          if(document.getElementById('target-products')) document.getElementById('target-products').innerHTML = prodHtml;
 
           let jHtml=''; 
           if(rawStats.recent_joins){ 
@@ -2377,7 +2390,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                   jHtml+='<tr><td>' + escapeHTML(u.username) + '</td><td class="text-muted">' + u.date + '</td></tr>'; 
               }); 
           } 
-          document.getElementById('target-joins').innerHTML=jHtml;
+          if(document.getElementById('target-joins')) document.getElementById('target-joins').innerHTML = jHtml;
 
           let lHtml=''; 
           if(rawStats.recent_leaves){ 
@@ -2391,7 +2404,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                   lHtml+='<tr><td><div style="display:flex; align-items:center; gap:15px;"><img src="' + escapeHTML(u.avatar) + '" style="width:35px; height:35px; border-radius:50%;"/><span>' + escapeHTML(u.username) + '</span></div></td><td class="text-muted">' + escapeHTML(durStr) + '</td><td class="text-muted">' + escapeHTML(u.date) + '</td></tr>'; 
               }); 
           } 
-          document.getElementById('target-leaves').innerHTML=lHtml||'<tr><td colspan="3" class="text-muted text-center">No drops recorded.</td></tr>';
+          if(document.getElementById('target-leaves')) document.getElementById('target-leaves').innerHTML = lHtml||'<tr><td colspan="3" class="text-muted text-center">No drops recorded.</td></tr>';
 
           let promHtml=''; 
           if(rawStats.promo_codes){ 
@@ -2402,7 +2415,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                   promHtml+= '<tr style="opacity:' + (isExhausted?'0.5':'1') + '"><td><strong style="letter-spacing:1px; color:#fff;">' + escapeHTML(code) + '</strong></td><td style="color:' + statusColor + '; font-weight:700;">-' + info.discount + '%</td><td>' + info.used + ' / ' + info.limit + '</td><td><button class="admin-btn" style="margin:0; padding:6px 12px; color:var(--accent-red);" onclick="window.deletePromo(\\'' + encodeURIComponent(code) + '\\')">🗑️</button></td></tr>'; 
               } 
           } 
-          document.getElementById('target-promos').innerHTML=promHtml;
+          if(document.getElementById('target-promos')) document.getElementById('target-promos').innerHTML = promHtml;
 
           document.getElementById('ref-threshold').value=rawStats.settings?.invite_reward_threshold||10;
 
@@ -2414,7 +2427,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                   refHtml+= '<tr><td>' + escapeHTML(r.username||id) + '<br><span class="text-muted" style="font-size:0.8em; letter-spacing:1px;">' + id + '</span></td><td class="text-green font-bold" style="font-size:1.2em;">' + r.count + '</td><td><span style="background:rgba(255,255,255,0.1); padding:4px 8px; border-radius:8px;">' + r.total_rewards + '</span></td><td class="text-muted" style="font-size:0.9em;">' + (list||'None') + '</td><td><button class="admin-btn" style="padding:6px 12px; margin:0;" onclick="window.editReferralCount(\\'' + id + '\\', ' + r.count + ')">✏️ Mod</button></td></tr>'; 
               }); 
           } 
-          document.getElementById('target-referrals').innerHTML=refHtml; 
+          if(document.getElementById('target-referrals')) document.getElementById('target-referrals').innerHTML = refHtml; 
 
           let vipHtml = ''; const now = Date.now(); 
           if(rawStats.subscriptions) { 
@@ -2425,7 +2438,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                   vipHtml += '<tr><td><strong>' + escapeHTML(sub.username) + '</strong><br><span class="text-muted" style="font-size:0.8em; letter-spacing:1px;">' + id + '</span></td><td>' + dEnd.toLocaleDateString('en-US') + '</td><td><div style="font-weight:700; color:var(--accent-green); margin-bottom:5px;">' + diffDays + ' Days</div><div style="background:rgba(255,255,255,0.1); border-radius:4px; height:6px; overflow:hidden;"><div style="height:100%; background:var(--accent-green); width:' + pct + '%;"></div></div></td><td><button class="admin-btn" style="padding:6px 12px; margin-right:8px;" onclick="window.manageVip(\\'' + id + '\\', \\'add\\')">🎁 +7D</button><button class="admin-btn" style="padding:6px 12px; color:var(--accent-red);" onclick="window.manageVip(\\'' + id + '\\', \\'revoke\\')">🛑 Revoke</button></td></tr>'; 
               }); 
           } 
-          document.getElementById('target-vips').innerHTML = vipHtml || '<tr><td colspan="4" class="text-muted text-center">No active assignments.</td></tr>';
+          if(document.getElementById('target-vips')) document.getElementById('target-vips').innerHTML = vipHtml || '<tr><td colspan="4" class="text-muted text-center">No active assignments.</td></tr>';
 
           let blHtml=''; 
           if(rawStats.buy_links){ 
@@ -2433,7 +2446,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                   blHtml += '<tr><td><strong>' + escapeHTML(l.label) + '</strong></td><td><a href="' + escapeHTML(l.url) + '" target="_blank" style="color:var(--accent-green); text-decoration:none;">Verify Gateway ↗</a></td><td><button class="admin-btn" style="padding:6px 12px; margin:0 8px 0 0;" onclick="window.editBuyLink(\\'' + id + '\\')">✏️ Mod</button><button class="admin-btn" style="padding:6px 12px; color:var(--accent-red); margin:0;" onclick="window.deleteBuyLink(\\'' + id + '\\')">🗑️ Purge</button></td></tr>'; 
               }); 
           } 
-          document.getElementById('target-buy-links').innerHTML=blHtml || '<tr><td colspan="3" class="text-muted">Gateways missing.</td></tr>'; 
+          if(document.getElementById('target-buy-links')) document.getElementById('target-buy-links').innerHTML = blHtml || '<tr><td colspan="3" class="text-muted">Gateways missing.</td></tr>'; 
 
           let prHtml=''; 
           if(rawStats.pending_reviews && rawStats.pending_reviews.length>0){ 
@@ -2443,7 +2456,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
           } else { 
               prHtml='<tr><td colspan="6" class="text-muted text-center">Queue clear.</td></tr>'; 
           } 
-          document.getElementById('target-pending-reviews').innerHTML=prHtml; 
+          if(document.getElementById('target-pending-reviews')) document.getElementById('target-pending-reviews').innerHTML = prHtml; 
 
           let kPending='', kRec='', kEdit='', kDone='';
           if(rawStats.custom_requests && rawStats.custom_requests.length>0) {
@@ -2463,7 +2476,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                   else if(req.status === 'done') kDone += html;
               });
           }
-          document.getElementById('target-kanban').innerHTML=\`
+          if(document.getElementById('target-kanban')) document.getElementById('target-kanban').innerHTML = \`
               <div class='kanban-col'><div class='kanban-header' style='color:var(--accent-blue)'>📬 NOUVELLES DEMANDES</div>\${kPending||'<p class="text-muted">Vide</p>'}</div>
               <div class='kanban-col'><div class='kanban-header' style='color:var(--accent-orange)'>🎥 ENREGISTREMENT</div>\${kRec||'<p class="text-muted">Vide</p>'}</div>
               <div class='kanban-col'><div class='kanban-header' style='color:var(--accent-purple)'>✂️ MONTAGE / EDIT</div>\${kEdit||'<p class="text-muted">Vide</p>'}</div>
@@ -2495,7 +2508,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             document.getElementById('newProdDesc').value = p.desc || ''; 
             document.getElementById('newProdUpsellId').value = p.upsellId || ''; 
             document.getElementById('newProdUpsellDiscount').value = p.upsellDiscount || ''; 
-            document.getElementById('saveProdBtn').innerText = 'Save Asset'; 
+            if(document.getElementById('saveProdBtn')) document.getElementById('saveProdBtn').innerText = 'Save Asset'; 
             document.getElementById('cancelEditBtn').style.display = 'inline-flex'; 
             window.scrollTo({top:0, behavior:'smooth'}); 
         };
@@ -2509,7 +2522,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             document.getElementById('newProdDesc').value = ''; 
             document.getElementById('newProdUpsellId').value = ''; 
             document.getElementById('newProdUpsellDiscount').value = ''; 
-            document.getElementById('saveProdBtn').innerText = 'Inject Asset'; 
+            if(document.getElementById('saveProdBtn')) document.getElementById('saveProdBtn').innerText = 'Inject Asset'; 
             document.getElementById('cancelEditBtn').style.display = 'none'; 
         };
         
@@ -2529,8 +2542,8 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         
         window.deleteProduct = async function(id) { if(await window.customConfirm('ASSET PURGE', 'Purge asset from network?')) await window.executeAction({action:'delete_product', id:id}, false); };
         
-        window.editBuyLink = function(id) { const l = rawStats.buy_links[id]; if(!l) return; document.getElementById('editLinkId').value = id; document.getElementById('newLinkLabel').value = l.label; document.getElementById('newLinkUrl').value = l.url; document.getElementById('saveLinkBtn').innerText = 'Save Gateway'; document.getElementById('cancelEditLinkBtn').style.display = 'inline-flex'; };
-        window.cancelEditLink = function() { document.getElementById('editLinkId').value = ''; document.getElementById('newLinkLabel').value = ''; document.getElementById('newLinkUrl').value = ''; document.getElementById('saveLinkBtn').innerText = 'Link Gateway'; document.getElementById('cancelEditLinkBtn').style.display = 'none'; };
+        window.editBuyLink = function(id) { const l = rawStats.buy_links[id]; if(!l) return; document.getElementById('editLinkId').value = id; document.getElementById('newLinkLabel').value = l.label; document.getElementById('newLinkUrl').value = l.url; if(document.getElementById('saveLinkBtn')) document.getElementById('saveLinkBtn').innerText = 'Save Gateway'; document.getElementById('cancelEditLinkBtn').style.display = 'inline-flex'; };
+        window.cancelEditLink = function() { document.getElementById('editLinkId').value = ''; document.getElementById('newLinkLabel').value = ''; document.getElementById('newLinkUrl').value = ''; if(document.getElementById('saveLinkBtn')) document.getElementById('saveLinkBtn').innerText = 'Link Gateway'; document.getElementById('cancelEditLinkBtn').style.display = 'none'; };
         window.saveBuyLink = async function() { const id = document.getElementById('editLinkId').value; const label = document.getElementById('newLinkLabel').value; const url = document.getElementById('newLinkUrl').value; if(!label || !url) return showToast('Label & URL required', 'error'); if(id) { await window.executeAction({action:'edit_buy_link', id:id, label:label, url:url}, false); } else { await window.executeAction({action:'add_buy_link', label:label, url:url}, false); } };
         window.deleteBuyLink = async function(id) { if(await window.customConfirm('GATEWAY SEVER', 'Sever this gateway link?')) await window.executeAction({action:'delete_buy_link', id:id}, false); };
 
@@ -2591,11 +2604,11 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         };
         
         window.runDiagnostics = async function() {
-            document.getElementById('ui-upstash-status').innerText = '⏳ Executing...';
+            if(document.getElementById('ui-upstash-status')) document.getElementById('ui-upstash-status').innerText = '⏳ Executing...';
             document.getElementById('ui-upstash-status').className = 'value text-muted';
-            document.getElementById('ui-rewarble-status').innerText = '⏳ Executing...';
+            if(document.getElementById('ui-rewarble-status')) document.getElementById('ui-rewarble-status').innerText = '⏳ Executing...';
             document.getElementById('ui-rewarble-status').className = 'value text-muted';
-            document.getElementById('ui-discord-ws').innerText = '-- ms';
+            if(document.getElementById('ui-discord-ws')) document.getElementById('ui-discord-ws').innerText = '-- ms';
             try {
                 const res = await fetch('/api/monitoring');
                 const data = await res.json();
@@ -2604,44 +2617,44 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                 const discordCard = document.getElementById('card-discord');
                 
                 if (data.upstash.status === 'online') {
-                    document.getElementById('ui-upstash-status').innerHTML = '🟢 Optimal';
+                    if(document.getElementById('ui-upstash-status')) document.getElementById('ui-upstash-status').innerHTML = '🟢 Optimal';
                     document.getElementById('ui-upstash-status').className = 'value text-green';
                     upstashCard.style.borderLeft = '4px solid var(--accent-green)';
                 } else {
-                    document.getElementById('ui-upstash-status').innerHTML = '🔴 Down';
+                    if(document.getElementById('ui-upstash-status')) document.getElementById('ui-upstash-status').innerHTML = '🔴 Down';
                     document.getElementById('ui-upstash-status').className = 'value text-red';
                     upstashCard.style.borderLeft = '4px solid var(--accent-red)';
                 }
-                document.getElementById('ui-upstash-ping').innerText = 'Latency: ' + data.upstash.latency + ' ms';
+                if(document.getElementById('ui-upstash-ping')) document.getElementById('ui-upstash-ping').innerText = 'Latency: ' + data.upstash.latency + ' ms';
                 
                 if (data.rewarble.status === 'online') {
-                    document.getElementById('ui-rewarble-status').innerHTML = '🟢 Optimal';
+                    if(document.getElementById('ui-rewarble-status')) document.getElementById('ui-rewarble-status').innerHTML = '🟢 Optimal';
                     document.getElementById('ui-rewarble-status').className = 'value text-green';
                     rewarbleCard.style.borderLeft = '4px solid var(--accent-green)';
                 } else {
-                    document.getElementById('ui-rewarble-status').innerHTML = '🔴 Error/Offline';
+                    if(document.getElementById('ui-rewarble-status')) document.getElementById('ui-rewarble-status').innerHTML = '🔴 Error/Offline';
                     document.getElementById('ui-rewarble-status').className = 'value text-red';
                     rewarbleCard.style.borderLeft = '4px solid var(--accent-red)';
                 }
-                document.getElementById('ui-rewarble-ping').innerText = 'Latency: ' + data.rewarble.latency + ' ms';
+                if(document.getElementById('ui-rewarble-ping')) document.getElementById('ui-rewarble-ping').innerText = 'Latency: ' + data.rewarble.latency + ' ms';
                 
-                document.getElementById('ui-discord-ws').innerText = data.discord.ws_ping + ' ms';
-                document.getElementById('ui-discord-status').innerHTML = data.discord.ready ? '<span style="color:var(--accent-green)">Connected</span>' : '<span style="color:var(--accent-red)">Disconnected</span>';
-                document.getElementById('ui-discord-guilds').innerText = data.discord.guilds;
-                document.getElementById('ui-discord-users').innerText = data.discord.users;
+                if(document.getElementById('ui-discord-ws')) document.getElementById('ui-discord-ws').innerText = data.discord.ws_ping + ' ms';
+                if(document.getElementById('ui-discord-status')) document.getElementById('ui-discord-status').innerHTML = data.discord.ready ? '<span style="color:var(--accent-green)">Connected</span>' : '<span style="color:var(--accent-red)">Disconnected</span>';
+                if(document.getElementById('ui-discord-guilds')) document.getElementById('ui-discord-guilds').innerText = data.discord.guilds;
+                if(document.getElementById('ui-discord-users')) document.getElementById('ui-discord-users').innerText = data.discord.users;
                 discordCard.style.borderLeft = data.discord.ready ? '4px solid var(--accent-blue)' : '4px solid var(--accent-red)';
                 
-                document.getElementById('ui-os-plat').innerText = data.system.platform;
-                document.getElementById('ui-os-arch').innerText = data.system.arch;
-                document.getElementById('ui-os-up').innerText = data.system.sysUptime + ' mins';
-                document.getElementById('ui-os-ram').innerText = data.system.freeMem + ' GB / ' + data.system.totalMem + ' GB';
+                if(document.getElementById('ui-os-plat')) document.getElementById('ui-os-plat').innerText = data.system.platform;
+                if(document.getElementById('ui-os-arch')) document.getElementById('ui-os-arch').innerText = data.system.arch;
+                if(document.getElementById('ui-os-up')) document.getElementById('ui-os-up').innerText = data.system.sysUptime + ' mins';
+                if(document.getElementById('ui-os-ram')) document.getElementById('ui-os-ram').innerText = data.system.freeMem + ' GB / ' + data.system.totalMem + ' GB';
                 
-                document.getElementById('ui-proc-up').innerText = data.process.uptime + ' mins';
-                document.getElementById('ui-proc-rss').innerText = data.process.rss + ' MB';
-                document.getElementById('ui-proc-heap').innerText = data.process.heap + ' MB';
+                if(document.getElementById('ui-proc-up')) document.getElementById('ui-proc-up').innerText = data.process.uptime + ' mins';
+                if(document.getElementById('ui-proc-rss')) document.getElementById('ui-proc-rss').innerText = data.process.rss + ' MB';
+                if(document.getElementById('ui-proc-heap')) document.getElementById('ui-proc-heap').innerText = data.process.heap + ' MB';
                 
-                document.getElementById('ui-sec-rates').innerText = data.security.rateLimits + ' IPs';
-                document.getElementById('ui-sec-locks').innerText = data.security.locks + ' IPs';
+                if(document.getElementById('ui-sec-rates')) document.getElementById('ui-sec-rates').innerText = data.security.rateLimits + ' IPs';
+                if(document.getElementById('ui-sec-locks')) document.getElementById('ui-sec-locks').innerText = data.security.locks + ' IPs';
                 
                 showToast('Diagnostics complete.');
             } catch(e) { showToast('Diagnostics Failed', 'error'); }
@@ -2681,16 +2694,16 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
 
         setInterval(() => { if(document.visibilityState === 'visible') window.refreshDataSilently(true); }, 15000);
 
-        window.refreshDataSilently = async function(isAutoSync = false) { try{ const res=await fetch('/api/init-data'); if(res.ok){ const data=await res.json(); processInitData(data); if(!isAutoSync){ try { window.cancelEdit(); window.cancelEditLink(); document.getElementById('promoName').value=''; document.getElementById('promoDiscount').value=''; document.getElementById('promoLimit').value=''; } catch(e) {} } } }catch(e){} };
+        window.refreshDataSilently = async function(isAutoSync = false) { try{ const res=await fetch('/api/init-data'); if(res.ok){ const data=await res.json(); processInitData(data); if(!isAutoSync){ try { window.cancelEdit(); window.cancelEditLink(); document.getElementById('promoName').value=''; document.getElementById('promoDiscount').value=''; document.getElementById('promoLimit').value=''; } catch(e) {} } } }catch(e){ try{ window.showToast('Runtime Error', 'error'); }catch(ex){} console.error('Silent error caught:', e); } };
         
         window.executeAction = async function(p, showModal=false) { p.pin=PIN; const res=await fetch('/api/action',{method:'POST',body:JSON.stringify(p)}); if(res.ok) { window.refreshDataSilently(); showToast('Action Successful'); } else { showToast('Action Failed', 'error'); } };
         
         window.sendReview = async function() { const author = document.getElementById('rev-author').value; const rating = document.getElementById('rev-rating').value; const text = document.getElementById('rev-msg').value; if(!author || !text) return showToast('Parameters missing', 'error'); await window.executeAction({ action: 'post_review', author: author, rating: rating, text: text }); document.getElementById('rev-author').value = ''; document.getElementById('rev-msg').value = ''; };
-        window.loadAllMembers = async function() { document.getElementById('memberResults').innerHTML = '<p class="text-muted" style="font-family:monospace;">Syncing directory...</p>'; try { const res = await fetch('/api/members'); if (!res.ok) throw new Error('Error'); allMembersData = await res.json(); isMembersLoaded = true; window.sortMembersLocally(); } catch (e) { document.getElementById('memberResults').innerHTML = '<p class="text-pink">Network failure.</p>'; } };
+        window.loadAllMembers = async function() { if(document.getElementById('memberResults')) document.getElementById('memberResults').innerHTML = '<p class="text-muted" style="font-family:monospace;">Syncing directory...</p>'; try { const res = await fetch('/api/members'); if (!res.ok) throw new Error('Error'); allMembersData = await res.json(); isMembersLoaded = true; window.sortMembersLocally(); } catch (e) { if(document.getElementById('memberResults')) document.getElementById('memberResults').innerHTML = '<p class="text-pink">Network failure.</p>'; } };
         window.sortMembersLocally = function() { const sortType = document.getElementById('memberSortSelect').value; const statusFilter = document.getElementById('memberStatusSelect').value; let filtered = [...allMembersData]; if (statusFilter === 'online') { filtered = filtered.filter(m => m.status !== 'offline'); } if (sortType === 'recent') filtered.sort(function(a, b) { return b.joinedTimestamp - a.joinedTimestamp; }); else if (sortType === 'oldest') filtered.sort(function(a, b) { return a.joinedTimestamp - b.joinedTimestamp; }); else if (sortType === 'spent_desc') filtered.sort(function(a, b) { return b.totalSpent - a.totalSpent; }); else if (sortType === 'spent_asc') filtered.sort(function(a, b) { return a.totalSpent - b.totalSpent; }); else if (sortType === 'warns') filtered.sort(function(a, b) { return b.warns.length - a.warns.length; }); const q = document.getElementById('memberSearchInput').value.toLowerCase(); if (q) { filtered = filtered.filter(function(m) { return m.username.toLowerCase().includes(q) || m.id.includes(q); }); } renderMembers(filtered); };
         window.filterMembersLocally = window.sortMembersLocally;
         function renderMembers(members) { 
-            if (members.length === 0) { document.getElementById('memberResults').innerHTML = '<p class="text-pink" style="font-family:monospace;">0 Nodes Discovered.</p>'; return; } 
+            if (members.length === 0) { if(document.getElementById('memberResults')) document.getElementById('memberResults').innerHTML = '<p class="text-pink" style="font-family:monospace;">0 Nodes Discovered.</p>'; return; } 
             let html = ''; 
             members.forEach(function(m) { 
                 let trustColor = m.isBlacklisted ? 'var(--accent-red)' : (m.totalSpent > 0 ? getThemeVal('hex') : 'var(--accent-orange)'); 
@@ -2751,18 +2764,19 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                         '<button class="admin-btn" style="width:auto; margin:0; background:rgba(0,0,0,0.5); color:' + (m.isBlacklisted ? getThemeVal('hex') : 'var(--accent-red)') + ';" onclick="window.modAction(\\'toggle_blacklist\\', \\'' + m.id + '\\')">' + (m.isBlacklisted ? '✅ Restore Access' : '🚫 Sever Access') + '</button>' +
                         '</div></div></div>'; 
             }); 
-            document.getElementById('memberResults').innerHTML = html; 
+            if(document.getElementById('memberResults')) document.getElementById('memberResults').innerHTML = html; 
         }
         window.modAction = async function(action, userId, extra) { extra = extra || {}; let payload = { action: action, userId: userId, pin: PIN }; if (extra.channelId) payload.channelId = extra.channelId; if (extra.duration) payload.duration = extra.duration; if (action === 'warn') { payload.reason = await window.customPrompt('WARNING', 'Input warning parameter (User will be DM\\'d)'); if (!payload.reason) return; } else if (action === 'clear_warns') { if (!(await window.customConfirm('PURGE', 'Purge all risk logs for this node?'))) return; } else if (action === 'mute') { if(!payload.duration) payload.duration = await window.customPrompt('TIMEOUT', 'Timeout duration (minutes)?', '60', '60'); if(!payload.duration) return; payload.reason = await window.customPrompt('TIMEOUT', 'Reason for timeout?'); if (!payload.reason) return; } else if (action === 'kick' || action === 'ban') { payload.reason = await window.customPrompt('EXPULSION', 'Reason for ' + action + '?'); if (!payload.reason || !(await window.customConfirm('CONFIRM', 'Execute ' + action + '?'))) return; } else if (action === 'toggle_blacklist') { if (!(await window.customConfirm('ACCESS', 'Toggle shop access for this node?'))) return; } else if (action === 'close_channel') { if (!(await window.customConfirm('SEVER', 'Sever this link?'))) return; } try { const res = await fetch('/api/action', { method: 'POST', body: JSON.stringify(payload) }); if (res.ok) { showToast('Action Successful'); setTimeout(function() { window.loadAllMembers(); }, 1000); } else showToast('Action Failed', 'error'); } catch(e) { showToast('Network Error', 'error'); } };
         window.refundTx = async function(date, username) { if(await window.customConfirm('REVERSE TX', 'Reverse this transaction? Yield will be adjusted.')) { await window.executeAction({action: 'refund_tx', date: date, username: username}); } };
         window.testActionLatency = async function() { const resultDiv = document.getElementById('latency-result'); resultDiv.innerText = 'Pinging...'; resultDiv.style.color = 'var(--text-muted)'; const startTime = Date.now(); try { const res = await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'ping_test', pin: PIN }) }); if (res.ok) { const totalTime = Date.now() - startTime; resultDiv.innerText = totalTime + ' ms'; if (totalTime < 500) resultDiv.style.color = getThemeVal('hex'); else if (totalTime < 1500) resultDiv.style.color = 'var(--accent-orange)'; else resultDiv.style.color = 'var(--accent-red)'; } else { resultDiv.innerText = 'Error'; resultDiv.style.color = 'var(--accent-red)'; } } catch(e) { resultDiv.innerText = 'Net Error'; resultDiv.style.color = 'var(--accent-red)'; } };
         
-        window.loadTicketsForChat = async function() { try { const res = await fetch('/api/tickets'); const tickets = await res.json(); let html = ''; if(tickets.length === 0) { html = '<p class="text-muted text-center" style="margin-top:20px; font-family:inherit;">No active lines.</p>'; } else { const shopTickets = tickets.filter(t => t.name.startsWith('shop-')); const supportTickets = tickets.filter(t => t.name.startsWith('support-')); if(shopTickets.length > 0) { html += '<div style="font-size:0.85em; text-transform:uppercase; color:var(--accent-green); font-weight:700; margin: 10px 0 5px 5px; border-bottom: 0.5px solid rgba(var(--accent-green-rgb), 0.2); padding-bottom:5px; letter-spacing:0.5px;">🛒 Shop (' + shopTickets.length + ')</div>'; shopTickets.forEach(t => { const isActive = activeChatChannel === t.id ? 'active' : ''; html += '<div class="ticket-item ' + isActive + '" onclick="window.openTicketChat(\\'' + t.id + '\\')">' + escapeHTML(t.name) + '</div>'; }); } if(supportTickets.length > 0) { html += '<div style="font-size:0.85em; text-transform:uppercase; color:var(--accent-orange); font-weight:700; margin: 20px 0 5px 5px; border-bottom: 0.5px solid rgba(245, 158, 11, 0.2); padding-bottom:5px; letter-spacing:0.5px;">🎧 Support (' + supportTickets.length + ')</div>'; supportTickets.forEach(t => { const isActive = activeChatChannel === t.id ? 'active' : ''; html += '<div class="ticket-item ' + isActive + '" onclick="window.openTicketChat(\\'' + t.id + '\\')">' + escapeHTML(t.name) + '</div>'; }); } } document.getElementById('chat-ticket-list').innerHTML = html; } catch(e) {} };
-        window.openTicketChat = function(channelId) { activeChatChannel = channelId; window.loadTicketsForChat(); document.getElementById('chat-messages-area').innerHTML = '<div style="margin:auto; color:var(--accent-green);"><div style="width:40px; height:40px; border:3px solid rgba(var(--accent-green-rgb), 0.1); border-top:3px solid var(--accent-green); border-radius:50%; animation:spin 1s linear infinite; margin:auto; box-shadow:0 0 15px rgba(var(--accent-green-rgb), 0.5);"></div></div>'; window.fetchChatMessages(); if(chatPollInterval) clearInterval(chatPollInterval); chatPollInterval = setInterval(window.fetchChatMessages, 3000); };
+        window.loadTicketsForChat = async function() { try { const res = await fetch('/api/tickets'); const tickets = await res.json(); let html = ''; if(tickets.length === 0) { html = '<p class="text-muted text-center" style="margin-top:20px; font-family:inherit;">No active lines.</p>'; } else { const shopTickets = tickets.filter(t => t.name.startsWith('shop-')); const supportTickets = tickets.filter(t => t.name.startsWith('support-')); if(shopTickets.length > 0) { html += '<div style="font-size:0.85em; text-transform:uppercase; color:var(--accent-green); font-weight:700; margin: 10px 0 5px 5px; border-bottom: 0.5px solid rgba(var(--accent-green-rgb), 0.2); padding-bottom:5px; letter-spacing:0.5px;">🛒 Shop (' + shopTickets.length + ')</div>'; shopTickets.forEach(t => { const isActive = activeChatChannel === t.id ? 'active' : ''; html += '<div class="ticket-item ' + isActive + '" onclick="window.openTicketChat(\\'' + t.id + '\\')">' + escapeHTML(t.name) + '</div>'; }); } if(supportTickets.length > 0) { html += '<div style="font-size:0.85em; text-transform:uppercase; color:var(--accent-orange); font-weight:700; margin: 20px 0 5px 5px; border-bottom: 0.5px solid rgba(245, 158, 11, 0.2); padding-bottom:5px; letter-spacing:0.5px;">🎧 Support (' + supportTickets.length + ')</div>'; supportTickets.forEach(t => { const isActive = activeChatChannel === t.id ? 'active' : ''; html += '<div class="ticket-item ' + isActive + '" onclick="window.openTicketChat(\\'' + t.id + '\\')">' + escapeHTML(t.name) + '</div>'; }); } } if(document.getElementById('chat-ticket-list')) document.getElementById('chat-ticket-list').innerHTML = html; } catch(e) {} };
+        window.openTicketChat = function(channelId) { activeChatChannel = channelId; window.loadTicketsForChat(); if(document.getElementById('chat-messages-area')) document.getElementById('chat-messages-area').innerHTML = '<div style="margin:auto; color:var(--accent-green);"><div style="width:40px; height:40px; border:3px solid rgba(var(--accent-green-rgb), 0.1); border-top:3px solid var(--accent-green); border-radius:50%; animation:spin 1s linear infinite; margin:auto; box-shadow:0 0 15px rgba(var(--accent-green-rgb), 0.5);"></div></div>'; window.fetchChatMessages(); if(chatPollInterval) clearInterval(chatPollInterval); chatPollInterval = setInterval(window.fetchChatMessages, 3000); };
         window.fetchChatMessages = async function() { if(!activeChatChannel) return; try { const res = await fetch('/api/tickets/messages?channelId=' + activeChatChannel); const msgs = await res.json(); let html = ''; if(msgs.length === 0) html = '<p class="text-muted text-center" style="margin:auto; font-family:monospace;">Awaiting transmission...</p>'; else { msgs.forEach(m => { const bubbleClass = m.isBot ? 'bot' : 'user'; const imgHtml = m.imageUrl ? '<br><img src="' + escapeHTML(m.imageUrl) + '" class="chat-img-preview" style="max-width:100%; border-radius:12px; margin-top:10px; cursor:pointer; border:0.5px solid rgba(255,255,255,0.1);" onclick="window.open(\\'' + escapeHTML(m.imageUrl) + '\\')">' : ''; const actionsHtml = '<div class="chat-bubble-actions" style="display:none; position:absolute; top:-15px; ' + (m.isBot ? 'left:15px;' : 'right:15px;') + ' background:rgba(0,0,0,0.8); backdrop-filter:blur(10px); border:0.5px solid rgba(255,255,255,0.1); border-radius:12px; padding:4px 8px; gap:8px; box-shadow:0 5px 15px rgba(0,0,0,0.3);"><button style="background:none; border:none; cursor:pointer; font-size:1.1em; transition:transform 0.2s;" onclick="window.reactMessage(\\'' + m.id + '\\', \\'👍\\')">👍</button><button style="background:none; border:none; cursor:pointer; font-size:1.1em; transition:transform 0.2s;" onclick="window.reactMessage(\\'' + m.id + '\\', \\'❤️\\')">❤️</button></div>'; html += '<div class="chat-bubble ' + bubbleClass + '" onmouseover="this.querySelector(\\' .chat-bubble-actions\\').style.display=\\'flex\\'" onmouseout="this.querySelector(\\' .chat-bubble-actions\\').style.display=\\'none\\'"><div class="chat-author">' + escapeHTML(m.author) + '</div>' + escapeHTML(m.content) + imgHtml + actionsHtml + '</div>'; }); } const area = document.getElementById('chat-messages-area'); const isAtBottom = area.scrollHeight - area.scrollTop <= area.clientHeight + 100; area.innerHTML = html; if(isAtBottom) area.scrollTop = area.scrollHeight; } catch(e) {} };
         window.sendChatMessage = async function() { if(!activeChatChannel) return showToast('Select line first', 'error'); const input = document.getElementById('chat-input-text'); const fileInput = document.getElementById('chat-file-input'); const text = input.value.trim(); const file = fileInput.files[0]; if(!text && !file) return; input.value = ''; document.getElementById('attach-badge').style.display='none'; let base64 = null; if (file) { const reader = new FileReader(); reader.readAsDataURL(file); await new Promise(r => reader.onload = r); base64 = reader.result; fileInput.value = ''; } try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'send_ticket_message', channelId: activeChatChannel, message: text, imageBase64: base64, pin: PIN }) }); window.fetchChatMessages(); } catch(e) { showToast('Transmission Failed', 'error'); } };
         window.reactMessage = async function(msgId, emoji) { if(!activeChatChannel) return; try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'react_ticket_message', channelId: activeChatChannel, messageId: msgId, emoji: emoji, pin: PIN }) }); showToast('Reaction sent'); } catch (e) { showToast('Failure', 'error'); } };
-        window.sendQuickResponse = async function(type) { if(!activeChatChannel) return showToast('Select line first', 'error'); let msg = ''; if(type === 'welcome') msg = '👋 Hello! How can I help you today?'; else if(type === 'wait') { const mins = await window.customPrompt('TRANSMISSION DELAY', 'Delay in minutes?', '5', '5'); if(!mins) return; msg = '⏳ Please wait for about ' + mins + ' minutes, an admin is looking into it.'; } else if(type === 'resolved') msg = '✅ Did this resolve your issue, or do you have any other questions?'; else if(type === 'close') { if(!(await window.customConfirm('SEVER COMMS', 'Sever this communication line?'))) return; msg = '🔒 Closing this ticket. Have a great day!'; await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'send_ticket_message', channelId: activeChatChannel, message: msg, pin: PIN }) }); window.fetchChatMessages(); setTimeout(async () => { await window.executeAction({ action: 'close_channel', channelId: activeChatChannel }, false); activeChatChannel = null; window.loadTicketsForChat(); document.getElementById('chat-messages-area').innerHTML = '<div style="margin:auto; text-align:center; opacity:0.3;"><div style="font-size:3em; margin-bottom:10px;">💬</div><div style="font-weight:500;">Select a conversation</div></div>'; }, 2000); return; } if(msg) { try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'send_ticket_message', channelId: activeChatChannel, message: msg, pin: PIN }) }); window.fetchChatMessages(); } catch(e) { showToast('Transmission Failed', 'error'); } } };
+        window.sendQuickResponse = async function(type) { if(!activeChatChannel) return showToast('Select line first', 'error'); let msg = ''; if(type === 'welcome') msg = '👋 Hello! How can I help you today?'; else if(type === 'wait') { const mins = await window.customPrompt('TRANSMISSION DELAY', 'Delay in minutes?', '5', '5'); if(!mins) return; msg = '⏳ Please wait for about ' + mins + ' minutes, an admin is looking into it.'; } else if(type === 'resolved') msg = '✅ Did this resolve your issue, or do you have any other questions?';
+        else if(type === 'review') msg = '⭐ If you are happy with the service, please consider leaving a review! It helps us a lot.'; else if(type === 'close') { if(!(await window.customConfirm('SEVER COMMS', 'Sever this communication line?'))) return; msg = '🔒 Closing this ticket. Have a great day!'; await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'send_ticket_message', channelId: activeChatChannel, message: msg, pin: PIN }) }); window.fetchChatMessages(); setTimeout(async () => { await window.executeAction({ action: 'close_channel', channelId: activeChatChannel }, false); activeChatChannel = null; window.loadTicketsForChat(); if(document.getElementById('chat-messages-area')) document.getElementById('chat-messages-area').innerHTML = '<div style="margin:auto; text-align:center; opacity:0.3;"><div style="font-size:3em; margin-bottom:10px;">💬</div><div style="font-weight:500;">Select a conversation</div></div>'; }, 2000); return; } if(msg) { try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'send_ticket_message', channelId: activeChatChannel, message: msg, pin: PIN }) }); window.fetchChatMessages(); } catch(e) { showToast('Transmission Failed', 'error'); } } };
 
         window.createPromo = async function() { const name = document.getElementById('promoName').value.trim().toUpperCase(); const discount = parseInt(document.getElementById('promoDiscount').value); const limit = parseInt(document.getElementById('promoLimit').value); if(!name || isNaN(discount) || isNaN(limit)) { return showToast('Invalid parameters', 'error'); } if(discount < 1 || discount > 100) return showToast('Discount 1-100', 'error'); await window.executeAction({ action: 'create_promo', name: name, discount: discount, limit: limit }); };
         window.deletePromo = async function(code) { if(await window.customConfirm('VOUCHER PURGE', 'Purge voucher ' + decodeURIComponent(code) + '?')) { await window.executeAction({ action: 'delete_promo', name: decodeURIComponent(code) }); } };
