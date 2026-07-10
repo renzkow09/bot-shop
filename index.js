@@ -1573,7 +1573,20 @@ http.createServer(async (req, res) => {
         }); return;
     }
 
-    // === [ANCHOR: DASHBOARD_HTML_        :root { 
+    // === [ANCHOR: DASHBOARD_HTML_INJECTION] ===
+    if (req.url === '/dashboard' || req.url === '/') {
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        const dashboardHTML = `<!DOCTYPE html>
+<html lang='en'>
+<head>
+    <meta charset='UTF-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no'>
+    <meta name='apple-mobile-web-app-capable' content='yes'>
+    <meta name='apple-mobile-web-app-status-bar-style' content='black-translucent'>
+    <title>Nexus Premium Dashboard</title>
+    <script src='https://cdn.jsdelivr.net/npm/chart.js'></script>
+    <style>
+        :root { 
            --bg-main: #0c0205; 
            --bg-card: rgba(36, 12, 20, 0.45); 
            --border-color: rgba(244, 114, 182, 0.15); 
@@ -1611,11 +1624,7 @@ http.createServer(async (req, res) => {
         .admin-btn:hover { background: rgba(255,255,255,0.15); transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,0.3); }
         .btn-green { background: var(--accent-pink); color: #fff; border-color: var(--accent-pink); font-weight: 600; }
         .btn-green:hover { background: #ff5e9c; box-shadow: 0 6px 20px rgba(255, 51, 119, 0.4); color: #fff; }
-        .text-green { color: var(--accent-pink); text-shadow: 0 0 15px rgba(255, 51, 119, 0.2); } .text-muted { color: var(--text-muted); } .text-blue { color: var(--accent-blue); text-shadow: 0 0 15px rgba(244, 114, 182, 0.2); }r; align-items: center; }
-        .admin-btn:hover { background: rgba(255,255,255,0.15); transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,0.3); }
-        .btn-green { background: var(--accent-green); color: #000; border-color: var(--accent-green); font-weight: 600; }
-        .btn-green:hover { background: #34d399; box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4); color: #000; }
-        .text-green { color: var(--accent-green); text-shadow: 0 0 15px rgba(16, 185, 129, 0.2); } .text-muted { color: var(--text-muted); } .text-blue { color: var(--accent-blue); text-shadow: 0 0 15px rgba(10, 132, 255, 0.2); }
+        .text-green { color: var(--accent-pink); text-shadow: 0 0 15px rgba(255, 51, 119, 0.2); } .text-muted { color: var(--text-muted); } .text-blue { color: var(--accent-blue); text-shadow: 0 0 15px rgba(244, 114, 182, 0.2); }
         
         .product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; }
         .product-card { background: var(--bg-card); border: 0.5px solid var(--border-color); border-radius: 24px; padding: 25px; position: relative; transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1); display: flex; flex-direction: column; justify-content: space-between; backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px); overflow: hidden; }
