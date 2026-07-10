@@ -335,7 +335,7 @@ async function sendShopSetup(channel) {
     }
 
     const shopEmbed = new EmbedBuilder()
-        .setColor('#ff3377')
+        .setColor('#10b981')
         .setTitle('💎 VIP EXCLUSIVE MENU & PRICES 💎')
         .setDescription('> *Instant automatic delivery directly in your DMs!* 🚀\n\n━━━━━━━━━━━━━━━━━━━━━━');
     
@@ -412,7 +412,7 @@ client.on('interactionCreate', async (interaction) => {
                 if (interaction.user.id !== ADMIN_DISCORD_ID) {
                     const unixTime = Math.floor(mMode.endsAt / 1000);
                     const embed = new EmbedBuilder()
-                        .setColor('#ff3377')
+                        .setColor('#10b981')
                         .setTitle('🚧 Shop Under Maintenance')
                         .setDescription(`Our system is currently undergoing updates or restocking.\n\n⏳ **Expected return:** <t:${unixTime}:R>.\n\nPlease try again later. Your codes and purchases are perfectly safe!`);
                     systemLog('DEBUG', 'MAINTENANCE', `Blocked interaction from user ${interaction.user.username} due to active lockout.`);
@@ -489,7 +489,7 @@ client.on('interactionCreate', async (interaction) => {
                     const threshold = memoryStats.settings?.invite_reward_threshold || 10;
                     const current = refs ? refs.count : 0;
                     const total = refs ? refs.total_rewards : 0;
-                    const refEmbed = new EmbedBuilder().setColor('#ff3377').setTitle('🔗 Your Exclusive Referral Link').setDescription(`Here is your permanent link to invite people:\n**${invite.url}**\n\n📊 **Your Progress:**\n> 🎯 **${current} / ${threshold}** invites for a free product.\n> 🏆 **${total}** rewards claimed.`).setFooter({ text: 'Invitations are automatically tracked!' });
+                    const refEmbed = new EmbedBuilder().setColor('#10b981').setTitle('🔗 Your Exclusive Referral Link').setDescription(`Here is your permanent link to invite people:\n**${invite.url}**\n\n📊 **Your Progress:**\n> 🎯 **${current} / ${threshold}** invites for a free product.\n> 🏆 **${total}** rewards claimed.`).setFooter({ text: 'Invitations are automatically tracked!' });
                     await interaction.editReply({ embeds: [refEmbed] }).catch(() => {});
                 } catch (e) { await interaction.editReply({ content: "❌ Error generating invite. Tell the admin to check bot permissions." }).catch(() => {}); }
                 return;
@@ -939,7 +939,7 @@ http.createServer(async (req, res) => {
 
     if ((req.url === '/dashboard' || req.url === '/') && !isAuthenticated) {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        return res.end("<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no'><title>Nexus Security</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Inter',sans-serif;background:#0c0205;color:#fdf2f8;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;}.login-box{background:rgba(36,12,20,0.5);backdrop-filter:blur(30px);-webkit-backdrop-filter:blur(30px);padding:50px;border-radius:24px;border:1px solid rgba(244,114,182,0.15);text-align:center;box-shadow:0 20px 50px rgba(0,0,0,0.5);width:90%;max-width:420px;box-sizing:border-box;}h2{font-weight:700;letter-spacing:1px;color:#fff;}input{background:rgba(0,0,0,0.4);border:1px solid rgba(244,114,182,0.1);color:white;padding:18px;border-radius:16px;font-size:20px!important;text-align:center;letter-spacing:15px;width:100%;max-width:240px;margin:30px auto;outline:none;transition:all 0.3s;display:block;}input:focus{border-color:#ff3377;box-shadow:0 0 15px rgba(255, 51, 119, 0.35);}button{background:#ff3377;color:#fff;border:none;padding:15px 40px;font-size:1em;border-radius:16px;cursor:pointer;font-weight:700;width:100%;transition:all 0.3s;text-transform:uppercase;letter-spacing:1px;}button:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(255,18,129,0.3);}</style></head><body><div class='login-box'><h2>NEXUS CORE</h2><input type='password' id='pin' maxlength='4' placeholder='••••'><button onclick='login()'>Authenticate</button><p id='err' style='color:#ff453a;display:none;margin-top:20px;font-weight:500;'>Access Denied</p></div><script>async function login(){const res=await fetch('/api/login',{method:'POST',body:JSON.stringify({pin:document.getElementById('pin').value})});if(res.ok)location.reload();else document.getElementById('err').style.display='block';} document.getElementById('pin').addEventListener('keypress', e=>{if(e.key==='Enter')login();});</script></body></html>");
+        return res.end("<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no'><title>Nexus Security</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Inter',sans-serif;background:#000000;color:#f5f5f7;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;}.login-box{background:rgba(28,28,30,0.5);backdrop-filter:blur(30px);-webkit-backdrop-filter:blur(30px);padding:50px;border-radius:24px;border:1px solid rgba(255,255,255,0.08);text-align:center;box-shadow:0 20px 50px rgba(0,0,0,0.5);width:90%;max-width:420px;box-sizing:border-box;}h2{font-weight:700;letter-spacing:1px;color:#fff;}input{background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.1);color:white;padding:18px;border-radius:16px;font-size:20px!important;text-align:center;letter-spacing:15px;width:100%;max-width:240px;margin:30px auto;outline:none;transition:all 0.3s;display:block;}input:focus{border-color:#10b981;box-shadow:0 0 15px rgba(16,185,129,0.2);}button{background:#10b981;color:#000;border:none;padding:15px 40px;font-size:1em;border-radius:16px;cursor:pointer;font-weight:700;width:100%;transition:all 0.3s;text-transform:uppercase;letter-spacing:1px;}button:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(16,185,129,0.3);}</style></head><body><div class='login-box'><h2>NEXUS CORE</h2><input type='password' id='pin' maxlength='4' placeholder='••••'><button onclick='login()'>Authenticate</button><p id='err' style='color:#ff453a;display:none;margin-top:20px;font-weight:500;'>Access Denied</p></div><script>async function login(){const res=await fetch('/api/login',{method:'POST',body:JSON.stringify({pin:document.getElementById('pin').value})});if(res.ok)location.reload();else document.getElementById('err').style.display='block';} document.getElementById('pin').addEventListener('keypress', e=>{if(e.key==='Enter')login();});</script></body></html>");
     }
 
     // === [ANCHOR: API_ROUTES_GET] ===
@@ -1206,7 +1206,7 @@ http.createServer(async (req, res) => {
                         if (announceChannel) {
                             const unixTime = Math.floor(memoryStats.settings.maintenance.endsAt / 1000);
                             const mEmbed = new EmbedBuilder()
-                                .setColor('#ff3377')
+                                .setColor('#10b981')
                                 .setTitle('🚧 Maintenance in Progress')
                                 .setDescription(`The shop is temporarily suspended for stock updates or optimization.\n\n⏳ **Estimated return:** <t:${unixTime}:R>\n\nThank you for your patience, your codes and orders are perfectly safe.`);
                             await announceChannel.send({ embeds: [mEmbed] }).catch(()=>{});
@@ -1216,7 +1216,7 @@ http.createServer(async (req, res) => {
                         systemLog('INFO', 'MAINTENANCE', `System lockout disengaged. Operations resumed.`);
                         if (announceChannel) {
                             const mEmbed = new EmbedBuilder()
-                                .setColor('#ff3377')
+                                .setColor('#10b981')
                                 .setTitle('✅ Maintenance Completed')
                                 .setDescription(`The system is operational again!\nThe shop is open and ready to take your orders.`);
                             await announceChannel.send({ embeds: [mEmbed] }).catch(()=>{});
@@ -1573,45 +1573,54 @@ http.createServer(async (req, res) => {
         }); return;
     }
 
-    // === [ANCHOR: DASHBOARD_HTML_        :root { 
-           --bg-main: #0c0205; 
-           --bg-card: rgba(36, 12, 20, 0.45); 
-           --border-color: rgba(244, 114, 182, 0.15); 
-           --text-main: #fdf2f8; 
-           --text-muted: #f472b6; 
-           --accent-blue: #f472b6; 
-           --accent-green: #ff3377; 
-           --accent-purple: #d946ef; 
-           --accent-orange: #fb7185; 
-           --accent-pink: #ff3377; 
-           --accent-red: #f43f5e; 
+    // === [ANCHOR: DASHBOARD_HTML_INJECTION] ===
+    if (req.url === '/dashboard' || req.url === '/') {
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        const dashboardHTML = `<!DOCTYPE html>
+<html lang='en'>
+<head>
+    <meta charset='UTF-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no'>
+    <meta name='apple-mobile-web-app-capable' content='yes'>
+    <meta name='apple-mobile-web-app-status-bar-style' content='black-translucent'>
+    <title>Nexus Premium Dashboard</title>
+    <script src='https://cdn.jsdelivr.net/npm/chart.js'></script>
+    <style>
+        :root { 
+           --bg-main: #000000; 
+           --bg-card: rgba(28, 28, 30, 0.4); 
+           --border-color: rgba(255, 255, 255, 0.08); 
+           --text-main: #f5f5f7; 
+           --text-muted: #8e8e93; 
+           --accent-blue: #0a84ff; 
+           --accent-green: #10b981; 
+           --accent-purple: #bf5af2; 
+           --accent-orange: #ff9f0a; 
+           --accent-pink: #ff375f; 
+           --accent-red: #ff453a; 
         }
         * { box-sizing: border-box; } 
         body { font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: var(--bg-main); color: var(--text-main); margin: 0; min-height: 100vh; overflow-x: hidden; -webkit-font-smoothing: antialiased; }
-        ::-webkit-scrollbar { width: 6px; height: 6px; } ::-webkit-scrollbar-thumb { background: rgba(244, 114, 182, 0.15); border-radius: 10px; } ::-webkit-scrollbar-thumb:hover { background: rgba(244, 114, 182, 0.3); }
+        ::-webkit-scrollbar { width: 6px; height: 6px; } ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 10px; } ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.3); }
         @keyframes fadeInSmooth { from { opacity: 0; transform: translateY(10px); filter: blur(5px); } to { opacity: 1; transform: translateY(0); filter: blur(0); } }
-        @keyframes pulseGlow { 0% { box-shadow: 0 0 5px rgba(255, 51, 119, 0.2); } 100% { box-shadow: 0 0 15px rgba(255, 51, 119, 0.5); } }
-        .status-dot { width: 8px; height: 8px; background-color: var(--accent-pink); border-radius: 50%; display: inline-block; animation: pulseGlow 2s infinite alternate; margin-right: 8px; box-shadow: 0 0 8px var(--accent-pink); }
-        .bot-status { display: flex; align-items: center; background: rgba(255, 51, 119, 0.1); border: 1px solid rgba(255, 51, 119, 0.2); padding: 6px 14px; border-radius: 20px; font-weight: 500; color: var(--accent-pink); font-size: 0.85em; letter-spacing: 0.5px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+        @keyframes pulseGlow { 0% { box-shadow: 0 0 5px rgba(16, 185, 129, 0.2); } 100% { box-shadow: 0 0 15px rgba(16, 185, 129, 0.5); } }
+        .status-dot { width: 8px; height: 8px; background-color: var(--accent-green); border-radius: 50%; display: inline-block; animation: pulseGlow 2s infinite alternate; margin-right: 8px; box-shadow: 0 0 8px var(--accent-green); }
+        .bot-status { display: flex; align-items: center; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); padding: 6px 14px; border-radius: 20px; font-weight: 500; color: var(--accent-green); font-size: 0.85em; letter-spacing: 0.5px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
         .btn-icon { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255,255,255,0.05); color: #fff; padding: 8px 14px; border-radius: 16px; cursor: pointer; transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); font-size: 1rem; }
         .btn-icon:hover { background: rgba(255,255,255,0.1); transform: scale(1.05); }
         .nav-badge { background: var(--accent-red); color: white; border-radius: 10px; padding: 2px 6px; font-size: 0.75em; margin-left: 8px; box-shadow: 0 0 10px var(--accent-red); }
         .tab-content { display: none; animation: fadeInSmooth 0.4s cubic-bezier(0.25, 1, 0.5, 1); } .tab-content.active { display: block; }
         .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; margin-bottom: 30px; }
         .card { background: var(--bg-card); padding: 25px; border-radius: 24px; border: 1px solid var(--border-color); transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1); position: relative; overflow: hidden; backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px); box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
-        .card:hover { transform: translateY(-3px); border-color: rgba(244, 114, 182, 0.25); box-shadow: 0 12px 40px rgba(0,0,0,0.4); }
+        .card:hover { transform: translateY(-3px); border-color: rgba(255,255,255,0.15); box-shadow: 0 12px 40px rgba(0,0,0,0.4); }
         .card h3 { margin: 0 0 10px 0; font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); font-weight: 600; }
         .card .value { font-size: 2.2em; font-weight: 700; letter-spacing: -1px; }
         .box { background: var(--bg-card); padding: 25px; border-radius: 24px; border: 1px solid var(--border-color); margin-bottom: 25px; transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1); backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px); box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
         .box h2 { font-size: 1.3em; font-weight: 600; margin-top: 0; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; color: #fff; letter-spacing: 0px; border-bottom: 0.5px solid rgba(255,255,255,0.05); padding-bottom: 15px; }
         table { width: 100%; border-collapse: separate; border-spacing: 0; } th { padding: 15px; text-align: left; color: var(--text-muted); font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 0.5px solid rgba(255,255,255,0.1); font-weight: 600; } td { padding: 15px; text-align: left; border-bottom: 0.5px solid rgba(255,255,255,0.05); vertical-align: middle; } tr { transition: all 0.3s ease; } tr:hover { background: rgba(255,255,255,0.02); transform: scale(1.005); }
         input, textarea, select { width: 100%; background: rgba(255,255,255,0.05); border: 0.5px solid rgba(255,255,255,0.1); color: white; padding: 15px; border-radius: 14px; transition: all 0.3s ease; font-family: inherit; font-size: 0.95em; }
-        input:focus, textarea:focus, select:focus { border-color: var(--accent-pink); box-shadow: 0 0 0 2px rgba(255, 51, 119, 0.2); outline: none; background: rgba(255,255,255,0.08); }
+        input:focus, textarea:focus, select:focus { border-color: var(--accent-green); box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2); outline: none; background: rgba(255,255,255,0.08); }
         .admin-btn { background: rgba(255,255,255,0.1); color: white; border: 0.5px solid rgba(255,255,255,0.1); padding: 10px 20px; border-radius: 14px; cursor: pointer; font-weight: 500; margin-top: 10px; transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1); font-size: 0.9em; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); display: inline-flex; justify-content: center; align-items: center; }
-        .admin-btn:hover { background: rgba(255,255,255,0.15); transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,0.3); }
-        .btn-green { background: var(--accent-pink); color: #fff; border-color: var(--accent-pink); font-weight: 600; }
-        .btn-green:hover { background: #ff5e9c; box-shadow: 0 6px 20px rgba(255, 51, 119, 0.4); color: #fff; }
-        .text-green { color: var(--accent-pink); text-shadow: 0 0 15px rgba(255, 51, 119, 0.2); } .text-muted { color: var(--text-muted); } .text-blue { color: var(--accent-blue); text-shadow: 0 0 15px rgba(244, 114, 182, 0.2); }r; align-items: center; }
         .admin-btn:hover { background: rgba(255,255,255,0.15); transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,0.3); }
         .btn-green { background: var(--accent-green); color: #000; border-color: var(--accent-green); font-weight: 600; }
         .btn-green:hover { background: #34d399; box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4); color: #000; }
@@ -2588,7 +2597,7 @@ http.createServer(async (req, res) => {
             if(tabId === 'overview'){ window.renderSalesChart(7); }
         };
         
-        function showToast(msg, type='success') { const t=document.getElementById('toast'); t.innerHTML = (type==='error'?'❌':'✅') + ' <span style="letter-spacing:0.5px;">' + msg + '</span>'; t.style.borderColor = type === 'error' ? 'rgba(239,68,68,0.5)' : 'rgba(255, 51, 119, 0.5)'; t.style.boxShadow = type === 'error' ? '0 10px 30px rgba(239,68,68,0.2)' : '0 10px 30px rgba(255, 51, 119, 0.2)'; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 3000); }
+        function showToast(msg, type='success') { const t=document.getElementById('toast'); t.innerHTML = (type==='error'?'❌':'✅') + ' <span style="letter-spacing:0.5px;">' + msg + '</span>'; t.style.borderColor = type === 'error' ? 'rgba(239,68,68,0.5)' : 'rgba(16,185,129,0.5)'; t.style.boxShadow = type === 'error' ? '0 10px 30px rgba(239,68,68,0.2)' : '0 10px 30px rgba(16,185,129,0.2)'; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 3000); }
         
         window.manualRefresh = async function() { const btn = document.getElementById('refreshBtn'); btn.classList.add('spinning'); await window.refreshDataSilently(); setTimeout(()=>btn.classList.remove('spinning'), 1000); showToast('Matrix Synced'); };
 
@@ -2685,9 +2694,9 @@ http.createServer(async (req, res) => {
         window.manageVip = async function(userId, action) { if(action === 'add') { await window.executeAction({action: 'add_vip_days', userId: userId, days: 7}); } else if(action === 'revoke') { if(await window.customConfirm('VIP REVOKE', 'Revoke VIP status for this node?')) { await window.executeAction({action: 'revoke_vip', userId: userId}); } } };
 
         if(typeof Chart !== 'undefined') {
-            Chart.defaults.color = '#f472b6'; Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, Inter, sans-serif';
+            Chart.defaults.color = '#8e8e93'; Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, Inter, sans-serif';
         }
-        window.renderSalesChart = function(days) { if(typeof Chart === 'undefined') return; let dates = Object.keys(rawStats.revenue || {}).sort(); let values = dates.map(d => rawStats.revenue[d]); if (days > 0 && dates.length > days) { dates = dates.slice(-days); values = values.slice(-days); } const ctxSales = document.getElementById('salesChart').getContext('2d'); let grad = ctxSales.createLinearGradient(0,0,0,400); grad.addColorStop(0, 'rgba(255, 51, 119, 0.4)'); grad.addColorStop(1, 'transparent'); if(salesChart) salesChart.destroy(); salesChart = new Chart(ctxSales, { type: 'line', data: { labels: dates.length?dates:['No Data'], datasets: [{ data: values.length?values:[0], borderColor: '#ff3377', backgroundColor: grad, fill: true, tension: 0.4, pointHoverBackgroundColor: '#fff', pointHoverBorderColor: 'rgba(255, 51, 119, 1)', pointHoverBorderWidth: 4, pointRadius: 0, pointHitRadius: 20 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, plugins: { legend: { display: false } }, interaction: { intersect: false, mode: 'index' }, scales: { x: { display: false }, y: { grid: { color: 'rgba(255,255,255,0.05)'}, border: { dash: [4, 4], display: false } } } } }); };
+        window.renderSalesChart = function(days) { if(typeof Chart === 'undefined') return; let dates = Object.keys(rawStats.revenue || {}).sort(); let values = dates.map(d => rawStats.revenue[d]); if (days > 0 && dates.length > days) { dates = dates.slice(-days); values = values.slice(-days); } const ctxSales = document.getElementById('salesChart').getContext('2d'); let grad = ctxSales.createLinearGradient(0,0,0,400); grad.addColorStop(0, 'rgba(16, 185, 129, 0.4)'); grad.addColorStop(1, 'transparent'); if(salesChart) salesChart.destroy(); salesChart = new Chart(ctxSales, { type: 'line', data: { labels: dates.length?dates:['No Data'], datasets: [{ data: values.length?values:[0], borderColor: '#10b981', backgroundColor: grad, fill: true, tension: 0.4, pointHoverBackgroundColor: '#fff', pointHoverBorderColor: 'rgba(16, 185, 129, 1)', pointHoverBorderWidth: 4, pointRadius: 0, pointHitRadius: 20 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, plugins: { legend: { display: false } }, interaction: { intersect: false, mode: 'index' }, scales: { x: { display: false }, y: { grid: { color: 'rgba(255,255,255,0.05)'}, border: { dash: [4, 4], display: false } } } } }); };
         window.updateSalesChart = function(days) { 
             if(document.getElementById('btn-chart-7')) document.getElementById('btn-chart-7').className = days === 7 ? 'admin-btn btn-green' : 'admin-btn';
             if(document.getElementById('btn-chart-30')) document.getElementById('btn-chart-30').className = days === 30 ? 'admin-btn btn-green' : 'admin-btn';
@@ -2696,12 +2705,12 @@ http.createServer(async (req, res) => {
         };
         function renderAnalyticsCharts() { 
            if(typeof Chart === 'undefined') return;
-           const ctxHourly = document.getElementById('hourlyChart').getContext('2d'); if(hourlyChart) hourlyChart.destroy(); hourlyChart = new Chart(ctxHourly, { type: 'bar', data: { labels: Array.from({length: 24}, (_, i) => i+'h'), datasets: [{ label: 'Sales', data: rawStats.analytics.hourly_sales || Array(24).fill(0), backgroundColor: '#ff3377', hoverBackgroundColor: '#ff5e9c', borderRadius: 6 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1000, easing: 'easeOutQuart' }, plugins: { legend: { display: false } }, scales: { y: { grid: { color: 'rgba(255,255,255,0.05)' }, border: {display: false} }, x: { grid: { display: false }, border: {display: false} } } } });
-           const prodIds = Object.keys(rawStats.product_sales || {}); const prodLabels = prodIds.map(id => rawStats.products[id] ? rawStats.products[id].name : 'Unknown'); const prodData = Object.values(rawStats.product_sales || {}); const ctxTopProd = document.getElementById('topProductsBarChart').getContext('2d'); if(topProdChart) topProdChart.destroy(); topProdChart = new Chart(ctxTopProd, { type: 'bar', data: { labels: prodLabels.length?prodLabels:['No Data'], datasets: [{ label: 'Sales', data: prodData.length?prodData:[0], backgroundColor: '#ff3377', hoverBackgroundColor: '#fff', borderRadius: 6 }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: { duration: 1000, easing: 'easeOutQuart' }, plugins: { legend: { display: false } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' }, border: {display: false} }, y: { grid: { display: false }, border: {display: false} } } } });
-           const catRevs = {}; Object.entries(rawStats.product_sales || {}).forEach(([id, count]) => { const p = rawStats.products[id]; if(p && p.price !== 'Custom'){ const cat = p.category || 'Other'; if(!catRevs[cat]) catRevs[cat] = 0; catRevs[cat] += (parseInt(p.price) * count); } }); const ctxCat = document.getElementById('categoryRevenueChart').getContext('2d'); if(catChart) catChart.destroy(); catChart = new Chart(ctxCat, { type: 'polarArea', data: { labels: Object.keys(catRevs).length?Object.keys(catRevs):['No Data'], datasets: [{ data: Object.values(catRevs).length?Object.values(catRevs):[0], backgroundColor: ['#ff3377', '#ff5e9c', '#ec4899', '#fb7185', '#d946ef'], hoverBackgroundColor: ['#fff', '#fff', '#fff', '#fff', '#fff'], borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { animateScale: true, animateRotate: true, duration: 1000, easing: 'easeOutQuart' }, plugins: { legend: { position: 'right', labels: {color: '#f472b6', font: { family: '-apple-system' }} } } } });
+           const ctxHourly = document.getElementById('hourlyChart').getContext('2d'); if(hourlyChart) hourlyChart.destroy(); hourlyChart = new Chart(ctxHourly, { type: 'bar', data: { labels: Array.from({length: 24}, (_, i) => i+'h'), datasets: [{ label: 'Sales', data: rawStats.analytics.hourly_sales || Array(24).fill(0), backgroundColor: '#10b981', hoverBackgroundColor: '#34d399', borderRadius: 6 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1000, easing: 'easeOutQuart' }, plugins: { legend: { display: false } }, scales: { y: { grid: { color: 'rgba(255,255,255,0.05)' }, border: {display: false} }, x: { grid: { display: false }, border: {display: false} } } } });
+           const prodIds = Object.keys(rawStats.product_sales || {}); const prodLabels = prodIds.map(id => rawStats.products[id] ? rawStats.products[id].name : 'Unknown'); const prodData = Object.values(rawStats.product_sales || {}); const ctxTopProd = document.getElementById('topProductsBarChart').getContext('2d'); if(topProdChart) topProdChart.destroy(); topProdChart = new Chart(ctxTopProd, { type: 'bar', data: { labels: prodLabels.length?prodLabels:['No Data'], datasets: [{ label: 'Sales', data: prodData.length?prodData:[0], backgroundColor: '#10b981', hoverBackgroundColor: '#fff', borderRadius: 6 }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: { duration: 1000, easing: 'easeOutQuart' }, plugins: { legend: { display: false } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' }, border: {display: false} }, y: { grid: { display: false }, border: {display: false} } } } });
+           const catRevs = {}; Object.entries(rawStats.product_sales || {}).forEach(([id, count]) => { const p = rawStats.products[id]; if(p && p.price !== 'Custom'){ const cat = p.category || 'Other'; if(!catRevs[cat]) catRevs[cat] = 0; catRevs[cat] += (parseInt(p.price) * count); } }); const ctxCat = document.getElementById('categoryRevenueChart').getContext('2d'); if(catChart) catChart.destroy(); catChart = new Chart(ctxCat, { type: 'polarArea', data: { labels: Object.keys(catRevs).length?Object.keys(catRevs):['No Data'], datasets: [{ data: Object.values(catRevs).length?Object.values(catRevs):[0], backgroundColor: ['#10b981', '#34d399', '#059669', '#f59e0b', '#ef4444'], hoverBackgroundColor: ['#fff', '#fff', '#fff', '#fff', '#fff'], borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { animateScale: true, animateRotate: true, duration: 1000, easing: 'easeOutQuart' }, plugins: { legend: { position: 'right', labels: {color: '#8e8e93', font: { family: '-apple-system' }} } } } });
            
-           const dowSales = { 'Sun':0, 'Mon':0, 'Tue':0, 'Wed':0, 'Thu':0, 'Fri':0, 'Sat':0 }; const daysArr = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']; Object.entries(rawStats.revenue || {}).forEach(([dateStr, val]) => { const d = new Date(dateStr); if(!isNaN(d)) { dowSales[daysArr[d.getDay()]] += parseFloat(val); } }); const ctxDow = document.getElementById('dowChart').getContext('2d'); if(window.dowChartInst) window.dowChartInst.destroy(); window.dowChartInst = new Chart(ctxDow, { type: 'bar', data: { labels: daysArr, datasets: [{ label: 'Revenue (£)', data: daysArr.map(d=>dowSales[d]), backgroundColor: '#ff3377', hoverBackgroundColor: '#ff5e9c', borderRadius: 8 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { grid: { color: 'rgba(255,255,255,0.05)' }, border: {display: false} }, x: { grid: { display: false }, border: {display: false} } } } });
-           const ticketsOpened = rawStats.analytics?.tickets_opened || 0; const salesClosed = rawStats.total_transactions || 0; const ctxFunnel = document.getElementById('funnelChart').getContext('2d'); if(window.funnelChartInst) window.funnelChartInst.destroy(); window.funnelChartInst = new Chart(ctxFunnel, { type: 'doughnut', data: { labels: ['Tickets Opened (No Purchase)', 'Successful Sales'], datasets: [{ data: [Math.max(0, ticketsOpened - salesClosed), salesClosed], backgroundColor: ['rgba(251, 113, 133, 0.8)', 'rgba(255, 51, 119, 0.8)'], hoverOffset: 4, borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '75%', plugins: { legend: { position: 'bottom', labels: { color: '#f472b6' } } } } });
+           const dowSales = { 'Sun':0, 'Mon':0, 'Tue':0, 'Wed':0, 'Thu':0, 'Fri':0, 'Sat':0 }; const daysArr = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']; Object.entries(rawStats.revenue || {}).forEach(([dateStr, val]) => { const d = new Date(dateStr); if(!isNaN(d)) { dowSales[daysArr[d.getDay()]] += parseFloat(val); } }); const ctxDow = document.getElementById('dowChart').getContext('2d'); if(window.dowChartInst) window.dowChartInst.destroy(); window.dowChartInst = new Chart(ctxDow, { type: 'bar', data: { labels: daysArr, datasets: [{ label: 'Revenue (£)', data: daysArr.map(d=>dowSales[d]), backgroundColor: '#10b981', hoverBackgroundColor: '#34d399', borderRadius: 8 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { grid: { color: 'rgba(255,255,255,0.05)' }, border: {display: false} }, x: { grid: { display: false }, border: {display: false} } } } });
+           const ticketsOpened = rawStats.analytics?.tickets_opened || 0; const salesClosed = rawStats.total_transactions || 0; const ctxFunnel = document.getElementById('funnelChart').getContext('2d'); if(window.funnelChartInst) window.funnelChartInst.destroy(); window.funnelChartInst = new Chart(ctxFunnel, { type: 'doughnut', data: { labels: ['Tickets Opened (No Purchase)', 'Successful Sales'], datasets: [{ data: [Math.max(0, ticketsOpened - salesClosed), salesClosed], backgroundColor: ['rgba(239, 68, 68, 0.8)', 'rgba(16, 185, 129, 0.8)'], hoverOffset: 4, borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '75%', plugins: { legend: { position: 'bottom', labels: { color: '#8e8e93' } } } } });
         }
         window.forceBackup = async function() {
             if(!confirm('Force a manual cloud sync and download local backup?')) return;
