@@ -715,33 +715,49 @@ client.on('messageCreate', async (message) => {
 
         if (message.channel?.name?.startsWith('support-') && !message.author.bot) {
            try {
-               const { GoogleGenAI } = require('@google/genai');
-               if (process.env.GEMINI_API_KEY) {
-                   const ai = new GoogleGenAI({
-                       apiKey: (process.env.GEMINI_API_KEY || '').trim(),
-                       httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+               if (process.env.GROQ_API_KEY) {
+                   const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                       method: 'POST',
+                       headers: {
+                           'Authorization': `Bearer ${(process.env.GROQ_API_KEY || '').trim()}`,
+                           'Content-Type': 'application/json'
+                       },
+                       body: JSON.stringify({
+                           model: 'llama-3.1-8b-instant',
+                           messages: [
+                               { role: 'system', content: 'You are an AI support agent. Detect the user\'s intent and provide a helpful, polite reply. Return JSON in the format: { "intent": "brief summary", "suggested_reply": "detailed reply" }' },
+                               { role: 'user', content: message.content }
+                           ],
+                           response_format: { type: 'json_object' }
+                       })
                    });
-                   const response = await ai.models.generateContent({
-                       model: "gemini-2.0-flash",
-                       contents: message.content,
-                       config: {
-                           systemInstruction: "You are an AI support agent. Detect the user's intent and provide a helpful, polite reply. Return JSON in the format: { \"intent\": \"brief summary\", \"suggested_reply\": \"detailed reply\" }",
-                           responseMimeType: "application/json"
-                       }
-                   });
-                   const intentData = JSON.parse(response.text.trim());
+                   
+                   if (!response.ok) {
+                       const errText = await response.text();
+                       throw new Error(`HTTP error! status: ${response.status}, message: ${errText}`);
+                   }
+                   
+                   const data = await response.json();
+                   let intentData;
+                   try {
+                       intentData = JSON.parse(data.choices[0].message.content);
+                   } catch(err) {
+                       intentData = { intent: "Unknown", suggested_reply: data.choices[0].message.content };
+                   }
                    
                    const { EmbedBuilder } = require('discord.js');
                    const embed = new EmbedBuilder()
                        .setColor('#10b981')
                        .setTitle('🤖 AI Support Agent')
-                       .setDescription(`**Intent Detected:** ${intentData.intent}\n\n**Suggestion:** ${intentData.suggested_reply}`)
+                       .setDescription(`**Intent Detected:** ${intentData.intent || 'N/A'}\n\n**Suggestion:** ${intentData.suggested_reply || 'N/A'}`)
                        .setFooter({ text: 'This is an AI generated response.' });
                    await message.reply({ embeds: [embed] }).catch(()=>{});
+               } else {
+                   await message.reply("⚠️ **AI Support Error:** The GROQ API key is missing. Please check the App Settings (Secrets) and provide a valid GROQ_API_KEY.").catch(()=>{});
                }
            } catch (e) {
                console.log("AI Error:", e.message);
-               await message.reply("⚠️ **AI Support Error:** The Gemini API key is either missing or invalid. Please check the App Settings (Secrets) and provide a valid API key.").catch(()=>{});
+               await message.reply("⚠️ **AI Support Error:** An error occurred while communicating with Groq. Please verify your API key and try again.").catch(()=>{});
            }
         }
 
