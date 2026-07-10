@@ -2,6 +2,11 @@
   "name": "bot-shop",
   "version": "1.0.0",
   "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node index.js",
+    "build": "echo 'No build required'"
+  },
   "dependencies": {
     "axios": "^1.7.0",
     "discord.js": "^14.15.0"
