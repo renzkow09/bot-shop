@@ -559,20 +559,20 @@ client.on('interactionCreate', async (interaction) => {
                 const eventLock = await acquireDistributedLock(interaction.id, 5000);
                 if (!eventLock) return; // Silently ignore duplicate websocket broadcasts
 
-                if (userTicketLocks.has(interaction.user.id)) return interaction.reply({ content: '⏳ Please wait, processing...', ephemeral: true }).catch(()=>{});
-                const dLock = await acquireDistributedLock(interaction.user.id + "_" + interaction.customId, 5000);
-                if (!dLock) return interaction.reply({ content: '⏳ Anti-spam: please wait a few seconds before clicking again.', ephemeral: true }).catch(()=>{});
-                
-                userTicketLocks.add(interaction.user.id);
-                setTimeout(() => userTicketLocks.delete(interaction.user.id), 5000);
-                await interaction.deferReply({ flags: 64 }).catch(() => {});
-                
                 // 🛡️ ANTI-SPAM TICKET CHECK
                 const sanitizedName = interaction.user.username.toLowerCase().replace(/[^a-z0-9]/g, '');
                 const existingChannel = interaction.guild.channels.cache.find(c => c.name === `shop-${sanitizedName}` || c.name === `support-${sanitizedName}`);
                 if (existingChannel) {
-                    return await interaction.editReply({ content: `❌ You already have an open ticket: <#${existingChannel.id}>` }).catch(() => {});
+                    return interaction.reply({ content: `❌ You already have an open ticket: <#${existingChannel.id}>`, ephemeral: true }).catch(() => {});
                 }
+
+                if (userTicketLocks.has(interaction.user.id)) return interaction.reply({ content: '⏳ Channel is being created, please wait...', ephemeral: true }).catch(()=>{});
+                const dLock = await acquireDistributedLock(interaction.user.id + "_" + interaction.customId, 5000);
+                if (!dLock) return interaction.reply({ content: '⏳ Channel is being created, please wait...', ephemeral: true }).catch(()=>{});
+                
+                userTicketLocks.add(interaction.user.id);
+                setTimeout(() => userTicketLocks.delete(interaction.user.id), 5000);
+                await interaction.deferReply({ flags: 64 }).catch(() => {});
 
                 if (!memoryStats.analytics) memoryStats.analytics = { tickets_opened: 0, hourly_sales: Array(24).fill(0) };
                 memoryStats.analytics.tickets_opened = (memoryStats.analytics.tickets_opened || 0) + 1;
@@ -601,20 +601,20 @@ client.on('interactionCreate', async (interaction) => {
                 const eventLock = await acquireDistributedLock(interaction.id, 5000);
                 if (!eventLock) return; // Silently ignore duplicate websocket broadcasts
 
-                if (userTicketLocks.has(interaction.user.id)) return interaction.reply({ content: '⏳ Please wait, processing...', ephemeral: true }).catch(()=>{});
-                const dLock = await acquireDistributedLock(interaction.user.id + "_" + interaction.customId, 5000);
-                if (!dLock) return interaction.reply({ content: '⏳ Anti-spam: please wait a few seconds before clicking again.', ephemeral: true }).catch(()=>{});
-                
-                userTicketLocks.add(interaction.user.id);
-                setTimeout(() => userTicketLocks.delete(interaction.user.id), 5000);
-                await interaction.deferReply({ flags: 64 }).catch(() => {});
-                
                 // 🛡️ ANTI-SPAM TICKET CHECK
                 const sanitizedName = interaction.user.username.toLowerCase().replace(/[^a-z0-9]/g, '');
                 const existingChannel = interaction.guild.channels.cache.find(c => c.name === `shop-${sanitizedName}` || c.name === `support-${sanitizedName}`);
                 if (existingChannel) {
-                    return await interaction.editReply({ content: `❌ You already have an open ticket: <#${existingChannel.id}>` }).catch(() => {});
+                    return interaction.reply({ content: `❌ You already have an open ticket: <#${existingChannel.id}>`, ephemeral: true }).catch(() => {});
                 }
+
+                if (userTicketLocks.has(interaction.user.id)) return interaction.reply({ content: '⏳ Channel is being created, please wait...', ephemeral: true }).catch(()=>{});
+                const dLock = await acquireDistributedLock(interaction.user.id + "_" + interaction.customId, 5000);
+                if (!dLock) return interaction.reply({ content: '⏳ Channel is being created, please wait...', ephemeral: true }).catch(()=>{});
+                
+                userTicketLocks.add(interaction.user.id);
+                setTimeout(() => userTicketLocks.delete(interaction.user.id), 5000);
+                await interaction.deferReply({ flags: 64 }).catch(() => {});
 
                 const channel = await interaction.guild.channels.create({
                     name: `support-${sanitizedName}`, type: ChannelType.GuildText, parent: CATEGORY_SUPPORT_ID,
