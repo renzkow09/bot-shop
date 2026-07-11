@@ -1518,18 +1518,22 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
             arch: os.arch(),
             freeMem: (os.freemem() / 1024 / 1024 / 1024).toFixed(2),
             totalMem: (os.totalmem() / 1024 / 1024 / 1024).toFixed(2),
-            sysUptime: Math.floor(os.uptime() / 60)
+            sysUptime: Math.floor(os.uptime() / 60),
+            cpuLoad: Math.round(((os.loadavg()[0] || 0) * 100) / (os.cpus()?.length || 1)),
+            memPercent: Math.round(100 * (1 - os.freemem() / os.totalmem()))
         };
 
         const procInfo = {
             rss: (process.memoryUsage().rss / 1024 / 1024).toFixed(2),
             heap: (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(2),
-            uptime: Math.floor(process.uptime() / 60)
+            uptime: Math.floor(process.uptime() / 60),
+            lag: eventLoopLag
         };
 
         const securityInfo = {
             rateLimits: rateLimits.size,
-            locks: bruteForceLocks.size
+            locks: bruteForceLocks.size,
+            firewall: 'active'
         };
 
         systemLog('DEBUG', 'DIAGNOSTICS', `Scan complete. DB: ${upstashLatency}ms | GW: ${rewarbleLatency}ms | WS: ${client.ws.ping}ms`);
@@ -3451,7 +3455,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                 if(document.getElementById('ui-fw-status')) document.getElementById('ui-fw-status').innerText = data.security.firewall.toUpperCase();
                 
                 showToast('Diagnostics complete.');
-            } catch(e) { showToast('Diagnostics Failed', 'error'); }
+            } catch(e) { console.error('Diag Error:', e); showToast('Diagnostics Failed', 'error'); }
         };
         
         
