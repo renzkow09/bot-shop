@@ -467,7 +467,7 @@ client.once('clientReady', () => {
                 const admin = await client.users.fetch(ADMIN_DISCORD_ID).catch(()=>null);
                 if (admin) admin.send("🚨 **SYSTEM ALERT** 🚨\n- The Rewarble API is currently DOWN or unreachable. Purchases might fail.").catch(()=>{});
             }
-        } catch(e){ try{ window.showToast('Runtime Error', 'error'); }catch(ex){} console.error('Silent error caught:', e); }
+        } catch(e){ systemLog('ERROR', 'SYSTEM', e.message); }
     }, 15 * 60 * 1000);
 });
 
@@ -710,7 +710,7 @@ client.on('interactionCreate', async (interaction) => {
                     setTimeout(() => { channelStates.delete(interaction.channel.id); interaction.channel.delete().catch(()=>{}); }, 10000);
                 }
             } else {
-                let finalPrice = parseInt(product.price);
+                let finalPrice = parseFloat(product.price);
                 let isVIPPurchase = selected === "VIP" || (product.category && product.category.includes("SUBSCRIPTION"));
                 let appliedDiscount = 0;
 
@@ -808,7 +808,7 @@ client.on('interactionCreate', async (interaction) => {
             } catch (err) {
                 systemLog('ERROR', 'STORE', 'Transaction crashed: ' + err.message);
                 if (interaction.channel) {
-                    interaction.channel.send("❌ **Critical Error during transaction:** " + err.message + " \nContact support.").catch(()=>{});
+                    interaction.channel.send("❌ **Critical Error during transaction:** Une erreur est survenue, contactez le support.").catch(()=>{});
                 }
             }
         }
@@ -884,6 +884,10 @@ client.on('messageCreate', async (message) => {
         }
 
         if (message.channel?.name?.startsWith('shop-')) {
+                if (memoryStats.blacklist && memoryStats.blacklist.includes(message.author.id)) return;
+                if (memoryStats.settings && memoryStats.settings.maintenance && memoryStats.settings.maintenance.active && message.author.id !== ADMIN_DISCORD_ID) {
+                    return message.reply('Le bot est actuellement en maintenance.');
+                }
             let state = channelStates.get(message.channel.id); 
             if (!state) {
                 state = { validated: false, processing: false, promo: null, redeemed: false };
@@ -1010,7 +1014,7 @@ client.on('messageCreate', async (message) => {
                     if (prod.price === "Custom") {
                         finalPriceStr = "Custom";
                     } else {
-                        let originalPrice = parseInt(prod.price);
+                        let originalPrice = parseFloat(prod.price);
                         let discountToApply = 0;
                         let isVIPItem = id === "VIP" || (prod.category && prod.category.includes("SUBSCRIPTION"));
 
@@ -1146,7 +1150,7 @@ global.broadcastToDashboard = function(type, data) {
 };
 
 const server = http.createServer(async (req, res) => {
-    const clientIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '127.0.0.1';
+    const clientIp = req.socket?.remoteAddress || '127.0.0.1';
     const now = Date.now();
     let rl = rateLimits.get(clientIp) || { count: 0, resetTime: now + 60000 };
     if (now > rl.resetTime) rl = { count: 0, resetTime: now + 60000 };
@@ -1164,18 +1168,21 @@ const server = http.createServer(async (req, res) => {
         return res.end(fs.readFileSync(__filename));
     }
     if (req.url === '/api/login' && req.method === 'POST') {
-        let body = ''; req.on('data', chunk => body += chunk);
+        let body = ''; let bodySize = 0; req.on('data', chunk => { bodySize += chunk.length; if(bodySize > 5*1024*1024) req.socket.destroy(); else body += chunk; });
         req.on('end', () => {
             let lock = bruteForceLocks.get(clientIp) || { attempts: 0, lockout: 0 };
             if (now < lock.lockout) return res.writeHead(429).end('Locked out.');
             try {
                 const data = JSON.parse(body);
-                if (data.pin === DASHBOARD_PIN) {
+                const crypto = require('crypto');
+                        const a = Buffer.from(data.pin || '');
+                        const b = Buffer.from(DASHBOARD_PIN);
+                        if (a.length === b.length && crypto.timingSafeEqual(a, b)) {
                     bruteForceLocks.delete(clientIp);
                     if(!global.activeAdminSessions) global.activeAdminSessions = new Set();
                     const sessionToken = require('crypto').randomBytes(32).toString('hex');
                     global.activeAdminSessions.add(sessionToken);
-                    res.writeHead(200, { 'Set-Cookie': `auth_session=${sessionToken}; Max-Age=2592000; HttpOnly; Path=/`, 'Content-Type': 'application/json' });
+                    res.writeHead(200, { 'Set-Cookie': `auth_session=${sessionToken}; Max-Age=86400; HttpOnly; Secure; SameSite=Strict; Path=/`, 'Content-Type': 'application/json' });
                     systemLog('INFO', 'SECURITY', `Successful admin dashboard login from IP: ${clientIp}`);
                     return res.end(JSON.stringify({ success: true }));
                 } else {
@@ -1283,7 +1290,37 @@ const server = http.createServer(async (req, res) => {
         const todayStr = new Date().toISOString().split('T')[0];
         let monthRevenue = 0; if(memoryStats.revenue) Object.keys(memoryStats.revenue).forEach(date => { if(date.startsWith(todayStr.substring(0, 7))) monthRevenue += parseFloat(memoryStats.revenue[date]) || 0; });
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify({ memoryStats, maintenance: memoryStats.settings?.maintenance, pendingReviewsCount: memoryStats.pending_reviews?.length || 0, activeTickets: activeTickets, todayRevenue: memoryStats.revenue[todayStr] || 0, monthRevenue, ticketsOpened: memoryStats.analytics?.tickets_opened || 0, dropOffRate: memoryStats.analytics?.tickets_opened > 0 ? (100 - (memoryStats.total_transactions / memoryStats.analytics.tickets_opened) * 100).toFixed(1) : 0, peakHourStr: "N/A", conversionRate: ((memoryStats.total_transactions / (memoryStats.total_joins || 1)) * 100).toFixed(1), retentionRate: memberCount !== "N/A" ? ((memberCount / (memberCount + (memoryStats.total_leaves || 0))) * 100).toFixed(1) : "N/A", onlineCount, memberCount, MONTHLY_GOAL, PIN: DASHBOARD_PIN }));
+        return res.end(JSON.stringify({ memoryStats, maintenance: memoryStats.settings?.maintenance, pendingReviewsCount: memoryStats.pending_reviews?.length || 0, activeTickets: activeTickets, todayRevenue: memoryStats.revenue[todayStr] || 0, monthRevenue, ticketsOpened: memoryStats.analytics?.tickets_opened || 0, dropOffRate: memoryStats.analytics?.tickets_opened > 0 ? (100 - (memoryStats.total_transactions / memoryStats.analytics.tickets_opened) * 100).toFixed(1) : 0, peakHourStr: "N/A", conversionRate: ((memoryStats.total_transactions / (memoryStats.total_joins || 1)) * 100).toFixed(1), retentionRate: memberCount !== "N/A" ? ((memberCount / (memberCount + (memoryStats.total_leaves || 0))) * 100).toFixed(1) : "N/A", onlineCount, memberCount, MONTHLY_GOAL, /* PIN removed */ }));
+    }
+
+    
+    if (req.url === '/api/backups' && req.method === 'GET') {
+        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
+        const fs = require('fs');
+        const files = fs.readdirSync(__dirname).filter(f => f.startsWith('stats_backup_') && f.endsWith('.json'));
+        const backups = files.map(f => {
+            const stats = fs.statSync(f);
+            return { name: f, size: (stats.size / 1024).toFixed(2) + ' KB', date: stats.mtimeMs };
+        }).sort((a, b) => b.date - a.date);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify(backups));
+    }
+
+    if (req.url.startsWith('/api/backups/download') && req.method === 'GET') {
+        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
+        const urlObj = new URL(req.url, `http://${req.headers.host}`);
+        const file = urlObj.searchParams.get('file');
+        if (!file || !file.startsWith('stats_backup_') || !file.endsWith('.json') || file.includes('/')) {
+            return res.writeHead(400).end('Invalid file');
+        }
+        const fs = require('fs');
+        if (!fs.existsSync(file)) return res.writeHead(404).end('File not found');
+        res.writeHead(200, {
+            'Content-Type': 'application/json',
+            'Content-Disposition': `attachment; filename="${file}"`
+        });
+        const readStream = fs.createReadStream(file);
+        return readStream.pipe(res);
     }
 
     if (req.url === '/api/export' && req.method === 'GET') {
@@ -1731,7 +1768,8 @@ const server = http.createServer(async (req, res) => {
                 }
                 else if (data.action === 'add_product') {
                     if (!memoryStats.products) memoryStats.products = {};
-                    const newId = (Object.keys(memoryStats.products).length + 1).toString();
+                    if (!memoryStats.next_product_id) memoryStats.next_product_id = Date.now();
+                        const newId = (memoryStats.next_product_id++).toString();
                     memoryStats.products[newId] = { name: data.name, price: data.price, link: data.link, category: "✨ NEW ITEMS", stock: data.stock || "∞", desc: data.desc, upsellId: data.upsellId, upsellDiscount: data.upsellDiscount };
                     syncCloud();
                     systemLog('INFO', 'CATALOG', `New asset injected into matrix: ${data.name}`);
@@ -1739,9 +1777,6 @@ const server = http.createServer(async (req, res) => {
                 else if (data.action === 'delete_product') {
                     if (memoryStats.products && memoryStats.products[data.id]) {
                         delete memoryStats.products[data.id];
-                        const newProducts = {}; let counter = 1;
-                        for (const key in memoryStats.products) { newProducts[counter.toString()] = memoryStats.products[key]; counter++; }
-                        memoryStats.products = newProducts;
                         syncCloud();
                     }
                 }
@@ -1847,7 +1882,7 @@ const server = http.createServer(async (req, res) => {
                                     let statusFr = data.status === 'recording' ? '🎥 Enregistrement en cours' : data.status === 'editing' ? '✂️ Montage en cours' : '✅ Commande Terminée';
                                     await targetUser.send(`🔔 **Mise à jour de ta commande personnalisée (${reqItem.product}):**\nNouveau statut : **${statusFr}** !`).catch(()=>{});
                                 }
-                            } catch(e){ try{ window.showToast('Runtime Error', 'error'); }catch(ex){} console.error('Silent error caught:', e); }
+                            } catch(e){ systemLog('ERROR', 'SYSTEM', e.message); }
                         }
                     }
                 }
@@ -1920,6 +1955,7 @@ const server = http.createServer(async (req, res) => {
                 else if (data.action === 'update_raw_db') {
                     try {
                         const newStats = JSON.parse(data.json);
+                        if (!newStats.products || !newStats.settings) throw new Error('Structure invalide');
                         memoryStats = newStats;
                         syncCloud();
                         systemLog('CRITICAL', 'SYSTEM', `Core memory matrix overridden by raw JSON upload.`);
@@ -2775,7 +2811,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                    const data = await res.json();
                    processInitData(data);
                }
-           } catch(e){ try{ window.showToast('Runtime Error', 'error'); }catch(ex){} console.error('Silent error caught:', e); }
+           } catch(e){ systemLog('ERROR', 'SYSTEM', e.message); }
            if(typeof window.renderSalesChart === 'function') window.renderSalesChart(7);
         }
         
@@ -3237,9 +3273,9 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
 
         setInterval(() => { if(document.visibilityState === 'visible') window.refreshDataSilently(true); }, 15000);
 
-        window.refreshDataSilently = async function(isAutoSync = false) { try{ const res=await fetch('/api/init-data'); if(res.ok){ const data=await res.json(); processInitData(data); if(!isAutoSync){ try { window.cancelEdit(); window.cancelEditLink(); document.getElementById('promoName').value=''; document.getElementById('promoDiscount').value=''; document.getElementById('promoLimit').value=''; } catch(e) {} } } }catch(e){ try{ window.showToast('Runtime Error', 'error'); }catch(ex){} console.error('Silent error caught:', e); } };
+        window.refreshDataSilently = async function(isAutoSync = false) { try{ const res=await fetch('/api/init-data'); if(res.ok){ const data=await res.json(); processInitData(data); if(!isAutoSync){ try { window.cancelEdit(); window.cancelEditLink(); document.getElementById('promoName').value=''; document.getElementById('promoDiscount').value=''; document.getElementById('promoLimit').value=''; } catch(e) {} } } }catch(e){ systemLog('ERROR', 'SYSTEM', e.message); } };
         
-        window.executeAction = async function(p, showModal=false) { p.pin=PIN; const res=await fetch('/api/action',{method:'POST',body:JSON.stringify(p)}); if(res.ok) { window.refreshDataSilently(); showToast('Action Successful'); } else { showToast('Action Failed', 'error'); } };
+        window.executeAction = async function(p, showModal=false) { /* pin removed */ const res=await fetch('/api/action',{method:'POST',body:JSON.stringify(p)}); if(res.ok) { window.refreshDataSilently(); showToast('Action Successful'); } else { showToast('Action Failed', 'error'); } };
         
         window.sendReview = async function() { const author = document.getElementById('rev-author').value; const rating = document.getElementById('rev-rating').value; const text = document.getElementById('rev-msg').value; if(!author || !text) return showToast('Parameters missing', 'error'); await window.executeAction({ action: 'post_review', author: author, rating: rating, text: text }); document.getElementById('rev-author').value = ''; document.getElementById('rev-msg').value = ''; };
         window.loadAllMembers = async function() { if(document.getElementById('memberResults')) document.getElementById('memberResults').innerHTML = '<p class="text-muted" style="font-family:monospace;">Syncing directory...</p>'; try { const res = await fetch('/api/members'); if (!res.ok) throw new Error('Error'); allMembersData = await res.json(); isMembersLoaded = true; window.sortMembersLocally(); } catch (e) { if(document.getElementById('memberResults')) document.getElementById('memberResults').innerHTML = '<p class="text-pink">Network failure.</p>'; } };
@@ -3400,24 +3436,27 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
            try { const canvas = document.getElementById('dowChart'); if(canvas) { const dowSales = { 'Sun':0, 'Mon':0, 'Tue':0, 'Wed':0, 'Thu':0, 'Fri':0, 'Sat':0 }; const daysArr = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']; Object.entries(rawStats.revenue || {}).forEach(([dateStr, val]) => { const d = new Date(dateStr); if(!isNaN(d)) { dowSales[daysArr[d.getDay()]] += parseFloat(val); } }); const ctxDow = canvas.getContext('2d'); if(window.dowChartInst instanceof Chart) window.dowChartInst.destroy(); window.dowChartInst = new Chart(ctxDow, { type: 'bar', data: { labels: daysArr, datasets: [{ label: 'Revenue (£)', data: daysArr.map(d=>dowSales[d]), backgroundColor: getThemeVal('hex'), hoverBackgroundColor: '#fff', borderRadius: 8 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false } }, scales: { y: { grid: { color: 'rgba(255,255,255,0.05)' }, border: {display: false}, beginAtZero: true }, x: { grid: { display: false }, border: {display: false} } } } }); } } catch(e) { console.error("Dow Chart Error", e); }
            try { const canvas = document.getElementById('funnelChart'); if(canvas) { const ticketsOpened = rawStats.analytics?.tickets_opened || 0; const salesClosed = rawStats.total_transactions || 0; const ctxFunnel = canvas.getContext('2d'); if(window.funnelChartInst instanceof Chart) window.funnelChartInst.destroy(); window.funnelChartInst = new Chart(ctxFunnel, { type: 'doughnut', data: { labels: ['Tickets Opened (No Purchase)', 'Successful Sales'], datasets: [{ data: [Math.max(0, ticketsOpened - salesClosed), salesClosed], backgroundColor: ['rgba(239, 68, 68, 0.8)', 'rgba(' + getThemeVal('rgb') + ', 0.8)'], hoverOffset: 15, borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, cutout: '75%', plugins: { legend: { position: 'bottom', labels: { color: '#8e8e93' } } } } }); } } catch(e) { console.error("Funnel Chart Error", e); }
         }
+        window.loadBackups = async function() {
+            try {
+                const res = await fetch('/api/backups');
+                const backups = await res.json();
+                const tbody = document.getElementById('target-backups');
+                if(!tbody) return;
+                tbody.innerHTML = backups.map(b => '<tr><td>' + b.name + '</td><td>' + b.size + '</td><td><a href="/api/backups/download?file=' + b.name + '" target="_blank" class="admin-btn btn-green" style="padding: 4px 8px; font-size: 0.8em; text-decoration: none;">Download</a></td></tr>').join('');
+            } catch(e) { console.error('Failed to load backups', e); }
+        };
+        
         window.forceBackup = async function() {
-            if(!confirm('Force a manual cloud sync and download local backup?')) return;
+            if(!confirm('Force a manual cloud backup on the server?')) return;
             try {
                 await window.executeAction({ action: 'force_backup' }, false);
-                const blob = new Blob([JSON.stringify(rawStats, null, 4)], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'nexus_backup_' + new Date().toISOString().split('T')[0] + '.json';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-                showToast('Backup successful & downloaded!');
+                window.loadBackups();
+                showToast('Backup successful!');
             } catch(e) {
                 showToast('Backup failed', 'error');
             }
         };
+
         window.saveRawDb = async function() {
             if(!confirm('DANGER: Saving raw JSON! Are you absolutely sure the syntax is perfect?')) return;
             const val = document.getElementById('dev-raw-db').value;
