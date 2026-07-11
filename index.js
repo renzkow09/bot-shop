@@ -555,18 +555,22 @@ client.on('interactionCreate', async (interaction) => {
             }
             
             if (interaction.customId === 'open_shop_channel') {
+                // Ignore spam clicks silently to avoid multiple ephemeral messages
                 if (userTicketLocks.has(interaction.user.id)) {
-                    return interaction.reply({ content: '⏳ Channel is already being created, please wait...', ephemeral: true }).catch(()=>{});
+                    await interaction.deferUpdate().catch(()=>{});
+                    return;
                 }
                 userTicketLocks.add(interaction.user.id);
-                setTimeout(() => userTicketLocks.delete(interaction.user.id), 8000);
+                setTimeout(() => userTicketLocks.delete(interaction.user.id), 10000);
                 
                 let replied = false;
                 try {
+                    // This acts as a distributed lock across multiple bot instances!
+                    // Only ONE instance can successfully reply to an interaction.
                     await interaction.reply({ content: '⏳ Channel is being created, please wait...', ephemeral: true });
                     replied = true;
                 } catch (e) {
-                    // Another instance already handled this exact interaction
+                    // Interaction already acknowledged by another instance. Abort.
                 }
                 if (!replied) return;
                 
@@ -602,18 +606,22 @@ client.on('interactionCreate', async (interaction) => {
                 } else { await interaction.editReply({ content: `❌ Error creating the room.` }).catch(() => {}); }
             
             } else if (interaction.customId === 'open_support_ticket') {
+                // Ignore spam clicks silently to avoid multiple ephemeral messages
                 if (userTicketLocks.has(interaction.user.id)) {
-                    return interaction.reply({ content: '⏳ Channel is already being created, please wait...', ephemeral: true }).catch(()=>{});
+                    await interaction.deferUpdate().catch(()=>{});
+                    return;
                 }
                 userTicketLocks.add(interaction.user.id);
-                setTimeout(() => userTicketLocks.delete(interaction.user.id), 8000);
+                setTimeout(() => userTicketLocks.delete(interaction.user.id), 10000);
                 
                 let replied = false;
                 try {
+                    // This acts as a distributed lock across multiple bot instances!
+                    // Only ONE instance can successfully reply to an interaction.
                     await interaction.reply({ content: '⏳ Channel is being created, please wait...', ephemeral: true });
                     replied = true;
                 } catch (e) {
-                    // Another instance already handled this exact interaction
+                    // Interaction already acknowledged by another instance. Abort.
                 }
                 if (!replied) return;
                 
