@@ -405,6 +405,7 @@ client.on('inviteCreate', invite => { try { guildInvites.get(invite.guild.id)?.s
 client.on('inviteDelete', invite => { try { guildInvites.get(invite.guild.id)?.delete(invite.code); } catch (e) {} });
 
 // === [ANCHOR: DISCORD_INTERACTION_HANDLER] ===
+const userTicketLocks = new Set();
 client.on('interactionCreate', async (interaction) => {
     try {
         // --- MAINTENANCE SHIELD ---
@@ -498,6 +499,9 @@ client.on('interactionCreate', async (interaction) => {
             }
             
             if (interaction.customId === 'open_shop_channel') {
+                if (userTicketLocks.has(interaction.user.id)) return interaction.reply({ content: '⏳ Please wait, processing...', ephemeral: true }).catch(()=>{});
+                userTicketLocks.add(interaction.user.id);
+                setTimeout(() => userTicketLocks.delete(interaction.user.id), 5000);
                 await interaction.deferReply({ flags: 64 }).catch(() => {});
                 
                 // 🛡️ ANTI-SPAM TICKET CHECK
@@ -530,6 +534,9 @@ client.on('interactionCreate', async (interaction) => {
                 } else { await interaction.editReply({ content: `❌ Error creating the room.` }).catch(() => {}); }
             
             } else if (interaction.customId === 'open_support_ticket') {
+                if (userTicketLocks.has(interaction.user.id)) return interaction.reply({ content: '⏳ Please wait, processing...', ephemeral: true }).catch(()=>{});
+                userTicketLocks.add(interaction.user.id);
+                setTimeout(() => userTicketLocks.delete(interaction.user.id), 5000);
                 await interaction.deferReply({ flags: 64 }).catch(() => {});
                 
                 // 🛡️ ANTI-SPAM TICKET CHECK
@@ -2827,6 +2834,13 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                 // chatPollInterval replaced by websocket
             }
             
+            if(tabId === 'overview') {
+                if(window.renderSalesChart) setTimeout(() => window.renderSalesChart(), 50);
+            }
+            if(tabId === 'analytics') {
+                if(window.renderAnalyticsCharts) setTimeout(() => window.renderAnalyticsCharts(), 50);
+            }
+            
             if(tabId === 'terminal') {
                 window.fetchLogs();
                 if(!terminalInterval) terminalInterval = setInterval(window.fetchLogs, 3000);
@@ -2939,31 +2953,19 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         if(typeof Chart !== 'undefined') {
             Chart.defaults.color = '#8e8e93'; 
             Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, Inter, sans-serif';
-            Chart.defaults.animation = {
-                duration: 1500,
-                easing: 'easeOutQuart',
-                delay: (context) => {
-                    if (context.type === 'data') {
-                        return context.dataIndex * 50;
-                    }
-                    return 0;
-                }
-            };
-            Chart.defaults.interaction = { mode: 'index', intersect: false };
-            Chart.defaults.plugins.tooltip.animation = { duration: 200, easing: 'easeOutQuart' };
-            
-            // Fix hover configuration for newer Chart.js versions
-            Chart.defaults.hover = Chart.defaults.hover || {};
-            Chart.defaults.hover.mode = 'nearest';
-            Chart.defaults.hover.intersect = true;
+            // Suppress global animation overhead to prevent hover blocking
         }
         window.renderSalesChart = function(days) { 
             try {
                 if(typeof Chart === 'undefined') return; 
+                if(!window.currentChartDays) window.currentChartDays = 7;
+                if(days !== undefined) window.currentChartDays = days;
+                
+                let d = window.currentChartDays;
                 let dates = Object.keys(rawStats.revenue || {}).sort(); 
-                let values = dates.map(d => rawStats.revenue[d]); 
-                if (days > 0 && dates.length > days) { 
-                    dates = dates.slice(-days); values = values.slice(-days); 
+                let values = dates.map(dt => rawStats.revenue[dt]); 
+                if (d > 0 && dates.length > d) { 
+                    dates = dates.slice(-d); values = values.slice(-d); 
                 } 
                 const canvas = document.getElementById('salesChart');
                 if(!canvas) return;
@@ -2986,7 +2988,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                             fill: true, 
                             tension: 0.4, 
                             pointHoverBackgroundColor: '#fff', 
-                            pointHoverBorderColor: 'rgba(' + getThemeVal('rgb') + ', 1)', 
+                            pointHoverBorderColor: getThemeVal('hex'), 
                             pointHoverBorderWidth: 4, 
                             pointRadius: 0, 
                             pointHitRadius: 20 
@@ -2995,13 +2997,13 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                     options: { 
                         responsive: true, 
                         maintainAspectRatio: false, 
+                        animation: { duration: 1500, easing: 'easeOutQuart' },
                         plugins: { legend: { display: false } }, 
+                        interaction: { mode: 'index', intersect: false },
                         scales: { 
                             x: { display: false }, 
-                            y: { grid: { color: 'rgba(255,255,255,0.05)'}, border: { dash: [4, 4], display: false } } 
-                        }, 
-                        hover: { mode: 'nearest', intersect: true }, 
-                        elements: { line: { tension: 0.5 } } 
+                            y: { grid: { color: 'rgba(255,255,255,0.05)'}, border: { dash: [4, 4], display: false }, beginAtZero: true } 
+                        }
                     } 
                 }); 
             } catch(e) { console.error("Chart Render Error:", e); }
@@ -3014,12 +3016,11 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         };
         function renderAnalyticsCharts() { 
            if(typeof Chart === 'undefined') return;
-           try { const canvas = document.getElementById('hourlyChart'); if(canvas) { const ctxHourly = canvas.getContext('2d'); if(window.hourlyChart instanceof Chart) window.hourlyChart.destroy(); window.hourlyChart = new Chart(ctxHourly, { type: 'bar', data: { labels: Array.from({length: 24}, (_, i) => i+'h'), datasets: [{ label: 'Sales', data: rawStats.analytics.hourly_sales || Array(24).fill(0), backgroundColor: getThemeVal('hex'), hoverBackgroundColor: '#fff', borderRadius: 6 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { grid: { color: 'rgba(255,255,255,0.05)' }, border: {display: false} }, x: { grid: { display: false }, border: {display: false} } } } }); } } catch(e) { console.error("Hourly Chart Error", e); }
-           try { const canvas = document.getElementById('topProductsBarChart'); if(canvas) { const prodIds = Object.keys(rawStats.product_sales || {}); const prodLabels = prodIds.map(id => rawStats.products[id] ? rawStats.products[id].name : 'Unknown'); const prodData = Object.values(rawStats.product_sales || {}); const ctxTopProd = canvas.getContext('2d'); if(window.topProdChart instanceof Chart) window.topProdChart.destroy(); window.topProdChart = new Chart(ctxTopProd, { type: 'bar', data: { labels: prodLabels.length?prodLabels:['No Data'], datasets: [{ label: 'Sales', data: prodData.length?prodData:[0], backgroundColor: getThemeVal('hex'), hoverBackgroundColor: '#fff', borderRadius: 6 }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' }, border: {display: false} }, y: { grid: { display: false }, border: {display: false} } } } }); } } catch(e) { console.error("Top Prod Chart Error", e); }
-           try { const canvas = document.getElementById('categoryRevenueChart'); if(canvas) { const catRevs = {}; Object.entries(rawStats.product_sales || {}).forEach(([id, count]) => { const p = rawStats.products[id]; if(p && p.price !== 'Custom'){ const cat = p.category || 'Other'; if(!catRevs[cat]) catRevs[cat] = 0; catRevs[cat] += (parseInt(p.price) * count); } }); const ctxCat = canvas.getContext('2d'); if(window.catChart instanceof Chart) window.catChart.destroy(); window.catChart = new Chart(ctxCat, { type: 'polarArea', data: { labels: Object.keys(catRevs).length?Object.keys(catRevs):['No Data'], datasets: [{ data: Object.values(catRevs).length?Object.values(catRevs):[0], backgroundColor: [getThemeVal('hex'), getThemeVal('hover'), '#059669', '#f59e0b', '#ef4444'], hoverBackgroundColor: ['#fff', '#fff', '#fff', '#fff', '#fff'], borderWidth: 0, hoverOffset: 15 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: {color: '#8e8e93', font: { family: '-apple-system' }} } } } }); } } catch(e) { console.error("Cat Chart Error", e); }
-           
-           try { const canvas = document.getElementById('dowChart'); if(canvas) { const dowSales = { 'Sun':0, 'Mon':0, 'Tue':0, 'Wed':0, 'Thu':0, 'Fri':0, 'Sat':0 }; const daysArr = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']; Object.entries(rawStats.revenue || {}).forEach(([dateStr, val]) => { const d = new Date(dateStr); if(!isNaN(d)) { dowSales[daysArr[d.getDay()]] += parseFloat(val); } }); const ctxDow = canvas.getContext('2d'); if(window.dowChartInst instanceof Chart) window.dowChartInst.destroy(); window.dowChartInst = new Chart(ctxDow, { type: 'bar', data: { labels: daysArr, datasets: [{ label: 'Revenue (£)', data: daysArr.map(d=>dowSales[d]), backgroundColor: getThemeVal('hex'), hoverBackgroundColor: '#fff', borderRadius: 8 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { grid: { color: 'rgba(255,255,255,0.05)' }, border: {display: false} }, x: { grid: { display: false }, border: {display: false} } } } }); } } catch(e) { console.error("Dow Chart Error", e); }
-           try { const canvas = document.getElementById('funnelChart'); if(canvas) { const ticketsOpened = rawStats.analytics?.tickets_opened || 0; const salesClosed = rawStats.total_transactions || 0; const ctxFunnel = canvas.getContext('2d'); if(window.funnelChartInst instanceof Chart) window.funnelChartInst.destroy(); window.funnelChartInst = new Chart(ctxFunnel, { type: 'doughnut', data: { labels: ['Tickets Opened (No Purchase)', 'Successful Sales'], datasets: [{ data: [Math.max(0, ticketsOpened - salesClosed), salesClosed], backgroundColor: ['rgba(239, 68, 68, 0.8)', 'rgba(' + getThemeVal('rgb') + ', 0.8)'], hoverOffset: 15, borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '75%', plugins: { legend: { position: 'bottom', labels: { color: '#8e8e93' } } } } }); } } catch(e) { console.error("Funnel Chart Error", e); }
+           try { const canvas = document.getElementById('hourlyChart'); if(canvas) { const ctxHourly = canvas.getContext('2d'); if(window.hourlyChart instanceof Chart) window.hourlyChart.destroy(); window.hourlyChart = new Chart(ctxHourly, { type: 'bar', data: { labels: Array.from({length: 24}, (_, i) => i+'h'), datasets: [{ label: 'Sales', data: rawStats.analytics.hourly_sales || Array(24).fill(0), backgroundColor: getThemeVal('hex'), hoverBackgroundColor: '#fff', borderRadius: 6 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false } }, scales: { y: { grid: { color: 'rgba(255,255,255,0.05)' }, border: {display: false}, beginAtZero: true }, x: { grid: { display: false }, border: {display: false} } } } }); } } catch(e) { console.error("Hourly Chart Error", e); }
+           try { const canvas = document.getElementById('topProductsBarChart'); if(canvas) { const prodIds = Object.keys(rawStats.product_sales || {}); const prodLabels = prodIds.map(id => rawStats.products[id] ? rawStats.products[id].name : 'Unknown'); const prodData = Object.values(rawStats.product_sales || {}); const ctxTopProd = canvas.getContext('2d'); if(window.topProdChart instanceof Chart) window.topProdChart.destroy(); window.topProdChart = new Chart(ctxTopProd, { type: 'bar', data: { labels: prodLabels.length?prodLabels:['No Data'], datasets: [{ label: 'Sales', data: prodData.length?prodData:[0], backgroundColor: getThemeVal('hex'), hoverBackgroundColor: '#fff', borderRadius: 6 }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' }, border: {display: false}, beginAtZero: true }, y: { grid: { display: false }, border: {display: false} } } } }); } } catch(e) { console.error("Top Prod Chart Error", e); }
+           try { const canvas = document.getElementById('categoryRevenueChart'); if(canvas) { const catRevs = {}; Object.entries(rawStats.product_sales || {}).forEach(([id, count]) => { const p = rawStats.products[id]; if(p && p.price !== 'Custom'){ const cat = p.category || 'Other'; if(!catRevs[cat]) catRevs[cat] = 0; catRevs[cat] += (parseInt(p.price) * count); } }); const ctxCat = canvas.getContext('2d'); if(window.catChart instanceof Chart) window.catChart.destroy(); window.catChart = new Chart(ctxCat, { type: 'polarArea', data: { labels: Object.keys(catRevs).length?Object.keys(catRevs):['No Data'], datasets: [{ data: Object.values(catRevs).length?Object.values(catRevs):[0], backgroundColor: [getThemeVal('hex'), getThemeVal('hover'), '#059669', '#f59e0b', '#ef4444'], hoverBackgroundColor: ['#fff', '#fff', '#fff', '#fff', '#fff'], borderWidth: 0, hoverOffset: 15 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, plugins: { legend: { position: 'right', labels: {color: '#8e8e93', font: { family: '-apple-system' }} } } } }); } } catch(e) { console.error("Cat Chart Error", e); }
+           try { const canvas = document.getElementById('dowChart'); if(canvas) { const dowSales = { 'Sun':0, 'Mon':0, 'Tue':0, 'Wed':0, 'Thu':0, 'Fri':0, 'Sat':0 }; const daysArr = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']; Object.entries(rawStats.revenue || {}).forEach(([dateStr, val]) => { const d = new Date(dateStr); if(!isNaN(d)) { dowSales[daysArr[d.getDay()]] += parseFloat(val); } }); const ctxDow = canvas.getContext('2d'); if(window.dowChartInst instanceof Chart) window.dowChartInst.destroy(); window.dowChartInst = new Chart(ctxDow, { type: 'bar', data: { labels: daysArr, datasets: [{ label: 'Revenue (£)', data: daysArr.map(d=>dowSales[d]), backgroundColor: getThemeVal('hex'), hoverBackgroundColor: '#fff', borderRadius: 8 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false } }, scales: { y: { grid: { color: 'rgba(255,255,255,0.05)' }, border: {display: false}, beginAtZero: true }, x: { grid: { display: false }, border: {display: false} } } } }); } } catch(e) { console.error("Dow Chart Error", e); }
+           try { const canvas = document.getElementById('funnelChart'); if(canvas) { const ticketsOpened = rawStats.analytics?.tickets_opened || 0; const salesClosed = rawStats.total_transactions || 0; const ctxFunnel = canvas.getContext('2d'); if(window.funnelChartInst instanceof Chart) window.funnelChartInst.destroy(); window.funnelChartInst = new Chart(ctxFunnel, { type: 'doughnut', data: { labels: ['Tickets Opened (No Purchase)', 'Successful Sales'], datasets: [{ data: [Math.max(0, ticketsOpened - salesClosed), salesClosed], backgroundColor: ['rgba(239, 68, 68, 0.8)', 'rgba(' + getThemeVal('rgb') + ', 0.8)'], hoverOffset: 15, borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, cutout: '75%', plugins: { legend: { position: 'bottom', labels: { color: '#8e8e93' } } } } }); } } catch(e) { console.error("Funnel Chart Error", e); }
         }
         window.forceBackup = async function() {
             if(!confirm('Force a manual cloud sync and download local backup?')) return;
