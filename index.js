@@ -555,19 +555,9 @@ client.on('interactionCreate', async (interaction) => {
             }
             
             if (interaction.customId === 'open_shop_channel') {
-                const eventLock = await acquireDistributedLock(interaction.id, 10000);
-                if (!eventLock) return;
-
                 if (userTicketLocks.has(interaction.user.id)) {
-                    await interaction.deferUpdate().catch(()=>{});
-                    return;
+                    return interaction.reply({ content: '⏳ Channel is already being created, please wait...', ephemeral: true }).catch(()=>{});
                 }
-                const dLock = await acquireDistributedLock(interaction.user.id + "_" + interaction.customId, 10000);
-                if (!dLock) {
-                    await interaction.deferUpdate().catch(()=>{});
-                    return;
-                }
-
                 userTicketLocks.add(interaction.user.id);
                 setTimeout(() => userTicketLocks.delete(interaction.user.id), 8000);
                 
@@ -605,19 +595,9 @@ client.on('interactionCreate', async (interaction) => {
                 } else { await interaction.editReply({ content: `❌ Error creating the room.` }).catch(() => {}); }
             
             } else if (interaction.customId === 'open_support_ticket') {
-                const eventLock = await acquireDistributedLock(interaction.id, 10000);
-                if (!eventLock) return;
-
                 if (userTicketLocks.has(interaction.user.id)) {
-                    await interaction.deferUpdate().catch(()=>{});
-                    return;
+                    return interaction.reply({ content: '⏳ Channel is already being created, please wait...', ephemeral: true }).catch(()=>{});
                 }
-                const dLock = await acquireDistributedLock(interaction.user.id + "_" + interaction.customId, 10000);
-                if (!dLock) {
-                    await interaction.deferUpdate().catch(()=>{});
-                    return;
-                }
-
                 userTicketLocks.add(interaction.user.id);
                 setTimeout(() => userTicketLocks.delete(interaction.user.id), 8000);
                 
