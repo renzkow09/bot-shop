@@ -555,13 +555,13 @@ client.on('interactionCreate', async (interaction) => {
             }
             
             if (interaction.customId === 'open_shop_channel') {
-                if (userTicketLocks.has(interaction.user.id)) return interaction.reply({ content: '⏳ Please wait, processing...', ephemeral: true }).catch(()=>{});
-                const dLock = await acquireDistributedLock(interaction.user.id + "_" + interaction.customId, 5000);
-                if (!dLock) return interaction.reply({ content: '⏳ Anti-spam: please wait a few seconds before clicking again.', ephemeral: true }).catch(()=>{});
-                
                 // Block duplicate discord interaction broadcasts globally
                 const eventLock = await acquireDistributedLock(interaction.id, 5000);
                 if (!eventLock) return; // Silently ignore duplicate websocket broadcasts
+
+                if (userTicketLocks.has(interaction.user.id)) return interaction.reply({ content: '⏳ Please wait, processing...', ephemeral: true }).catch(()=>{});
+                const dLock = await acquireDistributedLock(interaction.user.id + "_" + interaction.customId, 5000);
+                if (!dLock) return interaction.reply({ content: '⏳ Anti-spam: please wait a few seconds before clicking again.', ephemeral: true }).catch(()=>{});
                 
                 userTicketLocks.add(interaction.user.id);
                 setTimeout(() => userTicketLocks.delete(interaction.user.id), 5000);
@@ -597,13 +597,13 @@ client.on('interactionCreate', async (interaction) => {
                 } else { await interaction.editReply({ content: `❌ Error creating the room.` }).catch(() => {}); }
             
             } else if (interaction.customId === 'open_support_ticket') {
-                if (userTicketLocks.has(interaction.user.id)) return interaction.reply({ content: '⏳ Please wait, processing...', ephemeral: true }).catch(()=>{});
-                const dLock = await acquireDistributedLock(interaction.user.id + "_" + interaction.customId, 5000);
-                if (!dLock) return interaction.reply({ content: '⏳ Anti-spam: please wait a few seconds before clicking again.', ephemeral: true }).catch(()=>{});
-                
                 // Block duplicate discord interaction broadcasts globally
                 const eventLock = await acquireDistributedLock(interaction.id, 5000);
                 if (!eventLock) return; // Silently ignore duplicate websocket broadcasts
+
+                if (userTicketLocks.has(interaction.user.id)) return interaction.reply({ content: '⏳ Please wait, processing...', ephemeral: true }).catch(()=>{});
+                const dLock = await acquireDistributedLock(interaction.user.id + "_" + interaction.customId, 5000);
+                if (!dLock) return interaction.reply({ content: '⏳ Anti-spam: please wait a few seconds before clicking again.', ephemeral: true }).catch(()=>{});
                 
                 userTicketLocks.add(interaction.user.id);
                 setTimeout(() => userTicketLocks.delete(interaction.user.id), 5000);
