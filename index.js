@@ -555,21 +555,23 @@ client.on('interactionCreate', async (interaction) => {
             }
             
             if (interaction.customId === 'open_shop_channel') {
+                const eventLock = await acquireDistributedLock(interaction.id, 10000);
+                if (!eventLock) return;
+
                 if (userTicketLocks.has(interaction.user.id)) {
-                    return interaction.reply({ content: '⏳ Channel is being created, please wait...', ephemeral: true }).catch(()=>{});
+                    await interaction.deferUpdate().catch(()=>{});
+                    return;
                 }
+                const dLock = await acquireDistributedLock(interaction.user.id + "_" + interaction.customId, 10000);
+                if (!dLock) {
+                    await interaction.deferUpdate().catch(()=>{});
+                    return;
+                }
+
                 userTicketLocks.add(interaction.user.id);
                 setTimeout(() => userTicketLocks.delete(interaction.user.id), 8000);
                 
-                // Reply immediately to prevent 3-second Interaction Failed timeout
                 await interaction.reply({ content: '⏳ Channel is being created, please wait...', ephemeral: true }).catch(() => {});
-
-                // Now we have up to 15 minutes to process safely
-                const dLock = await acquireDistributedLock(interaction.user.id + "_" + interaction.customId, 10000);
-                if (!dLock) return;
-                
-                const eventLock = await acquireDistributedLock(interaction.id, 10000);
-                if (!eventLock) return; 
                 
                 // 🛡️ ANTI-SPAM TICKET CHECK (Redirect to existing channel if already created)
                 const sanitizedName = interaction.user.username.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -603,21 +605,23 @@ client.on('interactionCreate', async (interaction) => {
                 } else { await interaction.editReply({ content: `❌ Error creating the room.` }).catch(() => {}); }
             
             } else if (interaction.customId === 'open_support_ticket') {
+                const eventLock = await acquireDistributedLock(interaction.id, 10000);
+                if (!eventLock) return;
+
                 if (userTicketLocks.has(interaction.user.id)) {
-                    return interaction.reply({ content: '⏳ Channel is being created, please wait...', ephemeral: true }).catch(()=>{});
+                    await interaction.deferUpdate().catch(()=>{});
+                    return;
                 }
+                const dLock = await acquireDistributedLock(interaction.user.id + "_" + interaction.customId, 10000);
+                if (!dLock) {
+                    await interaction.deferUpdate().catch(()=>{});
+                    return;
+                }
+
                 userTicketLocks.add(interaction.user.id);
                 setTimeout(() => userTicketLocks.delete(interaction.user.id), 8000);
                 
-                // Reply immediately to prevent 3-second Interaction Failed timeout
                 await interaction.reply({ content: '⏳ Channel is being created, please wait...', ephemeral: true }).catch(() => {});
-
-                // Now we have up to 15 minutes to process safely
-                const dLock = await acquireDistributedLock(interaction.user.id + "_" + interaction.customId, 10000);
-                if (!dLock) return;
-                
-                const eventLock = await acquireDistributedLock(interaction.id, 10000);
-                if (!eventLock) return; 
                 
                 // 🛡️ ANTI-SPAM TICKET CHECK (Redirect to existing channel if already created)
                 const sanitizedName = interaction.user.username.toLowerCase().replace(/[^a-z0-9]/g, '');
