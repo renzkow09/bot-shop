@@ -462,6 +462,7 @@ async function acquireDistributedLock(lockKey, ttl_ms = 5000) {
 }
 
 const userTicketLocks = new Set();
+const processedInteractions = new Set();
 client.on('interactionCreate', async (interaction) => {
     try {
         // --- MAINTENANCE SHIELD ---
@@ -555,15 +556,23 @@ client.on('interactionCreate', async (interaction) => {
             }
             
             if (interaction.customId === 'open_shop_channel') {
+                if (processedInteractions.has(interaction.id)) return;
+                processedInteractions.add(interaction.id);
+                setTimeout(() => processedInteractions.delete(interaction.id), 60000);
+
                 // Ignore spam clicks silently to avoid multiple ephemeral messages
                 if (userTicketLocks.has(interaction.user.id)) {
                     await interaction.deferUpdate().catch(()=>{});
                     return;
                 }
                 userTicketLocks.add(interaction.user.id);
-                setTimeout(() => userTicketLocks.delete(interaction.user.id), 10000);
+                setTimeout(() => userTicketLocks.delete(interaction.user.id), 15000);
                 
                 await interaction.reply({ content: '⏳ Channel is being created, please wait...', ephemeral: true }).catch(() => {});
+                
+                // Distributed Lock to prevent multiple instances from processing simultaneous clicks
+                const dLock = await acquireDistributedLock('ticket_' + interaction.user.id, 10000);
+                if (!dLock) return;
                 
                 // 🛡️ ANTI-SPAM TICKET CHECK (Redirect to existing channel if already created)
                 const sanitizedName = interaction.user.username.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -597,15 +606,23 @@ client.on('interactionCreate', async (interaction) => {
                 } else { await interaction.editReply({ content: `❌ Error creating the room.` }).catch(() => {}); }
             
             } else if (interaction.customId === 'open_support_ticket') {
+                if (processedInteractions.has(interaction.id)) return;
+                processedInteractions.add(interaction.id);
+                setTimeout(() => processedInteractions.delete(interaction.id), 60000);
+
                 // Ignore spam clicks silently to avoid multiple ephemeral messages
                 if (userTicketLocks.has(interaction.user.id)) {
                     await interaction.deferUpdate().catch(()=>{});
                     return;
                 }
                 userTicketLocks.add(interaction.user.id);
-                setTimeout(() => userTicketLocks.delete(interaction.user.id), 10000);
+                setTimeout(() => userTicketLocks.delete(interaction.user.id), 15000);
                 
                 await interaction.reply({ content: '⏳ Channel is being created, please wait...', ephemeral: true }).catch(() => {});
+                
+                // Distributed Lock to prevent multiple instances from processing simultaneous clicks
+                const dLock = await acquireDistributedLock('ticket_' + interaction.user.id, 10000);
+                if (!dLock) return;
                 
                 // 🛡️ ANTI-SPAM TICKET CHECK (Redirect to existing channel if already created)
                 const sanitizedName = interaction.user.username.toLowerCase().replace(/[^a-z0-9]/g, '');
