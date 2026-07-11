@@ -2148,7 +2148,7 @@ const server = http.createServer(async (req, res) => {
         <aside class='sidebar' id='sidebar'>
             <div class='sidebar-header'>
                 <div class='nav-brand'>Nexus <span style='font-weight:400; color:var(--text-muted); font-size:0.8em;'>Admin</span></div>
-                <button class='btn-icon' onclick='window.toggleSidebar()' title='Close Sidebar' style='border:none;background:transparent;color:#fff;cursor:pointer;font-size:1.2em;'>✖</button>
+
             </div>
             <nav class='nav-menu'>
                 <div class='nav-group'>DASHBOARD</div>
@@ -2882,6 +2882,16 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
               }); 
           } 
           if(document.getElementById('target-leaves')) document.getElementById('target-leaves').innerHTML = lHtml||'<tr><td colspan="3" class="text-muted text-center">No drops recorded.</td></tr>';
+           let pnHtml = '';
+           if(rawStats.patchnotes && rawStats.patchnotes.length > 0) {
+               [...rawStats.patchnotes].reverse().forEach(pn => {
+                   pnHtml += '<div class="patchnote-item"><div class="patchnote-date">' + new Date(pn.date).toLocaleString() + '</div><div class="patchnote-text">' + pn.text + '</div></div>';
+               });
+           } else {
+               pnHtml = "<div style='text-align:center; color:gray;'>No patchnotes available yet.</div>";
+           }
+           if(document.getElementById('patchnotesList')) document.getElementById('patchnotesList').innerHTML = pnHtml;
+        
 
           let promHtml=''; 
           if(rawStats.promo_codes){ 
