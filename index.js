@@ -81,6 +81,13 @@ const channelStates = new Map();
 const STATS_FILE = path.join(__dirname, 'stats.json');
 const guildInvites = new Map(); 
 
+// === [ANCHOR: EVENT_LOOP_TRACKER] ===
+let eventLoopLag = 0;
+setInterval(() => {
+    const start = Date.now();
+    setImmediate(() => { eventLoopLag = Date.now() - start; });
+}, 2000);
+
 // === [ANCHOR: SYSTEM_LOGGING_ENGINE] ===
 const MAX_LOGS = 500;
 let globalLogs = [];
@@ -1313,7 +1320,12 @@ const server = http.createServer(async (req, res) => {
          @media (min-width: 769px) { .nav-group { color: var(--text-muted); margin-top: 0; margin-bottom: 0; margin-left: 10px; margin-right: 10px; } }
          .shortcut-btn { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text-muted); padding: 5px 10px; border-radius: 8px; font-size: 0.8em; cursor: pointer; transition: 0.3s; white-space: nowrap; }
          .shortcut-btn:hover { background: rgba(255,255,255,0.1); color: white; }
-</style><script>(function() {const themes = {green: { hex: '#10b981', rgb: '16, 185, 129', hover: '#34d399' },blue: { hex: '#0a84ff', rgb: '10, 132, 255', hover: '#47a3ff' },red: { hex: '#ff453a', rgb: '255, 69, 58', hover: '#ff6b63' },orange: { hex: '#ff9f0a', rgb: '255, 159, 10', hover: '#ffb340' }};const savedTheme = localStorage.getItem('nexus_theme');if (savedTheme && themes[savedTheme]) {const t = themes[savedTheme];document.documentElement.style.setProperty('--accent-green', t.hex);document.documentElement.style.setProperty('--accent-green-rgb', t.rgb);document.documentElement.style.setProperty('--accent-green-hover', t.hover);}})();</script></head><body><div class='bg-mesh'></div><div class='bg-anim'></div><div class='login-box'>  <h2>NEXUS</h2>  <div class='subtitle'>System Authentication</div>  <div style="position:relative; width:100%; max-width:260px; margin: 10px auto 40px auto;">
+
+        .metric-bar-bg { background: rgba(255,255,255,0.05); border-radius: 4px; height: 10px; overflow: hidden; width: 100%; margin-top: 6px; box-shadow: inset 0 1px 3px rgba(0,0,0,0.5); }
+        .metric-bar-fill { height: 100%; border-radius: 4px; transition: width 1.5s cubic-bezier(0.2, 0.8, 0.2, 1), background-color 0.8s; width: 0%; box-shadow: 0 0 10px currentColor; }
+        .status-pulse { display: inline-block; border-radius: 50%; box-shadow: 0 0 8px currentColor; animation: statusPulse 2s infinite ease-in-out; }
+        @keyframes statusPulse { 0% { opacity: 1; transform: scale(1); box-shadow: 0 0 8px currentColor; } 50% { opacity: 0.5; transform: scale(1.3); box-shadow: 0 0 15px currentColor; } 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 8px currentColor; } }
+    </style><script>(function() {const themes = {green: { hex: '#10b981', rgb: '16, 185, 129', hover: '#34d399' },blue: { hex: '#0a84ff', rgb: '10, 132, 255', hover: '#47a3ff' },red: { hex: '#ff453a', rgb: '255, 69, 58', hover: '#ff6b63' },orange: { hex: '#ff9f0a', rgb: '255, 159, 10', hover: '#ffb340' }};const savedTheme = localStorage.getItem('nexus_theme');if (savedTheme && themes[savedTheme]) {const t = themes[savedTheme];document.documentElement.style.setProperty('--accent-green', t.hex);document.documentElement.style.setProperty('--accent-green-rgb', t.rgb);document.documentElement.style.setProperty('--accent-green-hover', t.hover);}})();</script></head><body><div class='bg-mesh'></div><div class='bg-anim'></div><div class='login-box'>  <h2>NEXUS</h2>  <div class='subtitle'>System Authentication</div>  <div style="position:relative; width:100%; max-width:260px; margin: 10px auto 40px auto;">
   <input type='password' id='pin' maxlength='4' placeholder='••••' style='margin:0; width:100%; box-sizing:border-box; padding-right:50px;'>
   <span id='toggleVisibility' onclick='togglePin()' style='position:absolute; right:15px; top:50%; transform:translateY(-50%); color:rgba(255,255,255,0.4); cursor:pointer; display:flex; align-items:center; justify-content:center; transition:0.3s; z-index:10;' onmouseover='this.style.color="rgba(255,255,255,0.8)"' onmouseout='this.style.color="rgba(255,255,255,0.4)"'>
     <svg id='eyeIcon' xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
@@ -2636,65 +2648,111 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
             </div>
 
             <div id='monitoring' class='tab-content'>
-                <div class='box'>
-                    <div style='display:flex; justify-content:space-between; align-items:center;'>
-                        <h2 style='margin:0; border:none; padding:0;'>📡 System Diagnostics & Metrics</h2>
-                        <button class='admin-btn btn-green' style='margin:0;' onclick='window.runDiagnostics()'>🔄 Initiate Deep Scan</button>
-                    </div>
-                    <p class='text-muted' style='margin-top:10px; margin-bottom:25px;'>Real-time analysis of hardware, software, security, and external services.</p>
+                <div class='box' style='background:#050505; position:relative; overflow:hidden;'>
+                    <!-- Background ambient glow -->
+                    <div style='position:absolute; top:-50%; left:-10%; width:120%; height:100%; background: radial-gradient(circle, rgba(var(--accent-green-rgb),0.03) 0%, transparent 60%); pointer-events:none;'></div>
                     
-                    <div class='stats-grid'>
-                        <div class='card' style='border-left: 4px solid var(--accent-blue);'>
-                            <h3>🖥️ Server Host Node</h3>
-                            <div style='margin-top:15px; font-size:0.9em; line-height:1.8;'>
-                                <div style='display:flex; justify-content:space-between;'><span class='text-muted'>OS Platform:</span> <strong id='ui-os-plat'>--</strong></div>
-                                <div style='display:flex; justify-content:space-between;'><span class='text-muted'>Architecture:</span> <strong id='ui-os-arch'>--</strong></div>
-                                <div style='display:flex; justify-content:space-between;'><span class='text-muted'>System Uptime:</span> <strong id='ui-os-up'>--</strong></div>
-                                <div style='margin-top:10px;'><span class='text-muted'>RAM (Free / Total):</span></div>
-                                <div style='font-family:monospace; font-weight:bold; color:var(--text-main); font-size:1.1em;' id='ui-os-ram'>-- GB / -- GB</div>
+                    <div style='display:flex; justify-content:space-between; align-items:center; position:relative; z-index:1;'>
+                        <h2 style='margin:0; border:none; padding:0; display:flex; align-items:center; gap:10px;'>
+                            <div class='status-pulse' style='background:var(--accent-green);'></div> 
+                            Nexus Mainframe Monitor
+                        </h2>
+                        <button class='admin-btn btn-green' style='margin:0; background:rgba(255,255,255,0.05); border:0.5px solid rgba(255,255,255,0.1); color:#fff; display:flex; align-items:center; gap:8px;' onclick='window.runDiagnostics()'>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.92-10.27l-3.27-3.27"/></svg> 
+                            Deep Scan
+                        </button>
+                    </div>
+                    <p class='text-muted' style='margin-top:10px; margin-bottom:30px; font-size:0.9em; position:relative; z-index:1;'>Live telemetry from core processing nodes, security shields, and external API gateways.</p>
+                    
+                    <div class='stats-grid' style='position:relative; z-index:1;'>
+                        <div class='card' style='border:none; background:rgba(255,255,255,0.02); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.05); border-radius:16px;'>
+                            <h3 style='display:flex; align-items:center; justify-content:space-between;'>🖥️ Core Compute <span style='font-size:0.65em; padding:3px 8px; border-radius:8px; background:rgba(255,255,255,0.1); font-family:monospace;' id='ui-os-plat'>--</span></h3>
+                            <div style='margin-top:25px;'>
+                                <div style='display:flex; justify-content:space-between; font-size:0.8em; text-transform:uppercase; font-weight:bold; color:var(--text-muted);'>
+                                    <span>CPU Load</span> <span id='ui-cpu-txt'>--%</span>
+                                </div>
+                                <div class='metric-bar-bg'>
+                                    <div class='metric-bar-fill' id='ui-cpu-bar' style='background:var(--accent-green); width:0%;'></div>
+                                </div>
+                            </div>
+                            <div style='margin-top:20px;'>
+                                <div style='display:flex; justify-content:space-between; font-size:0.8em; text-transform:uppercase; font-weight:bold; color:var(--text-muted);'>
+                                    <span>RAM Memory</span> <span id='ui-ram-txt'>--%</span>
+                                </div>
+                                <div class='metric-bar-bg'>
+                                    <div class='metric-bar-fill' id='ui-ram-bar' style='background:var(--accent-blue); width:0%;'></div>
+                                </div>
+                                <div style='text-align:right; font-size:0.7em; color:var(--text-muted); margin-top:5px; font-family:monospace;' id='ui-os-ram'>-- GB / -- GB</div>
+                            </div>
+                            <div style='margin-top:20px; font-size:0.85em; display:flex; justify-content:space-between; border-top:1px solid rgba(255,255,255,0.05); padding-top:15px;'>
+                                <span class='text-muted'>Node Uptime:</span> <strong id='ui-os-up' style='font-family:monospace;'>--</strong>
                             </div>
                         </div>
                         
-                        <div class='card' style='border-left: 4px solid var(--accent-purple);'>
-                            <h3>⚙️ Node.js Process</h3>
-                            <div style='margin-top:15px; font-size:0.9em; line-height:1.8;'>
-                                <div style='display:flex; justify-content:space-between;'><span class='text-muted'>Process Uptime:</span> <strong id='ui-proc-up'>--</strong></div>
-                                <div style='display:flex; justify-content:space-between;'><span class='text-muted'>Memory (RSS):</span> <strong id='ui-proc-rss' style='color:var(--accent-purple);'>-- MB</strong></div>
-                                <div style='display:flex; justify-content:space-between;'><span class='text-muted'>Memory (Heap):</span> <strong id='ui-proc-heap'>-- MB</strong></div>
+                        <div class='card' style='border:none; background:rgba(255,255,255,0.02); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.05); border-radius:16px;'>
+                            <h3 style='display:flex; align-items:center; justify-content:space-between;'>⚙️ V8 Runtime <span style='font-size:0.65em; padding:3px 8px; border-radius:8px; background:rgba(168,85,247,0.1); color:#a855f7; font-family:monospace;' id='ui-proc-up'>--</span></h3>
+                            <div style='margin-top:20px; font-size:0.9em; line-height:2.2;'>
+                                <div style='display:flex; justify-content:space-between; align-items:center;'>
+                                    <span class='text-muted' style='display:flex; align-items:center; gap:8px;'><div class='status-pulse' style='background:var(--accent-purple); width:6px; height:6px;'></div> Memory (RSS)</span> 
+                                    <strong id='ui-proc-rss' style='color:var(--accent-purple); font-family:monospace;'>-- MB</strong>
+                                </div>
+                                <div style='display:flex; justify-content:space-between; align-items:center;'>
+                                    <span class='text-muted' style='display:flex; align-items:center; gap:8px;'><div class='status-pulse' style='background:var(--accent-orange); width:6px; height:6px;'></div> Memory (Heap)</span> 
+                                    <strong id='ui-proc-heap' style='font-family:monospace;'>-- MB</strong>
+                                </div>
+                                <div style='display:flex; justify-content:space-between; align-items:center;'>
+                                    <span class='text-muted' style='display:flex; align-items:center; gap:8px;'><div class='status-pulse' style='background:#f43f5e; width:6px; height:6px;'></div> Event Loop Lag</span> 
+                                    <strong id='ui-proc-lag' style='font-family:monospace;'>-- ms</strong>
+                                </div>
                             </div>
                         </div>
 
-                        <div class='card' style='border-left: 4px solid var(--accent-orange);'>
-                            <h3>🛡️ Security Shields</h3>
-                            <div style='margin-top:15px; font-size:0.9em; line-height:1.8;'>
-                                <div style='display:flex; justify-content:space-between;'><span class='text-muted'>Active Rate Limits:</span> <strong id='ui-sec-rates' style='color:var(--accent-orange);'>-- IPs</strong></div>
-                                <div style='display:flex; justify-content:space-between;'><span class='text-muted'>Brute Force Locks:</span> <strong id='ui-sec-locks'>-- IPs</strong></div>
+                        <div class='card' style='border:none; background:rgba(255,255,255,0.02); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.05); border-radius:16px;'>
+                            <h3 style='display:flex; align-items:center; justify-content:space-between;'>🛡️ Defense Matrix <span style='font-size:0.65em; padding:3px 8px; border-radius:8px; background:rgba(16,185,129,0.1); color:var(--accent-green); font-family:monospace;' id='ui-fw-status'>ACTIVE</span></h3>
+                            <div style='margin-top:20px; font-size:0.9em; line-height:2.2;'>
+                                <div style='display:flex; justify-content:space-between; align-items:center;'>
+                                    <span class='text-muted'>IPs Rate-Limited</span> 
+                                    <div style='display:flex; align-items:center; gap:10px;'>
+                                        <div style='width:60px; height:4px; background:rgba(255,255,255,0.1); border-radius:2px;'><div id='ui-sec-rates-bar' style='width:0%; height:100%; background:var(--accent-orange); border-radius:2px; transition:0.5s;'></div></div>
+                                        <strong id='ui-sec-rates' style='color:var(--accent-orange); font-family:monospace; min-width:30px; text-align:right;'>--</strong>
+                                    </div>
+                                </div>
+                                <div style='display:flex; justify-content:space-between; align-items:center;'>
+                                    <span class='text-muted'>Brute-Force Locks</span> 
+                                    <div style='display:flex; align-items:center; gap:10px;'>
+                                        <div style='width:60px; height:4px; background:rgba(255,255,255,0.1); border-radius:2px;'><div id='ui-sec-locks-bar' style='width:0%; height:100%; background:var(--accent-red); border-radius:2px; transition:0.5s;'></div></div>
+                                        <strong id='ui-sec-locks' style='color:var(--accent-red); font-family:monospace; min-width:30px; text-align:right;'>--</strong>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    <h3 style='margin-top:40px; margin-bottom:20px; color:#fff;'>External Connections</h3>
-                    <div class='stats-grid'>
-                        <div class='card' id='card-discord' style='border-left: 4px solid var(--text-muted);'>
-                            <h3>🔵 Discord Gateway</h3>
-                            <div class='value' id='ui-discord-ws' style='font-size:1.5em; margin: 10px 0;'>-- ms</div>
-                            <div style='font-size:0.85em; line-height:1.6;'>
+                    <h3 style='margin-top:40px; margin-bottom:20px; color:#fff; font-size:1em; letter-spacing:1px; text-transform:uppercase;'>Gateway Uplinks</h3>
+                    <div class='stats-grid' style='position:relative; z-index:1;'>
+                        <div class='card' id='card-discord' style='border:none; background:rgba(255,255,255,0.02); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.05); border-radius:16px; position:relative; overflow:hidden;'>
+                            <div id='glow-discord' style='position:absolute; top:0; left:0; width:100%; height:4px; background:var(--text-muted); transition:1s;'></div>
+                            <h3 style='margin-top:5px;'>🔵 Discord WS</h3>
+                            <div class='value' id='ui-discord-ws' style='font-size:1.8em; margin: 15px 0; font-family:monospace;'>-- ms</div>
+                            <div style='font-size:0.85em; line-height:2;'>
                                 <div style='display:flex; justify-content:space-between;'><span class='text-muted'>Status:</span> <strong id='ui-discord-status'>--</strong></div>
-                                <div style='display:flex; justify-content:space-between;'><span class='text-muted'>Guilds:</span> <strong id='ui-discord-guilds'>--</strong></div>
-                                <div style='display:flex; justify-content:space-between;'><span class='text-muted'>Cached Users:</span> <strong id='ui-discord-users'>--</strong></div>
+                                <div style='display:flex; justify-content:space-between;'><span class='text-muted'>Guilds:</span> <strong id='ui-discord-guilds' style='font-family:monospace;'>--</strong></div>
+                                <div style='display:flex; justify-content:space-between;'><span class='text-muted'>Cached Users:</span> <strong id='ui-discord-users' style='font-family:monospace;'>--</strong></div>
                             </div>
                         </div>
 
-                        <div class='card' id='card-upstash' style='border-left: 4px solid var(--text-muted);'>
-                            <h3>🔴 Upstash Redis DB</h3>
-                            <div class='value' id='ui-upstash-status' style='font-size:1.5em; margin: 10px 0;'>⚪ Standby</div>
-                            <p class='text-muted' id='ui-upstash-ping' style='margin:0; font-size:0.9em;'>Latency: -- ms</p>
+                        <div class='card' id='card-upstash' style='border:none; background:rgba(255,255,255,0.02); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.05); border-radius:16px; position:relative; overflow:hidden;'>
+                            <div id='glow-upstash' style='position:absolute; top:0; left:0; width:100%; height:4px; background:var(--text-muted); transition:1s;'></div>
+                            <h3 style='margin-top:5px;'>🔴 Upstash DB</h3>
+                            <div class='value' id='ui-upstash-status' style='font-size:1.5em; margin: 15px 0;'>⚪ Standby</div>
+                            <p class='text-muted' style='margin:0; font-size:0.85em; display:flex; justify-content:space-between;'><span>Response Latency:</span> <strong id='ui-upstash-ping' style='font-family:monospace;'>-- ms</strong></p>
                         </div>
                         
-                        <div class='card' id='card-rewarble' style='border-left: 4px solid var(--text-muted);'>
-                            <h3>🟢 Rewarble API</h3>
-                            <div class='value' id='ui-rewarble-status' style='font-size:1.5em; margin: 10px 0;'>⚪ Standby</div>
-                            <p class='text-muted' id='ui-rewarble-ping' style='margin:0; font-size:0.9em;'>Latency: -- ms</p>
+                        <div class='card' id='card-rewarble' style='border:none; background:rgba(255,255,255,0.02); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.05); border-radius:16px; position:relative; overflow:hidden;'>
+                            <div id='glow-rewarble' style='position:absolute; top:0; left:0; width:100%; height:4px; background:var(--text-muted); transition:1s;'></div>
+                            <h3 style='margin-top:5px;'>🟢 Rewarble API</h3>
+                            <div class='value' id='ui-rewarble-status' style='font-size:1.5em; margin: 15px 0;'>⚪ Standby</div>
+                            <p class='text-muted' style='margin:0; font-size:0.85em; display:flex; justify-content:space-between;'><span>Response Latency:</span> <strong id='ui-rewarble-ping' style='font-family:monospace;'>-- ms</strong></p>
                         </div>
                     </div>
                 </div>
@@ -3326,57 +3384,71 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         
         // 🚀 [UI_ACTION_ASYNC: runDiagnostics] - Action asynchrone d'interface Dashboard
         window.runDiagnostics = async function() {
-            if(document.getElementById('ui-upstash-status')) document.getElementById('ui-upstash-status').innerText = '⏳ Executing...';
-            document.getElementById('ui-upstash-status').className = 'value text-muted';
-            if(document.getElementById('ui-rewarble-status')) document.getElementById('ui-rewarble-status').innerText = '⏳ Executing...';
-            document.getElementById('ui-rewarble-status').className = 'value text-muted';
-            if(document.getElementById('ui-discord-ws')) document.getElementById('ui-discord-ws').innerText = '-- ms';
+            if(document.getElementById('ui-upstash-status')) document.getElementById('ui-upstash-status').innerHTML = '<span style="animation:pulse 1s infinite">⏳</span> Ping...';
+            if(document.getElementById('ui-rewarble-status')) document.getElementById('ui-rewarble-status').innerHTML = '<span style="animation:pulse 1s infinite">⏳</span> Ping...';
+            if(document.getElementById('ui-discord-ws')) document.getElementById('ui-discord-ws').innerText = '...';
+            
             try {
                 const res = await fetch('/api/monitoring');
                 const data = await res.json();
-                const upstashCard = document.getElementById('card-upstash');
-                const rewarbleCard = document.getElementById('card-rewarble');
-                const discordCard = document.getElementById('card-discord');
+                
+                const setGlow = (id, color) => { if(document.getElementById(id)) document.getElementById(id).style.background = color; };
                 
                 if (data.upstash.status === 'online') {
                     if(document.getElementById('ui-upstash-status')) document.getElementById('ui-upstash-status').innerHTML = '🟢 Optimal';
-                    document.getElementById('ui-upstash-status').className = 'value text-green';
-                    upstashCard.style.borderLeft = '4px solid var(--accent-green)';
+                    setGlow('glow-upstash', 'var(--accent-green)');
                 } else {
                     if(document.getElementById('ui-upstash-status')) document.getElementById('ui-upstash-status').innerHTML = '🔴 Down';
-                    document.getElementById('ui-upstash-status').className = 'value text-red';
-                    upstashCard.style.borderLeft = '4px solid var(--accent-red)';
+                    setGlow('glow-upstash', 'var(--accent-red)');
                 }
-                if(document.getElementById('ui-upstash-ping')) document.getElementById('ui-upstash-ping').innerText = 'Latency: ' + data.upstash.latency + ' ms';
+                if(document.getElementById('ui-upstash-ping')) document.getElementById('ui-upstash-ping').innerText = data.upstash.latency + ' ms';
                 
                 if (data.rewarble.status === 'online') {
                     if(document.getElementById('ui-rewarble-status')) document.getElementById('ui-rewarble-status').innerHTML = '🟢 Optimal';
-                    document.getElementById('ui-rewarble-status').className = 'value text-green';
-                    rewarbleCard.style.borderLeft = '4px solid var(--accent-green)';
+                    setGlow('glow-rewarble', 'var(--accent-green)');
                 } else {
-                    if(document.getElementById('ui-rewarble-status')) document.getElementById('ui-rewarble-status').innerHTML = '🔴 Error/Offline';
-                    document.getElementById('ui-rewarble-status').className = 'value text-red';
-                    rewarbleCard.style.borderLeft = '4px solid var(--accent-red)';
+                    if(document.getElementById('ui-rewarble-status')) document.getElementById('ui-rewarble-status').innerHTML = '🔴 Error';
+                    setGlow('glow-rewarble', 'var(--accent-red)');
                 }
-                if(document.getElementById('ui-rewarble-ping')) document.getElementById('ui-rewarble-ping').innerText = 'Latency: ' + data.rewarble.latency + ' ms';
+                if(document.getElementById('ui-rewarble-ping')) document.getElementById('ui-rewarble-ping').innerText = data.rewarble.latency + ' ms';
                 
                 if(document.getElementById('ui-discord-ws')) document.getElementById('ui-discord-ws').innerText = data.discord.ws_ping + ' ms';
                 if(document.getElementById('ui-discord-status')) document.getElementById('ui-discord-status').innerHTML = data.discord.ready ? '<span style="color:var(--accent-green)">Connected</span>' : '<span style="color:var(--accent-red)">Disconnected</span>';
                 if(document.getElementById('ui-discord-guilds')) document.getElementById('ui-discord-guilds').innerText = data.discord.guilds;
                 if(document.getElementById('ui-discord-users')) document.getElementById('ui-discord-users').innerText = data.discord.users;
-                discordCard.style.borderLeft = data.discord.ready ? '4px solid var(--accent-blue)' : '4px solid var(--accent-red)';
+                setGlow('glow-discord', data.discord.ready ? 'var(--accent-blue)' : 'var(--accent-red)');
                 
-                if(document.getElementById('ui-os-plat')) document.getElementById('ui-os-plat').innerText = data.system.platform;
-                if(document.getElementById('ui-os-arch')) document.getElementById('ui-os-arch').innerText = data.system.arch;
+                if(document.getElementById('ui-os-plat')) document.getElementById('ui-os-plat').innerText = data.system.platform + ' ' + data.system.arch;
                 if(document.getElementById('ui-os-up')) document.getElementById('ui-os-up').innerText = data.system.sysUptime + ' mins';
-                if(document.getElementById('ui-os-ram')) document.getElementById('ui-os-ram').innerText = data.system.freeMem + ' GB / ' + data.system.totalMem + ' GB';
+                if(document.getElementById('ui-os-ram')) document.getElementById('ui-os-ram').innerText = data.system.freeMem + ' GB free / ' + data.system.totalMem + ' GB';
+                
+                if(document.getElementById('ui-cpu-txt')) document.getElementById('ui-cpu-txt').innerText = data.system.cpuLoad + '%';
+                if(document.getElementById('ui-cpu-bar')) {
+                    document.getElementById('ui-cpu-bar').style.width = data.system.cpuLoad + '%';
+                    document.getElementById('ui-cpu-bar').style.background = data.system.cpuLoad > 80 ? 'var(--accent-red)' : (data.system.cpuLoad > 50 ? 'var(--accent-orange)' : 'var(--accent-green)');
+                }
+                
+                if(document.getElementById('ui-ram-txt')) document.getElementById('ui-ram-txt').innerText = data.system.memPercent + '%';
+                if(document.getElementById('ui-ram-bar')) {
+                    document.getElementById('ui-ram-bar').style.width = data.system.memPercent + '%';
+                    document.getElementById('ui-ram-bar').style.background = data.system.memPercent > 85 ? 'var(--accent-red)' : (data.system.memPercent > 60 ? 'var(--accent-orange)' : 'var(--accent-blue)');
+                }
                 
                 if(document.getElementById('ui-proc-up')) document.getElementById('ui-proc-up').innerText = data.process.uptime + ' mins';
                 if(document.getElementById('ui-proc-rss')) document.getElementById('ui-proc-rss').innerText = data.process.rss + ' MB';
                 if(document.getElementById('ui-proc-heap')) document.getElementById('ui-proc-heap').innerText = data.process.heap + ' MB';
+                if(document.getElementById('ui-proc-lag')) {
+                    document.getElementById('ui-proc-lag').innerText = data.process.lag + ' ms';
+                    document.getElementById('ui-proc-lag').style.color = data.process.lag > 100 ? 'var(--accent-red)' : (data.process.lag > 20 ? 'var(--accent-orange)' : 'var(--accent-green)');
+                }
                 
-                if(document.getElementById('ui-sec-rates')) document.getElementById('ui-sec-rates').innerText = data.security.rateLimits + ' IPs';
-                if(document.getElementById('ui-sec-locks')) document.getElementById('ui-sec-locks').innerText = data.security.locks + ' IPs';
+                if(document.getElementById('ui-sec-rates')) document.getElementById('ui-sec-rates').innerText = data.security.rateLimits;
+                if(document.getElementById('ui-sec-rates-bar')) document.getElementById('ui-sec-rates-bar').style.width = Math.min(100, data.security.rateLimits * 5) + '%';
+                
+                if(document.getElementById('ui-sec-locks')) document.getElementById('ui-sec-locks').innerText = data.security.locks;
+                if(document.getElementById('ui-sec-locks-bar')) document.getElementById('ui-sec-locks-bar').style.width = Math.min(100, data.security.locks * 10) + '%';
+                
+                if(document.getElementById('ui-fw-status')) document.getElementById('ui-fw-status').innerText = data.security.firewall.toUpperCase();
                 
                 showToast('Diagnostics complete.');
             } catch(e) { showToast('Diagnostics Failed', 'error'); }
@@ -3424,6 +3496,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             
             if(window.innerWidth <= 900 && typeof window.closeSidebar === 'function') { window.closeSidebar(); }
             if(tabId === 'moderation' && !isMembersLoaded) window.loadAllMembers();
+            if(tabId === 'monitoring') window.runDiagnostics();
             
             if(tabId === 'livechat'){
                 window.loadTicketsForChat();
