@@ -1382,8 +1382,12 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
         if (guild) {
             tickets = guild.channels.cache
                 .filter(c => c.name.startsWith('shop-') || c.name.startsWith('support-'))
-                .map(c => ({ id: c.id, name: c.name }))
-                .sort((a, b) => a.name.localeCompare(b.name));
+                .map(c => ({ 
+                    id: c.id, 
+                    name: c.name,
+                    createdTimestamp: c.createdTimestamp || 0,
+                    isSupport: c.name.startsWith('support-')
+                }));
         }
         res.writeHead(200, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify(tickets));
@@ -2413,8 +2417,15 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
 
            <div id='livechat' class='tab-content'>
                <div class='box'>
-                   <div style='display:flex; justify-content:space-between; align-items:center;'>
-                       <h2 style='margin:0;'>💬 Live Support Console</h2>
+                   <div style='display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;'>
+                       <div style='display:flex; align-items:center; gap: 15px;'>
+                           <h2 style='margin:0;'>💬 Live Support Console</h2>
+                           <select id='chat-sort-select' style='margin:0; width:auto; padding: 8px;' onchange='window.loadTicketsForChat()'>
+                               <option value='asc'>⏱️ Chronologique (Ancien → Récent)</option>
+                               <option value='desc'>⏱️ Chronologique (Récent → Ancien)</option>
+                               <option value='importance'>⭐ Importance (Support d'abord)</option>
+                           </select>
+                       </div>
                        <button class='admin-btn btn-green' style='margin:0;' onclick='window.loadTicketsForChat()'>🔄 Synchronise</button>
                    </div>
                    <div class='chat-container' style='margin-top:20px;'>
@@ -3518,7 +3529,30 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         window.refundTx = async function(date, username) { if(await window.customConfirm('REVERSE TX', 'Reverse this transaction? Yield will be adjusted.')) { await window.executeAction({action: 'refund_tx', date: date, username: username}); } };
         window.testActionLatency = async function() { const resultDiv = document.getElementById('latency-result'); resultDiv.innerText = 'Pinging...'; resultDiv.style.color = 'var(--text-muted)'; const startTime = Date.now(); try { const res = await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'ping_test', pin: PIN }) }); if (res.ok) { const totalTime = Date.now() - startTime; resultDiv.innerText = totalTime + ' ms'; if (totalTime < 500) resultDiv.style.color = getThemeVal('hex'); else if (totalTime < 1500) resultDiv.style.color = 'var(--accent-orange)'; else resultDiv.style.color = 'var(--accent-red)'; } else { resultDiv.innerText = 'Error'; resultDiv.style.color = 'var(--accent-red)'; } } catch(e) { resultDiv.innerText = 'Net Error'; resultDiv.style.color = 'var(--accent-red)'; } };
         
-        window.loadTicketsForChat = async function() { try { const res = await fetch('/api/tickets'); const tickets = await res.json(); let html = ''; if(tickets.length === 0) { html = '<p class="text-muted text-center" style="margin-top:20px; font-family:inherit;">No active lines.</p>'; } else { const shopTickets = tickets.filter(t => t.name.startsWith('shop-')); const supportTickets = tickets.filter(t => t.name.startsWith('support-')); if(shopTickets.length > 0) { html += '<div style="font-size:0.85em; text-transform:uppercase; color:var(--accent-green); font-weight:700; margin: 10px 0 5px 5px; border-bottom: 0.5px solid rgba(var(--accent-green-rgb), 0.2); padding-bottom:5px; letter-spacing:0.5px;">🛒 Shop (' + shopTickets.length + ')</div>'; shopTickets.forEach(t => { const isActive = activeChatChannel === t.id ? 'active' : ''; html += '<div class="ticket-item ' + isActive + '" onclick="window.openTicketChat(\\'' + t.id + '\\')">' + escapeHTML(t.name) + '</div>'; }); } if(supportTickets.length > 0) { html += '<div style="font-size:0.85em; text-transform:uppercase; color:var(--accent-orange); font-weight:700; margin: 20px 0 5px 5px; border-bottom: 0.5px solid rgba(245, 158, 11, 0.2); padding-bottom:5px; letter-spacing:0.5px;">🎧 Support (' + supportTickets.length + ')</div>'; supportTickets.forEach(t => { const isActive = activeChatChannel === t.id ? 'active' : ''; html += '<div class="ticket-item ' + isActive + '" onclick="window.openTicketChat(\\'' + t.id + '\\')">' + escapeHTML(t.name) + '</div>'; }); } } if(document.getElementById('chat-ticket-list')) document.getElementById('chat-ticket-list').innerHTML = html; } catch(e) {} };
+        window.loadTicketsForChat = async function() { 
+    try { 
+        const res = await fetch('/api/tickets'); 
+        let tickets = await res.json(); 
+        
+        const sortMode = document.getElementById('chat-sort-select') ? document.getElementById('chat-sort-select').value : 'asc';
+        if (sortMode === 'asc') {
+            tickets.sort((a, b) => a.createdTimestamp - b.createdTimestamp);
+        } else if (sortMode === 'desc') {
+            tickets.sort((a, b) => b.createdTimestamp - a.createdTimestamp);
+        } else if (sortMode === 'importance') {
+            tickets.sort((a, b) => {
+                if (a.isSupport && !b.isSupport) return -1;
+                if (!a.isSupport && b.isSupport) return 1;
+                return a.createdTimestamp - b.createdTimestamp;
+            });
+        }
+        
+        let html = ''; 
+        if(tickets.length === 0) { 
+            html = '<p class="text-muted text-center" style="margin-top:20px; font-family:inherit;">No active lines.</p>'; 
+        } else { 
+            const shopTickets = tickets.filter(t => t.name.startsWith('shop-')); 
+            const supportTickets = tickets.filter(t => t.name.startsWith('support-')); if(shopTickets.length > 0) { html += '<div style="font-size:0.85em; text-transform:uppercase; color:var(--accent-green); font-weight:700; margin: 10px 0 5px 5px; border-bottom: 0.5px solid rgba(var(--accent-green-rgb), 0.2); padding-bottom:5px; letter-spacing:0.5px;">🛒 Shop (' + shopTickets.length + ')</div>'; shopTickets.forEach(t => { const isActive = activeChatChannel === t.id ? 'active' : ''; html += '<div class="ticket-item ' + isActive + '" onclick="window.openTicketChat(\\'' + t.id + '\\')">' + escapeHTML(t.name) + '</div>'; }); } if(supportTickets.length > 0) { html += '<div style="font-size:0.85em; text-transform:uppercase; color:var(--accent-orange); font-weight:700; margin: 20px 0 5px 5px; border-bottom: 0.5px solid rgba(245, 158, 11, 0.2); padding-bottom:5px; letter-spacing:0.5px;">🎧 Support (' + supportTickets.length + ')</div>'; supportTickets.forEach(t => { const isActive = activeChatChannel === t.id ? 'active' : ''; html += '<div class="ticket-item ' + isActive + '" onclick="window.openTicketChat(\\'' + t.id + '\\')">' + escapeHTML(t.name) + '</div>'; }); } } if(document.getElementById('chat-ticket-list')) document.getElementById('chat-ticket-list').innerHTML = html; } catch(e) {} };
         window.openTicketChat = function(channelId) { activeChatChannel = channelId; window.loadTicketsForChat(); if(document.getElementById('chat-messages-area')) document.getElementById('chat-messages-area').innerHTML = '<div style="margin:auto; color:var(--accent-green);"><div style="width:40px; height:40px; border:3px solid rgba(var(--accent-green-rgb), 0.1); border-top:3px solid var(--accent-green); border-radius:50%; animation:spin 1s linear infinite; margin:auto; box-shadow:0 0 15px rgba(var(--accent-green-rgb), 0.5);"></div></div>'; window.fetchChatMessages(); };
         window.fetchChatMessages = async function() { if(!activeChatChannel) return; try { const res = await fetch('/api/tickets/messages?channelId=' + activeChatChannel); const msgs = await res.json(); let html = ''; if(msgs.length === 0) html = '<p class="text-muted text-center" style="margin:auto; font-family:monospace;">Awaiting transmission...</p>'; else { msgs.forEach(m => { const bubbleClass = m.isBot ? 'bot' : 'user'; const imgHtml = m.imageUrl ? '<br><img src="' + escapeHTML(m.imageUrl) + '" class="chat-img-preview" style="max-width:100%; border-radius:12px; margin-top:10px; cursor:pointer; border:0.5px solid rgba(255,255,255,0.1);" onclick="window.open(\\'' + escapeHTML(m.imageUrl) + '\\')">' : ''; const actionsHtml = '<div class="chat-bubble-actions" style="display:none; position:absolute; top:-15px; ' + (m.isBot ? 'left:15px;' : 'right:15px;') + ' background:rgba(0,0,0,0.8); backdrop-filter:blur(10px); border:0.5px solid rgba(255,255,255,0.1); border-radius:12px; padding:4px 8px; gap:8px; box-shadow:0 5px 15px rgba(0,0,0,0.3);"><button style="background:none; border:none; cursor:pointer; font-size:1.1em; transition:transform 0.2s;" onclick="window.reactMessage(\\'' + m.id + '\\', \\'👍\\')">👍</button><button style="background:none; border:none; cursor:pointer; font-size:1.1em; transition:transform 0.2s;" onclick="window.reactMessage(\\'' + m.id + '\\', \\'❤️\\')">❤️</button></div>'; html += '<div class="chat-bubble ' + bubbleClass + '" onmouseover="this.querySelector(\\' .chat-bubble-actions\\').style.display=\\'flex\\'" onmouseout="this.querySelector(\\' .chat-bubble-actions\\').style.display=\\'none\\'"><div class="chat-author">' + escapeHTML(m.author) + '</div>' + escapeHTML(m.content) + imgHtml + actionsHtml + '</div>'; }); } const area = document.getElementById('chat-messages-area'); const isAtBottom = area.scrollHeight - area.scrollTop <= area.clientHeight + 100; area.innerHTML = html; if(isAtBottom) area.scrollTop = area.scrollHeight; } catch(e) {} };
         window.sendChatMessage = async function() { if(!activeChatChannel) return showToast('Select line first', 'error'); const input = document.getElementById('chat-input-text'); const fileInput = document.getElementById('chat-file-input'); const text = input.value.trim(); const file = fileInput.files[0]; if(!text && !file) return; input.value = ''; document.getElementById('attach-badge').style.display='none'; let base64 = null; if (file) { const reader = new FileReader(); reader.readAsDataURL(file); await new Promise(r => reader.onload = r); base64 = reader.result; fileInput.value = ''; } try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'send_ticket_message', channelId: activeChatChannel, message: text, imageBase64: base64, pin: PIN }) }); window.fetchChatMessages(); } catch(e) { showToast('Transmission Failed', 'error'); } };
