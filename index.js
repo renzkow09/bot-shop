@@ -1126,6 +1126,40 @@ const server = http.createServer(async (req, res) => {
          .shortcut-btn { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text-muted); padding: 5px 10px; border-radius: 8px; font-size: 0.8em; cursor: pointer; transition: 0.3s; white-space: nowrap; }
          .shortcut-btn:hover { background: rgba(255,255,255,0.1); color: white; }
 
+
+         /* Mobile Responsive & UI Enhancements */
+         @media (max-width: 768px) {
+             .top-navbar { padding: 12px 15px; flex-wrap: wrap; }
+             .nav-menu { flex-direction: column; position: fixed; top: 60px; left: -100%; width: 260px; height: calc(100vh - 60px); background: rgba(0,0,0,0.95); transition: left 0.3s cubic-bezier(0.25, 1, 0.5, 1); z-index: 2000; overflow-y: auto; padding: 20px; box-shadow: 2px 0 15px rgba(0,0,0,0.5); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
+             .nav-menu.open { left: 0; }
+             .burger-btn { display: flex; flex-direction: column; gap: 5px; cursor: pointer; background: transparent; border: none; padding: 5px; margin-right: 15px; }
+             .burger-btn span { width: 24px; height: 2px; background: white; border-radius: 2px; transition: 0.3s; }
+             .burger-btn.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+             .burger-btn.open span:nth-child(2) { opacity: 0; }
+             .burger-btn.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+             .main-content { padding: 15px; height: auto; overflow: visible; }
+             .stats-grid { grid-template-columns: 1fr; gap: 15px; }
+             .chat-container { flex-direction: column; height: auto; min-height: 800px; }
+             .box { padding: 15px; }
+             .kanban-board { flex-direction: column; min-height: auto; }
+             .kanban-col { min-width: 100%; }
+             input[type='text'], input[type='number'], textarea, select { font-size: 16px; /* Prevents iOS zoom */ }
+             .nav-brand { font-size: 1.2em; }
+             .bot-status { display: none; } /* Hide on mobile to save space */
+             table, thead, tbody, th, td, tr { display: block; }
+             thead tr { position: absolute; top: -9999px; left: -9999px; }
+             tr { margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+             td { border: none; border-bottom: 1px solid rgba(255,255,255,0.05); position: relative; padding-left: 40%; text-align: right; }
+             td:before { position: absolute; top: 15px; left: 15px; width: 35%; padding-right: 10px; white-space: nowrap; font-weight: bold; text-align: left; content: attr(data-label); color: var(--text-muted); text-transform: uppercase; font-size: 0.8em; }
+         }
+         @media (min-width: 769px) {
+             .burger-btn { display: none; }
+             .nav-group { font-size: 0.75em; text-transform: uppercase; color: var(--text-muted); margin: 0 10px; font-weight: bold; align-self: center; letter-spacing: 1px; }
+         }
+         .nav-group { margin-top: 15px; margin-bottom: 5px; font-size: 0.75em; text-transform: uppercase; color: var(--accent-green); font-weight: bold; letter-spacing: 1px; }
+         @media (min-width: 769px) { .nav-group { color: var(--text-muted); margin-top: 0; margin-bottom: 0; margin-left: 10px; margin-right: 10px; } }
+         .shortcut-btn { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text-muted); padding: 5px 10px; border-radius: 8px; font-size: 0.8em; cursor: pointer; transition: 0.3s; white-space: nowrap; }
+         .shortcut-btn:hover { background: rgba(255,255,255,0.1); color: white; }
 </style><script>(function() {const themes = {green: { hex: '#10b981', rgb: '16, 185, 129', hover: '#34d399' },blue: { hex: '#0a84ff', rgb: '10, 132, 255', hover: '#47a3ff' },red: { hex: '#ff453a', rgb: '255, 69, 58', hover: '#ff6b63' },orange: { hex: '#ff9f0a', rgb: '255, 159, 10', hover: '#ffb340' }};const savedTheme = localStorage.getItem('nexus_theme');if (savedTheme && themes[savedTheme]) {const t = themes[savedTheme];document.documentElement.style.setProperty('--accent-green', t.hex);document.documentElement.style.setProperty('--accent-green-rgb', t.rgb);document.documentElement.style.setProperty('--accent-green-hover', t.hover);}})();</script></head><body><div class='bg-mesh'></div><div class='bg-anim'></div><div class='login-box'>  <h2>NEXUS</h2>  <div class='subtitle'>System Authentication</div>  <input type='password' id='pin' maxlength='4' placeholder='••••'>  <button onclick='login()' id='btn'>Authenticate</button>  <p id='err' style='color:#ff453a;display:none;margin-top:20px;font-weight:500; font-size:0.9em; animation:slideUpFade 0.3s ease forwards;'>Access Denied</p></div><script>const themes = {    green: { hex: '#10b981', rgb: '16, 185, 129' },    blue: { hex: '#0a84ff', rgb: '10, 132, 255' },    red: { hex: '#ff453a', rgb: '255, 69, 58' },    orange: { hex: '#ff9f0a', rgb: '255, 159, 10' }};const savedTheme = localStorage.getItem('nexus_theme') || 'green';const t = themes[savedTheme] || themes.green;document.documentElement.style.setProperty('--accent', t.hex);document.documentElement.style.setProperty('--accent-rgb', t.rgb);async function login(){  const btn = document.getElementById('btn');  btn.style.opacity = '0.5';  btn.style.transform = 'scale(0.98)';  btn.innerText = 'Verifying...';  const res=await fetch('/api/login',{method:'POST',body:JSON.stringify({pin:document.getElementById('pin').value})});  if(res.ok) {    btn.style.background = '#fff';    btn.innerText = 'Granted';    btn.style.transform = 'scale(1.05)';    setTimeout(() => location.reload(), 500);  } else {     btn.style.opacity = '1';    btn.style.transform = 'scale(1)';    btn.innerText = 'Authenticate';    const err = document.getElementById('err'); err.style.display='block';    err.style.animation = 'none'; void err.offsetWidth; err.style.animation = 'slideUpFade 0.3s ease forwards';    setTimeout(() => err.style.display='none', 3000);  }} document.getElementById('pin').addEventListener('keypress', e=>{if(e.key==='Enter')login();});</script></body></html>");
     }
 
