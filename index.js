@@ -715,7 +715,10 @@ client.on('messageCreate', async (message) => {
         }
 
         if (message.channel?.name?.startsWith('support-') && !message.author.bot) {
-           if (memoryStats.settings && memoryStats.settings.ai_enabled === false) return;
+           if (memoryStats.settings && memoryStats.settings.ai_enabled === false) {
+               console.log("AI Support is disabled. Silently ignoring support message.");
+               return;
+           }
            try {
                if (process.env.GEMINI_API_KEY) {
                    const { GoogleGenAI, ThinkingLevel } = require("@google/genai");
@@ -2937,22 +2940,72 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             Chart.defaults.color = '#8e8e93'; 
             Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, Inter, sans-serif';
             Chart.defaults.animation = {
-                duration: 2000,
-                easing: 'easeOutExpo',
+                duration: 1500,
+                easing: 'easeOutQuart',
                 delay: (context) => {
-                    let delay = 0;
-                    if (context.type === 'data' && context.mode === 'default' && !context.dropped) {
-                        delay = context.dataIndex * 50 + context.datasetIndex * 50;
-                        context.dropped = true;
+                    if (context.type === 'data') {
+                        return context.dataIndex * 50;
                     }
-                    return delay;
+                    return 0;
                 }
             };
             Chart.defaults.interaction = { mode: 'index', intersect: false };
             Chart.defaults.plugins.tooltip.animation = { duration: 200, easing: 'easeOutQuart' };
-            Chart.defaults.hover.animationDuration = 400;
+            
+            // Fix hover configuration for newer Chart.js versions
+            Chart.defaults.hover = Chart.defaults.hover || {};
+            Chart.defaults.hover.mode = 'nearest';
+            Chart.defaults.hover.intersect = true;
         }
-        window.renderSalesChart = function(days) { if(typeof Chart === 'undefined') return; let dates = Object.keys(rawStats.revenue || {}).sort(); let values = dates.map(d => rawStats.revenue[d]); if (days > 0 && dates.length > days) { dates = dates.slice(-days); values = values.slice(-days); } const ctxSales = document.getElementById('salesChart').getContext('2d'); let grad = ctxSales.createLinearGradient(0,0,0,400); grad.addColorStop(0, 'rgba(' + getThemeVal('rgb') + ', 0.5)'); grad.addColorStop(1, 'transparent'); if(salesChart) salesChart.destroy(); salesChart = new Chart(ctxSales, { type: 'line', data: { labels: dates.length?dates:['No Data'], datasets: [{ data: values.length?values:[0], borderColor: getThemeVal('hex'), borderWidth: 3, backgroundColor: grad, fill: true, tension: 0.4, pointHoverBackgroundColor: '#fff', pointHoverBorderColor: 'rgba(' + getThemeVal('rgb') + ', 1)', pointHoverBorderWidth: 4, pointRadius: 0, pointHitRadius: 20 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { grid: { color: 'rgba(255,255,255,0.05)'}, border: { dash: [4, 4], display: false } } }, hover: { mode: 'nearest', intersect: true }, elements: { line: { tension: 0.5 } } } }); };
+        window.renderSalesChart = function(days) { 
+            try {
+                if(typeof Chart === 'undefined') return; 
+                let dates = Object.keys(rawStats.revenue || {}).sort(); 
+                let values = dates.map(d => rawStats.revenue[d]); 
+                if (days > 0 && dates.length > days) { 
+                    dates = dates.slice(-days); values = values.slice(-days); 
+                } 
+                const canvas = document.getElementById('salesChart');
+                if(!canvas) return;
+                const ctxSales = canvas.getContext('2d'); 
+                let grad = ctxSales.createLinearGradient(0,0,0,400); 
+                grad.addColorStop(0, 'rgba(' + getThemeVal('rgb') + ', 0.5)'); 
+                grad.addColorStop(1, 'transparent'); 
+                if(window.salesChart instanceof Chart) {
+                    window.salesChart.destroy(); 
+                }
+                window.salesChart = new Chart(ctxSales, { 
+                    type: 'line', 
+                    data: { 
+                        labels: dates.length ? dates : ['No Data'], 
+                        datasets: [{ 
+                            data: values.length ? values : [0], 
+                            borderColor: getThemeVal('hex'), 
+                            borderWidth: 3, 
+                            backgroundColor: grad, 
+                            fill: true, 
+                            tension: 0.4, 
+                            pointHoverBackgroundColor: '#fff', 
+                            pointHoverBorderColor: 'rgba(' + getThemeVal('rgb') + ', 1)', 
+                            pointHoverBorderWidth: 4, 
+                            pointRadius: 0, 
+                            pointHitRadius: 20 
+                        }] 
+                    }, 
+                    options: { 
+                        responsive: true, 
+                        maintainAspectRatio: false, 
+                        plugins: { legend: { display: false } }, 
+                        scales: { 
+                            x: { display: false }, 
+                            y: { grid: { color: 'rgba(255,255,255,0.05)'}, border: { dash: [4, 4], display: false } } 
+                        }, 
+                        hover: { mode: 'nearest', intersect: true }, 
+                        elements: { line: { tension: 0.5 } } 
+                    } 
+                }); 
+            } catch(e) { console.error("Chart Render Error:", e); }
+        };
         window.updateSalesChart = function(days) { 
             if(document.getElementById('btn-chart-7')) document.getElementById('btn-chart-7').className = days === 7 ? 'admin-btn btn-green' : 'admin-btn';
             if(document.getElementById('btn-chart-30')) document.getElementById('btn-chart-30').className = days === 30 ? 'admin-btn btn-green' : 'admin-btn';
@@ -2961,12 +3014,12 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         };
         function renderAnalyticsCharts() { 
            if(typeof Chart === 'undefined') return;
-           const ctxHourly = document.getElementById('hourlyChart').getContext('2d'); if(hourlyChart) hourlyChart.destroy(); hourlyChart = new Chart(ctxHourly, { type: 'bar', data: { labels: Array.from({length: 24}, (_, i) => i+'h'), datasets: [{ label: 'Sales', data: rawStats.analytics.hourly_sales || Array(24).fill(0), backgroundColor: getThemeVal('hex'), hoverBackgroundColor: '#fff', borderRadius: 6 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { grid: { color: 'rgba(255,255,255,0.05)' }, border: {display: false} }, x: { grid: { display: false }, border: {display: false} } } } });
-           const prodIds = Object.keys(rawStats.product_sales || {}); const prodLabels = prodIds.map(id => rawStats.products[id] ? rawStats.products[id].name : 'Unknown'); const prodData = Object.values(rawStats.product_sales || {}); const ctxTopProd = document.getElementById('topProductsBarChart').getContext('2d'); if(topProdChart) topProdChart.destroy(); topProdChart = new Chart(ctxTopProd, { type: 'bar', data: { labels: prodLabels.length?prodLabels:['No Data'], datasets: [{ label: 'Sales', data: prodData.length?prodData:[0], backgroundColor: getThemeVal('hex'), hoverBackgroundColor: '#fff', borderRadius: 6 }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' }, border: {display: false} }, y: { grid: { display: false }, border: {display: false} } } } });
-           const catRevs = {}; Object.entries(rawStats.product_sales || {}).forEach(([id, count]) => { const p = rawStats.products[id]; if(p && p.price !== 'Custom'){ const cat = p.category || 'Other'; if(!catRevs[cat]) catRevs[cat] = 0; catRevs[cat] += (parseInt(p.price) * count); } }); const ctxCat = document.getElementById('categoryRevenueChart').getContext('2d'); if(catChart) catChart.destroy(); catChart = new Chart(ctxCat, { type: 'polarArea', data: { labels: Object.keys(catRevs).length?Object.keys(catRevs):['No Data'], datasets: [{ data: Object.values(catRevs).length?Object.values(catRevs):[0], backgroundColor: [getThemeVal('hex'), getThemeVal('hover'), '#059669', '#f59e0b', '#ef4444'], hoverBackgroundColor: ['#fff', '#fff', '#fff', '#fff', '#fff'], borderWidth: 0, hoverOffset: 15 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: {color: '#8e8e93', font: { family: '-apple-system' }} } } } });
+           try { const canvas = document.getElementById('hourlyChart'); if(canvas) { const ctxHourly = canvas.getContext('2d'); if(window.hourlyChart instanceof Chart) window.hourlyChart.destroy(); window.hourlyChart = new Chart(ctxHourly, { type: 'bar', data: { labels: Array.from({length: 24}, (_, i) => i+'h'), datasets: [{ label: 'Sales', data: rawStats.analytics.hourly_sales || Array(24).fill(0), backgroundColor: getThemeVal('hex'), hoverBackgroundColor: '#fff', borderRadius: 6 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { grid: { color: 'rgba(255,255,255,0.05)' }, border: {display: false} }, x: { grid: { display: false }, border: {display: false} } } } }); } } catch(e) { console.error("Hourly Chart Error", e); }
+           try { const canvas = document.getElementById('topProductsBarChart'); if(canvas) { const prodIds = Object.keys(rawStats.product_sales || {}); const prodLabels = prodIds.map(id => rawStats.products[id] ? rawStats.products[id].name : 'Unknown'); const prodData = Object.values(rawStats.product_sales || {}); const ctxTopProd = canvas.getContext('2d'); if(window.topProdChart instanceof Chart) window.topProdChart.destroy(); window.topProdChart = new Chart(ctxTopProd, { type: 'bar', data: { labels: prodLabels.length?prodLabels:['No Data'], datasets: [{ label: 'Sales', data: prodData.length?prodData:[0], backgroundColor: getThemeVal('hex'), hoverBackgroundColor: '#fff', borderRadius: 6 }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' }, border: {display: false} }, y: { grid: { display: false }, border: {display: false} } } } }); } } catch(e) { console.error("Top Prod Chart Error", e); }
+           try { const canvas = document.getElementById('categoryRevenueChart'); if(canvas) { const catRevs = {}; Object.entries(rawStats.product_sales || {}).forEach(([id, count]) => { const p = rawStats.products[id]; if(p && p.price !== 'Custom'){ const cat = p.category || 'Other'; if(!catRevs[cat]) catRevs[cat] = 0; catRevs[cat] += (parseInt(p.price) * count); } }); const ctxCat = canvas.getContext('2d'); if(window.catChart instanceof Chart) window.catChart.destroy(); window.catChart = new Chart(ctxCat, { type: 'polarArea', data: { labels: Object.keys(catRevs).length?Object.keys(catRevs):['No Data'], datasets: [{ data: Object.values(catRevs).length?Object.values(catRevs):[0], backgroundColor: [getThemeVal('hex'), getThemeVal('hover'), '#059669', '#f59e0b', '#ef4444'], hoverBackgroundColor: ['#fff', '#fff', '#fff', '#fff', '#fff'], borderWidth: 0, hoverOffset: 15 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: {color: '#8e8e93', font: { family: '-apple-system' }} } } } }); } } catch(e) { console.error("Cat Chart Error", e); }
            
-           const dowSales = { 'Sun':0, 'Mon':0, 'Tue':0, 'Wed':0, 'Thu':0, 'Fri':0, 'Sat':0 }; const daysArr = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']; Object.entries(rawStats.revenue || {}).forEach(([dateStr, val]) => { const d = new Date(dateStr); if(!isNaN(d)) { dowSales[daysArr[d.getDay()]] += parseFloat(val); } }); const ctxDow = document.getElementById('dowChart').getContext('2d'); if(window.dowChartInst) window.dowChartInst.destroy(); window.dowChartInst = new Chart(ctxDow, { type: 'bar', data: { labels: daysArr, datasets: [{ label: 'Revenue (£)', data: daysArr.map(d=>dowSales[d]), backgroundColor: getThemeVal('hex'), hoverBackgroundColor: '#fff', borderRadius: 8 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { grid: { color: 'rgba(255,255,255,0.05)' }, border: {display: false} }, x: { grid: { display: false }, border: {display: false} } } } });
-           const ticketsOpened = rawStats.analytics?.tickets_opened || 0; const salesClosed = rawStats.total_transactions || 0; const ctxFunnel = document.getElementById('funnelChart').getContext('2d'); if(window.funnelChartInst) window.funnelChartInst.destroy(); window.funnelChartInst = new Chart(ctxFunnel, { type: 'doughnut', data: { labels: ['Tickets Opened (No Purchase)', 'Successful Sales'], datasets: [{ data: [Math.max(0, ticketsOpened - salesClosed), salesClosed], backgroundColor: ['rgba(239, 68, 68, 0.8)', 'rgba(' + getThemeVal('rgb') + ', 0.8)'], hoverOffset: 15, borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '75%', plugins: { legend: { position: 'bottom', labels: { color: '#8e8e93' } } } } });
+           try { const canvas = document.getElementById('dowChart'); if(canvas) { const dowSales = { 'Sun':0, 'Mon':0, 'Tue':0, 'Wed':0, 'Thu':0, 'Fri':0, 'Sat':0 }; const daysArr = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']; Object.entries(rawStats.revenue || {}).forEach(([dateStr, val]) => { const d = new Date(dateStr); if(!isNaN(d)) { dowSales[daysArr[d.getDay()]] += parseFloat(val); } }); const ctxDow = canvas.getContext('2d'); if(window.dowChartInst instanceof Chart) window.dowChartInst.destroy(); window.dowChartInst = new Chart(ctxDow, { type: 'bar', data: { labels: daysArr, datasets: [{ label: 'Revenue (£)', data: daysArr.map(d=>dowSales[d]), backgroundColor: getThemeVal('hex'), hoverBackgroundColor: '#fff', borderRadius: 8 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { grid: { color: 'rgba(255,255,255,0.05)' }, border: {display: false} }, x: { grid: { display: false }, border: {display: false} } } } }); } } catch(e) { console.error("Dow Chart Error", e); }
+           try { const canvas = document.getElementById('funnelChart'); if(canvas) { const ticketsOpened = rawStats.analytics?.tickets_opened || 0; const salesClosed = rawStats.total_transactions || 0; const ctxFunnel = canvas.getContext('2d'); if(window.funnelChartInst instanceof Chart) window.funnelChartInst.destroy(); window.funnelChartInst = new Chart(ctxFunnel, { type: 'doughnut', data: { labels: ['Tickets Opened (No Purchase)', 'Successful Sales'], datasets: [{ data: [Math.max(0, ticketsOpened - salesClosed), salesClosed], backgroundColor: ['rgba(239, 68, 68, 0.8)', 'rgba(' + getThemeVal('rgb') + ', 0.8)'], hoverOffset: 15, borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '75%', plugins: { legend: { position: 'bottom', labels: { color: '#8e8e93' } } } } }); } } catch(e) { console.error("Funnel Chart Error", e); }
         }
         window.forceBackup = async function() {
             if(!confirm('Force a manual cloud sync and download local backup?')) return;
