@@ -1172,6 +1172,14 @@ const server = http.createServer(async (req, res) => {
         res.writeHead(200, { 'Content-Type': 'application/javascript', 'Content-Disposition': 'attachment; filename="index.js"' });
         return res.end(fs.readFileSync(__filename));
     }
+    if (req.url === '/api/logout' && req.method === 'POST') {
+        if (req.headers.cookie && req.headers.cookie.includes('auth_session=')) {
+            const token = req.headers.cookie.split('auth_session=')[1].split(';')[0];
+            if (global.activeAdminSessions) global.activeAdminSessions.delete(token);
+        }
+        res.writeHead(200, { 'Set-Cookie': 'auth_session=; Max-Age=0; HttpOnly; Secure; SameSite=Strict; Path=/', 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ success: true }));
+    }
     if (req.url === '/api/login' && req.method === 'POST') {
         let body = ''; let bodySize = 0; req.on('data', chunk => { bodySize += chunk.length; if(bodySize > 5*1024*1024) req.socket.destroy(); else body += chunk; });
         req.on('end', () => {
@@ -2292,7 +2300,7 @@ const server = http.createServer(async (req, res) => {
                 <button class='nav-btn' onclick='window.switchTab("backups", this)'>Backups</button>
                 <button class='nav-btn' onclick='window.switchTab("admin", this)'>Settings <span class='nav-badge' id='badge-admin'>0</span></button>
                 
-                <button class='btn-red' style='margin-top:auto;' onclick='window.executeAction({action:"logout"})'>Logout</button>
+                <button class='btn-red' style='margin-top:auto;' onclick='window.logoutUser()'>Logout</button>
             </nav>
         </aside>
         
@@ -3339,6 +3347,12 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
 
         window.refreshDataSilently = async function(isAutoSync = false) { try{ const res=await fetch('/api/init-data'); if(res.ok){ const data=await res.json(); processInitData(data); if(!isAutoSync){ try { window.cancelEdit(); window.cancelEditLink(); document.getElementById('promoName').value=''; document.getElementById('promoDiscount').value=''; document.getElementById('promoLimit').value=''; } catch(e) {} } } }catch(e){ systemLog('ERROR', 'SYSTEM', e.message); } };
         
+        window.logoutUser = async function() {
+            try {
+                await fetch('/api/logout', { method: 'POST' });
+            } catch(e) {}
+            window.location.reload();
+        };
         window.executeAction = async function(p, showModal=false) { /* pin removed */ const res=await fetch('/api/action',{method:'POST',body:JSON.stringify(p)}); if(res.ok) { window.refreshDataSilently(); showToast('Action Successful'); } else { showToast('Action Failed', 'error'); } };
         
         window.sendReview = async function() { const author = document.getElementById('rev-author').value; const rating = document.getElementById('rev-rating').value; const text = document.getElementById('rev-msg').value; if(!author || !text) return showToast('Parameters missing', 'error'); await window.executeAction({ action: 'post_review', author: author, rating: rating, text: text }); document.getElementById('rev-author').value = ''; document.getElementById('rev-msg').value = ''; };
