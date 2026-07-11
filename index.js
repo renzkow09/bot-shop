@@ -2165,9 +2165,9 @@ const server = http.createServer(async (req, res) => {
         
          backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px); border-bottom: 0.5px solid rgba(255,255,255,0.05); white-space: nowrap; }
         .nav-menu::-webkit-scrollbar { height: 0px; display: none; }
-        .nav-btn { background: transparent; border: none; color: var(--text-muted); padding: 8px 16px; border-radius: 14px; cursor: pointer; font-weight: 500; transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1); display: flex; align-items: center; gap: 8px; font-size: 0.9em; position: relative; overflow: hidden; }
-        .nav-btn:hover { color: #fff; background: rgba(255,255,255,0.08); transform: translateX(5px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
-        .nav-btn.active { background: rgba(255,255,255,0.12); color: #fff; box-shadow: 0 4px 15px rgba(0,0,0,0.2); border-left: 3px solid var(--accent-green); padding-left: 13px; }
+        .nav-btn { background: transparent; border: none; color: var(--text-muted); padding: 14px 20px; border-radius: 16px; cursor: pointer; font-weight: 500; transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1); display: flex; align-items: center; gap: 14px; font-size: 1.05em; position: relative; overflow: hidden; }
+        .nav-btn:hover { color: #fff; background: rgba(255,255,255,0.08); transform: translateX(6px); box-shadow: 0 6px 16px rgba(0,0,0,0.15); }
+        .nav-btn.active { background: rgba(255,255,255,0.12); color: #fff; box-shadow: 0 6px 20px rgba(0,0,0,0.2); border-left: 4px solid var(--accent-green); padding-left: 16px; font-weight: 600; }
         .nav-btn:active { transform: translateX(2px) scale(0.98); }
         .main-content { padding: 30px 40px; max-width: 1400px; margin: 0 auto; animation: fadeInSmooth 0.5s ease; overflow-y: auto; height: calc(100vh - 120px); }
         
