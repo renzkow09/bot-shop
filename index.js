@@ -749,7 +749,7 @@ client.on('messageCreate', async (message) => {
                    const embed = new EmbedBuilder()
                        .setColor('#10b981')
                        .setTitle('🤖 AI Support Agent')
-                       .setDescription(`**Intent Detected:** ${intentData.intent || 'N/A'}\n\n**Suggestion:** ${intentData.suggested_reply || 'N/A'}`)
+                       .setDescription(intentData.suggested_reply || 'N/A')
                        .setFooter({ text: 'This is an AI generated response.' });
                    await message.reply({ embeds: [embed] }).catch(()=>{});
                } else {
