@@ -136,18 +136,12 @@ let memoryStats = {
 
 // 📦 INTEGRATION: Stock initialized to infinity ("∞")
 const INITIAL_PRODUCTS = {
-    "1": { name: "Photo Pack 1", price: "5", link: "https://drive.google.com/ton_lien", category: "✨ PHOTOS", stock: "∞", upsellId: "6", upsellDiscount: 20 }, 
-    "2": { name: "Photo Pack 2", price: "5", link: "https://drive.google.com/ton_lien", category: "✨ PHOTOS", stock: "∞" },
-    "3": { name: "Full Body", price: "5", link: "https://drive.google.com/ton_lien", category: "✨ PHOTOS", stock: "∞" }, 
-    "4": { name: "Try-On Pack", price: "5", link: "https://drive.google.com/ton_lien", category: "✨ PHOTOS", stock: "∞" },
-    "5": { name: "Mirror Pic", price: "5", link: "https://drive.google.com/ton_lien", category: "✨ PHOTOS", stock: "∞" }, 
-    "6": { name: "5-Min Video", price: "10", link: "https://drive.google.com/ton_lien", category: "🔥 VIDEOS", stock: "∞" },
-    "7": { name: "Shower / Bath", price: "10", link: "https://drive.google.com/ton_lien", category: "🔥 VIDEOS", stock: "∞" }, 
-    "8": { name: "Friends Pack", price: "15", link: "https://drive.google.com/ton_lien", category: "💦 SPECIAL", stock: "∞" },
-    "9": { name: "Surprise Pack", price: "15", link: "https://drive.google.com/ton_lien", category: "💦 SPECIAL", stock: "∞" }, 
-    "10": { name: "Sexting", price: "Custom", link: "", category: "💌 PERSONALIZED", stock: "∞" },
-    "11": { name: "Custom Request", price: "Custom", link: "", category: "💌 PERSONALIZED", stock: "∞" },
-    "VIP": { name: "👑 VIP Pass 30 Days", price: "20", link: "Welcome to VIP!", category: "👑 SUBSCRIPTION", stock: "∞" }
+    "1": { name: "Moderation Bot", price: "5", link: "https://github.com/...", category: "💬 DISCORD", stock: "∞", desc: "Advanced moderation with AI.", upsellId: "6", upsellDiscount: 20 }, 
+    "2": { name: "Economy Bot", price: "5", link: "https://github.com/...", category: "💬 DISCORD", stock: "∞", desc: "Economy system." },
+    "3": { name: "Crypto Tracker", price: "5", link: "https://github.com/...", category: "📱 TELEGRAM", stock: "∞", desc: "Tracks crypto prices." }, 
+    "4": { name: "Dashboard Template", price: "5", link: "https://github.com/...", category: "🌐 WEB", stock: "∞", desc: "Web dashboard." },
+    "5": { name: "Utility Bot", price: "5", link: "https://github.com/...", category: "🛠️ UTILITY", stock: "∞", desc: "General utility bot." }, 
+    "VIP": { name: "👑 Developer Pass", price: "20", link: "Welcome to VIP!", category: "👑 SUBSCRIPTION", stock: "∞", desc: "Access to all templates." }
 };
 
 const INITIAL_BUY_LINKS = {
@@ -1855,8 +1849,8 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                 }
                 else if (data.action === 'edit_product') {
                     if (memoryStats.products && memoryStats.products[data.id]) {
-                        const oldCat = memoryStats.products[data.id].category || "✨ ITEMS";
-                        memoryStats.products[data.id] = { name: data.name, price: data.price, link: data.link, category: oldCat, stock: data.stock || "∞", desc: data.desc, upsellId: data.upsellId, upsellDiscount: data.upsellDiscount };
+                        const newCat = data.category || memoryStats.products[data.id].category || "✨ ITEMS";
+                        memoryStats.products[data.id] = { name: data.name, price: data.price, link: data.link, category: newCat, stock: data.stock || "∞", desc: data.desc, upsellId: data.upsellId, upsellDiscount: data.upsellDiscount };
                         syncCloud();
                         systemLog('INFO', 'CATALOG', `Product matrix updated: Asset ID ${data.id}`);
                     }
@@ -1865,7 +1859,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                     if (!memoryStats.products) memoryStats.products = {};
                     if (!memoryStats.next_product_id) memoryStats.next_product_id = Date.now();
                         const newId = (memoryStats.next_product_id++).toString();
-                    memoryStats.products[newId] = { name: data.name, price: data.price, link: data.link, category: "✨ NEW ITEMS", stock: data.stock || "∞", desc: data.desc, upsellId: data.upsellId, upsellDiscount: data.upsellDiscount };
+                    memoryStats.products[newId] = { name: data.name, price: data.price, link: data.link, category: data.category || "✨ NEW ITEMS", stock: data.stock || "∞", desc: data.desc, upsellId: data.upsellId, upsellDiscount: data.upsellDiscount };
                     syncCloud();
                     systemLog('INFO', 'CATALOG', `New asset injected into matrix: ${data.name}`);
                 }
@@ -2567,8 +2561,16 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                        <input type='text' id='newProdStock' placeholder='Inventory (∞)' style='width:100px;'>
                    </div>
                    <div style='display:flex; gap:20px; flex-wrap:wrap; margin-bottom:15px;'>
-                       <input type='text' id='newProdDesc' placeholder='Asset Description (e.g. Premium 4K Photos)' style='flex:1; min-width:250px;'>
-                       <input type='text' id='newProdLink' placeholder='Secure Delivery Node (Drive, Mega...)' style='flex:1; min-width:250px;'>
+                       <input type='text' id='newProdDesc' placeholder='Asset Description (e.g. Bot features...)' style='flex:1; min-width:250px;'>
+                       <input type='text' id='newProdLink' placeholder='Secure Delivery Node (GitHub, Drive...)' style='flex:1; min-width:250px;'>
+                       <select id='newProdCategory' style='width:180px; padding: 12px; background: rgba(0,0,0,0.3); border: 0.5px solid rgba(255,255,255,0.05); color: #fff; border-radius: 12px;'>
+                           <option value='💬 DISCORD'>💬 DISCORD</option>
+                           <option value='📱 TELEGRAM'>📱 TELEGRAM</option>
+                           <option value='🌐 WEB'>🌐 WEB</option>
+                           <option value='🛠️ UTILITY'>🛠️ UTILITY</option>
+                           <option value='🎮 GAMING'>🎮 GAMING</option>
+                           <option value='👑 SUBSCRIPTION'>👑 SUBSCRIPTION</option>
+                       </select>
                    </div>
                    <div style='display:flex; gap:20px; flex-wrap:wrap; margin-bottom:15px; padding:15px; border-radius:16px; background:rgba(255,255,255,0.02); border:0.5px solid rgba(255,255,255,0.05);'>
                        <strong style='display:flex; align-items:center;'>🚀 Auto-Upsell :</strong>
@@ -2582,9 +2584,22 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                </div>
                
                <div class='box'>
-                   <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;'>
+                   <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-wrap:wrap; gap:15px;'>
                        <h2 style='margin:0;'>📦 Active Catalog</h2>
-                       <button class='admin-btn' style='margin:0;' onclick='window.triggerShopRefresh()'>Push Menu to Discord</button>
+                       <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                           <select id='product-category-filter' style='padding:8px 12px; background:rgba(0,0,0,0.5); border:0.5px solid rgba(255,255,255,0.1); color:#fff; border-radius:12px; cursor:pointer;' onchange='window.buildStaticTables()'>
+                               <option value='all'>All Categories</option>
+                               <option value='DISCORD'>💬 DISCORD</option>
+                               <option value='TELEGRAM'>📱 TELEGRAM</option>
+                               <option value='WEB'>🌐 WEB</option>
+                               <option value='UTILITY'>🛠️ UTILITY</option>
+                               <option value='GAMING'>🎮 GAMING</option>
+                               <option value='SUBSCRIPTION'>👑 SUBSCRIPTION</option>
+                               <option value='PHOTOS'>✨ PHOTOS</option>
+                               <option value='VIDEOS'>🔥 VIDEOS</option>
+                           </select>
+                           <button class='admin-btn' style='margin:0;' onclick='window.triggerShopRefresh()'>Push Menu to Discord</button>
+                       </div>
                    </div>
                    <div class='product-grid' id='target-products' style='margin-top:20px;'></div>
                </div>
@@ -3118,14 +3133,25 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
           if(document.getElementById('target-tx')) document.getElementById('target-tx').innerHTML = txHtml;
 
           let prodHtml=''; 
+          const filterSelect = document.getElementById('product-category-filter');
+          const filterValue = filterSelect ? filterSelect.value : 'all';
+
           if(rawStats.products){ 
               Object.entries(rawStats.products).forEach(([id,p])=>{ 
                   let icon='📦'; let cat = p.category||''; 
+                  
+                  if (filterValue !== 'all' && !cat.includes(filterValue)) return;
+
                   if(cat.includes('PHOTOS')) icon='📸'; 
                   else if(cat.includes('VIDEOS')) icon='🎥'; 
                   else if(cat.includes('SPECIAL')) icon='💦'; 
                   else if(cat.includes('PERSONALIZED')) icon='💌'; 
                   else if(cat.includes('SUBSCRIPTION')) icon='👑'; 
+                  else if(cat.includes('DISCORD')) icon='💬';
+                  else if(cat.includes('TELEGRAM')) icon='📱';
+                  else if(cat.includes('WEB')) icon='🌐';
+                  else if(cat.includes('UTILITY')) icon='🛠️';
+                  else if(cat.includes('GAMING')) icon='🎮';
                   let pPrice = p.price==='Custom'?'Custom':'£'+p.price; 
                   let pLink = p.link ? '<a href="' + escapeHTML(p.link) + '" target="_blank" style="color:var(--accent-green);text-decoration:none;">[🔗 Open Node]</a>' : '<span class="text-muted">Unlinked</span>'; 
                   let stockDisplay = p.stock === '∞' || !p.stock ? '∞' : p.stock; 
@@ -3278,6 +3304,20 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             document.getElementById('newProdStock').value = p.stock || '∞'; 
             document.getElementById('newProdLink').value = p.link; 
             document.getElementById('newProdDesc').value = p.desc || ''; 
+            if(document.getElementById('newProdCategory')) {
+                const catOpts = document.getElementById('newProdCategory').options;
+                let found = false;
+                for(let i=0; i<catOpts.length; i++) {
+                    if(catOpts[i].value === p.category) { document.getElementById('newProdCategory').value = p.category; found = true; break; }
+                }
+                if (!found && p.category) {
+                    const opt = document.createElement('option');
+                    opt.value = p.category;
+                    opt.text = p.category;
+                    document.getElementById('newProdCategory').add(opt);
+                    document.getElementById('newProdCategory').value = p.category;
+                }
+            }
             document.getElementById('newProdUpsellId').value = p.upsellId || ''; 
             document.getElementById('newProdUpsellDiscount').value = p.upsellDiscount || ''; 
             if(document.getElementById('saveProdBtn')) document.getElementById('saveProdBtn').innerText = 'Save Asset'; 
@@ -3293,6 +3333,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             document.getElementById('newProdStock').value = ''; 
             document.getElementById('newProdLink').value = ''; 
             document.getElementById('newProdDesc').value = ''; 
+            if(document.getElementById('newProdCategory')) document.getElementById('newProdCategory').selectedIndex = 0;
             document.getElementById('newProdUpsellId').value = ''; 
             document.getElementById('newProdUpsellDiscount').value = ''; 
             if(document.getElementById('saveProdBtn')) document.getElementById('saveProdBtn').innerText = 'Inject Asset'; 
@@ -3307,11 +3348,12 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             const s = document.getElementById('newProdStock').value || '∞'; 
             const l = document.getElementById('newProdLink').value; 
             const d = document.getElementById('newProdDesc').value; 
+            const c = document.getElementById('newProdCategory') ? document.getElementById('newProdCategory').value : '✨ ITEMS';
             const uid = document.getElementById('newProdUpsellId').value; 
             const udisc = document.getElementById('newProdUpsellDiscount').value; 
             if(!n||!p) return showToast('Designation & Value required', 'error'); 
-            if(id) { await window.executeAction({action:'edit_product', id:id, name:n, price:p, stock:s, link:l, desc:d, upsellId:uid, upsellDiscount:udisc}, false); } 
-            else { await window.executeAction({action:'add_product', name:n, price:p, stock:s, link:l, desc:d, upsellId:uid, upsellDiscount:udisc}, false); } 
+            if(id) { await window.executeAction({action:'edit_product', id:id, name:n, price:p, stock:s, link:l, desc:d, category:c, upsellId:uid, upsellDiscount:udisc}, false); } 
+            else { await window.executeAction({action:'add_product', name:n, price:p, stock:s, link:l, desc:d, category:c, upsellId:uid, upsellDiscount:udisc}, false); } 
         };
         
         // 🚀 [UI_ACTION_ASYNC: deleteProduct] - Action asynchrone d'interface Dashboard
@@ -3394,68 +3436,88 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             
             try {
                 const res = await fetch('/api/monitoring');
+                if (res.status === 401) {
+                    window.location.href = '/';
+                    return;
+                }
+                if (!res.ok) throw new Error('HTTP ' + res.status);
                 const data = await res.json();
                 
                 const setGlow = (id, color) => { if(document.getElementById(id)) document.getElementById(id).style.background = color; };
                 
-                if (data.upstash.status === 'online') {
-                    if(document.getElementById('ui-upstash-status')) document.getElementById('ui-upstash-status').innerHTML = '🟢 Optimal';
-                    setGlow('glow-upstash', 'var(--accent-green)');
-                } else {
-                    if(document.getElementById('ui-upstash-status')) document.getElementById('ui-upstash-status').innerHTML = '🔴 Down';
-                    setGlow('glow-upstash', 'var(--accent-red)');
-                }
-                if(document.getElementById('ui-upstash-ping')) document.getElementById('ui-upstash-ping').innerText = data.upstash.latency + ' ms';
-                
-                if (data.rewarble.status === 'online') {
-                    if(document.getElementById('ui-rewarble-status')) document.getElementById('ui-rewarble-status').innerHTML = '🟢 Optimal';
-                    setGlow('glow-rewarble', 'var(--accent-green)');
-                } else {
-                    if(document.getElementById('ui-rewarble-status')) document.getElementById('ui-rewarble-status').innerHTML = '🔴 Error';
-                    setGlow('glow-rewarble', 'var(--accent-red)');
-                }
-                if(document.getElementById('ui-rewarble-ping')) document.getElementById('ui-rewarble-ping').innerText = data.rewarble.latency + ' ms';
-                
-                if(document.getElementById('ui-discord-ws')) document.getElementById('ui-discord-ws').innerText = data.discord.ws_ping + ' ms';
-                if(document.getElementById('ui-discord-status')) document.getElementById('ui-discord-status').innerHTML = data.discord.ready ? '<span style="color:var(--accent-green)">Connected</span>' : '<span style="color:var(--accent-red)">Disconnected</span>';
-                if(document.getElementById('ui-discord-guilds')) document.getElementById('ui-discord-guilds').innerText = data.discord.guilds;
-                if(document.getElementById('ui-discord-users')) document.getElementById('ui-discord-users').innerText = data.discord.users;
-                setGlow('glow-discord', data.discord.ready ? 'var(--accent-blue)' : 'var(--accent-red)');
-                
-                if(document.getElementById('ui-os-plat')) document.getElementById('ui-os-plat').innerText = data.system.platform + ' ' + data.system.arch;
-                if(document.getElementById('ui-os-up')) document.getElementById('ui-os-up').innerText = data.system.sysUptime + ' mins';
-                if(document.getElementById('ui-os-ram')) document.getElementById('ui-os-ram').innerText = data.system.freeMem + ' GB free / ' + data.system.totalMem + ' GB';
-                
-                if(document.getElementById('ui-cpu-txt')) document.getElementById('ui-cpu-txt').innerText = data.system.cpuLoad + '%';
-                if(document.getElementById('ui-cpu-bar')) {
-                    document.getElementById('ui-cpu-bar').style.width = data.system.cpuLoad + '%';
-                    document.getElementById('ui-cpu-bar').style.background = data.system.cpuLoad > 80 ? 'var(--accent-red)' : (data.system.cpuLoad > 50 ? 'var(--accent-orange)' : 'var(--accent-green)');
+                if (data?.upstash) {
+                    if (data.upstash.status === 'online') {
+                        if(document.getElementById('ui-upstash-status')) document.getElementById('ui-upstash-status').innerHTML = '🟢 Optimal';
+                        setGlow('glow-upstash', 'var(--accent-green)');
+                    } else {
+                        if(document.getElementById('ui-upstash-status')) document.getElementById('ui-upstash-status').innerHTML = '🔴 Down';
+                        setGlow('glow-upstash', 'var(--accent-red)');
+                    }
+                    if(document.getElementById('ui-upstash-ping')) document.getElementById('ui-upstash-ping').innerText = (data.upstash.latency || 0) + ' ms';
                 }
                 
-                if(document.getElementById('ui-ram-txt')) document.getElementById('ui-ram-txt').innerText = data.system.memPercent + '%';
-                if(document.getElementById('ui-ram-bar')) {
-                    document.getElementById('ui-ram-bar').style.width = data.system.memPercent + '%';
-                    document.getElementById('ui-ram-bar').style.background = data.system.memPercent > 85 ? 'var(--accent-red)' : (data.system.memPercent > 60 ? 'var(--accent-orange)' : 'var(--accent-blue)');
+                if (data?.rewarble) {
+                    if (data.rewarble.status === 'online') {
+                        if(document.getElementById('ui-rewarble-status')) document.getElementById('ui-rewarble-status').innerHTML = '🟢 Optimal';
+                        setGlow('glow-rewarble', 'var(--accent-green)');
+                    } else {
+                        if(document.getElementById('ui-rewarble-status')) document.getElementById('ui-rewarble-status').innerHTML = '🔴 Error';
+                        setGlow('glow-rewarble', 'var(--accent-red)');
+                    }
+                    if(document.getElementById('ui-rewarble-ping')) document.getElementById('ui-rewarble-ping').innerText = (data.rewarble.latency || 0) + ' ms';
                 }
                 
-                if(document.getElementById('ui-proc-up')) document.getElementById('ui-proc-up').innerText = data.process.uptime + ' mins';
-                if(document.getElementById('ui-proc-rss')) document.getElementById('ui-proc-rss').innerText = data.process.rss + ' MB';
-                if(document.getElementById('ui-proc-heap')) document.getElementById('ui-proc-heap').innerText = data.process.heap + ' MB';
-                if(document.getElementById('ui-proc-lag')) {
-                    document.getElementById('ui-proc-lag').innerText = data.process.lag + ' ms';
-                    document.getElementById('ui-proc-lag').style.color = data.process.lag > 100 ? 'var(--accent-red)' : (data.process.lag > 20 ? 'var(--accent-orange)' : 'var(--accent-green)');
+                if (data?.discord) {
+                    if(document.getElementById('ui-discord-ws')) document.getElementById('ui-discord-ws').innerText = (data.discord.ws_ping || 0) + ' ms';
+                    if(document.getElementById('ui-discord-status')) document.getElementById('ui-discord-status').innerHTML = data.discord.ready ? '<span style="color:var(--accent-green)">Connected</span>' : '<span style="color:var(--accent-red)">Disconnected</span>';
+                    if(document.getElementById('ui-discord-guilds')) document.getElementById('ui-discord-guilds').innerText = data.discord.guilds || 0;
+                    if(document.getElementById('ui-discord-users')) document.getElementById('ui-discord-users').innerText = data.discord.users || 0;
+                    setGlow('glow-discord', data.discord.ready ? 'var(--accent-blue)' : 'var(--accent-red)');
                 }
                 
-                if(document.getElementById('ui-sec-rates')) document.getElementById('ui-sec-rates').innerText = data.security.rateLimits;
-                if(document.getElementById('ui-sec-rates-bar')) document.getElementById('ui-sec-rates-bar').style.width = Math.min(100, data.security.rateLimits * 5) + '%';
+                if (data?.system) {
+                    if(document.getElementById('ui-os-plat')) document.getElementById('ui-os-plat').innerText = (data.system.platform || 'N/A') + ' ' + (data.system.arch || 'N/A');
+                    if(document.getElementById('ui-os-up')) document.getElementById('ui-os-up').innerText = (data.system.sysUptime || 0) + ' mins';
+                    if(document.getElementById('ui-os-ram')) document.getElementById('ui-os-ram').innerText = (data.system.freeMem || 0) + ' GB free / ' + (data.system.totalMem || 0) + ' GB';
+                    
+                    if(document.getElementById('ui-cpu-txt')) document.getElementById('ui-cpu-txt').innerText = (data.system.cpuLoad || 0) + '%';
+                    if(document.getElementById('ui-cpu-bar')) {
+                        document.getElementById('ui-cpu-bar').style.width = Math.min(100, data.system.cpuLoad || 0) + '%';
+                        document.getElementById('ui-cpu-bar').style.background = (data.system.cpuLoad || 0) > 80 ? 'var(--accent-red)' : ((data.system.cpuLoad || 0) > 50 ? 'var(--accent-orange)' : 'var(--accent-green)');
+                    }
+                    
+                    if(document.getElementById('ui-ram-txt')) document.getElementById('ui-ram-txt').innerText = (data.system.memPercent || 0) + '%';
+                    if(document.getElementById('ui-ram-bar')) {
+                        document.getElementById('ui-ram-bar').style.width = Math.min(100, data.system.memPercent || 0) + '%';
+                        document.getElementById('ui-ram-bar').style.background = (data.system.memPercent || 0) > 85 ? 'var(--accent-red)' : ((data.system.memPercent || 0) > 60 ? 'var(--accent-orange)' : 'var(--accent-blue)');
+                    }
+                }
                 
-                if(document.getElementById('ui-sec-locks')) document.getElementById('ui-sec-locks').innerText = data.security.locks;
-                if(document.getElementById('ui-sec-locks-bar')) document.getElementById('ui-sec-locks-bar').style.width = Math.min(100, data.security.locks * 10) + '%';
+                if (data?.process) {
+                    if(document.getElementById('ui-proc-up')) document.getElementById('ui-proc-up').innerText = (data.process.uptime || 0) + ' mins';
+                    if(document.getElementById('ui-proc-rss')) document.getElementById('ui-proc-rss').innerText = (data.process.rss || 0) + ' MB';
+                    if(document.getElementById('ui-proc-heap')) document.getElementById('ui-proc-heap').innerText = (data.process.heap || 0) + ' MB';
+                    if(document.getElementById('ui-proc-lag')) {
+                        document.getElementById('ui-proc-lag').innerText = (data.process.lag || 0) + ' ms';
+                        document.getElementById('ui-proc-lag').style.color = (data.process.lag || 0) > 100 ? 'var(--accent-red)' : ((data.process.lag || 0) > 20 ? 'var(--accent-orange)' : 'var(--accent-green)');
+                    }
+                }
                 
-                if(document.getElementById('ui-fw-status')) document.getElementById('ui-fw-status').innerText = data.security.firewall.toUpperCase();
+                if (data?.security) {
+                    if(document.getElementById('ui-sec-rates')) document.getElementById('ui-sec-rates').innerText = data.security.rateLimits || 0;
+                    if(document.getElementById('ui-sec-rates-bar')) document.getElementById('ui-sec-rates-bar').style.width = Math.min(100, (data.security.rateLimits || 0) * 5) + '%';
+                    
+                    if(document.getElementById('ui-sec-locks')) document.getElementById('ui-sec-locks').innerText = data.security.locks || 0;
+                    if(document.getElementById('ui-sec-locks-bar')) document.getElementById('ui-sec-locks-bar').style.width = Math.min(100, (data.security.locks || 0) * 10) + '%';
+                    
+                    if(document.getElementById('ui-fw-status')) document.getElementById('ui-fw-status').innerText = (data.security.firewall || 'inactive').toUpperCase();
+                }
                 
                 showToast('Diagnostics complete.');
-            } catch(e) { console.error('Diag Error:', e); showToast('Diagnostics Failed', 'error'); }
+            } catch(e) { 
+                console.error('Diag Error:', e); 
+                showToast('Diagnostics Failed: ' + e.message, 'error'); 
+            }
         };
         
         
