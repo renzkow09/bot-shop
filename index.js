@@ -1,6 +1,32 @@
 // === [ANCHOR: IMPORTS_AND_CRASH_HANDLER] ===
 const { Client, GatewayIntentBits, Partials, ButtonBuilder, ActionRowBuilder, ButtonStyle, ChannelType, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, EmbedBuilder, AttachmentBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
-const axios = require('axios');
+
+const CircuitBreaker = {
+    failures: 0,
+    threshold: 3,
+    cooldown: 60000,
+    lastFailureTime: 0,
+    isOpen: function() {
+        if (this.failures >= this.threshold) {
+            if (Date.now() - this.lastFailureTime > this.cooldown) {
+                this.failures = 0; // Half-open
+                return false;
+            }
+            return true; // Open
+        }
+        return false;
+    },
+    recordFailure: function() {
+        this.failures++;
+        this.lastFailureTime = Date.now();
+    },
+    recordSuccess: function() {
+        this.failures = 0;
+    }
+};
+
+const axios = require('axios'); // just to anchor it
+
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
@@ -155,7 +181,7 @@ async function loadCloudStats() {
                 }
                 memoryStats.total_revenue = total;
             }
-            systemLog('INFO', 'UPSTASH', 'Database successfully synchronized with the Cloud.');
+            // sync silent
         }
     } catch (e) { 
         systemLog('ERROR', 'UPSTASH', `Cloud GET Error: ${e.message}`); 
@@ -195,8 +221,11 @@ async function syncCloud() {
         systemLog('ERROR', 'BACKUP', `Local Data Save Error: ${e.message}`);
     }
 
+
     // Sauvegarde Cloud (Upstash)
     const url = process.env.UPSTASH_REDIS_REST_URL;
+    if (global.broadcastToDashboard) global.broadcastToDashboard('stats_update', {});
+
     const token = process.env.UPSTASH_REDIS_REST_TOKEN;
     if (!url || !token) return;
     try {
@@ -388,9 +417,20 @@ client.once('ready', () => {
     setInterval(async () => {
         try {
             let down = false;
-            try { await axios.post(REWARBLE_API_URL, {}, { timeout: 5000, headers: { 'Authorization': `Bearer ${REWARBLE_API_KEY}` } }); } 
-            catch (e) {
-                if (!(e.response && (e.response.status === 400 || e.response.status === 402 || e.response.status === 401))) down = true;
+            if (CircuitBreaker.isOpen()) down = true;
+            else {
+                try { 
+                    await axios.post(REWARBLE_API_URL, {}, { timeout: 5000, headers: { 'Authorization': `Bearer ${REWARBLE_API_KEY}` } }); 
+                    CircuitBreaker.recordSuccess();
+                } 
+                catch (e) {
+                    if (!(e.response && (e.response.status === 400 || e.response.status === 402 || e.response.status === 401))) {
+                        down = true;
+                        CircuitBreaker.recordFailure();
+                    } else {
+                        CircuitBreaker.recordSuccess();
+                    }
+                }
             }
             if (down) {
                 systemLog('WARN', 'REWARBLE_API', 'API appears unreachable during routine heartbeat check.');
@@ -1272,7 +1312,11 @@ const server = http.createServer(async (req, res) => {
 
         const startRewarble = Date.now();
         try {
-            await axios.post(REWARBLE_API_URL, {}, { timeout: 5000, headers: { 'Authorization': `Bearer ${REWARBLE_API_KEY}` } });
+            if (CircuitBreaker.isOpen()) throw new Error("Service is temporarily unavailable (circuit breaker open).");
+            await axios.post(REWARBLE_API_URL, {}, { timeout: 5000, headers: { 'Authorization': `Bearer ${REWARBLE_API_KEY}` } }).catch(e => {
+                if (!(e.response && (e.response.status === 400 || e.response.status === 402 || e.response.status === 401))) CircuitBreaker.recordFailure();
+                else CircuitBreaker.recordSuccess();
+            });
         } catch (e) {
             if (e.response && (e.response.status === 400 || e.response.status === 402 || e.response.status === 401)) rewarbleStatus = 'online';
             else rewarbleStatus = 'offline';
@@ -1705,7 +1749,27 @@ const server = http.createServer(async (req, res) => {
                 }
                 else if (data.action === 'close_channel') {
                     const c = guild.channels.cache.get(data.channelId);
-                    if (c) { channelStates.delete(c.id); await c.delete().catch(()=>{}); }
+                    if (c) { 
+                        try {
+                            const msgs = await c.messages.fetch({ limit: 100 });
+                            const transcript = msgs.map(m => `[${new Date(m.createdTimestamp).toISOString()}] ${m.author.tag}: ${m.content}`).reverse().join('\n');
+                            if (!memoryStats.transcripts) memoryStats.transcripts = [];
+                            memoryStats.transcripts.push({
+                                id: c.id,
+                                name: c.name,
+                                date: new Date().toISOString(),
+                                content: transcript
+                            });
+                            syncCloud();
+                        } catch(e) {}
+                        channelStates.delete(c.id); await c.delete().catch(()=>{}); 
+                    }
+                }
+                else if (data.action === 'delete_transcript') {
+                    if (memoryStats.transcripts) {
+                        memoryStats.transcripts = memoryStats.transcripts.filter(t => t.id !== data.id);
+                        syncCloud();
+                    }
                 }
                 else if (data.action === 'move_custom_req') {
                     if (Array.isArray(memoryStats.custom_requests)) {
@@ -3244,7 +3308,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
     } else { res.writeHead(200, { 'Content-Type': 'text/plain' }); res.end('API Bot'); }
 });
 
-server.listen(process.env.PORT || 3000);
+server.listen(3000);
 
 server.on('upgrade', (request, socket, head) => {
     const pathname = request.url;
