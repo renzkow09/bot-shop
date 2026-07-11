@@ -754,11 +754,10 @@ client.on('messageCreate', async (message) => {
                        .setFooter({ text: 'This is an AI generated response.' });
                    await message.reply({ embeds: [embed] }).catch(()=>{});
                } else {
-                   await message.reply("⚠️ **AI Support Error:** The GROQ API key is missing. Please check the App Settings (Secrets) and provide a valid GROQ_API_KEY.").catch(()=>{});
+                   console.log("AI Support: GROQ_API_KEY missing, ignoring message silently.");
                }
            } catch (e) {
                console.log("AI Error:", e.message);
-               await message.reply("⚠️ **AI Support Error:** An error occurred while communicating with Groq. Please verify your API key and try again.").catch(()=>{});
            }
         }
 
