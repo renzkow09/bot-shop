@@ -561,7 +561,14 @@ client.on('interactionCreate', async (interaction) => {
                 userTicketLocks.add(interaction.user.id);
                 setTimeout(() => userTicketLocks.delete(interaction.user.id), 8000);
                 
-                await interaction.reply({ content: '⏳ Channel is being created, please wait...', ephemeral: true }).catch(() => {});
+                let replied = false;
+                try {
+                    await interaction.reply({ content: '⏳ Channel is being created, please wait...', ephemeral: true });
+                    replied = true;
+                } catch (e) {
+                    // Another instance already handled this exact interaction
+                }
+                if (!replied) return;
                 
                 // 🛡️ ANTI-SPAM TICKET CHECK (Redirect to existing channel if already created)
                 const sanitizedName = interaction.user.username.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -601,7 +608,14 @@ client.on('interactionCreate', async (interaction) => {
                 userTicketLocks.add(interaction.user.id);
                 setTimeout(() => userTicketLocks.delete(interaction.user.id), 8000);
                 
-                await interaction.reply({ content: '⏳ Channel is being created, please wait...', ephemeral: true }).catch(() => {});
+                let replied = false;
+                try {
+                    await interaction.reply({ content: '⏳ Channel is being created, please wait...', ephemeral: true });
+                    replied = true;
+                } catch (e) {
+                    // Another instance already handled this exact interaction
+                }
+                if (!replied) return;
                 
                 // 🛡️ ANTI-SPAM TICKET CHECK (Redirect to existing channel if already created)
                 const sanitizedName = interaction.user.username.toLowerCase().replace(/[^a-z0-9]/g, '');
