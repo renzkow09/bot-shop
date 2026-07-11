@@ -167,6 +167,10 @@ async function loadCloudStats() {
             if (!memoryStats.activity_feed) memoryStats.activity_feed = [];
             if (!memoryStats.custom_requests) memoryStats.custom_requests = [];
             if (!memoryStats.patchnotes) memoryStats.patchnotes = [];
+            if (memoryStats.patchnotes.length === 0) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "Ajout de la sidebar et de la catégorie Patchnotes." });
+            }
+            if (!memoryStats.patchnotes) memoryStats.patchnotes = [];
             
             // Auto add the first patchnote if empty
             if (memoryStats.patchnotes.length === 0) {
@@ -2020,18 +2024,33 @@ const server = http.createServer(async (req, res) => {
         
         .top-navbar { display: flex; justify-content: space-between; align-items: center; padding: 12px 30px; background: rgba(0, 0, 0, 0.6); backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px); border-bottom: 0.5px solid rgba(255,255,255,0.1); position: sticky; top: 0; z-index: 1000; }
         .nav-brand { font-size: 1.5em; font-weight: 700; color: #fff; letter-spacing: 0.5px; display: flex; align-items: center; gap: 15px; }
-        .app-layout { display: flex; height: 100vh; overflow: hidden; width: 100%; }
-        .sidebar { width: 250px; background: rgba(0,0,0,0.7); backdrop-filter: saturate(180%) blur(20px); border-right: 0.5px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1), width 0.3s; z-index: 1001; }
-        .sidebar.closed { width: 0; transform: translateX(-100%); }
-        .main-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; height: 100vh; }
-        .sidebar-header { padding: 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 0.5px solid rgba(255,255,255,0.05); }
+        
+        
+        
+        
         .nav-menu { display: flex; flex-direction: column; gap: 8px; padding: 20px; overflow-y: auto; flex: 1; }
         .nav-group { font-size: 0.7em; color: var(--text-muted); font-weight: 700; margin-top: 15px; margin-bottom: 5px; letter-spacing: 1px; }
-        .patchnotes-list { display: flex; flex-direction: column; gap: 15px; max-width: 800px; margin: 0 auto; }
-        .patchnote-item { background: rgba(255,255,255,0.02); border: 0.5px solid rgba(255,255,255,0.05); padding: 20px; border-radius: 16px; display: flex; flex-direction: column; gap: 10px; }
-        .patchnote-date { color: var(--accent-green); font-size: 0.85em; font-weight: 600; }
-        .patchnote-text { color: #fff; font-size: 0.95em; line-height: 1.5; }
-        .nav-menu { display: flex; gap: 8px; overflow-x: auto; padding: 12px 30px; background: rgba(0, 0, 0, 0.4); backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px); border-bottom: 0.5px solid rgba(255,255,255,0.05); white-space: nowrap; }
+        
+        
+        
+        
+        
+        /* SIDEBAR STYLES */
+        
+        
+        
+        
+        .nav-menu { display: flex; flex-direction: column; gap: 8px; padding: 20px; overflow-y: auto; flex: 1; }
+        .nav-group { font-size: 0.7em; color: var(--text-muted); font-weight: 700; margin-top: 15px; margin-bottom: 5px; letter-spacing: 1px; }
+        
+        
+        
+        
+        
+        
+        .main-content { padding: 30px 40px; max-width: 1400px; margin: 0 auto; animation: fadeInSmooth 0.5s ease; overflow-y: auto; height: calc(100vh - 70px); width: 100%; }
+        
+         backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px); border-bottom: 0.5px solid rgba(255,255,255,0.05); white-space: nowrap; }
         .nav-menu::-webkit-scrollbar { height: 0px; display: none; }
         .nav-btn { background: transparent; border: none; color: var(--text-muted); padding: 8px 16px; border-radius: 14px; cursor: pointer; font-weight: 500; transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1); display: flex; align-items: center; gap: 8px; font-size: 0.9em; }
         .nav-btn:hover { color: #fff; background: rgba(255,255,255,0.08); }
@@ -2077,6 +2096,27 @@ const server = http.createServer(async (req, res) => {
           .ticket-list { height: 200px; }
           .sidebar { position: absolute; height: 100vh; left: 0; top: 0; }
         }
+    
+        /* SIDEBAR STYLES */
+        .app-layout { display: flex; height: 100vh; overflow: hidden; width: 100%; }
+        .sidebar { width: 260px; background: rgba(0,0,0,0.8); backdrop-filter: saturate(180%) blur(20px); border-right: 0.5px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1), width 0.3s; z-index: 1001; }
+        .sidebar.closed { width: 0; transform: translateX(-100%); overflow: hidden; }
+        .main-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; height: 100vh; position: relative; }
+        .sidebar-header { padding: 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 0.5px solid rgba(255,255,255,0.05); }
+        .nav-menu { display: flex; flex-direction: column; gap: 8px; padding: 20px; overflow-y: auto; flex: 1; }
+        .nav-group { font-size: 0.7em; color: var(--text-muted); font-weight: 700; margin-top: 15px; margin-bottom: 5px; letter-spacing: 1px; }
+        
+        .patchnotes-list { display: flex; flex-direction: column; gap: 15px; max-width: 800px; margin: 0 auto; padding-bottom: 50px; }
+        .patchnote-item { background: rgba(255,255,255,0.02); border: 0.5px solid rgba(255,255,255,0.05); padding: 20px; border-radius: 16px; display: flex; flex-direction: column; gap: 10px; }
+        .patchnote-date { color: var(--accent-green); font-size: 0.85em; font-weight: 600; }
+        .patchnote-text { color: #fff; font-size: 0.95em; line-height: 1.5; }
+        
+        @media screen and (max-width: 900px) {
+          .overview-grid, .chat-container { grid-template-columns: 1fr !important; flex-direction: column; height: auto; }
+          .ticket-list { height: 200px; }
+          .sidebar { position: absolute; height: 100vh; left: 0; top: 0; }
+        }
+
     </style>
 </head>
 <body>
@@ -2104,45 +2144,53 @@ const server = http.createServer(async (req, res) => {
         </div>
     </div>
 
-    <header class='top-navbar'>
-         <div style='display:flex; align-items:center;'>
-             <button class='burger-btn' id='burgerBtn' onclick='window.toggleMobileMenu()'>
-                 <span></span><span></span><span></span>
-             </button>
-             <div class='nav-brand'>Nexus <span style='font-weight:400; color:var(--text-muted); font-size:0.8em;'>Admin</span></div>
-         </div>
-         <div class='controls' style='display:flex; align-items:center; gap:10px;'>
-             <button class='btn-icon' onclick='window.toggleMute()' id='audioBtn' title='Toggle Sound'>🔊</button>
-             <button class='btn-icon' onclick='window.manualRefresh()' id='refreshBtn' title='Sync Data'>🔄</button>
-             <div class='bot-status'><div class='status-dot'></div> Online</div>
-         </div>
-     </header>
-
-     <nav class='nav-menu' id='navMenu'>
-         <div class='nav-group'>DASHBOARD</div>
-         <button class='nav-btn active' onclick='window.switchTab("overview", this)'>Overview</button>
-         <button class='nav-btn' onclick='window.switchTab("analytics", this)'>Analytics</button>
-
-         <div class='nav-group'>STORE</div>
-         <button class='nav-btn' onclick='window.switchTab("transactions", this)'>Transactions</button>
-         <button class='nav-btn' onclick='window.switchTab("products", this)'>Catalog</button>
-         <button class='nav-btn' onclick='window.switchTab("kanban", this)'>Kanban</button>
-         <button class='nav-btn' onclick='window.switchTab("vip", this)'>VIP Pass</button>
-         <button class='nav-btn' onclick='window.switchTab("referrals", this)'>Promos</button>
-
-         <div class='nav-group'>COMMUNITY</div>
-         <button class='nav-btn' onclick='window.switchTab("livechat", this)'>Chat <span class='nav-badge' id='badge-chat'>0</span></button>
-         <button class='nav-btn' onclick='window.switchTab("audience", this)'>Audience</button>
-         <button class='nav-btn' onclick='window.switchTab("moderation", this)'>Moderation</button>
-
-         <div class='nav-group'>SYSTEM</div>
-         <button class='nav-btn' onclick='window.switchTab("monitoring", this)'>Diagnostics</button>
-         <button class='nav-btn' onclick='window.switchTab("terminal", this)'>🖥️ Terminal</button>
-         <button class='nav-btn' onclick='window.switchTab("backups", this)'>Backups</button>
-         <button class='nav-btn' onclick='window.switchTab("admin", this)'>Settings <span class='nav-badge' id='badge-admin'>0</span></button>
-     </nav>
-
-    <main class='main-content'>
+    <div class='app-layout'>
+        <aside class='sidebar' id='sidebar'>
+            <div class='sidebar-header'>
+                <div class='nav-brand'>Nexus <span style='font-weight:400; color:var(--text-muted); font-size:0.8em;'>Admin</span></div>
+                <button class='btn-icon' onclick='window.toggleSidebar()' title='Close Sidebar' style='border:none;background:transparent;color:#fff;cursor:pointer;font-size:1.2em;'>✖</button>
+            </div>
+            <nav class='nav-menu'>
+                <div class='nav-group'>DASHBOARD</div>
+                <button class='nav-btn active' onclick='window.switchTab("overview", this)'>Overview</button>
+                <button class='nav-btn' onclick='window.switchTab("analytics", this)'>Analytics</button>
+                <button class='nav-btn' onclick='window.switchTab("patchnotes", this)'>Patchnotes</button>
+                
+                <div class='nav-group'>STORE</div>
+                <button class='nav-btn' onclick='window.switchTab("transactions", this)'>Transactions</button>
+                <button class='nav-btn' onclick='window.switchTab("products", this)'>Catalog</button>
+                <button class='nav-btn' onclick='window.switchTab("kanban", this)'>Kanban</button>
+                <button class='nav-btn' onclick='window.switchTab("vip", this)'>VIP Pass</button>
+                <button class='nav-btn' onclick='window.switchTab("referrals", this)'>Promos</button>
+                
+                <div class='nav-group'>COMMUNITY</div>
+                <button class='nav-btn' onclick='window.switchTab("livechat", this)'>Chat <span class='nav-badge' id='badge-chat'>0</span></button>
+                <button class='nav-btn' onclick='window.switchTab("audience", this)'>Audience</button>
+                <button class='nav-btn' onclick='window.switchTab("moderation", this)'>Moderation</button>
+                
+                <div class='nav-group'>SYSTEM</div>
+                <button class='nav-btn' onclick='window.switchTab("monitoring", this)'>Diagnostics</button>
+                <button class='nav-btn' onclick='window.switchTab("terminal", this)'>🖥️ Terminal</button>
+                <button class='nav-btn' onclick='window.switchTab("backups", this)'>Backups</button>
+                <button class='nav-btn' onclick='window.switchTab("admin", this)'>Settings <span class='nav-badge' id='badge-admin'>0</span></button>
+                
+                <button class='btn-red' style='margin-top:auto;' onclick='window.executeAction({action:"logout"})'>Logout</button>
+            </nav>
+        </aside>
+        
+        <div class='main-area'>
+            <header class='top-navbar'>
+                <div style='display:flex; align-items:center; gap: 15px;'>
+                    <button class='burger-btn' onclick='window.toggleSidebar()' style='border:none;background:transparent;color:#fff;cursor:pointer;font-size:1.5em;padding:5px;'>☰</button>
+                    <div class='nav-brand' style='font-size: 1.2em;'>Admin Dashboard</div>
+                </div>
+                <div class='controls' style='display:flex; align-items:center; gap:10px;'>
+                    <button class='btn-icon' onclick='window.toggleMute()' id='audioBtn' title='Toggle Sound'>🔊</button>
+                    <button class='btn-icon' onclick='window.manualRefresh()' id='refreshBtn' title='Sync Data'>🔄</button>
+                    <div class='bot-status'><div class='status-dot'></div> Online</div>
+                </div>
+            </header>
+            <main class='main-content'>
            <div id='overview' class='tab-content active'>
                <div class='stats-grid'>
                    <div class='card' onclick='window.editStat("today_rev")' style='cursor:pointer;' title='Click to edit'><h3>Today's Earnings</h3><div class='value text-green' id='ui-today-rev'>£0</div></div>
@@ -2270,7 +2318,16 @@ const server = http.createServer(async (req, res) => {
                </div>
            </div>
 
-           <div id='transactions' class='tab-content'>
+           <div id='patchnotes' class='tab-content'>
+             <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom: 25px;'>
+                 <h2 style='font-size: 1.8em; font-weight: 700; letter-spacing: -0.5px;'>Patchnotes</h2>
+             </div>
+             <div class='patchnotes-list' id='patchnotesList'>
+                 <!-- Dynamically generated -->
+             </div>
+         </div>
+         
+         <div id='transactions' class='tab-content'>
                <div class='box'>
                    <h2>➕ Manual Transaction Entry</h2>
                    <div style='display:flex; gap:15px; flex-wrap:wrap; margin-bottom:15px;'>
@@ -2545,7 +2602,10 @@ const server = http.createServer(async (req, res) => {
                    <div style='overflow-x:auto;'><table><thead><tr><th>File Name</th><th>Size</th><th>Action</th></tr></thead><tbody id='target-backups'></tbody></table></div>
                </div>
            </div>
-       </main>
+       
+            </main>
+        </div>
+    </div>
 
     
     <script>
@@ -3097,10 +3157,15 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             if(el) { el.value = val; }
         };
 
-        window.switchTab = function(tabId, btn) {
+        window.toggleSidebar = function() {
             const sidebar = document.getElementById('sidebar');
+            if (sidebar) sidebar.classList.toggle('closed');
+        };
+        
+        window.switchTab = function(tabId, btn) {
             if(window.innerWidth <= 900) {
-                sidebar.classList.add('closed');
+                const sidebar = document.getElementById('sidebar');
+                if (sidebar) sidebar.classList.add('closed');
             }
 
             document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
