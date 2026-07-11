@@ -1091,7 +1091,42 @@ const server = http.createServer(async (req, res) => {
 
     if ((req.url === '/dashboard' || req.url === '/') && !isAuthenticated) {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        return res.end("<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no'><title>Nexus Core</title><style>:root { --accent: #10b981; --accent-rgb: 16, 185, 129; }body{font-family:-apple-system,BlinkMacSystemFont,'Inter',sans-serif;background:#050505;color:#f5f5f7;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;overflow:hidden;}.login-box{background:rgba(20,20,22,0.6);backdrop-filter:blur(40px);-webkit-backdrop-filter:blur(40px);padding:60px 50px;border-radius:30px;border:1px solid rgba(255,255,255,0.05);text-align:center;box-shadow:0 30px 60px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.1);width:90%;max-width:440px;box-sizing:border-box; animation: slideUpFade 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity:0; transform:translateY(40px); position:relative; overflow:hidden;} .login-box::before { content:''; position:absolute; top:0; left:-100%; width:50%; height:100%; background:linear-gradient(90deg, transparent, rgba(255,255,255,0.03), transparent); transform:skewX(-20deg); animation: shine 6s infinite; } @keyframes shine { 0% { left: -100%; } 20% { left: 200%; } 100% { left: 200%; } }@keyframes slideUpFade { to { opacity:1; transform:translateY(0); } }@keyframes pulseLogo { 0%, 100% { text-shadow: 0 0 15px rgba(var(--accent-rgb), 0.3); transform: scale(1); } 50% { text-shadow: 0 0 35px rgba(var(--accent-rgb), 0.8); transform: scale(1.02); } }h2{font-weight:800;letter-spacing:4px;color:#fff; margin-bottom:12px; font-size:2.2em; animation: pulseLogo 4s infinite cubic-bezier(0.4, 0, 0.2, 1);}.subtitle { color: rgba(255,255,255,0.4); font-size: 0.8em; letter-spacing: 2px; margin-bottom: 40px; text-transform: uppercase; font-weight:600; }input{background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.08);color:white;padding:20px;border-radius:18px;font-size:24px!important;text-align:center;letter-spacing:18px;width:100%;max-width:260px;margin:10px auto 40px auto;outline:none;transition:all 0.4s cubic-bezier(0.16, 1, 0.3, 1);display:block; box-shadow: inset 0 2px 10px rgba(0,0,0,0.5);}input:focus{border-color:var(--accent);box-shadow:0 0 25px rgba(var(--accent-rgb),0.2), inset 0 2px 10px rgba(0,0,0,0.5); background:rgba(var(--accent-rgb),0.02); transform:scale(1.02);}button{background:linear-gradient(135deg, var(--accent), rgba(var(--accent-rgb), 0.8));color:#000;border:none;padding:18px 40px;font-size:1em;border-radius:18px;cursor:pointer;font-weight:700;width:100%;transition:all 0.4s cubic-bezier(0.16, 1, 0.3, 1);text-transform:uppercase;letter-spacing:2px; box-shadow:0 10px 30px rgba(var(--accent-rgb),0.3);}button:hover{transform:translateY(-3px) scale(1.01);box-shadow:0 15px 35px rgba(var(--accent-rgb),0.5); filter:brightness(1.1);}button:active { transform:translateY(1px) scale(0.98); box-shadow:0 5px 15px rgba(var(--accent-rgb),0.3); }.bg-anim { position:absolute; top:50%; left:50%; width: 150vw; height: 150vw; background: radial-gradient(circle, rgba(var(--accent-rgb), 0.05) 0%, transparent 50%); transform: translate(-50%, -50%); z-index: -1; pointer-events: none; animation: bgPulse 8s infinite alternate ease-in-out; } .bg-mesh { position:absolute; inset:0; z-index:-2; background-image: radial-gradient(rgba(255,255,255,0.03) 1px, transparent 1px); background-size: 40px 40px; opacity:0.5; animation: meshMove 20s linear infinite; } @keyframes bgPulse { 0% { transform: translate(-50%, -50%) scale(0.95); opacity: 0.8; } 100% { transform: translate(-50%, -50%) scale(1.05); opacity: 1.2; } } @keyframes meshMove { 0% { background-position: 0 0; } 100% { background-position: 40px 40px; } } </style><script>(function() {const themes = {green: { hex: '#10b981', rgb: '16, 185, 129', hover: '#34d399' },blue: { hex: '#0a84ff', rgb: '10, 132, 255', hover: '#47a3ff' },red: { hex: '#ff453a', rgb: '255, 69, 58', hover: '#ff6b63' },orange: { hex: '#ff9f0a', rgb: '255, 159, 10', hover: '#ffb340' }};const savedTheme = localStorage.getItem('nexus_theme');if (savedTheme && themes[savedTheme]) {const t = themes[savedTheme];document.documentElement.style.setProperty('--accent-green', t.hex);document.documentElement.style.setProperty('--accent-green-rgb', t.rgb);document.documentElement.style.setProperty('--accent-green-hover', t.hover);}})();</script></head><body><div class='bg-mesh'></div><div class='bg-anim'></div><div class='login-box'>  <h2>NEXUS</h2>  <div class='subtitle'>System Authentication</div>  <input type='password' id='pin' maxlength='4' placeholder='••••'>  <button onclick='login()' id='btn'>Authenticate</button>  <p id='err' style='color:#ff453a;display:none;margin-top:20px;font-weight:500; font-size:0.9em; animation:slideUpFade 0.3s ease forwards;'>Access Denied</p></div><script>const themes = {    green: { hex: '#10b981', rgb: '16, 185, 129' },    blue: { hex: '#0a84ff', rgb: '10, 132, 255' },    red: { hex: '#ff453a', rgb: '255, 69, 58' },    orange: { hex: '#ff9f0a', rgb: '255, 159, 10' }};const savedTheme = localStorage.getItem('nexus_theme') || 'green';const t = themes[savedTheme] || themes.green;document.documentElement.style.setProperty('--accent', t.hex);document.documentElement.style.setProperty('--accent-rgb', t.rgb);async function login(){  const btn = document.getElementById('btn');  btn.style.opacity = '0.5';  btn.style.transform = 'scale(0.98)';  btn.innerText = 'Verifying...';  const res=await fetch('/api/login',{method:'POST',body:JSON.stringify({pin:document.getElementById('pin').value})});  if(res.ok) {    btn.style.background = '#fff';    btn.innerText = 'Granted';    btn.style.transform = 'scale(1.05)';    setTimeout(() => location.reload(), 500);  } else {     btn.style.opacity = '1';    btn.style.transform = 'scale(1)';    btn.innerText = 'Authenticate';    const err = document.getElementById('err'); err.style.display='block';    err.style.animation = 'none'; void err.offsetWidth; err.style.animation = 'slideUpFade 0.3s ease forwards';    setTimeout(() => err.style.display='none', 3000);  }} document.getElementById('pin').addEventListener('keypress', e=>{if(e.key==='Enter')login();});</script></body></html>");
+        return res.end("<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no'><title>Nexus Core</title><style>:root { --accent: #10b981; --accent-rgb: 16, 185, 129; }body{font-family:-apple-system,BlinkMacSystemFont,'Inter',sans-serif;background:#050505;color:#f5f5f7;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;overflow:hidden;}.login-box{background:rgba(20,20,22,0.6);backdrop-filter:blur(40px);-webkit-backdrop-filter:blur(40px);padding:60px 50px;border-radius:30px;border:1px solid rgba(255,255,255,0.05);text-align:center;box-shadow:0 30px 60px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.1);width:90%;max-width:440px;box-sizing:border-box; animation: slideUpFade 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity:0; transform:translateY(40px); position:relative; overflow:hidden;} .login-box::before { content:''; position:absolute; top:0; left:-100%; width:50%; height:100%; background:linear-gradient(90deg, transparent, rgba(255,255,255,0.03), transparent); transform:skewX(-20deg); animation: shine 6s infinite; } @keyframes shine { 0% { left: -100%; } 20% { left: 200%; } 100% { left: 200%; } }@keyframes slideUpFade { to { opacity:1; transform:translateY(0); } }@keyframes pulseLogo { 0%, 100% { text-shadow: 0 0 15px rgba(var(--accent-rgb), 0.3); transform: scale(1); } 50% { text-shadow: 0 0 35px rgba(var(--accent-rgb), 0.8); transform: scale(1.02); } }h2{font-weight:800;letter-spacing:4px;color:#fff; margin-bottom:12px; font-size:2.2em; animation: pulseLogo 4s infinite cubic-bezier(0.4, 0, 0.2, 1);}.subtitle { color: rgba(255,255,255,0.4); font-size: 0.8em; letter-spacing: 2px; margin-bottom: 40px; text-transform: uppercase; font-weight:600; }input{background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.08);color:white;padding:20px;border-radius:18px;font-size:24px!important;text-align:center;letter-spacing:18px;width:100%;max-width:260px;margin:10px auto 40px auto;outline:none;transition:all 0.4s cubic-bezier(0.16, 1, 0.3, 1);display:block; box-shadow: inset 0 2px 10px rgba(0,0,0,0.5);}input:focus{border-color:var(--accent);box-shadow:0 0 25px rgba(var(--accent-rgb),0.2), inset 0 2px 10px rgba(0,0,0,0.5); background:rgba(var(--accent-rgb),0.02); transform:scale(1.02);}button{background:linear-gradient(135deg, var(--accent), rgba(var(--accent-rgb), 0.8));color:#000;border:none;padding:18px 40px;font-size:1em;border-radius:18px;cursor:pointer;font-weight:700;width:100%;transition:all 0.4s cubic-bezier(0.16, 1, 0.3, 1);text-transform:uppercase;letter-spacing:2px; box-shadow:0 10px 30px rgba(var(--accent-rgb),0.3);}button:hover{transform:translateY(-3px) scale(1.01);box-shadow:0 15px 35px rgba(var(--accent-rgb),0.5); filter:brightness(1.1);}button:active { transform:translateY(1px) scale(0.98); box-shadow:0 5px 15px rgba(var(--accent-rgb),0.3); }.bg-anim { position:absolute; top:50%; left:50%; width: 150vw; height: 150vw; background: radial-gradient(circle, rgba(var(--accent-rgb), 0.05) 0%, transparent 50%); transform: translate(-50%, -50%); z-index: -1; pointer-events: none; animation: bgPulse 8s infinite alternate ease-in-out; } .bg-mesh { position:absolute; inset:0; z-index:-2; background-image: radial-gradient(rgba(255,255,255,0.03) 1px, transparent 1px); background-size: 40px 40px; opacity:0.5; animation: meshMove 20s linear infinite; } @keyframes bgPulse { 0% { transform: translate(-50%, -50%) scale(0.95); opacity: 0.8; } 100% { transform: translate(-50%, -50%) scale(1.05); opacity: 1.2; } } @keyframes meshMove { 0% { background-position: 0 0; } 100% { background-position: 40px 40px; } } 
+         /* Mobile Responsive & UI Enhancements */
+         @media (max-width: 768px) {
+             .top-navbar { padding: 12px 15px; flex-wrap: wrap; }
+             .nav-menu { flex-direction: column; position: fixed; top: 60px; left: -100%; width: 260px; height: calc(100vh - 60px); background: rgba(0,0,0,0.95); transition: left 0.3s cubic-bezier(0.25, 1, 0.5, 1); z-index: 2000; overflow-y: auto; padding: 20px; box-shadow: 2px 0 15px rgba(0,0,0,0.5); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
+             .nav-menu.open { left: 0; }
+             .burger-btn { display: flex; flex-direction: column; gap: 5px; cursor: pointer; background: transparent; border: none; padding: 5px; margin-right: 15px; }
+             .burger-btn span { width: 24px; height: 2px; background: white; border-radius: 2px; transition: 0.3s; }
+             .burger-btn.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+             .burger-btn.open span:nth-child(2) { opacity: 0; }
+             .burger-btn.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+             .main-content { padding: 15px; height: auto; overflow: visible; }
+             .stats-grid { grid-template-columns: 1fr; gap: 15px; }
+             .chat-container { flex-direction: column; height: auto; min-height: 800px; }
+             .box { padding: 15px; }
+             .kanban-board { flex-direction: column; min-height: auto; }
+             .kanban-col { min-width: 100%; }
+             input[type='text'], input[type='number'], textarea, select { font-size: 16px; /* Prevents iOS zoom */ }
+             .nav-brand { font-size: 1.2em; }
+             .bot-status { display: none; } /* Hide on mobile to save space */
+             table, thead, tbody, th, td, tr { display: block; }
+             thead tr { position: absolute; top: -9999px; left: -9999px; }
+             tr { margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+             td { border: none; border-bottom: 1px solid rgba(255,255,255,0.05); position: relative; padding-left: 40%; text-align: right; }
+             td:before { position: absolute; top: 15px; left: 15px; width: 35%; padding-right: 10px; white-space: nowrap; font-weight: bold; text-align: left; content: attr(data-label); color: var(--text-muted); text-transform: uppercase; font-size: 0.8em; }
+         }
+         @media (min-width: 769px) {
+             .burger-btn { display: none; }
+             .nav-group { font-size: 0.75em; text-transform: uppercase; color: var(--text-muted); margin: 0 10px; font-weight: bold; align-self: center; letter-spacing: 1px; }
+         }
+         .nav-group { margin-top: 15px; margin-bottom: 5px; font-size: 0.75em; text-transform: uppercase; color: var(--accent-green); font-weight: bold; letter-spacing: 1px; }
+         @media (min-width: 769px) { .nav-group { color: var(--text-muted); margin-top: 0; margin-bottom: 0; margin-left: 10px; margin-right: 10px; } }
+         .shortcut-btn { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text-muted); padding: 5px 10px; border-radius: 8px; font-size: 0.8em; cursor: pointer; transition: 0.3s; white-space: nowrap; }
+         .shortcut-btn:hover { background: rgba(255,255,255,0.1); color: white; }
+
+</style><script>(function() {const themes = {green: { hex: '#10b981', rgb: '16, 185, 129', hover: '#34d399' },blue: { hex: '#0a84ff', rgb: '10, 132, 255', hover: '#47a3ff' },red: { hex: '#ff453a', rgb: '255, 69, 58', hover: '#ff6b63' },orange: { hex: '#ff9f0a', rgb: '255, 159, 10', hover: '#ffb340' }};const savedTheme = localStorage.getItem('nexus_theme');if (savedTheme && themes[savedTheme]) {const t = themes[savedTheme];document.documentElement.style.setProperty('--accent-green', t.hex);document.documentElement.style.setProperty('--accent-green-rgb', t.rgb);document.documentElement.style.setProperty('--accent-green-hover', t.hover);}})();</script></head><body><div class='bg-mesh'></div><div class='bg-anim'></div><div class='login-box'>  <h2>NEXUS</h2>  <div class='subtitle'>System Authentication</div>  <input type='password' id='pin' maxlength='4' placeholder='••••'>  <button onclick='login()' id='btn'>Authenticate</button>  <p id='err' style='color:#ff453a;display:none;margin-top:20px;font-weight:500; font-size:0.9em; animation:slideUpFade 0.3s ease forwards;'>Access Denied</p></div><script>const themes = {    green: { hex: '#10b981', rgb: '16, 185, 129' },    blue: { hex: '#0a84ff', rgb: '10, 132, 255' },    red: { hex: '#ff453a', rgb: '255, 69, 58' },    orange: { hex: '#ff9f0a', rgb: '255, 159, 10' }};const savedTheme = localStorage.getItem('nexus_theme') || 'green';const t = themes[savedTheme] || themes.green;document.documentElement.style.setProperty('--accent', t.hex);document.documentElement.style.setProperty('--accent-rgb', t.rgb);async function login(){  const btn = document.getElementById('btn');  btn.style.opacity = '0.5';  btn.style.transform = 'scale(0.98)';  btn.innerText = 'Verifying...';  const res=await fetch('/api/login',{method:'POST',body:JSON.stringify({pin:document.getElementById('pin').value})});  if(res.ok) {    btn.style.background = '#fff';    btn.innerText = 'Granted';    btn.style.transform = 'scale(1.05)';    setTimeout(() => location.reload(), 500);  } else {     btn.style.opacity = '1';    btn.style.transform = 'scale(1)';    btn.innerText = 'Authenticate';    const err = document.getElementById('err'); err.style.display='block';    err.style.animation = 'none'; void err.offsetWidth; err.style.animation = 'slideUpFade 0.3s ease forwards';    setTimeout(() => err.style.display='none', 3000);  }} document.getElementById('pin').addEventListener('keypress', e=>{if(e.key==='Enter')login();});</script></body></html>");
     }
 
     // === [ANCHOR: API_ROUTES_GET] ===
@@ -1344,7 +1379,14 @@ const server = http.createServer(async (req, res) => {
                     syncCloud();
                     systemLog('INFO', 'AI', `AI Support Agent ${data.state ? 'enabled' : 'disabled'}.`);
                 }
-                else if (data.action === 'toggle_maintenance') {
+                else if (data.action === 'save_notes') {
+                     memoryStats.notes = data.notes;
+                     // We don't sync to cloud immediately to avoid rate limits, or we could.
+                     // The requirement says "Sauvegarde et synchronise automatiquement".
+                     // Let's call syncCloud();
+                     syncCloud();
+                 }
+                 else if (data.action === 'toggle_maintenance') {
                     if (!memoryStats.settings) memoryStats.settings = {};
                     if (!memoryStats.settings.maintenance) memoryStats.settings.maintenance = { active: false, endsAt: 0, channelId: "" };
                     
@@ -1912,30 +1954,42 @@ const server = http.createServer(async (req, res) => {
     </div>
 
     <header class='top-navbar'>
-        <div class='nav-brand'>Nexus <span style='font-weight:400; color:var(--text-muted); font-size:0.8em;'>Admin</span></div>
-        <div class='controls' style='display:flex; align-items:center; gap:10px;'>
-            <button class='btn-icon' onclick='window.toggleMute()' id='audioBtn' title='Toggle Sound'>🔊</button>
-            <button class='btn-icon' onclick='window.manualRefresh()' id='refreshBtn' title='Sync Data'>🔄</button>
-            <div class='bot-status'><div class='status-dot'></div> Online</div>
-        </div>
-    </header>
+         <div style='display:flex; align-items:center;'>
+             <button class='burger-btn' id='burgerBtn' onclick='window.toggleMobileMenu()'>
+                 <span></span><span></span><span></span>
+             </button>
+             <div class='nav-brand'>Nexus <span style='font-weight:400; color:var(--text-muted); font-size:0.8em;'>Admin</span></div>
+         </div>
+         <div class='controls' style='display:flex; align-items:center; gap:10px;'>
+             <button class='btn-icon' onclick='window.toggleMute()' id='audioBtn' title='Toggle Sound'>🔊</button>
+             <button class='btn-icon' onclick='window.manualRefresh()' id='refreshBtn' title='Sync Data'>🔄</button>
+             <div class='bot-status'><div class='status-dot'></div> Online</div>
+         </div>
+     </header>
 
-    <nav class='nav-menu'>
-        <button class='nav-btn active' onclick='window.switchTab("overview", this)'>Overview</button>
-        <button class='nav-btn' onclick='window.switchTab("analytics", this)'>Analytics</button>
-        <button class='nav-btn' onclick='window.switchTab("transactions", this)'>Transactions</button>
-        <button class='nav-btn' onclick='window.switchTab("products", this)'>Catalog</button>
-        <button class='nav-btn' onclick='window.switchTab("kanban", this)'>Kanban</button>
-        <button class='nav-btn' onclick='window.switchTab("vip", this)'>VIP Pass</button>
-        <button class='nav-btn' onclick='window.switchTab("referrals", this)'>Promos</button>
-        <button class='nav-btn' onclick='window.switchTab("livechat", this)'>Chat <span class='nav-badge' id='badge-chat'>0</span></button>
-        <button class='nav-btn' onclick='window.switchTab("audience", this)'>Audience</button>
-        <button class='nav-btn' onclick='window.switchTab("moderation", this)'>Moderation</button>
-        <button class='nav-btn' onclick='window.switchTab("monitoring", this)'>Diagnostics</button>
-        <button class='nav-btn' onclick='window.switchTab("terminal", this)'>🖥️ Terminal</button>
-        <button class='nav-btn' onclick='window.switchTab("backups", this)'>Backups</button>
-        <button class='nav-btn' onclick='window.switchTab("admin", this)'>Settings <span class='nav-badge' id='badge-admin'>0</span></button>
-    </nav>
+     <nav class='nav-menu' id='navMenu'>
+         <div class='nav-group'>DASHBOARD</div>
+         <button class='nav-btn active' onclick='window.switchTab("overview", this)'>Overview</button>
+         <button class='nav-btn' onclick='window.switchTab("analytics", this)'>Analytics</button>
+
+         <div class='nav-group'>STORE</div>
+         <button class='nav-btn' onclick='window.switchTab("transactions", this)'>Transactions</button>
+         <button class='nav-btn' onclick='window.switchTab("products", this)'>Catalog</button>
+         <button class='nav-btn' onclick='window.switchTab("kanban", this)'>Kanban</button>
+         <button class='nav-btn' onclick='window.switchTab("vip", this)'>VIP Pass</button>
+         <button class='nav-btn' onclick='window.switchTab("referrals", this)'>Promos</button>
+
+         <div class='nav-group'>COMMUNITY</div>
+         <button class='nav-btn' onclick='window.switchTab("livechat", this)'>Chat <span class='nav-badge' id='badge-chat'>0</span></button>
+         <button class='nav-btn' onclick='window.switchTab("audience", this)'>Audience</button>
+         <button class='nav-btn' onclick='window.switchTab("moderation", this)'>Moderation</button>
+
+         <div class='nav-group'>SYSTEM</div>
+         <button class='nav-btn' onclick='window.switchTab("monitoring", this)'>Diagnostics</button>
+         <button class='nav-btn' onclick='window.switchTab("terminal", this)'>🖥️ Terminal</button>
+         <button class='nav-btn' onclick='window.switchTab("backups", this)'>Backups</button>
+         <button class='nav-btn' onclick='window.switchTab("admin", this)'>Settings <span class='nav-badge' id='badge-admin'>0</span></button>
+     </nav>
 
     <main class='main-content'>
            <div id='overview' class='tab-content active'>
@@ -1951,7 +2005,12 @@ const server = http.createServer(async (req, res) => {
                    <div class='card' onclick='window.editStat("dropoff")' style='cursor:pointer;' title='Click to edit'><h3>Drop-off Rate</h3><div class='value' id='ui-dropoff'>0%</div></div>
                    <div class='card' onclick='window.editStat("peak")' style='cursor:pointer;' title='Click to edit'><h3>Peak Sales Hour</h3><div class='value' id='ui-peak-hour'>N/A</div></div>
                </div>
-               <div class='box' style='background:rgba(10, 132, 255, 0.05); border:1px solid rgba(10, 132, 255, 0.2); margin-bottom: 25px;'>
+               
+                <div class='box'>
+                    <h2>📝 Notes Personnelles</h2>
+                    <textarea id='personal-notes' rows='5' placeholder='Tapez vos notes ici... Elles sont synchronisées automatiquement.' oninput='window.saveNotes()' style='resize:vertical;'>${(memoryStats.notes || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</textarea>
+                </div>
+<div class='box' style='background:rgba(10, 132, 255, 0.05); border:1px solid rgba(10, 132, 255, 0.2); margin-bottom: 25px;'>
                    <h2 style='color:var(--accent-blue); margin-top:0; border-bottom:0.5px solid rgba(10, 132, 255, 0.2); padding-bottom:10px;'>💱 Live Currency Converter (GBP to EUR)</h2>
                    <div style='display:flex; gap:15px; align-items:center; flex-wrap:wrap; margin-top:20px;'>
                        <div style='flex:1; min-width:120px;'>
@@ -2262,7 +2321,15 @@ const server = http.createServer(async (req, res) => {
                     <h2 style='color:var(--accent-green);'>📢 Global Broadcast</h2>
                     <p class='text-muted'>Send an admin message from the bot to any specific channel.</p>
                     <div style='display:flex; gap:15px; margin-top:20px; align-items:center;'>
-                        <input type='text' id='broadcast-channel' placeholder='Target Channel ID' style='width:250px;'>
+                        <div style="display:flex; flex-direction:column; gap:5px;">
+    <div style="display:flex; gap:10px;">
+        <input type='text' id='broadcast-channel' placeholder='Target Channel ID' style='width:250px;'>
+        <div style="display:flex; gap:5px; align-items:center;">
+            <button class='shortcut-btn' onclick='window.insertShortcut("broadcast-channel", "1520823312618623036")'>alert-and-info</button>
+            <button class='shortcut-btn' onclick='window.insertShortcut("broadcast-channel", "1520823430813843576")'>previews</button>
+        </div>
+    </div>
+</div>
                     </div>
                     <textarea id='broadcast-msg' placeholder='Type your message payload here...' style='margin-top:15px; min-height:100px;'></textarea>
                     <button class='admin-btn btn-green' style='width:100%; margin-top:15px;' onclick='window.sendBroadcast()'>📤 Broadcast Message</button>
@@ -2289,7 +2356,15 @@ const server = http.createServer(async (req, res) => {
                     <p class='text-muted'>Suspend all inbound commercial transactions globally.</p>
                     <div style='display:flex; gap:15px; flex-wrap:wrap; margin-top:20px; align-items:center;'>
                         <input type='number' id='maint-duration' placeholder='T-Minus (Mins)' value='60' style='width:180px; border-color:rgba(249,115,22,0.3);'>
-                        <input type='text' id='maint-channel' placeholder='Broadcast Channel ID (Optional)' style='flex:1; min-width:250px; border-color:rgba(249,115,22,0.3);'>
+                        <div style="display:flex; flex-direction:column; gap:5px; flex:1;">
+    <div style="display:flex; gap:10px;">
+        <input type='text' id='maint-channel' placeholder='Broadcast Channel ID (Optional)' style='flex:1; min-width:250px; border-color:rgba(249,115,22,0.3);'>
+        <div style="display:flex; gap:5px; align-items:center;">
+            <button class='shortcut-btn' onclick='window.insertShortcut("maint-channel", "1520823312618623036")'>alert-and-info</button>
+            <button class='shortcut-btn' onclick='window.insertShortcut("maint-channel", "1520823430813843576")'>previews</button>
+        </div>
+    </div>
+</div>
                         <button class='admin-btn' style='margin:0; background:rgba(249,115,22,0.2); color:var(--accent-orange); border-color:var(--accent-orange);' onclick='window.toggleMaintenance(true)'>Engage Lockout</button>
                         <button class='admin-btn' style='margin:0; color:var(--accent-green); border-color:var(--accent-green);' onclick='window.toggleMaintenance(false)'>Disengage</button>
                     </div>
@@ -2475,7 +2550,11 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         }
         
         function processInitData(data) { 
-            rawStats=data.memoryStats || {}; PRODUCT_DATA=data.PRODUCT_DATA || {}; currentMonthRevenue=data.monthRevenue || 0; PIN=data.PIN || ''; lastTxCount=rawStats.total_transactions||0; 
+            rawStats=data.memoryStats || {}; PRODUCT_DATA=data.PRODUCT_DATA || {}; currentMonthRevenue=data.monthRevenue || 0; PIN=data.PIN || ''; lastTxCount=rawStats.total_transactions||0;
+            const notesEl = document.getElementById('personal-notes');
+            if (notesEl && document.activeElement !== notesEl) {
+                notesEl.value = rawStats.notes || '';
+            } 
             
             let calcTotalRev = 0;
             if(rawStats.revenue) {
@@ -2848,13 +2927,43 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             } catch(e) { showToast('Diagnostics Failed', 'error'); }
         };
         
+        
+        window.toggleMobileMenu = function() {
+            const menu = document.getElementById('navMenu');
+            const btn = document.getElementById('burgerBtn');
+            menu.classList.toggle('open');
+            btn.classList.toggle('open');
+        };
+        
+        window.saveNotes = function() {
+            clearTimeout(window.notesTimeout);
+            window.notesTimeout = setTimeout(() => {
+                const notes = document.getElementById('personal-notes').value;
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ action: 'save_notes', notes }));
+                }
+            }, 1000);
+        };
+        
+        window.insertShortcut = function(inputId, val) {
+            const el = document.getElementById(inputId);
+            if(el) { el.value = val; }
+        };
+
         window.switchTab = function(tabId, btn) {
+            const menu = document.getElementById('navMenu');
+            const burgerBtn = document.getElementById('burgerBtn');
+            if(menu.classList.contains('open')) {
+                menu.classList.remove('open');
+                burgerBtn.classList.remove('open');
+            }
+
             document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
             document.querySelectorAll('.nav-btn').forEach(el=>el.classList.remove('active'));
             document.getElementById(tabId).classList.add('active');
             btn.classList.add('active');
             
-            if(window.innerWidth <= 900) { window.closeSidebar(); }
+            if(window.innerWidth <= 900 && typeof window.closeSidebar === 'function') { window.closeSidebar(); }
             if(tabId === 'moderation' && !isMembersLoaded) window.loadAllMembers();
             
             if(tabId === 'livechat'){
