@@ -218,7 +218,7 @@ async function loadCloudStats() {
     }
 }
 
-async function syncCloud() {
+async function syncCloud(isManualForce = false) {
     try { 
         const dataStr = JSON.stringify(memoryStats);
         const tempFile = STATS_FILE + '.' + Math.random().toString(36).substr(2, 9) + '.tmp';
@@ -232,14 +232,19 @@ async function syncCloud() {
         const backupFileName = `stats_backup_${today}.json`;
         const backupFilePath = path.join(__dirname, backupFileName);
 
-        if (!fs.existsSync(backupFilePath)) {
+        if (isManualForce) {
+            const timeStr = new Date().toISOString().replace(/:/g, '-').split('.')[0];
+            const manualFile = `stats_backup_manual_${timeStr}.json`;
+            fs.writeFileSync(path.join(__dirname, manualFile), dataStr);
+            systemLog('INFO', 'BACKUP', `Manual physical backup created: ${manualFile}`);
+        } else if (!fs.existsSync(backupFilePath)) {
             // S'il n'y a pas encore de sauvegarde pour aujourd'hui, on la crée
             fs.writeFileSync(backupFilePath, dataStr);
             systemLog('INFO', 'BACKUP', `Daily physical backup created: ${backupFileName}`);
             
             // Nettoyage des anciennes sauvegardes pour ne garder que les 7 plus récentes
             const files = fs.readdirSync(__dirname);
-            const backups = files.filter(f => f.startsWith('stats_backup_')).sort();
+            const backups = files.filter(f => f.startsWith('stats_backup_') && !f.includes('_manual_')).sort();
             
             if (backups.length > 7) {
                 const oldestBackup = backups[0];
@@ -1964,7 +1969,7 @@ const server = http.createServer(async (req, res) => {
                     }
                 }
                 else if (data.action === 'force_backup') {
-                    await syncCloud();
+                    await syncCloud(true);
                 }
                 res.writeHead(200).end('OK');
             } catch(e) { res.writeHead(500).end(e.message); }
@@ -2072,6 +2077,46 @@ const server = http.createServer(async (req, res) => {
         .kanban-board { display: flex; gap: 20px; overflow-x: auto; padding-bottom: 20px; align-items: stretch; min-height: 500px; }
         .kanban-col { background: rgba(255,255,255,0.02); border-radius: 20px; padding: 15px; min-width: 300px; flex: 1; border: 0.5px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; gap: 15px; }
         .kanban-header { font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.9em; }
+        .shortcut-btn { 
+            background: linear-gradient(135deg, rgba(255,255,255,0.03), rgba(255,255,255,0.08)); 
+            border: 0.5px solid rgba(255,255,255,0.1); 
+            color: var(--text-muted); 
+            padding: 8px 16px; 
+            border-radius: 12px; 
+            font-size: 0.85em; 
+            cursor: pointer; 
+            transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1); 
+            white-space: nowrap; 
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            text-transform: capitalize;
+            letter-spacing: 0.5px;
+            font-weight: 500;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+        .shortcut-btn::before {
+            content: '';
+            position: absolute;
+            top: 0; left: -100%;
+            width: 50%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+            transform: skewX(-20deg);
+            transition: left 0.5s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+        .shortcut-btn:hover::before { left: 150%; }
+        .shortcut-btn:hover { 
+            background: linear-gradient(135deg, rgba(var(--accent-green-rgb), 0.1), rgba(var(--accent-green-rgb), 0.2)); 
+            color: white; 
+            border-color: rgba(var(--accent-green-rgb), 0.4); 
+            transform: translateY(-2px) scale(1.02); 
+            box-shadow: 0 8px 25px rgba(var(--accent-green-rgb), 0.2); 
+        }
+        .shortcut-btn:active {
+            transform: translateY(1px) scale(0.98);
+            box-shadow: 0 2px 10px rgba(var(--accent-green-rgb), 0.1);
+        }
         .kanban-card { background: rgba(255,255,255,0.05); border: 0.5px solid rgba(255,255,255,0.08); padding: 15px; border-radius: 16px; display: flex; flex-direction: column; gap: 10px; transition: transform 0.3s; }
         .kanban-card:hover { transform: translateY(-3px) scale(1.02); border-color: rgba(255,255,255,0.15); }
         .kanban-actions { display: flex; gap: 8px; margin-top: auto; }
@@ -3265,6 +3310,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             if(tabId === 'monitoring'){ window.runDiagnostics(); }
             if(tabId === 'analytics'){ renderAnalyticsCharts(); }
             if(tabId === 'overview'){ window.renderSalesChart(7); }
+            if(tabId === 'backups'){ window.loadBackups(); }
         };
         
         function showToast(msg, type='success') { const t=document.getElementById('toast'); t.innerHTML = (type==='error'?'❌':'✅') + ' <span style="letter-spacing:0.5px;">' + msg + '</span>'; t.style.borderColor = type === 'error' ? 'rgba(239,68,68,0.5)' : 'rgba(var(--accent-green-rgb),0.5)'; t.style.boxShadow = type === 'error' ? '0 10px 30px rgba(239,68,68,0.2)' : '0 10px 30px rgba(var(--accent-green-rgb),0.2)'; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 3000); }
