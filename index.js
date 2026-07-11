@@ -566,10 +566,10 @@ client.on('interactionCreate', async (interaction) => {
                     return interaction.reply({ content: `❌ You already have an open ticket: <#${existingChannel.id}>`, ephemeral: true }).catch(() => {});
                 }
 
-                // Si l'utilisateur a cliqué pendant la création, on ignore silencieusement pour ne pas bloquer l'UI
-                if (userTicketLocks.has(interaction.user.id)) return;
+                // Anti-spam pour ne pas crash ou bloquer (Réponse Discord obligatoire pour éviter "Interaction Failed")
+                if (userTicketLocks.has(interaction.user.id)) return interaction.reply({ content: '⏳ Channel is being created, please wait...', ephemeral: true }).catch(()=>{});
                 const dLock = await acquireDistributedLock(interaction.user.id + "_" + interaction.customId, 5000);
-                if (!dLock) return;
+                if (!dLock) return interaction.reply({ content: '⏳ Channel is being created, please wait...', ephemeral: true }).catch(()=>{});
                 
                 userTicketLocks.add(interaction.user.id);
                 
@@ -612,10 +612,10 @@ client.on('interactionCreate', async (interaction) => {
                     return interaction.reply({ content: `❌ You already have an open ticket: <#${existingChannel.id}>`, ephemeral: true }).catch(() => {});
                 }
 
-                // Si l'utilisateur a cliqué pendant la création, on ignore silencieusement pour ne pas bloquer l'UI
-                if (userTicketLocks.has(interaction.user.id)) return;
+                // Anti-spam pour ne pas crash ou bloquer (Réponse Discord obligatoire pour éviter "Interaction Failed")
+                if (userTicketLocks.has(interaction.user.id)) return interaction.reply({ content: '⏳ Channel is being created, please wait...', ephemeral: true }).catch(()=>{});
                 const dLock = await acquireDistributedLock(interaction.user.id + "_" + interaction.customId, 5000);
-                if (!dLock) return;
+                if (!dLock) return interaction.reply({ content: '⏳ Channel is being created, please wait...', ephemeral: true }).catch(()=>{});
                 
                 userTicketLocks.add(interaction.user.id);
                 
@@ -638,6 +638,8 @@ client.on('interactionCreate', async (interaction) => {
                     systemLog('INFO', 'TICKET_SYS', `Support ticket generated for ${interaction.user.username}`);
                     await channel.send(`🎧 **Support Ticket for <@${interaction.user.id}>**`).catch(() => {});
                     await interaction.editReply({ content: `✅ Your channel is ready: <#${channel.id}>` }).catch(() => {});
+                } else {
+                    await interaction.editReply({ content: `❌ Error creating the room.` }).catch(() => {});
                 }
             }
         }
