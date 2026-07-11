@@ -714,6 +714,7 @@ client.on('messageCreate', async (message) => {
         }
 
         if (message.channel?.name?.startsWith('support-') && !message.author.bot) {
+           if (memoryStats.settings && memoryStats.settings.ai_enabled === false) return;
            try {
                if (process.env.GROQ_API_KEY) {
                    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -1310,6 +1311,12 @@ const server = http.createServer(async (req, res) => {
                         syncCloud();
                         systemLog('INFO', 'REVIEWS', `Review ID ${data.id} rejected. Reason: ${data.reason}`);
                     }
+                }
+                else if (data.action === 'toggle_ai') {
+                    if (!memoryStats.settings) memoryStats.settings = {};
+                    memoryStats.settings.ai_enabled = data.state;
+                    syncCloud();
+                    systemLog('INFO', 'AI', `AI Support Agent ${data.state ? 'enabled' : 'disabled'}.`);
                 }
                 else if (data.action === 'toggle_maintenance') {
                     if (!memoryStats.settings) memoryStats.settings = {};
@@ -2242,6 +2249,15 @@ const server = http.createServer(async (req, res) => {
                     </div>
                 </div>
                 
+                <div class='box' style='border:1px solid rgba(16,185,129,0.2); background:rgba(16,185,129,0.05); margin-bottom:20px;'>
+                    <h2 style='color:var(--accent-green); margin-top:0; border-bottom-color:rgba(16,185,129,0.1);'>🤖 AI Support Agent</h2>
+                    <p class='text-muted'>Enable or disable the Groq AI agent in support tickets.</p>
+                    <div style='display:flex; gap:15px; flex-wrap:wrap; margin-top:20px; align-items:center;'>
+                        <button class='admin-btn' id='btn-ai-enable' style='margin:0; background:rgba(16,185,129,0.2); color:var(--accent-green); border-color:var(--accent-green);' onclick='window.toggleAI(true)'>Enable AI</button>
+                        <button class='admin-btn' id='btn-ai-disable' style='margin:0; color:var(--accent-red); border-color:var(--accent-red);' onclick='window.toggleAI(false)'>Disable AI</button>
+                    </div>
+                </div>
+                
                 <div class='box' style='border:1px solid rgba(249,115,22,0.2); background:rgba(249,115,22,0.05);'>
                     <h2 style='color:var(--accent-orange); margin-top:0; border-bottom-color:rgba(249,115,22,0.1);'>🚧 Lockout Protocol (Maintenance)</h2>
                     <p class='text-muted'>Suspend all inbound commercial transactions globally.</p>
@@ -2441,6 +2457,19 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             }
             rawStats.total_revenue = calcTotalRev;
 
+          if(rawStats.settings && rawStats.settings.ai_enabled === false) {
+              if(document.getElementById('btn-ai-enable')) {
+                  document.getElementById('btn-ai-enable').style.background = 'transparent';
+                  document.getElementById('btn-ai-disable').style.background = 'rgba(255,69,58,0.2)';
+              }
+          } else {
+              if(document.getElementById('btn-ai-enable')) {
+                  document.getElementById('btn-ai-enable').style.background = 'rgba(16,185,129,0.2)';
+                  document.getElementById('btn-ai-disable').style.background = 'transparent';
+              }
+          }
+
+
             let overrides = rawStats.overrides || {};
             if(document.getElementById('ui-today-rev')) document.getElementById('ui-today-rev').innerText = overrides['today_rev'] || ('£'+(data.todayRevenue || 0));
             if(document.getElementById('ui-total-rev')) document.getElementById('ui-total-rev').innerText = overrides['total_rev'] || ('£'+(rawStats.total_revenue || 0));
@@ -2627,6 +2656,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         window.approveReview = async function(id) { await window.executeAction({action:'approve_review', id:id}); };
         window.rejectReview = async function(id) { const reason = await window.customPrompt('REVIEW REJECTION', 'Specify reason for user log:'); if(reason !== null) await window.executeAction({action:'reject_review', id:id, reason:reason}); };
 
+        window.toggleAI = async function(state) { await window.executeAction({action:'toggle_ai', state:state}, false); if(state){ document.getElementById('btn-ai-enable').style.background = 'rgba(16,185,129,0.2)'; document.getElementById('btn-ai-disable').style.background = 'transparent'; } else { document.getElementById('btn-ai-enable').style.background = 'transparent'; document.getElementById('btn-ai-disable').style.background = 'rgba(255,69,58,0.2)'; } showToast(state ? 'AI Enabled' : 'AI Disabled'); };
         window.toggleMaintenance = async function(state) { const dur = document.getElementById('maint-duration').value; const ch = document.getElementById('maint-channel').value; if(state && !dur) return showToast('T-Minus missing', 'error'); await window.executeAction({action:'toggle_maintenance', state:state, duration:dur, channelId:ch}); };
         window.editReferralCount = async function(id, current) { const n = await window.customPrompt('NODE OVERWRITE', 'Overwrite referral node integer:', '0', current); if(n !== null) { const parsed = parseInt(n); if(!isNaN(parsed)) { await window.executeAction({action:'edit_referral_count', userId:id, newCount: parsed}); } } };
         
