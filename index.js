@@ -375,6 +375,7 @@ client.once('ready', () => {
     systemLog('INFO', 'DISCORD_CORE', `Bot logged in successfully as ${client.user.tag}`);
     console.log(`✅ Bot logged in as ${client.user.tag}`);
     loadCloudStats();
+    setInterval(loadCloudStats, 15000);
     client.guilds.cache.forEach(async guild => {
         try {
             const firstInvites = await guild.invites.fetch();
@@ -716,45 +717,31 @@ client.on('messageCreate', async (message) => {
         if (message.channel?.name?.startsWith('support-') && !message.author.bot) {
            if (memoryStats.settings && memoryStats.settings.ai_enabled === false) return;
            try {
-               if (process.env.GROQ_API_KEY) {
-                   const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-                       method: 'POST',
-                       headers: {
-                           'Authorization': `Bearer ${(process.env.GROQ_API_KEY || '').trim()}`,
-                           'Content-Type': 'application/json'
-                       },
-                       body: JSON.stringify({
-                           model: 'llama-3.1-8b-instant',
-                           messages: [
-                               { role: 'system', content: 'You are an AI support agent. Detect the user\'s intent and provide a helpful, polite reply. Return JSON in the format: { "intent": "brief summary", "suggested_reply": "detailed reply" }' },
-                               { role: 'user', content: message.content }
-                           ],
-                           response_format: { type: 'json_object' }
-                       })
+               if (process.env.GEMINI_API_KEY) {
+                   const { GoogleGenAI, ThinkingLevel } = require("@google/genai");
+                   const ai = new GoogleGenAI({
+                       apiKey: process.env.GEMINI_API_KEY,
+                       httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
                    });
-                   
-                   if (!response.ok) {
-                       const errText = await response.text();
-                       throw new Error(`HTTP error! status: ${response.status}, message: ${errText}`);
-                   }
-                   
-                   const data = await response.json();
-                   let intentData;
-                   try {
-                       intentData = JSON.parse(data.choices[0].message.content);
-                   } catch(err) {
-                       intentData = { intent: "Unknown", suggested_reply: data.choices[0].message.content };
-                   }
+                   const aiRes = await ai.models.generateContent({
+                       model: 'gemini-3.1-pro-preview',
+                       contents: message.content,
+                       config: {
+                           thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
+                           tools: [{ googleSearch: {} }],
+                           systemInstruction: 'You are an AI support agent. Provide a helpful, polite, and detailed reply directly to the user.'
+                       }
+                   });
                    
                    const { EmbedBuilder } = require('discord.js');
                    const embed = new EmbedBuilder()
                        .setColor('#10b981')
                        .setTitle('🤖 AI Support Agent')
-                       .setDescription(intentData.suggested_reply || 'N/A')
+                       .setDescription(aiRes.text || 'N/A')
                        .setFooter({ text: 'This is an AI generated response.' });
                    await message.reply({ embeds: [embed] }).catch(()=>{});
                } else {
-                   console.log("AI Support: GROQ_API_KEY missing, ignoring message silently.");
+                   console.log("AI Support: GEMINI_API_KEY missing, ignoring message silently.");
                }
            } catch (e) {
                console.log("AI Error:", e.message);
@@ -2250,7 +2237,7 @@ const server = http.createServer(async (req, res) => {
                 
                 <div class='box' style='border:1px solid rgba(16,185,129,0.2); background:rgba(16,185,129,0.05); margin-bottom:20px;'>
                     <h2 style='color:var(--accent-green); margin-top:0; border-bottom-color:rgba(16,185,129,0.1);'>🤖 AI Support Agent</h2>
-                    <p class='text-muted'>Enable or disable the Groq AI agent in support tickets.</p>
+                    <p class='text-muted'>Enable or disable the Gemini AI agent in support tickets.</p>
                     <div style='display:flex; gap:15px; flex-wrap:wrap; margin-top:20px; align-items:center;'>
                         <button class='admin-btn' id='btn-ai-enable' style='margin:0; background:rgba(16,185,129,0.2); color:var(--accent-green); border-color:var(--accent-green);' onclick='window.toggleAI(true)'>Enable AI</button>
                         <button class='admin-btn' id='btn-ai-disable' style='margin:0; color:var(--accent-red); border-color:var(--accent-red);' onclick='window.toggleAI(false)'>Disable AI</button>
