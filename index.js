@@ -166,6 +166,13 @@ async function loadCloudStats() {
             if (!memoryStats.pending_reviews) memoryStats.pending_reviews = [];
             if (!memoryStats.activity_feed) memoryStats.activity_feed = [];
             if (!memoryStats.custom_requests) memoryStats.custom_requests = [];
+            if (!memoryStats.patchnotes) memoryStats.patchnotes = [];
+            
+            // Auto add the first patchnote if empty
+            if (memoryStats.patchnotes.length === 0) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "Ajout de la sidebar et de la catégorie Patchnotes." });
+                syncCloud();
+            }
             if (!memoryStats.overrides) memoryStats.overrides = {};
             if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } };
             if (!memoryStats.settings.maintenance) memoryStats.settings.maintenance = { active: false, endsAt: 0, channelId: "" };
@@ -1129,6 +1136,10 @@ const server = http.createServer(async (req, res) => {
         return match && global.activeAdminSessions && global.activeAdminSessions.has(match[1]);
     })();
 
+    if (req.url === '/download-code') {
+        res.writeHead(200, { 'Content-Type': 'application/javascript', 'Content-Disposition': 'attachment; filename="index.js"' });
+        return res.end(fs.readFileSync(__filename));
+    }
     if (req.url === '/api/login' && req.method === 'POST') {
         let body = ''; req.on('data', chunk => body += chunk);
         req.on('end', () => {
@@ -2009,6 +2020,17 @@ const server = http.createServer(async (req, res) => {
         
         .top-navbar { display: flex; justify-content: space-between; align-items: center; padding: 12px 30px; background: rgba(0, 0, 0, 0.6); backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px); border-bottom: 0.5px solid rgba(255,255,255,0.1); position: sticky; top: 0; z-index: 1000; }
         .nav-brand { font-size: 1.5em; font-weight: 700; color: #fff; letter-spacing: 0.5px; display: flex; align-items: center; gap: 15px; }
+        .app-layout { display: flex; height: 100vh; overflow: hidden; width: 100%; }
+        .sidebar { width: 250px; background: rgba(0,0,0,0.7); backdrop-filter: saturate(180%) blur(20px); border-right: 0.5px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1), width 0.3s; z-index: 1001; }
+        .sidebar.closed { width: 0; transform: translateX(-100%); }
+        .main-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; height: 100vh; }
+        .sidebar-header { padding: 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 0.5px solid rgba(255,255,255,0.05); }
+        .nav-menu { display: flex; flex-direction: column; gap: 8px; padding: 20px; overflow-y: auto; flex: 1; }
+        .nav-group { font-size: 0.7em; color: var(--text-muted); font-weight: 700; margin-top: 15px; margin-bottom: 5px; letter-spacing: 1px; }
+        .patchnotes-list { display: flex; flex-direction: column; gap: 15px; max-width: 800px; margin: 0 auto; }
+        .patchnote-item { background: rgba(255,255,255,0.02); border: 0.5px solid rgba(255,255,255,0.05); padding: 20px; border-radius: 16px; display: flex; flex-direction: column; gap: 10px; }
+        .patchnote-date { color: var(--accent-green); font-size: 0.85em; font-weight: 600; }
+        .patchnote-text { color: #fff; font-size: 0.95em; line-height: 1.5; }
         .nav-menu { display: flex; gap: 8px; overflow-x: auto; padding: 12px 30px; background: rgba(0, 0, 0, 0.4); backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px); border-bottom: 0.5px solid rgba(255,255,255,0.05); white-space: nowrap; }
         .nav-menu::-webkit-scrollbar { height: 0px; display: none; }
         .nav-btn { background: transparent; border: none; color: var(--text-muted); padding: 8px 16px; border-radius: 14px; cursor: pointer; font-weight: 500; transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1); display: flex; align-items: center; gap: 8px; font-size: 0.9em; }
@@ -2053,6 +2075,7 @@ const server = http.createServer(async (req, res) => {
         @media screen and (max-width: 900px) {
           .overview-grid, .chat-container { grid-template-columns: 1fr !important; flex-direction: column; height: auto; }
           .ticket-list { height: 200px; }
+          .sidebar { position: absolute; height: 100vh; left: 0; top: 0; }
         }
     </style>
 </head>
@@ -3056,11 +3079,9 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         };
         
         
-        window.toggleMobileMenu = function() {
-            const menu = document.getElementById('navMenu');
-            const btn = document.getElementById('burgerBtn');
-            menu.classList.toggle('open');
-            btn.classList.toggle('open');
+        window.toggleSidebar = function() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('closed');
         };
         
         window.saveNotes = function() {
@@ -3077,11 +3098,9 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         };
 
         window.switchTab = function(tabId, btn) {
-            const menu = document.getElementById('navMenu');
-            const burgerBtn = document.getElementById('burgerBtn');
-            if(menu.classList.contains('open')) {
-                menu.classList.remove('open');
-                burgerBtn.classList.remove('open');
+            const sidebar = document.getElementById('sidebar');
+            if(window.innerWidth <= 900) {
+                sidebar.classList.add('closed');
             }
 
             document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
@@ -3342,6 +3361,7 @@ server.listen(3000);
 
 server.on('upgrade', (request, socket, head) => {
     const pathname = request.url;
+
     if (pathname === '/ws') {
         wss.handleUpgrade(request, socket, head, (ws) => {
             wss.emit('connection', ws, request);
