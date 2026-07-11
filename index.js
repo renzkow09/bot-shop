@@ -2030,8 +2030,11 @@ const server = http.createServer(async (req, res) => {
         @keyframes pulseGlow { 0% { box-shadow: 0 0 5px rgba(var(--accent-green-rgb), 0.2); } 100% { box-shadow: 0 0 15px rgba(var(--accent-green-rgb), 0.5); } }
         .status-dot { width: 8px; height: 8px; background-color: var(--accent-green); border-radius: 50%; display: inline-block; animation: pulseGlow 2s infinite alternate; margin-right: 8px; box-shadow: 0 0 8px var(--accent-green); }
         .bot-status { display: flex; align-items: center; background: rgba(var(--accent-green-rgb), 0.1); border: 1px solid rgba(var(--accent-green-rgb), 0.2); padding: 6px 14px; border-radius: 20px; font-weight: 500; color: var(--accent-green); font-size: 0.85em; letter-spacing: 0.5px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
-        .btn-icon { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255,255,255,0.05); color: #fff; padding: 8px 14px; border-radius: 16px; cursor: pointer; transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); font-size: 1rem; }
-        .btn-icon:hover { background: rgba(255,255,255,0.1); transform: scale(1.05); }
+        .btn-icon { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255,255,255,0.05); color: #fff; padding: 8px 14px; border-radius: 16px; cursor: pointer; transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); font-size: 1rem; box-shadow: 0 4px 15px rgba(0,0,0,0.1); position: relative; overflow: hidden; }
+        .btn-icon::before { content: ''; position: absolute; top: 0; left: -100%; width: 50%; height: 100%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent); transform: skewX(-20deg); transition: left 0.5s cubic-bezier(0.25, 1, 0.5, 1); }
+        .btn-icon:hover::before { left: 150%; }
+        .btn-icon:hover { background: rgba(255,255,255,0.15); transform: translateY(-3px) scale(1.1); box-shadow: 0 8px 20px rgba(0,0,0,0.3); border-color: rgba(255,255,255,0.2); }
+        .btn-icon:active { transform: translateY(0) scale(0.95); box-shadow: 0 2px 10px rgba(0,0,0,0.2); }
         .nav-badge { background: var(--accent-red); color: white; border-radius: 10px; padding: 2px 6px; font-size: 0.75em; margin-left: 8px; box-shadow: 0 0 10px var(--accent-red); }
         .tab-content { display: none; animation: fadeInSmooth 0.4s cubic-bezier(0.25, 1, 0.5, 1); } .tab-content.active { display: block; }
         .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; margin-bottom: 30px; }
@@ -2044,10 +2047,17 @@ const server = http.createServer(async (req, res) => {
         table { width: 100%; border-collapse: separate; border-spacing: 0; } th { padding: 15px; text-align: left; color: var(--text-muted); font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 0.5px solid rgba(255,255,255,0.1); font-weight: 600; } td { padding: 15px; text-align: left; border-bottom: 0.5px solid rgba(255,255,255,0.05); vertical-align: middle; } tr { transition: all 0.3s ease; } tr:hover { background: rgba(255,255,255,0.02); transform: scale(1.005); }
         input, textarea, select { width: 100%; background: rgba(255,255,255,0.05); border: 0.5px solid rgba(255,255,255,0.1); color: white; padding: 15px; border-radius: 14px; transition: all 0.3s ease; font-family: inherit; font-size: 0.95em; }
         input:focus, textarea:focus, select:focus { border-color: var(--accent-green); box-shadow: 0 0 0 2px rgba(var(--accent-green-rgb), 0.2); outline: none; background: rgba(255,255,255,0.08); }
-        .admin-btn { background: rgba(255,255,255,0.1); color: white; border: 0.5px solid rgba(255,255,255,0.1); padding: 10px 20px; border-radius: 14px; cursor: pointer; font-weight: 500; margin-top: 10px; transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1); font-size: 0.9em; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); display: inline-flex; justify-content: center; align-items: center; }
-        .admin-btn:hover { background: rgba(255,255,255,0.15); transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,0.3); }
-        .btn-green { background: var(--accent-green); color: #000; border-color: var(--accent-green); font-weight: 600; }
-        .btn-green:hover { background: var(--accent-green-hover); box-shadow: 0 6px 20px rgba(var(--accent-green-rgb), 0.4); color: #000; }
+        .admin-btn { background: linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.1)); color: white; border: 0.5px solid rgba(255,255,255,0.1); padding: 10px 20px; border-radius: 14px; cursor: pointer; font-weight: 500; margin-top: 10px; transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1); font-size: 0.9em; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); display: inline-flex; justify-content: center; align-items: center; position: relative; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+        .admin-btn::before { content: ''; position: absolute; top: 0; left: -100%; width: 50%; height: 100%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent); transform: skewX(-20deg); transition: left 0.5s cubic-bezier(0.25, 1, 0.5, 1); }
+        .admin-btn:hover::before { left: 150%; }
+        .admin-btn:hover { background: linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.15)); border-color: rgba(255,255,255,0.2); transform: translateY(-2px) scale(1.02); box-shadow: 0 8px 25px rgba(0,0,0,0.3); }
+        .admin-btn:active { transform: translateY(1px) scale(0.98); box-shadow: 0 2px 10px rgba(0,0,0,0.2); }
+        .btn-green { background: linear-gradient(135deg, var(--accent-green), rgba(var(--accent-green-rgb), 0.8)); color: #000; border-color: transparent; font-weight: 600; box-shadow: 0 4px 15px rgba(var(--accent-green-rgb), 0.3); text-transform: uppercase; letter-spacing: 0.5px; }
+        .btn-green:hover { background: linear-gradient(135deg, var(--accent-green-hover), var(--accent-green)); box-shadow: 0 8px 25px rgba(var(--accent-green-rgb), 0.5); border-color: transparent; color: #000; transform: translateY(-2px) scale(1.03); }
+        .btn-green:active { transform: translateY(1px) scale(0.97); }
+        .btn-red { background: linear-gradient(135deg, var(--accent-red), rgba(255,69,58,0.8)); color: #fff; border-color: transparent; font-weight: 600; box-shadow: 0 4px 15px rgba(255,69,58,0.3); text-transform: uppercase; letter-spacing: 0.5px; transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1); }
+        .btn-red:hover { background: linear-gradient(135deg, #ff6b63, var(--accent-red)); box-shadow: 0 8px 25px rgba(255,69,58,0.5); border-color: transparent; color: #fff; transform: translateY(-2px) scale(1.03); }
+        .btn-red:active { transform: translateY(1px) scale(0.97); }
         .text-green { color: var(--accent-green); text-shadow: 0 0 15px rgba(var(--accent-green-rgb), 0.2); } .text-muted { color: var(--text-muted); } .text-blue { color: var(--accent-blue); text-shadow: 0 0 15px rgba(10, 132, 255, 0.2); }
         
         .product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; }
@@ -2065,8 +2075,8 @@ const server = http.createServer(async (req, res) => {
         
         .feed-container { max-height: 350px; overflow-y: auto; padding-right: 10px; }
         .feed-container::-webkit-scrollbar { width: 4px; } .feed-container::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 4px; }
-        .feed-item { display: flex; align-items: flex-start; gap: 15px; margin-bottom: 15px; padding: 15px; background: rgba(255,255,255,0.02); border-left: 3px solid var(--accent-green); border-radius: 0 12px 12px 0; font-size: 0.9em; transition: 0.3s; }
-        .feed-item:hover { background: rgba(255,255,255,0.05); transform: translateX(5px); }
+        .feed-item { display: flex; align-items: flex-start; gap: 15px; margin-bottom: 15px; padding: 15px; background: rgba(255,255,255,0.02); border-left: 3px solid var(--accent-green); border-radius: 0 12px 12px 0; font-size: 0.9em; transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1); cursor: default; }
+        .feed-item:hover { background: rgba(255,255,255,0.05); transform: translateX(8px); box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
         .feed-item.sale { border-color: var(--accent-green); } .feed-item.ticket { border-color: var(--accent-orange); } .feed-item.review { border-color: var(--accent-purple); }
         .feed-time { font-size: 0.75em; color: var(--accent-green); min-width: 60px; font-weight: 600; text-transform: uppercase; }
         
@@ -2117,8 +2127,11 @@ const server = http.createServer(async (req, res) => {
             transform: translateY(1px) scale(0.98);
             box-shadow: 0 2px 10px rgba(var(--accent-green-rgb), 0.1);
         }
-        .kanban-card { background: rgba(255,255,255,0.05); border: 0.5px solid rgba(255,255,255,0.08); padding: 15px; border-radius: 16px; display: flex; flex-direction: column; gap: 10px; transition: transform 0.3s; }
-        .kanban-card:hover { transform: translateY(-3px) scale(1.02); border-color: rgba(255,255,255,0.15); }
+        .kanban-card { background: rgba(255,255,255,0.03); border: 0.5px solid rgba(255,255,255,0.08); padding: 15px; border-radius: 16px; display: flex; flex-direction: column; gap: 10px; transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1); cursor: pointer; position: relative; overflow: hidden; }
+        .kanban-card::before { content: ''; position: absolute; top: 0; left: -100%; width: 50%; height: 100%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent); transform: skewX(-20deg); transition: left 0.6s cubic-bezier(0.25, 1, 0.5, 1); }
+        .kanban-card:hover::before { left: 150%; }
+        .kanban-card:hover { transform: translateY(-4px) scale(1.02); border-color: rgba(255,255,255,0.2); background: rgba(255,255,255,0.06); box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+        .kanban-card:active { transform: translateY(0) scale(0.98); box-shadow: 0 2px 10px rgba(0,0,0,0.2); }
         .kanban-actions { display: flex; gap: 8px; margin-top: auto; }
         .kanban-actions button { flex: 1; padding: 8px; font-size: 0.8em; border-radius: 10px; }
         
@@ -2152,20 +2165,25 @@ const server = http.createServer(async (req, res) => {
         
          backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px); border-bottom: 0.5px solid rgba(255,255,255,0.05); white-space: nowrap; }
         .nav-menu::-webkit-scrollbar { height: 0px; display: none; }
-        .nav-btn { background: transparent; border: none; color: var(--text-muted); padding: 8px 16px; border-radius: 14px; cursor: pointer; font-weight: 500; transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1); display: flex; align-items: center; gap: 8px; font-size: 0.9em; }
-        .nav-btn:hover { color: #fff; background: rgba(255,255,255,0.08); }
-        .nav-btn.active { background: rgba(255,255,255,0.1); color: #fff; }
+        .nav-btn { background: transparent; border: none; color: var(--text-muted); padding: 8px 16px; border-radius: 14px; cursor: pointer; font-weight: 500; transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1); display: flex; align-items: center; gap: 8px; font-size: 0.9em; position: relative; overflow: hidden; }
+        .nav-btn:hover { color: #fff; background: rgba(255,255,255,0.08); transform: translateX(5px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+        .nav-btn.active { background: rgba(255,255,255,0.12); color: #fff; box-shadow: 0 4px 15px rgba(0,0,0,0.2); border-left: 3px solid var(--accent-green); padding-left: 13px; }
+        .nav-btn:active { transform: translateX(2px) scale(0.98); }
         .main-content { padding: 30px 40px; max-width: 1400px; margin: 0 auto; animation: fadeInSmooth 0.5s ease; overflow-y: auto; height: calc(100vh - 120px); }
         
         .chat-container { display: flex; height: 600px; gap: 25px; }
         .ticket-list { flex: 1; background: var(--bg-card); border-radius: 24px; border: 0.5px solid var(--border-color); overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 10px; backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px); }
-        .ticket-item { padding: 15px; background: rgba(255,255,255,0.02); border-radius: 16px; cursor: pointer; transition: all 0.3s; font-weight: 500; font-size: 0.9em; border: 0.5px solid transparent; }
-        .ticket-item:hover { background: rgba(255,255,255,0.05); }
-        .ticket-item.active { background: rgba(255,255,255,0.1); border: 0.5px solid rgba(255,255,255,0.1); color: #fff; }
+        .ticket-item { padding: 15px; background: rgba(255,255,255,0.02); border-radius: 16px; cursor: pointer; transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1); font-weight: 500; font-size: 0.9em; border: 0.5px solid transparent; position: relative; overflow: hidden; }
+        .ticket-item:hover { background: rgba(255,255,255,0.06); transform: translateX(4px); box-shadow: 0 4px 15px rgba(0,0,0,0.15); border-color: rgba(255,255,255,0.05); }
+        .ticket-item.active { background: linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.1)); border: 0.5px solid rgba(255,255,255,0.15); color: #fff; box-shadow: 0 5px 20px rgba(0,0,0,0.2); border-left: 3px solid var(--accent-green); padding-left: 12px; }
+        .ticket-item:active { transform: translateX(2px) scale(0.98); }
         .chat-window { flex: 3; display: flex; flex-direction: column; background: var(--bg-card); border-radius: 24px; border: 0.5px solid var(--border-color); overflow: hidden; position: relative; backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px); }
         .chat-messages { flex: 1; padding: 25px; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; scroll-behavior: smooth; }
         .chat-bubble { max-width: 75%; padding: 14px 18px; border-radius: 20px; line-height: 1.5; font-size: 0.95em; position: relative; animation: fadeInSmooth 0.3s ease-out; }
         .chat-bubble.bot { align-self: flex-end; background: var(--accent-green); color: #000; border-bottom-right-radius: 4px; font-weight: 500; }
+        .react-btn { background:none; border:none; cursor:pointer; font-size:1.1em; transition:transform 0.3s cubic-bezier(0.25, 1, 0.5, 1), filter 0.3s; margin: 0 2px; }
+        .react-btn:hover { transform: scale(1.3) translateY(-2px); filter: drop-shadow(0 4px 8px rgba(0,0,0,0.5)); }
+        .react-btn:active { transform: scale(0.9) translateY(1px); }
         .chat-bubble.user { align-self: flex-start; background: rgba(255,255,255,0.08); color: white; border-bottom-left-radius: 4px; border: 0.5px solid rgba(255,255,255,0.1); }
         .chat-author { font-size: 0.7em; opacity: 0.6; margin-bottom: 6px; font-weight: 600; }
         .chat-input-area { display: flex; padding: 20px; background: rgba(0,0,0,0.2); border-top: 0.5px solid rgba(255,255,255,0.05); gap: 15px; align-items: center; }
