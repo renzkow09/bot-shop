@@ -555,27 +555,25 @@ client.on('interactionCreate', async (interaction) => {
             }
             
             if (interaction.customId === 'open_shop_channel') {
-                // Block duplicate discord interaction broadcasts globally
-                const eventLock = await acquireDistributedLock(interaction.id, 5000);
-                if (!eventLock) return;
-
-                // 🛡️ ANTI-SPAM TICKET CHECK (Redirect to existing channel if already created)
-                const sanitizedName = interaction.user.username.toLowerCase().replace(/[^a-z0-9]/g, '');
-                const existingChannel = interaction.guild.channels.cache.find(c => c.name === `shop-${sanitizedName}` || c.name === `support-${sanitizedName}`);
-                if (existingChannel) {
-                    return interaction.reply({ content: `❌ You already have an open ticket: <#${existingChannel.id}>`, ephemeral: true }).catch(() => {});
-                }
-
-                // Anti-spam pour ne pas crash ou bloquer (Réponse Discord obligatoire pour éviter "Interaction Failed")
                 if (userTicketLocks.has(interaction.user.id)) return interaction.reply({ content: '⏳ Channel is being created, please wait...', ephemeral: true }).catch(()=>{});
                 const dLock = await acquireDistributedLock(interaction.user.id + "_" + interaction.customId, 5000);
                 if (!dLock) return interaction.reply({ content: '⏳ Channel is being created, please wait...', ephemeral: true }).catch(()=>{});
                 
+                const eventLock = await acquireDistributedLock(interaction.id, 5000);
+                if (!eventLock) return; 
+
                 userTicketLocks.add(interaction.user.id);
-                
-                // On répond immédiatement pour valider l'interaction
-                await interaction.reply({ content: '⏳ Channel is being created, please wait...', ephemeral: true }).catch(() => {});
                 setTimeout(() => userTicketLocks.delete(interaction.user.id), 5000);
+                
+                // 🛡️ ANTI-SPAM TICKET CHECK (Redirect to existing channel if already created)
+                const sanitizedName = interaction.user.username.toLowerCase().replace(/[^a-z0-9]/g, '');
+                const existingChannel = interaction.guild.channels.cache.find(c => c.name === `shop-${sanitizedName}` || c.name === `support-${sanitizedName}`);
+                
+                if (existingChannel) {
+                    return interaction.reply({ content: `❌ You already have an open ticket: <#${existingChannel.id}>`, ephemeral: true }).catch(() => {});
+                }
+
+                await interaction.reply({ content: '⏳ Channel is being created, please wait...', ephemeral: true }).catch(() => {});
 
                 if (!memoryStats.analytics) memoryStats.analytics = { tickets_opened: 0, hourly_sales: Array(24).fill(0) };
                 memoryStats.analytics.tickets_opened = (memoryStats.analytics.tickets_opened || 0) + 1;
@@ -601,27 +599,25 @@ client.on('interactionCreate', async (interaction) => {
                 } else { await interaction.editReply({ content: `❌ Error creating the room.` }).catch(() => {}); }
             
             } else if (interaction.customId === 'open_support_ticket') {
-                // Block duplicate discord interaction broadcasts globally
-                const eventLock = await acquireDistributedLock(interaction.id, 5000);
-                if (!eventLock) return;
-
-                // 🛡️ ANTI-SPAM TICKET CHECK (Redirect to existing channel if already created)
-                const sanitizedName = interaction.user.username.toLowerCase().replace(/[^a-z0-9]/g, '');
-                const existingChannel = interaction.guild.channels.cache.find(c => c.name === `shop-${sanitizedName}` || c.name === `support-${sanitizedName}`);
-                if (existingChannel) {
-                    return interaction.reply({ content: `❌ You already have an open ticket: <#${existingChannel.id}>`, ephemeral: true }).catch(() => {});
-                }
-
-                // Anti-spam pour ne pas crash ou bloquer (Réponse Discord obligatoire pour éviter "Interaction Failed")
                 if (userTicketLocks.has(interaction.user.id)) return interaction.reply({ content: '⏳ Channel is being created, please wait...', ephemeral: true }).catch(()=>{});
                 const dLock = await acquireDistributedLock(interaction.user.id + "_" + interaction.customId, 5000);
                 if (!dLock) return interaction.reply({ content: '⏳ Channel is being created, please wait...', ephemeral: true }).catch(()=>{});
                 
+                const eventLock = await acquireDistributedLock(interaction.id, 5000);
+                if (!eventLock) return; 
+
                 userTicketLocks.add(interaction.user.id);
-                
-                // On répond immédiatement pour valider l'interaction
-                await interaction.reply({ content: '⏳ Channel is being created, please wait...', ephemeral: true }).catch(() => {});
                 setTimeout(() => userTicketLocks.delete(interaction.user.id), 5000);
+                
+                // 🛡️ ANTI-SPAM TICKET CHECK (Redirect to existing channel if already created)
+                const sanitizedName = interaction.user.username.toLowerCase().replace(/[^a-z0-9]/g, '');
+                const existingChannel = interaction.guild.channels.cache.find(c => c.name === `shop-${sanitizedName}` || c.name === `support-${sanitizedName}`);
+                
+                if (existingChannel) {
+                    return interaction.reply({ content: `❌ You already have an open ticket: <#${existingChannel.id}>`, ephemeral: true }).catch(() => {});
+                }
+
+                await interaction.reply({ content: '⏳ Channel is being created, please wait...', ephemeral: true }).catch(() => {});
 
                 const channel = await interaction.guild.channels.create({
                     name: `support-${sanitizedName}`, type: ChannelType.GuildText, parent: CATEGORY_SUPPORT_ID,
