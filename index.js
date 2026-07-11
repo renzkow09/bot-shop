@@ -165,7 +165,7 @@ async function loadCloudStats() {
 async function syncCloud() {
     try { 
         const dataStr = JSON.stringify(memoryStats);
-        const tempFile = STATS_FILE + '.tmp';
+        const tempFile = STATS_FILE + '.' + Math.random().toString(36).substr(2, 9) + '.tmp';
 
         // 1. Écriture Atomique (Incorruptible)
         fs.writeFileSync(tempFile, dataStr);
@@ -405,6 +405,22 @@ client.on('inviteCreate', invite => { try { guildInvites.get(invite.guild.id)?.s
 client.on('inviteDelete', invite => { try { guildInvites.get(invite.guild.id)?.delete(invite.code); } catch (e) {} });
 
 // === [ANCHOR: DISCORD_INTERACTION_HANDLER] ===
+
+async function acquireDistributedLock(lockKey, ttl_ms = 5000) {
+    const url = process.env.UPSTASH_REDIS_REST_URL;
+    const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+    if (!url || !token) return true; 
+    try {
+        const cleanUrl = url.endsWith('/') ? url.slice(0, -1) : url;
+        const res = await axios.post(cleanUrl, ["SET", `lock_${lockKey}`, "1", "NX", "PX", ttl_ms.toString()], {
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }
+        });
+        return res.data.result === "OK";
+    } catch (e) {
+        return true; 
+    }
+}
+
 const userTicketLocks = new Set();
 client.on('interactionCreate', async (interaction) => {
     try {
@@ -500,6 +516,13 @@ client.on('interactionCreate', async (interaction) => {
             
             if (interaction.customId === 'open_shop_channel') {
                 if (userTicketLocks.has(interaction.user.id)) return interaction.reply({ content: '⏳ Please wait, processing...', ephemeral: true }).catch(()=>{});
+                const dLock = await acquireDistributedLock(interaction.user.id + "_" + interaction.customId, 5000);
+                if (!dLock) return interaction.reply({ content: '⏳ Please wait, processing request across servers...', ephemeral: true }).catch(()=>{});
+                
+                // Block duplicate discord interaction broadcasts globally
+                const eventLock = await acquireDistributedLock(interaction.id, 5000);
+                if (!eventLock) return; // Silently ignore duplicate websocket broadcasts
+                
                 userTicketLocks.add(interaction.user.id);
                 setTimeout(() => userTicketLocks.delete(interaction.user.id), 5000);
                 await interaction.deferReply({ flags: 64 }).catch(() => {});
@@ -535,6 +558,13 @@ client.on('interactionCreate', async (interaction) => {
             
             } else if (interaction.customId === 'open_support_ticket') {
                 if (userTicketLocks.has(interaction.user.id)) return interaction.reply({ content: '⏳ Please wait, processing...', ephemeral: true }).catch(()=>{});
+                const dLock = await acquireDistributedLock(interaction.user.id + "_" + interaction.customId, 5000);
+                if (!dLock) return interaction.reply({ content: '⏳ Please wait, processing request across servers...', ephemeral: true }).catch(()=>{});
+                
+                // Block duplicate discord interaction broadcasts globally
+                const eventLock = await acquireDistributedLock(interaction.id, 5000);
+                if (!eventLock) return; // Silently ignore duplicate websocket broadcasts
+                
                 userTicketLocks.add(interaction.user.id);
                 setTimeout(() => userTicketLocks.delete(interaction.user.id), 5000);
                 await interaction.deferReply({ flags: 64 }).catch(() => {});
