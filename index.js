@@ -400,7 +400,7 @@ client.on('shardDisconnect', (event, id) => {
     console.log(`❌ Shard ${id} déconnecté de Discord. Tentative de reconnexion automatique...`);
 });
 
-client.once('ready', () => {
+client.once('clientReady', () => {
     systemLog('INFO', 'DISCORD_CORE', `Bot logged in successfully as ${client.user.tag}`);
     console.log(`✅ Bot logged in as ${client.user.tag}`);
     loadCloudStats();
@@ -557,7 +557,7 @@ client.on('interactionCreate', async (interaction) => {
             if (interaction.customId === 'open_shop_channel') {
                 if (userTicketLocks.has(interaction.user.id)) return interaction.reply({ content: '⏳ Please wait, processing...', ephemeral: true }).catch(()=>{});
                 const dLock = await acquireDistributedLock(interaction.user.id + "_" + interaction.customId, 5000);
-                if (!dLock) return interaction.reply({ content: '⏳ Please wait, processing request across servers...', ephemeral: true }).catch(()=>{});
+                if (!dLock) return interaction.reply({ content: '⏳ Anti-spam: please wait a few seconds before clicking again.', ephemeral: true }).catch(()=>{});
                 
                 // Block duplicate discord interaction broadcasts globally
                 const eventLock = await acquireDistributedLock(interaction.id, 5000);
@@ -599,7 +599,7 @@ client.on('interactionCreate', async (interaction) => {
             } else if (interaction.customId === 'open_support_ticket') {
                 if (userTicketLocks.has(interaction.user.id)) return interaction.reply({ content: '⏳ Please wait, processing...', ephemeral: true }).catch(()=>{});
                 const dLock = await acquireDistributedLock(interaction.user.id + "_" + interaction.customId, 5000);
-                if (!dLock) return interaction.reply({ content: '⏳ Please wait, processing request across servers...', ephemeral: true }).catch(()=>{});
+                if (!dLock) return interaction.reply({ content: '⏳ Anti-spam: please wait a few seconds before clicking again.', ephemeral: true }).catch(()=>{});
                 
                 // Block duplicate discord interaction broadcasts globally
                 const eventLock = await acquireDistributedLock(interaction.id, 5000);
@@ -649,8 +649,9 @@ client.on('interactionCreate', async (interaction) => {
             // 💥 DESTRUCTION VISUELLE DE L'UI
             await interaction.update({ content: "📦 **Processing your order... The menu has been locked.**", components: [] }).catch(() => {});
 
-            const selected = interaction.values[0]; const product = memoryStats.products[selected]; 
-            if (!product) return;
+            try {
+                const selected = interaction.values[0]; const product = memoryStats.products[selected]; 
+                if (!product) return;
             
             const promo = state ? state.promo : null;
 
@@ -754,6 +755,12 @@ client.on('interactionCreate', async (interaction) => {
                         if(upsellEmbed) await interaction.channel.send({ embeds: [upsellEmbed] }).catch(()=>{});
                         setTimeout(() => { channelStates.delete(interaction.channel.id); interaction.channel.delete().catch(()=>{}); }, 30000);
                     } 
+                }
+            } 
+            } catch (err) {
+                systemLog('ERROR', 'STORE', 'Transaction crashed: ' + err.message);
+                if (interaction.channel) {
+                    interaction.channel.send("❌ **Critical Error during transaction:** " + err.message + " \nContact support.").catch(()=>{});
                 }
             }
         }
@@ -1313,13 +1320,18 @@ const server = http.createServer(async (req, res) => {
         const startRewarble = Date.now();
         try {
             if (CircuitBreaker.isOpen()) throw new Error("Service is temporarily unavailable (circuit breaker open).");
-            await axios.post(REWARBLE_API_URL, {}, { timeout: 5000, headers: { 'Authorization': `Bearer ${REWARBLE_API_KEY}` } }).catch(e => {
-                if (!(e.response && (e.response.status === 400 || e.response.status === 402 || e.response.status === 401))) CircuitBreaker.recordFailure();
-                else CircuitBreaker.recordSuccess();
-            });
+            await axios.post(REWARBLE_API_URL, {}, { timeout: 5000, headers: { 'Authorization': `Bearer ${REWARBLE_API_KEY}` } });
+            rewarbleStatus = 'online';
+            rewarbleLatency = Date.now() - startRewarble;
+            CircuitBreaker.recordSuccess();
         } catch (e) {
-            if (e.response && (e.response.status === 400 || e.response.status === 402 || e.response.status === 401)) rewarbleStatus = 'online';
-            else rewarbleStatus = 'offline';
+            if (e.response && (e.response.status === 400 || e.response.status === 402 || e.response.status === 401)) {
+                rewarbleStatus = 'online';
+                CircuitBreaker.recordSuccess();
+            } else {
+                rewarbleStatus = 'offline';
+                CircuitBreaker.recordFailure();
+            }
             rewarbleLatency = Date.now() - startRewarble;
         }
 
