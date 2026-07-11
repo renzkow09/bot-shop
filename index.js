@@ -85,6 +85,7 @@ const guildInvites = new Map();
 const MAX_LOGS = 500;
 let globalLogs = [];
 
+    // 🚀 [FUNCTION: redactSecrets] - Déclaration de fonction
 function redactSecrets(text) {
     if (typeof text !== 'string') text = String(text);
     const secrets = [DISCORD_BOT_TOKEN, REWARBLE_API_KEY, DASHBOARD_PIN].filter(Boolean);
@@ -94,6 +95,7 @@ function redactSecrets(text) {
     return text;
 }
 
+    // 🚀 [FUNCTION: systemLog] - Déclaration de fonction
 function systemLog(level, component, message) {
     const now = new Date();
     const timeStr = now.toTimeString().split(' ')[0]; 
@@ -149,6 +151,7 @@ const INITIAL_BUY_LINKS = {
 };
 
 // === [ANCHOR: CLOUD_SYNC_FUNCTIONS] ===
+    // 🚀 [FUNCTION: notifyAdminPhone] - Déclaration de fonction
 async function notifyAdminPhone(title, msg) {
     try {
         const admin = await client.users.fetch(ADMIN_DISCORD_ID);
@@ -156,6 +159,7 @@ async function notifyAdminPhone(title, msg) {
     } catch(e) {}
 }
 
+    // 🚀 [FUNCTION: addActivity] - Déclaration de fonction
 function addActivity(type, message) {
     if (!memoryStats.activity_feed) memoryStats.activity_feed = [];
     memoryStats.activity_feed.unshift({ type, message, time: Date.now() });
@@ -163,6 +167,7 @@ function addActivity(type, message) {
     syncCloud();
 }
 
+    // 🚀 [FUNCTION: loadCloudStats] - Déclaration de fonction
 async function loadCloudStats() {
     if (fs.existsSync(STATS_FILE)) {
         try { memoryStats = { ...memoryStats, ...JSON.parse(fs.readFileSync(STATS_FILE, 'utf8')) }; } catch (e) {}
@@ -218,6 +223,7 @@ async function loadCloudStats() {
     }
 }
 
+    // 🚀 [FUNCTION: syncCloud] - Déclaration de fonction
 async function syncCloud(isManualForce = false) {
     try { 
         const dataStr = JSON.stringify(memoryStats);
@@ -273,6 +279,7 @@ async function syncCloud(isManualForce = false) {
     }
 }
 
+    // 🚀 [FUNCTION: checkSubscriptions] - Déclaration de fonction
 async function checkSubscriptions() {
     const now = Date.now();
     const guild = client.guilds.cache.first();
@@ -307,6 +314,7 @@ async function checkSubscriptions() {
 }
 
 // === [ANCHOR: BOT_STATISTICS_LOGGER] ===
+    // 🚀 [FUNCTION: logStat] - Déclaration de fonction
 function logStat(type, value = 1, extraData = null) {
     const today = new Date().toISOString().split('T')[0];
     if (type === 'revenue') {
@@ -363,6 +371,7 @@ function logStat(type, value = 1, extraData = null) {
 }
 
 // === [ANCHOR: DISCORD_SHOP_EMBED_GENERATOR] ===
+    // 🚀 [FUNCTION: sendShopSetup] - Déclaration de fonction
 async function sendShopSetup(channel) {
     let buyRows = [];
     let currentComponents = [];
@@ -425,11 +434,13 @@ const client = new Client({
     rest: { timeout: 60000, retries: 5 } 
 });
 
+// 🚀 [EVENT_LISTENER: error] - Écouteur d'événement Discord
 client.on('error', error => {
     systemLog('ERROR', 'DISCORD_CORE', `Network Error: ${error.message}`);
     console.error('⚠️ Discord Client Network Error:', error.message);
 });
 
+// 🚀 [EVENT_LISTENER: shardDisconnect] - Écouteur d'événement Discord
 client.on('shardDisconnect', (event, id) => {
     systemLog('WARN', 'DISCORD_CORE', `Shard ${id} disconnected. Attempting auto-reconnect...`);
     console.log(`❌ Shard ${id} déconnecté de Discord. Tentative de reconnexion automatique...`);
@@ -476,11 +487,24 @@ client.once('clientReady', () => {
     }, 15 * 60 * 1000);
 });
 
+// 🚀 [EVENT_LISTENER: inviteCreate] - Écouteur d'événement Discord
 client.on('inviteCreate', invite => { try { guildInvites.get(invite.guild.id)?.set(invite.code, invite.uses); } catch (e) {} });
+// 🚀 [EVENT_LISTENER: inviteDelete] - Écouteur d'événement Discord
 client.on('inviteDelete', invite => { try { guildInvites.get(invite.guild.id)?.delete(invite.code); } catch (e) {} });
+
+// === [ANCHOR: GLOBAL_PROCESS_HANDLERS] ===
+process.on('uncaughtException', (err) => {
+    systemLog('ERROR', 'SYSTEM', 'Uncaught Exception: ' + err.message);
+    console.error(err);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    systemLog('ERROR', 'SYSTEM', 'Unhandled Rejection: ' + (reason ? reason.stack || reason : 'Unknown'));
+});
 
 // === [ANCHOR: DISCORD_INTERACTION_HANDLER] ===
 
+    // 🚀 [FUNCTION: acquireDistributedLock] - Déclaration de fonction
 async function acquireDistributedLock(lockKey, ttl_ms = 5000) {
     const url = process.env.UPSTASH_REDIS_REST_URL;
     const token = process.env.UPSTASH_REDIS_REST_TOKEN;
@@ -498,6 +522,7 @@ async function acquireDistributedLock(lockKey, ttl_ms = 5000) {
 
 const userTicketLocks = new Set();
 const processedInteractions = new Set();
+// 🚀 [EVENT_LISTENER: interactionCreate] - Écouteur d'événement Discord
 client.on('interactionCreate', async (interaction) => {
     try {
         // --- MAINTENANCE SHIELD ---
@@ -823,6 +848,7 @@ client.on('interactionCreate', async (interaction) => {
 });
 
 // === [ANCHOR: DISCORD_MESSAGE_HANDLER] ===
+// 🚀 [EVENT_LISTENER: messageCreate] - Écouteur d'événement Discord
 client.on('messageCreate', async (message) => {
     try {
         if (message.author.bot) return;
@@ -1074,6 +1100,7 @@ client.on('messageCreate', async (message) => {
 });
 
 // === [ANCHOR: DISCORD_GUILD_MEMBER_EVENTS] ===
+// 🚀 [EVENT_LISTENER: guildMemberAdd] - Écouteur d'événement Discord
 client.on('guildMemberAdd', async (member) => { 
     logStat('joins', 1, { username: member.user.username }); 
     try {
@@ -1105,6 +1132,7 @@ client.on('guildMemberAdd', async (member) => {
     } catch (err) {}
 });
 
+// 🚀 [EVENT_LISTENER: guildMemberRemove] - Écouteur d'événement Discord
 client.on('guildMemberRemove', async (member) => { 
     const duration = member.joinedTimestamp ? (Date.now() - member.joinedTimestamp) : 0;
     const avatar = member.user.displayAvatarURL({ size: 64, dynamic: true });
@@ -1168,10 +1196,12 @@ const server = http.createServer(async (req, res) => {
         return match && global.activeAdminSessions && global.activeAdminSessions.has(match[1]);
     })();
 
+    // 🚀 [API_ROUTE: /download-code] - Route API backend
     if (req.url === '/download-code') {
         res.writeHead(200, { 'Content-Type': 'application/javascript', 'Content-Disposition': 'attachment; filename="index.js"' });
         return res.end(fs.readFileSync(__filename));
     }
+    // 🚀 [API_ROUTE: /api/logout] - Route API backend
     if (req.url === '/api/logout' && req.method === 'POST') {
         if (req.headers.cookie && req.headers.cookie.includes('auth_session=')) {
             const token = req.headers.cookie.split('auth_session=')[1].split(';')[0];
@@ -1180,6 +1210,7 @@ const server = http.createServer(async (req, res) => {
         res.writeHead(200, { 'Set-Cookie': 'auth_session=; Max-Age=0; HttpOnly; Secure; SameSite=Strict; Path=/', 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({ success: true }));
     }
+    // 🚀 [API_ROUTE: /api/login] - Route API backend
     if (req.url === '/api/login' && req.method === 'POST') {
         let body = ''; let bodySize = 0; req.on('data', chunk => { bodySize += chunk.length; if(bodySize > 5*1024*1024) req.socket.destroy(); else body += chunk; });
         req.on('end', () => {
@@ -1208,6 +1239,7 @@ const server = http.createServer(async (req, res) => {
         }); return;
     }
 
+    // 🚀 [API_ROUTE: /dashboard] - Route API backend
     if ((req.url === '/dashboard' || req.url === '/') && !isAuthenticated) {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         return res.end(`<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no'><title>Nexus Core</title><style>:root { --accent: #10b981; --accent-rgb: 16, 185, 129; }body{font-family:-apple-system,BlinkMacSystemFont,'Inter',sans-serif;background:#050505;color:#f5f5f7;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;overflow:hidden;}.login-box{background:rgba(20,20,22,0.6);backdrop-filter:blur(40px);-webkit-backdrop-filter:blur(40px);padding:60px 50px;border-radius:30px;border:1px solid rgba(255,255,255,0.05);text-align:center;box-shadow:0 30px 60px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.1);width:90%;max-width:440px;box-sizing:border-box; animation: slideUpFade 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity:0; transform:translateY(40px); position:relative; overflow:hidden;} .login-box::before { content:''; position:absolute; top:0; left:-100%; width:50%; height:100%; background:linear-gradient(90deg, transparent, rgba(255,255,255,0.03), transparent); transform:skewX(-20deg); animation: shine 6s infinite; } @keyframes shine { 0% { left: -100%; } 20% { left: 200%; } 100% { left: 200%; } }@keyframes slideUpFade { to { opacity:1; transform:translateY(0); } }@keyframes pulseLogo { 0%, 100% { text-shadow: 0 0 15px rgba(var(--accent-rgb), 0.3); transform: scale(1); } 50% { text-shadow: 0 0 35px rgba(var(--accent-rgb), 0.8); transform: scale(1.02); } }h2{font-weight:800;letter-spacing:4px;color:#fff; margin-bottom:12px; font-size:2.2em; animation: pulseLogo 4s infinite cubic-bezier(0.4, 0, 0.2, 1);}.subtitle { color: rgba(255,255,255,0.4); font-size: 0.8em; letter-spacing: 2px; margin-bottom: 40px; text-transform: uppercase; font-weight:600; }input{background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.08);color:white;padding:20px;border-radius:18px;font-size:24px!important;text-align:center;letter-spacing:18px;text-indent:18px;width:100%;max-width:260px;margin:10px auto 40px auto;outline:none;transition:all 0.4s cubic-bezier(0.16, 1, 0.3, 1);display:block; box-shadow: inset 0 2px 10px rgba(0,0,0,0.5);}input:focus{border-color:var(--accent);box-shadow:0 0 25px rgba(var(--accent-rgb),0.2), inset 0 2px 10px rgba(0,0,0,0.5); background:rgba(var(--accent-rgb),0.02); transform:scale(1.02);}button{background:linear-gradient(135deg, var(--accent), rgba(var(--accent-rgb), 0.8));color:#000;border:none;padding:18px 40px;font-size:1em;border-radius:18px;cursor:pointer;font-weight:700;width:100%;transition:all 0.4s cubic-bezier(0.16, 1, 0.3, 1);text-transform:uppercase;letter-spacing:2px; box-shadow:0 10px 30px rgba(var(--accent-rgb),0.3);}button:hover{transform:translateY(-3px) scale(1.01);box-shadow:0 15px 35px rgba(var(--accent-rgb),0.5); filter:brightness(1.1);}button:active { transform:translateY(1px) scale(0.98); box-shadow:0 5px 15px rgba(var(--accent-rgb),0.3); }.bg-anim { position:absolute; top:50%; left:50%; width: 150vw; height: 150vw; background: radial-gradient(circle, rgba(var(--accent-rgb), 0.05) 0%, transparent 50%); transform: translate(-50%, -50%); z-index: -1; pointer-events: none; animation: bgPulse 8s infinite alternate ease-in-out; } .bg-mesh { position:absolute; inset:0; z-index:-2; background-image: radial-gradient(rgba(255,255,255,0.03) 1px, transparent 1px); background-size: 40px 40px; opacity:0.5; animation: meshMove 20s linear infinite; } @keyframes bgPulse { 0% { transform: translate(-50%, -50%) scale(0.95); opacity: 0.8; } 100% { transform: translate(-50%, -50%) scale(1.05); opacity: 1.2; } } @keyframes meshMove { 0% { background-position: 0 0; } 100% { background-position: 40px 40px; } } 
@@ -1297,16 +1329,19 @@ const server = http.createServer(async (req, res) => {
     eyeIcon.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>';
   }
 }
+    // 🚀 [FUNCTION: login] - Déclaration de fonction
 async function login(){  const btn = document.getElementById('btn');  btn.style.opacity = '0.7';  btn.style.transform = 'scale(0.98)';  if (!document.getElementById('spin-keyframes')) { const style = document.createElement('style'); style.id = 'spin-keyframes'; style.innerHTML = '@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }'; document.head.appendChild(style); } btn.innerHTML = '<svg style="animation: spin 1s linear infinite; width: 20px; height: 20px; vertical-align: middle; margin-right: 10px;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" style="opacity: 0.25;"></circle><path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" style="opacity: 0.75;"></path></svg> Verifying...';  const res=await fetch('/api/login',{method:'POST',body:JSON.stringify({pin:document.getElementById('pin').value})});  if(res.ok) {    btn.style.background = '#fff';    btn.innerHTML = '<svg style="width: 20px; height: 20px; vertical-align: middle; margin-right: 10px;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Granted';    btn.style.transform = 'scale(1.05)';    setTimeout(() => location.reload(), 500);  } else {     btn.style.opacity = '1';    btn.style.transform = 'scale(1)';    btn.innerText = 'Authenticate';    const err = document.getElementById('err'); err.style.display='block';    err.style.animation = 'none'; void err.offsetWidth; err.style.animation = 'slideUpFade 0.3s ease forwards';    setTimeout(() => err.style.display='none', 3000);  }} document.getElementById('pin').addEventListener('keypress', e=>{if(e.key==='Enter')login();});</script></body></html>`);
     }
 
     // === [ANCHOR: API_ROUTES_GET] ===
+    // 🚀 [API_ROUTE: /api/logs] - Route API backend
     if (req.url === '/api/logs' && req.method === 'GET') {
         if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         res.writeHead(200, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify(globalLogs));
     }
 
+    // 🚀 [API_ROUTE: /api/init-data] - Route API backend
     if (req.url === '/api/init-data' && req.method === 'GET') {
         if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         let memberCount = "N/A"; let onlineCount = "N/A"; let activeTickets = 0;
@@ -1325,6 +1360,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
     }
 
     
+    // 🚀 [API_ROUTE: /api/backups] - Route API backend
     if (req.url === '/api/backups' && req.method === 'GET') {
         if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         const fs = require('fs');
@@ -1337,6 +1373,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
         return res.end(JSON.stringify(backups));
     }
 
+    // 🚀 [API_ROUTE_DYNAMIC: /api/backups/download] - Route API dynamique
     if (req.url.startsWith('/api/backups/download') && req.method === 'GET') {
         if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         const urlObj = new URL(req.url, `http://${req.headers.host}`);
@@ -1354,6 +1391,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
         return readStream.pipe(res);
     }
 
+    // 🚀 [API_ROUTE: /api/export] - Route API backend
     if (req.url === '/api/export' && req.method === 'GET') {
         if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         systemLog('INFO', 'DASHBOARD', 'Transaction ledger exported to CSV.');
@@ -1367,6 +1405,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
         return res.end(csv);
     }
 
+    // 🚀 [API_ROUTE: /api/live] - Route API backend
     if (req.url === '/api/live' && req.method === 'GET') {
         if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         const guild = client.guilds.cache.first(); let activeTickets = 0;
@@ -1375,6 +1414,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
         return res.end(JSON.stringify({ txCount: memoryStats.total_transactions, lastTx: Array.isArray(memoryStats.recent_transactions) ? memoryStats.recent_transactions[0] : null, liveTickets: activeTickets }));
     }
 
+    // 🚀 [API_ROUTE: /api/tickets] - Route API backend
     if (req.url === '/api/tickets' && req.method === 'GET') {
         if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         const guild = client.guilds.cache.first();
@@ -1393,6 +1433,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
         return res.end(JSON.stringify(tickets));
     }
 
+    // 🚀 [API_ROUTE_DYNAMIC: /api/tickets/messages] - Route API dynamique
     if (req.url.startsWith('/api/tickets/messages') && req.method === 'GET') {
         if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         const urlObj = new URL(req.url, `http://${req.headers.host}`);
@@ -1422,6 +1463,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
         return res.end(JSON.stringify(msgs));
     }
 
+    // 🚀 [API_ROUTE: /api/monitoring] - Route API backend
     if (req.url === '/api/monitoring' && req.method === 'GET') {
         if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         
@@ -1491,6 +1533,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
         }));
     }
 
+    // 🚀 [API_ROUTE_DYNAMIC: /api/members] - Route API dynamique
     if (req.url.startsWith('/api/members') && req.method === 'GET') {
         if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         const guild = client.guilds.cache.first();
@@ -1522,6 +1565,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
     }
 
     // === [ANCHOR: API_ROUTES_POST_ACTIONS] ===
+    // 🚀 [API_ROUTE: /api/action] - Route API backend
     if (req.url === '/api/action' && req.method === 'POST') {
         if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         let body = ''; req.on('data', chunk => body += chunk.toString());
@@ -2007,6 +2051,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
     }
 
     // === [ANCHOR: DASHBOARD_HTML_INJECTION] ===
+    // 🚀 [API_ROUTE: /dashboard] - Route API backend
     if (req.url === '/dashboard' || req.url === '/') {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         const dashboardHTML = `<!DOCTYPE html>
@@ -2765,6 +2810,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
     
     <script>
         
+        // 🚀 [UI_ACTION: setTheme] - Action d'interface Dashboard
         window.setTheme = function(color) {
             const themes = {
                 green: { hex: '#10b981', rgb: '16, 185, 129', hover: '#34d399' },
@@ -2796,6 +2842,7 @@ if(savedTheme) window.setTheme(savedTheme);
 else window.setTheme('green');
 
 
+    // 🚀 [FUNCTION: getThemeVal] - Déclaration de fonction
         function getThemeVal(key) {
     const color = localStorage.getItem('nexus_theme') || 'green';
     const themes = {
@@ -2811,6 +2858,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         let allMembersData = []; let isMembersLoaded = false; let activeChatChannel = null; let chatPollInterval = null; let terminalInterval = null; let ws = null;
         let trackedTickets = 0, trackedReviews = 0, trackedSales = 0;
         
+        // 🚀 [UI_ACTION: calcCurrency] - Action d'interface Dashboard
         window.calcCurrency = function(source) {
             const rate = parseFloat(document.getElementById('conv-rate').value) || 1.18;
             if(source === 'gbp') {
@@ -2822,6 +2870,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             }
         };
         
+        // 🚀 [UI_ACTION: customPrompt] - Action d'interface Dashboard
         window.customPrompt = function(title, message, placeholder = '', defaultValue = '') {
             return new Promise((resolve) => {
                 const dialog = document.getElementById('premium-dialog');
@@ -2843,6 +2892,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                 inputEl.onkeypress = (e) => { if(e.key === 'Enter') btnConfirm.click(); };
             });
         };
+        // 🚀 [UI_ACTION: customConfirm] - Action d'interface Dashboard
         window.customConfirm = function(title, message) {
             return new Promise((resolve) => {
                 const dialog = document.getElementById('premium-dialog');
@@ -2863,8 +2913,10 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         
         // 🌟 AUDIO ENGINE (Premium Chord Generation)
         let isMuted = false;
+        // 🚀 [UI_ACTION: toggleMute] - Action d'interface Dashboard
         window.toggleMute = function() { isMuted = !isMuted; if(document.getElementById('audioBtn')) document.getElementById('audioBtn').innerText = isMuted ? '🔇' : '🔊'; };
         let audioCtx = null;
+    // 🚀 [FUNCTION: initAudio] - Déclaration de fonction
         function initAudio() {
            try {
                if(!audioCtx && (window.AudioContext || window.webkitAudioContext)) {
@@ -2875,6 +2927,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         }
         document.body.addEventListener('click', initAudio, { once: true });
         
+    // 🚀 [FUNCTION: playSound] - Déclaration de fonction
         function playSound(type) {
            if(isMuted) return;
            try {
@@ -2894,6 +2947,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
            } catch(e) {}
         }
 
+    // 🚀 [FUNCTION: initDashboard] - Déclaration de fonction
         async function initDashboard() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             ws = new WebSocket(protocol + '//' + window.location.host + '/ws');
@@ -2915,6 +2969,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
            if(typeof window.renderSalesChart === 'function') window.renderSalesChart(7);
         }
         
+    // 🚀 [FUNCTION: processInitData] - Déclaration de fonction
         function processInitData(data) { 
             rawStats=data.memoryStats || {}; PRODUCT_DATA=data.PRODUCT_DATA || {}; currentMonthRevenue=data.monthRevenue || 0; PIN=data.PIN || ''; lastTxCount=rawStats.total_transactions||0;
             const notesEl = document.getElementById('personal-notes');
@@ -2961,6 +3016,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         
         function escapeHTML(str){ return str ? String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') : ''; }
         
+    // 🚀 [FUNCTION: updateMaintenanceBadge] - Déclaration de fonction
         function updateMaintenanceBadge(m) { 
             const botStatus = document.querySelector('.bot-status'); 
             if(m && m.active && Date.now() < m.endsAt) { 
@@ -2973,6 +3029,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             } 
         }
 
+    // 🚀 [FUNCTION: updateBadgesAndFeed] - Déclaration de fonction
         function updateBadgesAndFeed(data) { 
             const bChat = document.getElementById('badge-chat'); const bAdmin = document.getElementById('badge-admin'); 
             if(data.activeTickets > 0) { bChat.innerText = data.activeTickets; bChat.style.display = 'inline-block'; } else { bChat.style.display = 'none'; } 
@@ -2988,6 +3045,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             if(document.getElementById('target-feed')) document.getElementById('target-feed').innerHTML = feedHtml; 
         }
 
+    // 🚀 [FUNCTION: buildStaticTables] - Déclaration de fonction
         function buildStaticTables(){
           let txHtml=''; 
           if(rawStats.recent_transactions && rawStats.recent_transactions.length>0){ 
@@ -3126,21 +3184,30 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
           \`;
         }
             
+        // 🚀 [UI_ACTION_ASYNC: moveReq] - Action asynchrone d'interface Dashboard
         window.moveReq = async function(id, status) { await window.executeAction({action:'move_custom_req', id: id, status: status}, false); };
         
+        // 🚀 [UI_ACTION_ASYNC: editStat] - Action asynchrone d'interface Dashboard
         window.editStat = async function(key) {
             const val = await window.customPrompt('OVERRIDE STAT', 'Enter new value (leave empty to revert to auto):', '', '');
             if (val !== null) { await window.executeAction({action:'edit_stat', key: key, value: val}); }
         };
+        // 🚀 [UI_ACTION: editTodayEarnings] - Action d'interface Dashboard
         window.editTodayEarnings = function() { window.editStat('today_rev'); };
 
+        // 🚀 [UI_ACTION_ASYNC: approveReview] - Action asynchrone d'interface Dashboard
         window.approveReview = async function(id) { await window.executeAction({action:'approve_review', id:id}); };
+        // 🚀 [UI_ACTION_ASYNC: rejectReview] - Action asynchrone d'interface Dashboard
         window.rejectReview = async function(id) { const reason = await window.customPrompt('REVIEW REJECTION', 'Specify reason for user log:'); if(reason !== null) await window.executeAction({action:'reject_review', id:id, reason:reason}); };
 
+        // 🚀 [UI_ACTION_ASYNC: toggleAI] - Action asynchrone d'interface Dashboard
         window.toggleAI = async function(state) { await window.executeAction({action:'toggle_ai', state:state}, false); if(state){ document.getElementById('btn-ai-enable').style.background = 'rgba(16,185,129,0.2)'; document.getElementById('btn-ai-disable').style.background = 'transparent'; } else { document.getElementById('btn-ai-enable').style.background = 'transparent'; document.getElementById('btn-ai-disable').style.background = 'rgba(255,69,58,0.2)'; } showToast(state ? 'AI Enabled' : 'AI Disabled'); };
+        // 🚀 [UI_ACTION_ASYNC: toggleMaintenance] - Action asynchrone d'interface Dashboard
         window.toggleMaintenance = async function(state) { const dur = document.getElementById('maint-duration').value; const ch = document.getElementById('maint-channel').value; if(state && !dur) return showToast('T-Minus missing', 'error'); await window.executeAction({action:'toggle_maintenance', state:state, duration:dur, channelId:ch}); };
+        // 🚀 [UI_ACTION_ASYNC: editReferralCount] - Action asynchrone d'interface Dashboard
         window.editReferralCount = async function(id, current) { const n = await window.customPrompt('NODE OVERWRITE', 'Overwrite referral node integer:', '0', current); if(n !== null) { const parsed = parseInt(n); if(!isNaN(parsed)) { await window.executeAction({action:'edit_referral_count', userId:id, newCount: parsed}); } } };
         
+        // 🚀 [UI_ACTION: editProduct] - Action d'interface Dashboard
         window.editProduct = function(id) { 
             const p = rawStats.products[id]; if(!p) return; 
             document.getElementById('editProdId').value = id; 
@@ -3156,6 +3223,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             window.scrollTo({top:0, behavior:'smooth'}); 
         };
         
+        // 🚀 [UI_ACTION: cancelEdit] - Action d'interface Dashboard
         window.cancelEdit = function() { 
             document.getElementById('editProdId').value = ''; 
             document.getElementById('newProdName').value = ''; 
@@ -3169,6 +3237,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             document.getElementById('cancelEditBtn').style.display = 'none'; 
         };
         
+        // 🚀 [UI_ACTION_ASYNC: saveProduct] - Action asynchrone d'interface Dashboard
         window.saveProduct = async function() { 
             const id = document.getElementById('editProdId').value; 
             const n = document.getElementById('newProdName').value; 
@@ -3183,13 +3252,19 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             else { await window.executeAction({action:'add_product', name:n, price:p, stock:s, link:l, desc:d, upsellId:uid, upsellDiscount:udisc}, false); } 
         };
         
+        // 🚀 [UI_ACTION_ASYNC: deleteProduct] - Action asynchrone d'interface Dashboard
         window.deleteProduct = async function(id) { if(await window.customConfirm('ASSET PURGE', 'Purge asset from network?')) await window.executeAction({action:'delete_product', id:id}, false); };
         
+        // 🚀 [UI_ACTION: editBuyLink] - Action d'interface Dashboard
         window.editBuyLink = function(id) { const l = rawStats.buy_links[id]; if(!l) return; document.getElementById('editLinkId').value = id; document.getElementById('newLinkLabel').value = l.label; document.getElementById('newLinkUrl').value = l.url; if(document.getElementById('saveLinkBtn')) document.getElementById('saveLinkBtn').innerText = 'Save Gateway'; document.getElementById('cancelEditLinkBtn').style.display = 'inline-flex'; };
+        // 🚀 [UI_ACTION: cancelEditLink] - Action d'interface Dashboard
         window.cancelEditLink = function() { document.getElementById('editLinkId').value = ''; document.getElementById('newLinkLabel').value = ''; document.getElementById('newLinkUrl').value = ''; if(document.getElementById('saveLinkBtn')) document.getElementById('saveLinkBtn').innerText = 'Link Gateway'; document.getElementById('cancelEditLinkBtn').style.display = 'none'; };
+        // 🚀 [UI_ACTION_ASYNC: saveBuyLink] - Action asynchrone d'interface Dashboard
         window.saveBuyLink = async function() { const id = document.getElementById('editLinkId').value; const label = document.getElementById('newLinkLabel').value; const url = document.getElementById('newLinkUrl').value; if(!label || !url) return showToast('Label & URL required', 'error'); if(id) { await window.executeAction({action:'edit_buy_link', id:id, label:label, url:url}, false); } else { await window.executeAction({action:'add_buy_link', label:label, url:url}, false); } };
+        // 🚀 [UI_ACTION_ASYNC: deleteBuyLink] - Action asynchrone d'interface Dashboard
         window.deleteBuyLink = async function(id) { if(await window.customConfirm('GATEWAY SEVER', 'Sever this gateway link?')) await window.executeAction({action:'delete_buy_link', id:id}, false); };
 
+        // 🚀 [UI_ACTION_ASYNC: createManualTx] - Action asynchrone d'interface Dashboard
         window.createManualTx = async function() {
             const user = document.getElementById('manTxUser').value;
             const prod = document.getElementById('manTxProd').value;
@@ -3219,6 +3294,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             document.getElementById('manTxDate').value = '';
         };
 
+        // 🚀 [UI_ACTION_ASYNC: sendBroadcast] - Action asynchrone d'interface Dashboard
         window.sendBroadcast = async function() {
             const ch = document.getElementById('broadcast-channel').value.trim();
             const msg = document.getElementById('broadcast-msg').value.trim();
@@ -3227,8 +3303,10 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             document.getElementById('broadcast-msg').value = '';
         };
 
+        // 🚀 [UI_ACTION_ASYNC: triggerShopRefresh] - Action asynchrone d'interface Dashboard
         window.triggerShopRefresh = async function() { await window.executeAction({action:'refresh_setup'}, false); };
         
+        // 🚀 [UI_ACTION_ASYNC: fetchLogs] - Action asynchrone d'interface Dashboard
         window.fetchLogs = async function() {
             try {
                 const res = await fetch('/api/logs');
@@ -3246,6 +3324,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             } catch(e) {}
         };
         
+        // 🚀 [UI_ACTION_ASYNC: runDiagnostics] - Action asynchrone d'interface Dashboard
         window.runDiagnostics = async function() {
             if(document.getElementById('ui-upstash-status')) document.getElementById('ui-upstash-status').innerText = '⏳ Executing...';
             document.getElementById('ui-upstash-status').className = 'value text-muted';
@@ -3304,11 +3383,13 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         };
         
         
+        // 🚀 [UI_ACTION: toggleSidebar] - Action d'interface Dashboard
         window.toggleSidebar = function() {
             const sidebar = document.getElementById('sidebar');
             sidebar.classList.toggle('closed');
         };
         
+        // 🚀 [UI_ACTION: saveNotes] - Action d'interface Dashboard
         window.saveNotes = function() {
             clearTimeout(window.notesTimeout);
             window.notesTimeout = setTimeout(() => {
@@ -3317,16 +3398,19 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             }, 1000);
         };
         
+        // 🚀 [UI_ACTION: insertShortcut] - Action d'interface Dashboard
         window.insertShortcut = function(inputId, val) {
             const el = document.getElementById(inputId);
             if(el) { el.value = val; }
         };
 
+        // 🚀 [UI_ACTION: toggleSidebar] - Action d'interface Dashboard
         window.toggleSidebar = function() {
             const sidebar = document.getElementById('sidebar');
             if (sidebar) sidebar.classList.toggle('closed');
         };
         
+        // 🚀 [UI_ACTION: switchTab] - Action d'interface Dashboard
         window.switchTab = function(tabId, btn) {
             if(window.innerWidth <= 900) {
                 const sidebar = document.getElementById('sidebar');
@@ -3368,14 +3452,18 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             if(tabId === 'backups'){ window.loadBackups(); }
         };
         
+    // 🚀 [FUNCTION: showToast] - Déclaration de fonction
         function showToast(msg, type='success') { const t=document.getElementById('toast'); t.innerHTML = (type==='error'?'❌':'✅') + ' <span style="letter-spacing:0.5px;">' + msg + '</span>'; t.style.borderColor = type === 'error' ? 'rgba(239,68,68,0.5)' : 'rgba(var(--accent-green-rgb),0.5)'; t.style.boxShadow = type === 'error' ? '0 10px 30px rgba(239,68,68,0.2)' : '0 10px 30px rgba(var(--accent-green-rgb),0.2)'; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 3000); }
         
+        // 🚀 [UI_ACTION_ASYNC: manualRefresh] - Action asynchrone d'interface Dashboard
         window.manualRefresh = async function() { const btn = document.getElementById('refreshBtn'); btn.classList.add('spinning'); await window.refreshDataSilently(); setTimeout(()=>btn.classList.remove('spinning'), 1000); showToast('Matrix Synced'); };
 
         setInterval(() => { if(document.visibilityState === 'visible') window.refreshDataSilently(true); }, 15000);
 
+        // 🚀 [UI_ACTION_ASYNC: refreshDataSilently] - Action asynchrone d'interface Dashboard
         window.refreshDataSilently = async function(isAutoSync = false) { try{ const res=await fetch('/api/init-data'); if(res.ok){ const data=await res.json(); processInitData(data); if(!isAutoSync){ try { window.cancelEdit(); window.cancelEditLink(); document.getElementById('promoName').value=''; document.getElementById('promoDiscount').value=''; document.getElementById('promoLimit').value=''; } catch(e) {} } } }catch(e){ systemLog('ERROR', 'SYSTEM', e.message); } };
         
+        // 🚀 [UI_ACTION_ASYNC: logoutUser] - Action asynchrone d'interface Dashboard
         window.logoutUser = async function(btnElement) {
             if (!btnElement) btnElement = document.getElementById('logout-btn');
             if (btnElement) {
@@ -3455,12 +3543,17 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                 window.location.reload();
             }, 1800);
         };
+        // 🚀 [UI_ACTION_ASYNC: executeAction] - Action asynchrone d'interface Dashboard
         window.executeAction = async function(p, showModal=false) { /* pin removed */ const res=await fetch('/api/action',{method:'POST',body:JSON.stringify(p)}); if(res.ok) { window.refreshDataSilently(); showToast('Action Successful'); } else { showToast('Action Failed', 'error'); } };
         
+        // 🚀 [UI_ACTION_ASYNC: sendReview] - Action asynchrone d'interface Dashboard
         window.sendReview = async function() { const author = document.getElementById('rev-author').value; const rating = document.getElementById('rev-rating').value; const text = document.getElementById('rev-msg').value; if(!author || !text) return showToast('Parameters missing', 'error'); await window.executeAction({ action: 'post_review', author: author, rating: rating, text: text }); document.getElementById('rev-author').value = ''; document.getElementById('rev-msg').value = ''; };
+        // 🚀 [UI_ACTION_ASYNC: loadAllMembers] - Action asynchrone d'interface Dashboard
         window.loadAllMembers = async function() { if(document.getElementById('memberResults')) document.getElementById('memberResults').innerHTML = '<p class="text-muted" style="font-family:monospace;">Syncing directory...</p>'; try { const res = await fetch('/api/members'); if (!res.ok) throw new Error('Error'); allMembersData = await res.json(); isMembersLoaded = true; window.sortMembersLocally(); } catch (e) { if(document.getElementById('memberResults')) document.getElementById('memberResults').innerHTML = '<p class="text-pink">Network failure.</p>'; } };
+        // 🚀 [UI_ACTION: sortMembersLocally] - Action d'interface Dashboard
         window.sortMembersLocally = function() { const sortType = document.getElementById('memberSortSelect').value; const statusFilter = document.getElementById('memberStatusSelect').value; let filtered = [...allMembersData]; if (statusFilter === 'online') { filtered = filtered.filter(m => m.status !== 'offline'); } if (sortType === 'recent') filtered.sort(function(a, b) { return b.joinedTimestamp - a.joinedTimestamp; }); else if (sortType === 'oldest') filtered.sort(function(a, b) { return a.joinedTimestamp - b.joinedTimestamp; }); else if (sortType === 'spent_desc') filtered.sort(function(a, b) { return b.totalSpent - a.totalSpent; }); else if (sortType === 'spent_asc') filtered.sort(function(a, b) { return a.totalSpent - b.totalSpent; }); else if (sortType === 'warns') filtered.sort(function(a, b) { return b.warns.length - a.warns.length; }); const q = document.getElementById('memberSearchInput').value.toLowerCase(); if (q) { filtered = filtered.filter(function(m) { return m.username.toLowerCase().includes(q) || m.id.includes(q); }); } renderMembers(filtered); };
         window.filterMembersLocally = window.sortMembersLocally;
+    // 🚀 [FUNCTION: renderMembers] - Déclaration de fonction
         function renderMembers(members) { 
             if (members.length === 0) { if(document.getElementById('memberResults')) document.getElementById('memberResults').innerHTML = '<p class="text-pink" style="font-family:monospace;">0 Nodes Discovered.</p>'; return; } 
             let html = ''; 
@@ -3525,10 +3618,14 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             }); 
             if(document.getElementById('memberResults')) document.getElementById('memberResults').innerHTML = html; 
         }
+        // 🚀 [UI_ACTION_ASYNC: modAction] - Action asynchrone d'interface Dashboard
         window.modAction = async function(action, userId, extra) { extra = extra || {}; let payload = { action: action, userId: userId, pin: PIN }; if (extra.channelId) payload.channelId = extra.channelId; if (extra.duration) payload.duration = extra.duration; if (action === 'warn') { payload.reason = await window.customPrompt('WARNING', 'Input warning parameter (User will be DM\\'d)'); if (!payload.reason) return; } else if (action === 'clear_warns') { if (!(await window.customConfirm('PURGE', 'Purge all risk logs for this node?'))) return; } else if (action === 'mute') { if(!payload.duration) payload.duration = await window.customPrompt('TIMEOUT', 'Timeout duration (minutes)?', '60', '60'); if(!payload.duration) return; payload.reason = await window.customPrompt('TIMEOUT', 'Reason for timeout?'); if (!payload.reason) return; } else if (action === 'kick' || action === 'ban') { payload.reason = await window.customPrompt('EXPULSION', 'Reason for ' + action + '?'); if (!payload.reason || !(await window.customConfirm('CONFIRM', 'Execute ' + action + '?'))) return; } else if (action === 'toggle_blacklist') { if (!(await window.customConfirm('ACCESS', 'Toggle shop access for this node?'))) return; } else if (action === 'close_channel') { if (!(await window.customConfirm('SEVER', 'Sever this link?'))) return; } try { const res = await fetch('/api/action', { method: 'POST', body: JSON.stringify(payload) }); if (res.ok) { showToast('Action Successful'); setTimeout(function() { window.loadAllMembers(); }, 1000); } else showToast('Action Failed', 'error'); } catch(e) { showToast('Network Error', 'error'); } };
+        // 🚀 [UI_ACTION_ASYNC: refundTx] - Action asynchrone d'interface Dashboard
         window.refundTx = async function(date, username) { if(await window.customConfirm('REVERSE TX', 'Reverse this transaction? Yield will be adjusted.')) { await window.executeAction({action: 'refund_tx', date: date, username: username}); } };
+        // 🚀 [UI_ACTION_ASYNC: testActionLatency] - Action asynchrone d'interface Dashboard
         window.testActionLatency = async function() { const resultDiv = document.getElementById('latency-result'); resultDiv.innerText = 'Pinging...'; resultDiv.style.color = 'var(--text-muted)'; const startTime = Date.now(); try { const res = await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'ping_test', pin: PIN }) }); if (res.ok) { const totalTime = Date.now() - startTime; resultDiv.innerText = totalTime + ' ms'; if (totalTime < 500) resultDiv.style.color = getThemeVal('hex'); else if (totalTime < 1500) resultDiv.style.color = 'var(--accent-orange)'; else resultDiv.style.color = 'var(--accent-red)'; } else { resultDiv.innerText = 'Error'; resultDiv.style.color = 'var(--accent-red)'; } } catch(e) { resultDiv.innerText = 'Net Error'; resultDiv.style.color = 'var(--accent-red)'; } };
         
+        // 🚀 [UI_ACTION_ASYNC: loadTicketsForChat] - Action asynchrone d'interface Dashboard
         window.loadTicketsForChat = async function() { 
     try { 
         const res = await fetch('/api/tickets'); 
@@ -3553,18 +3650,29 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         } else { 
             const shopTickets = tickets.filter(t => t.name.startsWith('shop-')); 
             const supportTickets = tickets.filter(t => t.name.startsWith('support-')); if(shopTickets.length > 0) { html += '<div style="font-size:0.85em; text-transform:uppercase; color:var(--accent-green); font-weight:700; margin: 10px 0 5px 5px; border-bottom: 0.5px solid rgba(var(--accent-green-rgb), 0.2); padding-bottom:5px; letter-spacing:0.5px;">🛒 Shop (' + shopTickets.length + ')</div>'; shopTickets.forEach(t => { const isActive = activeChatChannel === t.id ? 'active' : ''; html += '<div class="ticket-item ' + isActive + '" onclick="window.openTicketChat(\\'' + t.id + '\\')">' + escapeHTML(t.name) + '</div>'; }); } if(supportTickets.length > 0) { html += '<div style="font-size:0.85em; text-transform:uppercase; color:var(--accent-orange); font-weight:700; margin: 20px 0 5px 5px; border-bottom: 0.5px solid rgba(245, 158, 11, 0.2); padding-bottom:5px; letter-spacing:0.5px;">🎧 Support (' + supportTickets.length + ')</div>'; supportTickets.forEach(t => { const isActive = activeChatChannel === t.id ? 'active' : ''; html += '<div class="ticket-item ' + isActive + '" onclick="window.openTicketChat(\\'' + t.id + '\\')">' + escapeHTML(t.name) + '</div>'; }); } } if(document.getElementById('chat-ticket-list')) document.getElementById('chat-ticket-list').innerHTML = html; } catch(e) {} };
+        // 🚀 [UI_ACTION: openTicketChat] - Action d'interface Dashboard
         window.openTicketChat = function(channelId) { activeChatChannel = channelId; window.loadTicketsForChat(); if(document.getElementById('chat-messages-area')) document.getElementById('chat-messages-area').innerHTML = '<div style="margin:auto; color:var(--accent-green);"><div style="width:40px; height:40px; border:3px solid rgba(var(--accent-green-rgb), 0.1); border-top:3px solid var(--accent-green); border-radius:50%; animation:spin 1s linear infinite; margin:auto; box-shadow:0 0 15px rgba(var(--accent-green-rgb), 0.5);"></div></div>'; window.fetchChatMessages(); };
+        // 🚀 [UI_ACTION_ASYNC: fetchChatMessages] - Action asynchrone d'interface Dashboard
         window.fetchChatMessages = async function() { if(!activeChatChannel) return; try { const res = await fetch('/api/tickets/messages?channelId=' + activeChatChannel); const msgs = await res.json(); let html = ''; if(msgs.length === 0) html = '<p class="text-muted text-center" style="margin:auto; font-family:monospace;">Awaiting transmission...</p>'; else { msgs.forEach(m => { const bubbleClass = m.isBot ? 'bot' : 'user'; const imgHtml = m.imageUrl ? '<br><img src="' + escapeHTML(m.imageUrl) + '" class="chat-img-preview" style="max-width:100%; border-radius:12px; margin-top:10px; cursor:pointer; border:0.5px solid rgba(255,255,255,0.1);" onclick="window.open(\\'' + escapeHTML(m.imageUrl) + '\\')">' : ''; const actionsHtml = '<div class="chat-bubble-actions" style="display:none; position:absolute; top:-15px; ' + (m.isBot ? 'left:15px;' : 'right:15px;') + ' background:rgba(0,0,0,0.8); backdrop-filter:blur(10px); border:0.5px solid rgba(255,255,255,0.1); border-radius:12px; padding:4px 8px; gap:8px; box-shadow:0 5px 15px rgba(0,0,0,0.3);"><button style="background:none; border:none; cursor:pointer; font-size:1.1em; transition:transform 0.2s;" onclick="window.reactMessage(\\'' + m.id + '\\', \\'👍\\')">👍</button><button style="background:none; border:none; cursor:pointer; font-size:1.1em; transition:transform 0.2s;" onclick="window.reactMessage(\\'' + m.id + '\\', \\'❤️\\')">❤️</button></div>'; html += '<div class="chat-bubble ' + bubbleClass + '" onmouseover="this.querySelector(\\' .chat-bubble-actions\\').style.display=\\'flex\\'" onmouseout="this.querySelector(\\' .chat-bubble-actions\\').style.display=\\'none\\'"><div class="chat-author">' + escapeHTML(m.author) + '</div>' + escapeHTML(m.content) + imgHtml + actionsHtml + '</div>'; }); } const area = document.getElementById('chat-messages-area'); const isAtBottom = area.scrollHeight - area.scrollTop <= area.clientHeight + 100; area.innerHTML = html; if(isAtBottom) area.scrollTop = area.scrollHeight; } catch(e) {} };
+        // 🚀 [UI_ACTION_ASYNC: sendChatMessage] - Action asynchrone d'interface Dashboard
         window.sendChatMessage = async function() { if(!activeChatChannel) return showToast('Select line first', 'error'); const input = document.getElementById('chat-input-text'); const fileInput = document.getElementById('chat-file-input'); const text = input.value.trim(); const file = fileInput.files[0]; if(!text && !file) return; input.value = ''; document.getElementById('attach-badge').style.display='none'; let base64 = null; if (file) { const reader = new FileReader(); reader.readAsDataURL(file); await new Promise(r => reader.onload = r); base64 = reader.result; fileInput.value = ''; } try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'send_ticket_message', channelId: activeChatChannel, message: text, imageBase64: base64, pin: PIN }) }); window.fetchChatMessages(); } catch(e) { showToast('Transmission Failed', 'error'); } };
+        // 🚀 [UI_ACTION_ASYNC: reactMessage] - Action asynchrone d'interface Dashboard
         window.reactMessage = async function(msgId, emoji) { if(!activeChatChannel) return; try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'react_ticket_message', channelId: activeChatChannel, messageId: msgId, emoji: emoji, pin: PIN }) }); showToast('Reaction sent'); } catch (e) { showToast('Failure', 'error'); } };
+        // 🚀 [UI_ACTION_ASYNC: sendQuickResponse] - Action asynchrone d'interface Dashboard
         window.sendQuickResponse = async function(type) { if(!activeChatChannel) return showToast('Select line first', 'error'); let msg = ''; if(type === 'welcome') msg = '👋 Hello! How can I help you today?'; else if(type === 'wait') { const mins = await window.customPrompt('TRANSMISSION DELAY', 'Delay in minutes?', '5', '5'); if(!mins) return; msg = '⏳ Please wait for about ' + mins + ' minutes, an admin is looking into it.'; } else if(type === 'resolved') msg = '✅ Did this resolve your issue, or do you have any other questions?';
         else if(type === 'review') msg = '⭐ If you are happy with the service, please consider leaving a review! It helps us a lot.'; else if(type === 'close') { if(!(await window.customConfirm('SEVER COMMS', 'Sever this communication line?'))) return; msg = '🔒 Closing this ticket. Have a great day!'; await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'send_ticket_message', channelId: activeChatChannel, message: msg, pin: PIN }) }); window.fetchChatMessages(); setTimeout(async () => { await window.executeAction({ action: 'close_channel', channelId: activeChatChannel }, false); activeChatChannel = null; window.loadTicketsForChat(); if(document.getElementById('chat-messages-area')) document.getElementById('chat-messages-area').innerHTML = '<div style="margin:auto; text-align:center; opacity:0.3;"><div style="font-size:3em; margin-bottom:10px;">💬</div><div style="font-weight:500;">Select a conversation</div></div>'; }, 2000); return; } if(msg) { try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'send_ticket_message', channelId: activeChatChannel, message: msg, pin: PIN }) }); window.fetchChatMessages(); } catch(e) { showToast('Transmission Failed', 'error'); } } };
 
+        // 🚀 [UI_ACTION_ASYNC: createPromo] - Action asynchrone d'interface Dashboard
         window.createPromo = async function() { const name = document.getElementById('promoName').value.trim().toUpperCase(); const discount = parseInt(document.getElementById('promoDiscount').value); const limit = parseInt(document.getElementById('promoLimit').value); if(!name || isNaN(discount) || isNaN(limit)) { return showToast('Invalid parameters', 'error'); } if(discount < 1 || discount > 100) return showToast('Discount 1-100', 'error'); await window.executeAction({ action: 'create_promo', name: name, discount: discount, limit: limit }); };
+        // 🚀 [UI_ACTION_ASYNC: deletePromo] - Action asynchrone d'interface Dashboard
         window.deletePromo = async function(code) { if(await window.customConfirm('VOUCHER PURGE', 'Purge voucher ' + decodeURIComponent(code) + '?')) { await window.executeAction({ action: 'delete_promo', name: decodeURIComponent(code) }); } };
+        // 🚀 [UI_ACTION: updateRefThreshold] - Action d'interface Dashboard
         window.updateRefThreshold = function() { const val = document.getElementById('ref-threshold').value; if(val) window.executeAction({action:'update_ref_threshold', threshold: val}); };
+        // 🚀 [UI_ACTION_ASYNC: openDirectContact] - Action asynchrone d'interface Dashboard
         window.openDirectContact = async function(id) { const msg = await window.customPrompt('DIRECT MESSAGE', 'Input DM payload:'); if(msg) await window.executeAction({action:'send_dm', userId: id, message: msg}); };
+        // 🚀 [UI_ACTION_ASYNC: saveUserNote] - Action asynchrone d'interface Dashboard
         window.saveUserNote = async function(id) { const note = document.getElementById('note-'+id).value; fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'save_note', userId: id, note: note, pin: PIN }) }).then(r => { if(r.ok) showToast('Saved'); }); };
+        // 🚀 [UI_ACTION_ASYNC: manageVip] - Action asynchrone d'interface Dashboard
         window.manageVip = async function(userId, action) { if(action === 'add') { await window.executeAction({action: 'add_vip_days', userId: userId, days: 7}); } else if(action === 'revoke') { if(await window.customConfirm('VIP REVOKE', 'Revoke VIP status for this node?')) { await window.executeAction({action: 'revoke_vip', userId: userId}); } } };
 
         if(typeof Chart !== 'undefined') {
@@ -3572,6 +3680,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, Inter, sans-serif';
             // Suppress global animation overhead to prevent hover blocking
         }
+        // 🚀 [UI_ACTION: renderSalesChart] - Action d'interface Dashboard
         window.renderSalesChart = function(days) { 
             try {
                 if(typeof Chart === 'undefined') return; 
@@ -3625,12 +3734,14 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                 }); 
             } catch(e) { console.error("Chart Render Error:", e); }
         };
+        // 🚀 [UI_ACTION: updateSalesChart] - Action d'interface Dashboard
         window.updateSalesChart = function(days) { 
             if(document.getElementById('btn-chart-7')) document.getElementById('btn-chart-7').className = days === 7 ? 'admin-btn btn-green' : 'admin-btn';
             if(document.getElementById('btn-chart-30')) document.getElementById('btn-chart-30').className = days === 30 ? 'admin-btn btn-green' : 'admin-btn';
             if(document.getElementById('btn-chart-all')) document.getElementById('btn-chart-all').className = days === 0 ? 'admin-btn btn-green' : 'admin-btn';
             window.renderSalesChart(days); 
         };
+    // 🚀 [FUNCTION: renderAnalyticsCharts] - Déclaration de fonction
         function renderAnalyticsCharts() { 
            if(typeof Chart === 'undefined') return;
            try { const canvas = document.getElementById('hourlyChart'); if(canvas) { const ctxHourly = canvas.getContext('2d'); if(window.hourlyChart instanceof Chart) window.hourlyChart.destroy(); window.hourlyChart = new Chart(ctxHourly, { type: 'bar', data: { labels: Array.from({length: 24}, (_, i) => i+'h'), datasets: [{ label: 'Sales', data: rawStats.analytics.hourly_sales || Array(24).fill(0), backgroundColor: getThemeVal('hex'), hoverBackgroundColor: '#fff', borderRadius: 6 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false } }, scales: { y: { grid: { color: 'rgba(255,255,255,0.05)' }, border: {display: false}, beginAtZero: true }, x: { grid: { display: false }, border: {display: false} } } } }); } } catch(e) { console.error("Hourly Chart Error", e); }
@@ -3639,6 +3750,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
            try { const canvas = document.getElementById('dowChart'); if(canvas) { const dowSales = { 'Sun':0, 'Mon':0, 'Tue':0, 'Wed':0, 'Thu':0, 'Fri':0, 'Sat':0 }; const daysArr = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']; Object.entries(rawStats.revenue || {}).forEach(([dateStr, val]) => { const d = new Date(dateStr); if(!isNaN(d)) { dowSales[daysArr[d.getDay()]] += parseFloat(val); } }); const ctxDow = canvas.getContext('2d'); if(window.dowChartInst instanceof Chart) window.dowChartInst.destroy(); window.dowChartInst = new Chart(ctxDow, { type: 'bar', data: { labels: daysArr, datasets: [{ label: 'Revenue (£)', data: daysArr.map(d=>dowSales[d]), backgroundColor: getThemeVal('hex'), hoverBackgroundColor: '#fff', borderRadius: 8 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false } }, scales: { y: { grid: { color: 'rgba(255,255,255,0.05)' }, border: {display: false}, beginAtZero: true }, x: { grid: { display: false }, border: {display: false} } } } }); } } catch(e) { console.error("Dow Chart Error", e); }
            try { const canvas = document.getElementById('funnelChart'); if(canvas) { const ticketsOpened = rawStats.analytics?.tickets_opened || 0; const salesClosed = rawStats.total_transactions || 0; const ctxFunnel = canvas.getContext('2d'); if(window.funnelChartInst instanceof Chart) window.funnelChartInst.destroy(); window.funnelChartInst = new Chart(ctxFunnel, { type: 'doughnut', data: { labels: ['Tickets Opened (No Purchase)', 'Successful Sales'], datasets: [{ data: [Math.max(0, ticketsOpened - salesClosed), salesClosed], backgroundColor: ['rgba(239, 68, 68, 0.8)', 'rgba(' + getThemeVal('rgb') + ', 0.8)'], hoverOffset: 15, borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, cutout: '75%', plugins: { legend: { position: 'bottom', labels: { color: '#8e8e93' } } } } }); } } catch(e) { console.error("Funnel Chart Error", e); }
         }
+        // 🚀 [UI_ACTION_ASYNC: loadBackups] - Action asynchrone d'interface Dashboard
         window.loadBackups = async function() {
             try {
                 const res = await fetch('/api/backups');
@@ -3649,6 +3761,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             } catch(e) { console.error('Failed to load backups', e); }
         };
         
+        // 🚀 [UI_ACTION_ASYNC: forceBackup] - Action asynchrone d'interface Dashboard
         window.forceBackup = async function() {
             if(!confirm('Force a manual cloud backup on the server?')) return;
             try {
@@ -3660,6 +3773,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             }
         };
 
+        // 🚀 [UI_ACTION_ASYNC: saveRawDb] - Action asynchrone d'interface Dashboard
         window.saveRawDb = async function() {
             if(!confirm('DANGER: Saving raw JSON! Are you absolutely sure the syntax is perfect?')) return;
             const val = document.getElementById('dev-raw-db').value;
@@ -3667,6 +3781,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             await window.executeAction({ action: 'update_raw_db', json: val }, false);
             showToast('Cloud database forcefully overridden!');
         };
+        // 🚀 [UI_ACTION: importBackupFile] - Action d'interface Dashboard
         window.importBackupFile = function(event) {
             const file = event.target.files[0];
             if (!file) return;
