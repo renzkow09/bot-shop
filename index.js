@@ -35,6 +35,25 @@ const os = require('os');
 process.on('unhandledRejection', (reason, p) => { systemLog('ERROR', 'SYSTEM', `Unhandled Rejection: ${reason}`); });
 process.on('uncaughtException', (err, origin) => { systemLog('CRITICAL', 'SYSTEM', `Uncaught Exception: ${err.message}`); });
 
+const shutdown = async (signal) => {
+    systemLog('WARN', 'SYSTEM', `${signal} received. Graceful shutdown initiated (Deploy/Restart)...`);
+    try {
+        if (client && client.ws) {
+            client.destroy();
+            systemLog('INFO', 'DISCORD', 'Client connection closed securely.');
+        }
+        await syncCloud(); // Ensure final state is saved to Upstash/Disk
+        systemLog('INFO', 'SYSTEM', 'Final cloud sync complete. Exiting gracefully.');
+    } catch (e) {
+        systemLog('CRITICAL', 'SYSTEM', `Error during shutdown: ${e.message}`);
+    }
+    process.exit(0);
+};
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
+
+
 // === [ANCHOR: CONFIG_AND_CONSTANTS] ===
 const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
 const REWARBLE_API_KEY = process.env.REWARBLE_API_KEY;
@@ -3451,10 +3470,57 @@ server.on('upgrade', (request, socket, head) => {
 systemLog('INFO', 'SYSTEM', 'Starting Nexus Bot instance...');
 console.log('Token:', DISCORD_BOT_TOKEN ? '✅ Présent' : '❌ Manquant');
 
+// 🔒 AUTO-PATCHNOTE FOR NEW DEPLOYMENTS
+try {
+    const { execSync } = require('child_process');
+    let currentCommit = 'unknown';
+    let commitMsg = 'Nouvelle mise à jour / Déploiement automatique.';
+
+    try {
+        currentCommit = execSync('git rev-parse HEAD').toString().trim();
+        commitMsg = execSync('git log -1 --pretty=%B').toString().trim();
+    } catch (gitErr) {
+        if (process.env.RENDER_GIT_COMMIT) {
+            currentCommit = process.env.RENDER_GIT_COMMIT;
+            commitMsg = 'Déploiement Render détecté via RENDER_GIT_COMMIT.';
+        }
+    }
+
+    if (currentCommit !== 'unknown' && memoryStats.last_commit !== currentCommit) {
+        systemLog('INFO', 'DEPLOYMENT', `New deployment detected: ${currentCommit}`);
+        if (!memoryStats.patchnotes) memoryStats.patchnotes = [];
+        
+        memoryStats.patchnotes.push({
+            date: new Date().toISOString(),
+            text: `🚀 <strong>Déploiement / Mise à jour :</strong> ${commitMsg}`
+        });
+        
+        memoryStats.last_commit = currentCommit;
+        syncCloud();
+    }
+} catch (e) {
+    systemLog('WARN', 'DEPLOYMENT', `Failed to process auto-patchnote: ${e.message}`);
+}
+
+
 if (DISCORD_BOT_TOKEN) {
-    client.login(DISCORD_BOT_TOKEN).catch(e => {
-        systemLog('CRITICAL', 'DISCORD_CORE', `Failed to login to Discord: ${e.message}`);
-    });
+    const loginWithRetry = async (retries = 10, delay = 5000) => {
+        for (let i = 0; i < retries; i++) {
+            try {
+                await client.login(DISCORD_BOT_TOKEN);
+                systemLog('INFO', 'DISCORD_CORE', 'Successfully connected to Discord API.');
+                return;
+            } catch (e) {
+                systemLog('CRITICAL', 'DISCORD_CORE', `Failed to login to Discord (Attempt ${i + 1}/${retries}): ${e.message}`);
+                if (i < retries - 1) {
+                    systemLog('INFO', 'DISCORD_CORE', `Retrying in ${delay / 1000}s...`);
+                    await new Promise(res => setTimeout(res, delay));
+                }
+            }
+        }
+        systemLog('CRITICAL', 'DISCORD_CORE', 'Exhausted all login retries. Bot will remain in degraded mode (Dashboard only).');
+    };
+    loginWithRetry();
 } else {
     systemLog('WARN', 'SYSTEM', 'Skipping Discord login because DISCORD_BOT_TOKEN is missing.');
 }
