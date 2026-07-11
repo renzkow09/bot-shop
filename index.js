@@ -572,7 +572,7 @@ client.on('interactionCreate', async (interaction) => {
                 
                 userTicketLocks.add(interaction.user.id);
                 setTimeout(() => userTicketLocks.delete(interaction.user.id), 5000);
-                await interaction.deferReply({ flags: 64 }).catch(() => {});
+                await interaction.reply({ content: '⏳ Channel is being created, please wait...', ephemeral: true }).catch(() => {});
 
                 if (!memoryStats.analytics) memoryStats.analytics = { tickets_opened: 0, hourly_sales: Array(24).fill(0) };
                 memoryStats.analytics.tickets_opened = (memoryStats.analytics.tickets_opened || 0) + 1;
@@ -593,7 +593,7 @@ client.on('interactionCreate', async (interaction) => {
                     systemLog('INFO', 'TICKET_SYS', `Shop ticket generated for ${interaction.user.username}`);
                     channelStates.set(channel.id, { validated: false, processing: false, promo: null, redeemed: false });
                     await channel.send(`👋 Welcome <@${interaction.user.id}>!\n\n**Please paste your Rewarble voucher code or Promo Code below.**`).catch(() => {});
-                    await interaction.editReply({ content: `✅ Room ready: <#${channel.id}>` }).catch(() => {});
+                    await interaction.editReply({ content: `✅ Your channel is ready: <#${channel.id}>` }).catch(() => {});
                 } else { await interaction.editReply({ content: `❌ Error creating the room.` }).catch(() => {}); }
             
             } else if (interaction.customId === 'open_support_ticket') {
@@ -614,7 +614,7 @@ client.on('interactionCreate', async (interaction) => {
                 
                 userTicketLocks.add(interaction.user.id);
                 setTimeout(() => userTicketLocks.delete(interaction.user.id), 5000);
-                await interaction.deferReply({ flags: 64 }).catch(() => {});
+                await interaction.reply({ content: '⏳ Channel is being created, please wait...', ephemeral: true }).catch(() => {});
 
                 const channel = await interaction.guild.channels.create({
                     name: `support-${sanitizedName}`, type: ChannelType.GuildText, parent: CATEGORY_SUPPORT_ID,
@@ -630,7 +630,7 @@ client.on('interactionCreate', async (interaction) => {
                     addActivity('ticket', `🎧 New support ticket opened by ${interaction.user.username}`);
                     systemLog('INFO', 'TICKET_SYS', `Support ticket generated for ${interaction.user.username}`);
                     await channel.send(`🎧 **Support Ticket for <@${interaction.user.id}>**`).catch(() => {});
-                    await interaction.editReply({ content: `✅ Support room created: <#${channel.id}>` }).catch(() => {});
+                    await interaction.editReply({ content: `✅ Your channel is ready: <#${channel.id}>` }).catch(() => {});
                 }
             }
         }
