@@ -563,16 +563,7 @@ client.on('interactionCreate', async (interaction) => {
                 userTicketLocks.add(interaction.user.id);
                 setTimeout(() => userTicketLocks.delete(interaction.user.id), 10000);
                 
-                let replied = false;
-                try {
-                    // This acts as a distributed lock across multiple bot instances!
-                    // Only ONE instance can successfully reply to an interaction.
-                    await interaction.reply({ content: '⏳ Channel is being created, please wait...', ephemeral: true });
-                    replied = true;
-                } catch (e) {
-                    // Interaction already acknowledged by another instance. Abort.
-                }
-                if (!replied) return;
+                await interaction.reply({ content: '⏳ Channel is being created, please wait...', ephemeral: true }).catch(() => {});
                 
                 // 🛡️ ANTI-SPAM TICKET CHECK (Redirect to existing channel if already created)
                 const sanitizedName = interaction.user.username.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -614,16 +605,7 @@ client.on('interactionCreate', async (interaction) => {
                 userTicketLocks.add(interaction.user.id);
                 setTimeout(() => userTicketLocks.delete(interaction.user.id), 10000);
                 
-                let replied = false;
-                try {
-                    // This acts as a distributed lock across multiple bot instances!
-                    // Only ONE instance can successfully reply to an interaction.
-                    await interaction.reply({ content: '⏳ Channel is being created, please wait...', ephemeral: true });
-                    replied = true;
-                } catch (e) {
-                    // Interaction already acknowledged by another instance. Abort.
-                }
-                if (!replied) return;
+                await interaction.reply({ content: '⏳ Channel is being created, please wait...', ephemeral: true }).catch(() => {});
                 
                 // 🛡️ ANTI-SPAM TICKET CHECK (Redirect to existing channel if already created)
                 const sanitizedName = interaction.user.username.toLowerCase().replace(/[^a-z0-9]/g, '');
