@@ -1297,7 +1297,7 @@ const server = http.createServer(async (req, res) => {
     eyeIcon.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>';
   }
 }
-async function login(){  const btn = document.getElementById('btn');  btn.style.opacity = '0.5';  btn.style.transform = 'scale(0.98)';  btn.innerText = 'Verifying...';  const res=await fetch('/api/login',{method:'POST',body:JSON.stringify({pin:document.getElementById('pin').value})});  if(res.ok) {    btn.style.background = '#fff';    btn.innerText = 'Granted';    btn.style.transform = 'scale(1.05)';    setTimeout(() => location.reload(), 500);  } else {     btn.style.opacity = '1';    btn.style.transform = 'scale(1)';    btn.innerText = 'Authenticate';    const err = document.getElementById('err'); err.style.display='block';    err.style.animation = 'none'; void err.offsetWidth; err.style.animation = 'slideUpFade 0.3s ease forwards';    setTimeout(() => err.style.display='none', 3000);  }} document.getElementById('pin').addEventListener('keypress', e=>{if(e.key==='Enter')login();});</script></body></html>`);
+async function login(){  const btn = document.getElementById('btn');  btn.style.opacity = '0.7';  btn.style.transform = 'scale(0.98)';  if (!document.getElementById('spin-keyframes')) { const style = document.createElement('style'); style.id = 'spin-keyframes'; style.innerHTML = '@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }'; document.head.appendChild(style); } btn.innerHTML = '<svg style="animation: spin 1s linear infinite; width: 20px; height: 20px; vertical-align: middle; margin-right: 10px;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" style="opacity: 0.25;"></circle><path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" style="opacity: 0.75;"></path></svg> Verifying...';  const res=await fetch('/api/login',{method:'POST',body:JSON.stringify({pin:document.getElementById('pin').value})});  if(res.ok) {    btn.style.background = '#fff';    btn.innerHTML = '<svg style="width: 20px; height: 20px; vertical-align: middle; margin-right: 10px;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Granted';    btn.style.transform = 'scale(1.05)';    setTimeout(() => location.reload(), 500);  } else {     btn.style.opacity = '1';    btn.style.transform = 'scale(1)';    btn.innerText = 'Authenticate';    const err = document.getElementById('err'); err.style.display='block';    err.style.animation = 'none'; void err.offsetWidth; err.style.animation = 'slideUpFade 0.3s ease forwards';    setTimeout(() => err.style.display='none', 3000);  }} document.getElementById('pin').addEventListener('keypress', e=>{if(e.key==='Enter')login();});</script></body></html>`);
     }
 
     // === [ANCHOR: API_ROUTES_GET] ===
@@ -2318,7 +2318,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                 <button class='nav-btn' onclick='window.switchTab("backups", this)'>Backups</button>
                 <button class='nav-btn' onclick='window.switchTab("admin", this)'>Settings <span class='nav-badge' id='badge-admin'>0</span></button>
                 
-                <button class='btn-red' style='margin-top:auto;' onclick='window.logoutUser()'>Logout</button>
+                <button class='btn-red' id='logout-btn' style='margin-top:auto;' onclick='window.logoutUser(this)'>Logout</button>
             </nav>
         </aside>
         
@@ -3365,7 +3365,19 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
 
         window.refreshDataSilently = async function(isAutoSync = false) { try{ const res=await fetch('/api/init-data'); if(res.ok){ const data=await res.json(); processInitData(data); if(!isAutoSync){ try { window.cancelEdit(); window.cancelEditLink(); document.getElementById('promoName').value=''; document.getElementById('promoDiscount').value=''; document.getElementById('promoLimit').value=''; } catch(e) {} } } }catch(e){ systemLog('ERROR', 'SYSTEM', e.message); } };
         
-        window.logoutUser = async function() {
+        window.logoutUser = async function(btnElement) {
+            if (!btnElement) btnElement = document.getElementById('logout-btn');
+            if (btnElement) {
+                if (!document.getElementById('spin-keyframes')) {
+                    const style = document.createElement('style');
+                    style.id = 'spin-keyframes';
+                    style.innerHTML = '@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }';
+                    document.head.appendChild(style);
+                }
+                btnElement.innerHTML = '<svg style="animation: spin 1s linear infinite; width: 16px; height: 16px; vertical-align: middle; margin-right: 8px;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" style="opacity: 0.25;"></circle><path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" style="opacity: 0.75;"></path></svg> Logging out...';
+                btnElement.style.opacity = '0.7';
+                btnElement.style.pointerEvents = 'none';
+            }
             const overlay = document.createElement('div');
             overlay.style.position = 'fixed';
             overlay.style.top = '0';
