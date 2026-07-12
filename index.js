@@ -210,6 +210,13 @@ async function loadCloudStats() {
             if (!memoryStats.analytics.hourly_sales) memoryStats.analytics.hourly_sales = Array(24).fill(0);
             if (!memoryStats.products || Object.keys(memoryStats.products).length === 0) memoryStats.products = INITIAL_PRODUCTS;
             
+            if (!memoryStats.revenue) memoryStats.revenue = {};
+            if (!memoryStats.joins) memoryStats.joins = {};
+            if (!memoryStats.leaves) memoryStats.leaves = {};
+            if (!memoryStats.product_sales) memoryStats.product_sales = {};
+            if (!memoryStats.recent_transactions) memoryStats.recent_transactions = {};
+            if (!memoryStats.user_history) memoryStats.user_history = {};
+            if (!memoryStats.user_spending) memoryStats.user_spending = {};
             if (memoryStats.revenue) {
                 let total = 0;
                 for (const val of Object.values(memoryStats.revenue)) {
@@ -1473,7 +1480,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
         const todayStr = new Date().toISOString().split('T')[0];
         let monthRevenue = 0; if(memoryStats.revenue) Object.keys(memoryStats.revenue).forEach(date => { if(date.startsWith(todayStr.substring(0, 7))) monthRevenue += parseFloat(memoryStats.revenue[date]) || 0; });
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify({ memoryStats, maintenance: memoryStats.settings?.maintenance, pendingReviewsCount: memoryStats.pending_reviews?.length || 0, activeTickets: activeTickets, todayRevenue: memoryStats.revenue[todayStr] || 0, monthRevenue, ticketsOpened: memoryStats.analytics?.tickets_opened || 0, dropOffRate: memoryStats.analytics?.tickets_opened > 0 ? (100 - (memoryStats.total_transactions / memoryStats.analytics.tickets_opened) * 100).toFixed(1) : 0, peakHourStr: "N/A", conversionRate: ((memoryStats.total_transactions / (memoryStats.total_joins || 1)) * 100).toFixed(1), retentionRate: memberCount !== "N/A" ? ((memberCount / (memberCount + (memoryStats.total_leaves || 0))) * 100).toFixed(1) : "N/A", onlineCount, memberCount, MONTHLY_GOAL, /* PIN removed */ }));
+        return res.end(JSON.stringify({ memoryStats, maintenance: memoryStats.settings?.maintenance, pendingReviewsCount: memoryStats.pending_reviews?.length || 0, activeTickets: activeTickets, todayRevenue: (memoryStats.revenue && memoryStats.revenue[todayStr]) || 0, monthRevenue, ticketsOpened: memoryStats.analytics?.tickets_opened || 0, dropOffRate: memoryStats.analytics?.tickets_opened > 0 ? (100 - (memoryStats.total_transactions / memoryStats.analytics.tickets_opened) * 100).toFixed(1) : 0, peakHourStr: "N/A", conversionRate: ((memoryStats.total_transactions / (memoryStats.total_joins || 1)) * 100).toFixed(1), retentionRate: memberCount !== "N/A" ? ((memberCount / (memberCount + (memoryStats.total_leaves || 0))) * 100).toFixed(1) : "N/A", onlineCount, memberCount, MONTHLY_GOAL, /* PIN removed */ }));
     }
 
     
