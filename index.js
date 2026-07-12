@@ -3258,7 +3258,8 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             if(typeof window.renderSalesChart === 'function') window.renderSalesChart(7);
         }
         
-        function escapeHTML(str){ return str ? String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') : ''; }
+        function escapeHTML(str){ return str ? String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;') : ''; }
+        function escapeJS(str){ return str ? String(str).replace(/\\/g, '\\\\').replace(/'/g, '\\'').replace(/"/g, '\\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r') : ''; }
         
     // 🚀 [FUNCTION: updateMaintenanceBadge] - Déclaration de fonction
         function updateMaintenanceBadge(m) { 
@@ -3346,8 +3347,8 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             transHtml += '<td><strong>' + escapeHTML(t.name) + '</strong></td>';
             transHtml += '<td class="text-muted">' + new Date(t.date).toLocaleString() + '</td>';
             transHtml += '<td>';
-            transHtml += '<button class="admin-btn btn-green" style="margin:0; font-size:0.75em; padding:6px 12px;" onclick="window.downloadTranscript(&quot;' + escapeHTML(t.name) + '&quot;, &quot;' + safeHtml + '&quot;)">📥 Download</button> ';
-            transHtml += '<button class="admin-btn" style="margin:0; font-size:0.75em; padding:6px 12px; color:var(--accent-red);" onclick="window.deleteTranscript(&quot;' + t.id + '&quot;)">🗑️ Delete</button>';
+            transHtml += '<button class="admin-btn btn-green" style="margin:0; font-size:0.75em; padding:6px 12px;" onclick="window.downloadTranscript(decodeURIComponent(\'\' + encodeURIComponent(t.name) + \'\'), decodeURIComponent(\'\' + encodeURIComponent(safeHtml) + \'\'))">📥 Download</button> ';
+            transHtml += '<button class="admin-btn" style="margin:0; font-size:0.75em; padding:6px 12px; color:var(--accent-red);" onclick="window.deleteTranscript(decodeURIComponent(\'\' + encodeURIComponent(t.id) + \'\'))">🗑️ Delete</button>';
             transHtml += '</td>';
             transHtml += '</tr>';
         });
