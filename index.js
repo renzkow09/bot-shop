@@ -2417,10 +2417,14 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
         .nav-menu { display: flex; flex-direction: column; gap: 8px; padding: 20px; overflow-y: auto; flex: 1; }
         .nav-group { font-size: 0.7em; color: var(--text-muted); font-weight: 700; margin-top: 15px; margin-bottom: 5px; letter-spacing: 1px; }
         
-        .patchnotes-list { display: flex; flex-direction: column; gap: 15px; max-width: 800px; margin: 0 auto; padding-bottom: 50px; }
-        .patchnote-item { background: rgba(255,255,255,0.02); border: 0.5px solid rgba(255,255,255,0.05); padding: 20px; border-radius: 16px; display: flex; flex-direction: column; gap: 10px; }
-        .patchnote-date { color: var(--accent-green); font-size: 0.85em; font-weight: 600; }
-        .patchnote-text { color: #fff; font-size: 0.95em; line-height: 1.5; }
+        .patchnotes-list { display: flex; flex-direction: column; gap: 20px; max-width: 800px; margin: 0 auto; padding-bottom: 50px; }
+        .patchnote-item { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 25px; border-radius: 16px; display: flex; flex-direction: column; gap: 12px; position: relative; overflow: hidden; transition: transform 0.3s ease, background 0.3s ease, border-color 0.3s ease; }
+        .patchnote-item:hover { transform: translateY(-2px); background: rgba(255,255,255,0.05); border-color: rgba(var(--accent-rgb), 0.4); }
+        .patchnote-item::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--accent); border-radius: 4px 0 0 4px; }
+        .patchnote-date { color: var(--accent); font-size: 0.85em; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; display: flex; align-items: center; gap: 8px; }
+        .patchnote-date::before { content: '🗓️'; font-size: 1.1em; }
+        .patchnote-text { color: #e5e5ea; font-size: 1.05em; line-height: 1.6; }
+        .patchnote-text strong { color: #fff; font-weight: 600; }
         
         @media screen and (max-width: 900px) {
           .overview-grid, .chat-container { grid-template-columns: 1fr !important; flex-direction: column; height: auto; }
@@ -2639,6 +2643,10 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
            <div id='patchnotes' class='tab-content'>
              <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom: 25px;'>
                  <h2 style='font-size: 1.8em; font-weight: 700; letter-spacing: -0.5px;'>Patchnotes</h2>
+                 <button class='admin-btn btn-green' onclick='window.requestNotificationPermission()' style='display:flex; align-items:center; gap:8px; font-size: 0.75em; padding: 8px 14px; border-radius: 10px;'>
+                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+                     Enable Push Notifications
+                 </button>
              </div>
              <div class='patchnotes-list' id='patchnotesList'>
                  <!-- Dynamically generated -->
@@ -3294,7 +3302,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
            let pnHtml = '';
            if(rawStats.patchnotes && rawStats.patchnotes.length > 0) {
                [...rawStats.patchnotes].reverse().forEach(pn => {
-                   pnHtml += '<div class="patchnote-item"><div class="patchnote-date">' + new Date(pn.date).toLocaleString() + '</div><div class="patchnote-text">' + pn.text + '</div></div>';
+                   pnHtml += '<div class="patchnote-item"><div class="patchnote-date">' + new Date(pn.date).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) + '</div><div class="patchnote-text">' + pn.text + '</div></div>';
                });
            } else {
                pnHtml = "<div style='text-align:center; color:gray;'>No patchnotes available yet.</div>";
@@ -4021,6 +4029,20 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
            try { const canvas = document.getElementById('funnelChart'); if(canvas) { const ticketsOpened = rawStats.analytics?.tickets_opened || 0; const salesClosed = rawStats.total_transactions || 0; const ctxFunnel = canvas.getContext('2d'); if(window.funnelChartInst instanceof Chart) window.funnelChartInst.destroy(); window.funnelChartInst = new Chart(ctxFunnel, { type: 'doughnut', data: { labels: ['Tickets Opened (No Purchase)', 'Successful Sales'], datasets: [{ data: [Math.max(0, ticketsOpened - salesClosed), salesClosed], backgroundColor: ['rgba(239, 68, 68, 0.8)', 'rgba(' + getThemeVal('rgb') + ', 0.8)'], hoverOffset: 15, borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, cutout: '75%', plugins: { legend: { position: 'bottom', labels: { color: '#8e8e93' } } } } }); } } catch(e) { console.error("Funnel Chart Error", e); }
         }
         // 🚀 [UI_ACTION_ASYNC: loadBackups] - Action asynchrone d'interface Dashboard
+        window.requestNotificationPermission = async function() {
+            if (!("Notification" in window)) {
+                showToast("This browser does not support desktop notifications", "error");
+            } else if (Notification.permission === "granted") {
+                showToast("Push notifications are already enabled!", "success");
+            } else if (Notification.permission !== "denied") {
+                const permission = await Notification.requestPermission();
+                if (permission === "granted") {
+                    showToast("Push notifications successfully enabled!", "success");
+                } else {
+                    showToast("Permission denied for push notifications", "error");
+                }
+            }
+        };
         window.loadBackups = async function() {
             try {
                 const res = await fetch('/api/backups');
@@ -4096,39 +4118,6 @@ server.on('upgrade', (request, socket, head) => {
 // === [ANCHOR: STARTUP_DEBUG] ===
 systemLog('INFO', 'SYSTEM', 'Starting Nexus Bot instance...');
 console.log('Token:', DISCORD_BOT_TOKEN ? '✅ Présent' : '❌ Manquant');
-
-// 🔒 AUTO-PATCHNOTE FOR NEW DEPLOYMENTS
-try {
-    const { execSync } = require('child_process');
-    let currentCommit = 'unknown';
-    let commitMsg = 'Nouvelle mise à jour / Déploiement automatique.';
-
-    try {
-        currentCommit = execSync('git rev-parse HEAD').toString().trim();
-        commitMsg = execSync('git log -1 --pretty=%B').toString().trim();
-    } catch (gitErr) {
-        if (process.env.RENDER_GIT_COMMIT) {
-            currentCommit = process.env.RENDER_GIT_COMMIT;
-            commitMsg = 'Déploiement Render détecté via RENDER_GIT_COMMIT.';
-        }
-    }
-
-    if (currentCommit !== 'unknown' && memoryStats.last_commit !== currentCommit) {
-        systemLog('INFO', 'DEPLOYMENT', `New deployment detected: ${currentCommit}`);
-        if (!memoryStats.patchnotes) memoryStats.patchnotes = [];
-        
-        memoryStats.patchnotes.push({
-            date: new Date().toISOString(),
-            text: `🚀 <strong>Déploiement / Mise à jour :</strong> ${commitMsg}`
-        });
-        
-        memoryStats.last_commit = currentCommit;
-        syncCloud();
-    }
-} catch (e) {
-    systemLog('WARN', 'DEPLOYMENT', `Failed to process auto-patchnote: ${e.message}`);
-}
-
 
 if (DISCORD_BOT_TOKEN) {
     const loginWithRetry = async (retries = 10, delay = 5000) => {
