@@ -402,6 +402,15 @@ async function generateTranscript(channel) {
         html += `</body></html>`;
         
         fs.writeFileSync(`./transcript-${channel.id}.html`, html);
+        if (!memoryStats.transcripts) memoryStats.transcripts = [];
+        memoryStats.transcripts.unshift({
+            id: channel.id,
+            name: channel.name,
+            date: new Date().toISOString(),
+            html: html
+        });
+        if (memoryStats.transcripts.length > 30) memoryStats.transcripts.length = 30;
+        syncCloud();
         return `./transcript-${channel.id}.html`;
     } catch(e) { console.error("Transcript err:", e); return null; }
 }
@@ -950,11 +959,13 @@ client.on('messageCreate', async (message) => {
                    let catalogStr = Object.values(memoryStats.products).map(p => p.name + " (£" + p.price + ")").join(", ");
                    
                    const aiRes = await ai.models.generateContent({
-                       model: 'gemini-3.5-flash',
+                       model: 'gemini-3.1-pro-preview',
                        contents: "User message: " + message.content + "\nCatalog: " + catalogStr,
                        config: {
-                           systemInstruction: 'You are an AI support agent. Format your response exactly as JSON: {"sentiment": "Urgent" | "Angry" | "Neutral" | "Happy", "reply": "Your helpful response"}. Use the catalog to answer product questions.',
+                           systemInstruction: 'You are an AI support agent. Format your response exactly as JSON: {"sentiment": "Urgent" | "Angry" | "Neutral" | "Happy", "reply": "Your helpful response"}. Use the catalog to answer product questions. If they ask about real world info, you can use googleSearch.',
                            responseMimeType: "application/json",
+                           thinkingConfig: { thinkingLevel: 'HIGH' },
+                           tools: [{ googleSearch: {} }]
                        }
                    });
                    
@@ -2500,6 +2511,41 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                     <div class='nav-brand' style='font-size: 1.2em;'>Admin Dashboard</div>
                 </div>
                 <div class='controls' style='display:flex; align-items:center; gap:10px;'>
+                    <button class='btn-icon' onclick='window.testNotification = function() {
+            showToast('Notification scheduled in 5 seconds...', 'success');
+            setTimeout(() => {
+                if (Notification.permission === "granted") {
+                    new Notification("Nexus Dashboard", { body: "This is a test notification!", icon: "https://cdn.discordapp.com/embed/avatars/0.png" });
+                } else {
+                    showToast('Notification permission not granted.', 'error');
+                }
+            }, 5000);
+        };
+        
+        window.downloadTranscript = function(name, safeHtml) {
+            try {
+                const html = decodeURIComponent(safeHtml);
+                const blob = new Blob([html], { type: 'text/html' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = 'Transcript_' + name + '.html';
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+                showToast('Transcript downloaded!', 'success');
+            } catch(e) { showToast('Error decoding transcript', 'error'); }
+        };
+
+        window.deleteTranscript = async function(id) {
+            if(confirm("Delete this transcript permanently?")) {
+                await window.executeAction({action: 'delete_transcript', id: id}, false);
+            }
+        };
+
+        window.requestNotificationPermission()' id='notifBtn' title='Enable Notifications' style='color: var(--accent-green);'>🔔</button>
                     <button class='btn-icon' onclick='window.toggleMute()' id='audioBtn' title='Toggle Sound'>🔊</button>
                     <button class='btn-icon' onclick='window.manualRefresh()' id='refreshBtn' title='Sync Data'>🔄</button>
                     <div class='bot-status'><div class='status-dot'></div> Online</div>
@@ -2595,7 +2641,19 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                        </div>
                        <button class='admin-btn btn-green' style='margin:0;' onclick='window.loadTicketsForChat()'>🔄 Synchronise</button>
                    </div>
-                   <div class='chat-container' style='margin-top:20px;'>
+                   <div class='box' style='margin-top:25px;'>
+    <div style='display:flex; justify-content:space-between; align-items:center;'>
+        <h2>📜 Automated HTML Transcripts</h2>
+    </div>
+    <p class='text-muted' style='font-size:0.9em; margin-bottom:15px;'>View and download transcripts of closed tickets.</p>
+    <div style='overflow-x:auto;'>
+        <table>
+            <thead><tr><th>Ticket Name</th><th>Closed Date</th><th>Actions</th></tr></thead>
+            <tbody id='target-transcripts'></tbody>
+        </table>
+    </div>
+</div>
+<div class='chat-container' style='margin-top:20px;'>
                        <div class='ticket-list' id='chat-ticket-list'><p class='text-muted text-center' style='margin-top:20px;'>Syncing channels...</p></div>
                        <div class='chat-window'>
                            <div class='chat-messages' id='chat-messages-area'>
@@ -2643,10 +2701,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
            <div id='patchnotes' class='tab-content'>
              <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom: 25px;'>
                  <h2 style='font-size: 1.8em; font-weight: 700; letter-spacing: -0.5px;'>Patchnotes</h2>
-                 <button class='admin-btn btn-green' onclick='window.requestNotificationPermission()' style='display:flex; align-items:center; gap:8px; font-size: 0.75em; padding: 8px 14px; border-radius: 10px;'>
-                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
-                     Enable Push Notifications
-                 </button>
+                 
              </div>
              <div class='patchnotes-list' id='patchnotesList'>
                  <!-- Dynamically generated -->
@@ -2907,7 +2962,30 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
             
             <div id='admin' class='tab-content'>
 
-                <div class='box'>
+                <div class='box' style='border:1px solid rgba(16,185,129,0.2); background:rgba(16,185,129,0.05); margin-bottom:20px;'>
+    <h2 style='color:var(--accent-green); margin-top:0;'>🔔 Push Notifications Setup</h2>
+    <p class='text-muted'>Test your browser push notifications to ensure they are working properly.</p>
+    <div style='display:flex; gap:15px; margin-top:20px;'>
+        <button class='admin-btn' onclick='window.testNotification()'>Test Notification (5s delay)</button>
+    </div>
+</div>
+
+<div class='box' style='border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.02); margin-bottom:20px;'>
+    <h2>🖼️ Visual Embed Generator</h2>
+    <p class='text-muted'>Create and push a custom embed to a specific Discord channel.</p>
+    <div style='display:flex; flex-direction:column; gap:15px; margin-top:20px;'>
+        <input type='text' id='embedChannel' placeholder='Target Channel ID'>
+        <input type='text' id='embedTitle' placeholder='Embed Title'>
+        <input type='text' id='embedDesc' placeholder='Embed Description (Message)'>
+        <div style='display:flex; gap:15px;'>
+            <input type='text' id='embedColor' placeholder='Hex Color Code (e.g. #10b981)' style='flex:1;'>
+            <input type='text' id='embedImg' placeholder='Image URL (Optional)' style='flex:2;'>
+        </div>
+        <button class='admin-btn btn-green' onclick='window.sendEmbed()' style='width:100%;'>📤 Publish Embed</button>
+    </div>
+</div>
+
+<div class='box'>
                     <h2>🎨 Dashboard Theme</h2>
                     <p class='text-muted'>Customize the dashboard accent color. Changes apply locally.</p>
                     <div style='display:flex; gap:15px; margin-top:20px; align-items:center;'>
@@ -3286,7 +3364,26 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
           } 
           if(document.getElementById('target-joins')) document.getElementById('target-joins').innerHTML = jHtml;
 
-          let lHtml=''; 
+          
+    let transHtml = '';
+    if (rawStats.transcripts && rawStats.transcripts.length > 0) {
+        rawStats.transcripts.forEach((t) => {
+            const safeHtml = encodeURIComponent(t.html);
+            transHtml += '<tr>';
+            transHtml += '<td><strong>' + escapeHTML(t.name) + '</strong></td>';
+            transHtml += '<td class="text-muted">' + new Date(t.date).toLocaleString() + '</td>';
+            transHtml += '<td>';
+            transHtml += '<button class="admin-btn btn-green" style="margin:0; font-size:0.75em; padding:6px 12px;" onclick="window.downloadTranscript(\'' + escapeHTML(t.name) + '\', \'' + safeHtml + '\')">📥 Download</button> ';
+            transHtml += '<button class="admin-btn" style="margin:0; font-size:0.75em; padding:6px 12px; color:var(--accent-red);" onclick="window.deleteTranscript(\'' + t.id + '\')">🗑️ Delete</button>';
+            transHtml += '</td>';
+            transHtml += '</tr>';
+        });
+    } else {
+        transHtml = '<tr><td colspan="3" class="text-center text-muted">No transcripts available. Close a ticket to generate one.</td></tr>';
+    }
+    if(document.getElementById('target-transcripts')) document.getElementById('target-transcripts').innerHTML = transHtml;
+
+    let lHtml=''; 
           if(rawStats.recent_leaves){ 
               rawStats.recent_leaves.forEach(u=>{ 
                   let durStr='Unknown'; 
