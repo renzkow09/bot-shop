@@ -4174,9 +4174,9 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             }
 
             if(txs.length === 0) return alert("No transactions to export.");
-            let csv = "Date,Client,Product,Price\n";
+            let csv = "Date,Client,Product,Price\\n";
             txs.forEach(tx => {
-                csv += '"' + tx.date + '","' + tx.username + '","' + tx.product + '","' + tx.price + '"\n';
+                csv += '"' + tx.date + '","' + tx.username + '","' + tx.product + '","' + tx.price + '"\\n';
             });
             const blob = new Blob([csv], { type: 'text/csv' });
             const url = window.URL.createObjectURL(blob);
@@ -4229,7 +4229,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                     const avatarId = (tx.username && tx.username.length > 0) ? (tx.username.charCodeAt(0) % 5) : 0;
                     const avatar = 'https://cdn.discordapp.com/embed/avatars/' + avatarId + '.png';
                     
-                    html += "<tr style='border-bottom:1px solid rgba(255,255,255,0.03); transition:all 0.3s ease;' onmouseover=\"this.style.background='rgba(255,255,255,0.03)'; this.style.transform='scale(1.002)';\" onmouseout=\"this.style.background='transparent'; this.style.transform='scale(1)';\">" +
+                    html += "<tr style='border-bottom:1px solid rgba(255,255,255,0.03); transition:all 0.3s ease;' onmouseover=\\"this.style.background='rgba(255,255,255,0.03)'; this.style.transform='scale(1.002)';\\" onmouseout=\\"this.style.background='transparent'; this.style.transform='scale(1)';\\">" +
                         "<td style='padding:20px 30px; display:flex; align-items:center; gap:15px;'>" +
                             "<img src='" + avatar + "' style='width:40px; height:40px; border-radius:50%; border:2px solid rgba(255,255,255,0.1); box-shadow:0 4px 10px rgba(0,0,0,0.3);'>" +
                             "<span style='font-weight:600; font-size:1.05em; color:#f3f4f6;'>" + escapeHTML(tx.username) + "</span>" +
@@ -4252,10 +4252,10 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                         "</td>" +
                         "<td style='padding:20px 30px; text-align:right;'>" +
                             "<div style='display:flex; justify-content:flex-end; gap:10px;'>" +
-                                "<button class='admin-btn' style='padding:8px 14px; background:rgba(10,132,255,0.1); color:var(--accent-blue); margin:0; border:1px solid rgba(10,132,255,0.2); font-size:0.85em; display:flex; align-items:center; gap:6px; font-weight:600; border-radius:8px; transition:all 0.2s;' onmouseover=\"this.style.background='rgba(10,132,255,0.2)';\" onmouseout=\"this.style.background='rgba(10,132,255,0.1)';\" onclick=\"window.checkMarketPrice('" + escapeInlineJS(tx.product) + "')\">" +
+                                "<button class='admin-btn' style='padding:8px 14px; background:rgba(10,132,255,0.1); color:var(--accent-blue); margin:0; border:1px solid rgba(10,132,255,0.2); font-size:0.85em; display:flex; align-items:center; gap:6px; font-weight:600; border-radius:8px; transition:all 0.2s;' onmouseover=\\"this.style.background='rgba(10,132,255,0.2)';\\" onmouseout=\\"this.style.background='rgba(10,132,255,0.1)';\\" onclick=\\"window.checkMarketPrice('" + escapeInlineJS(tx.product) + "')\\">" +
                                     "<svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><circle cx='11' cy='11' r='8'></circle><line x1='21' y1='21' x2='16.65' y2='16.65'></line></svg> Market" +
                                 "</button>" +
-                                "<button class='admin-btn' style='padding:8px 14px; background:rgba(255,69,58,0.1); color:var(--accent-red); margin:0; border:1px solid rgba(255,69,58,0.2); font-size:0.85em; display:flex; align-items:center; gap:6px; font-weight:600; border-radius:8px; transition:all 0.2s;' onmouseover=\"this.style.background='rgba(255,69,58,0.2)';\" onmouseout=\"this.style.background='rgba(255,69,58,0.1)';\" onclick=\"window.refundTx('" + escapeInlineJS(tx.date) + "', '" + escapeInlineJS(tx.username) + "')\">" +
+                                "<button class='admin-btn' style='padding:8px 14px; background:rgba(255,69,58,0.1); color:var(--accent-red); margin:0; border:1px solid rgba(255,69,58,0.2); font-size:0.85em; display:flex; align-items:center; gap:6px; font-weight:600; border-radius:8px; transition:all 0.2s;' onmouseover=\\"this.style.background='rgba(255,69,58,0.2)';\\" onmouseout=\\"this.style.background='rgba(255,69,58,0.1)';\\" onclick=\\"window.refundTx('" + escapeInlineJS(tx.date) + "', '" + escapeInlineJS(tx.username) + "')\\">" +
                                     "<svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><polyline points='3 6 5 6 21 6'></polyline><path d='M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2'></path></svg> Refund" +
                                 "</button>" +
                             "</div>" +
