@@ -3346,8 +3346,8 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             transHtml += '<td><strong>' + escapeHTML(t.name) + '</strong></td>';
             transHtml += '<td class="text-muted">' + new Date(t.date).toLocaleString() + '</td>';
             transHtml += '<td>';
-            transHtml += '<button class="admin-btn btn-green" style="margin:0; font-size:0.75em; padding:6px 12px;" onclick="window.downloadTranscript(\'' + escapeHTML(t.name) + '\', \'' + safeHtml + '\')">📥 Download</button> ';
-            transHtml += '<button class="admin-btn" style="margin:0; font-size:0.75em; padding:6px 12px; color:var(--accent-red);" onclick="window.deleteTranscript(\'' + t.id + '\')">🗑️ Delete</button>';
+            transHtml += '<button class="admin-btn btn-green" style="margin:0; font-size:0.75em; padding:6px 12px;" onclick="window.downloadTranscript(&quot;' + escapeHTML(t.name) + '&quot;, &quot;' + safeHtml + '&quot;)">📥 Download</button> ';
+            transHtml += '<button class="admin-btn" style="margin:0; font-size:0.75em; padding:6px 12px; color:var(--accent-red);" onclick="window.deleteTranscript(&quot;' + t.id + '&quot;)">🗑️ Delete</button>';
             transHtml += '</td>';
             transHtml += '</tr>';
         });
