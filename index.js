@@ -1,3 +1,4 @@
+require('dotenv').config({ path: __dirname + '/.env' });
 // === [ANCHOR: IMPORTS_AND_CRASH_HANDLER] ===
 const { Client, GatewayIntentBits, Partials, ButtonBuilder, ActionRowBuilder, ButtonStyle, ChannelType, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, EmbedBuilder, AttachmentBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 
@@ -966,7 +967,7 @@ client.on('messageCreate', async (message) => {
                    let catalogStr = Object.values(memoryStats.products).map(p => p.name + " (£" + p.price + ")").join(", ");
                    
                    const aiRes = await ai.models.generateContent({
-                       model: 'gemini-3.1-pro-preview',
+                       model: 'gemini-3.5-flash',
                        contents: "User message: " + message.content + "\nCatalog: " + catalogStr,
                        config: {
                            systemInstruction: 'You are an AI support agent. Format your response exactly as JSON: {"sentiment": "Urgent" | "Angry" | "Neutral" | "Happy", "reply": "Your helpful response"}. Use the catalog to answer product questions. If they ask about real world info, you can use googleSearch.',
@@ -2079,6 +2080,10 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                         }
                     }
                 }
+                else if (data.action === 'get_transcript') {
+                    const t = (memoryStats.transcripts || []).find(x => x.id === data.id);
+                    return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ html: t ? t.html : '' }));
+                }
                 else if (data.action === 'delete_transcript') {
                     if (memoryStats.transcripts) {
                         memoryStats.transcripts = memoryStats.transcripts.filter(t => t.id !== data.id);
@@ -2186,7 +2191,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                             const recent = (memoryStats.recent_transactions || []).slice(0, 50).map(t => `${t.date} | User: ${t.username} | Prod: ${t.product} | £${t.price}`).join("\n");
                             const prompt = `Analyze these recent transactions and provide a professional financial summary, identify trends, and note any anomalies or insights:\n\n${recent}`;
                             const aiRes = await ai.models.generateContent({
-                                model: 'gemini-3.1-pro-preview',
+                                model: 'gemini-3.5-flash',
                                 contents: prompt,
                                 config: {
                                     systemInstruction: 'You are an expert financial analyst. Return the response in clean HTML format (using <h3>, <p>, <ul>, <li>, <strong>) ready to be injected into a dashboard modal. Keep it concise, qualitative, and professional. Do not use markdown blocks.',
@@ -3520,12 +3525,12 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
     let transHtml = '';
     if (rawStats.transcripts && rawStats.transcripts.length > 0) {
         rawStats.transcripts.forEach((t) => {
-            const safeHtml = encodeURIComponent(t.html);
+            
             transHtml += '<tr>';
             transHtml += '<td><strong>' + escapeHTML(t.name) + '</strong></td>';
             transHtml += '<td class="text-muted">' + new Date(t.date).toLocaleString() + '</td>';
             transHtml += '<td>';
-            transHtml += '<button class="admin-btn btn-green" style="margin:0; font-size:0.75em; padding:6px 12px;" onclick="window.downloadTranscript(decodeURIComponent(\\'\\' + encodeURIComponent(t.name) + \\'\\'), decodeURIComponent(\\'\\' + encodeURIComponent(safeHtml) + \\'\\'))">📥 Download</button> ';
+            transHtml += '<button class="admin-btn btn-green" style="margin:0; font-size:0.75em; padding:6px 12px;" onclick="window.downloadTranscript('\'' + escapeInlineJS(t.id) + '\'', '\'' + escapeInlineJS(t.name) + '\'')">📥 Download</button> ';
             transHtml += '<button class="admin-btn" style="margin:0; font-size:0.75em; padding:6px 12px; color:var(--accent-red);" onclick="window.deleteTranscript(decodeURIComponent(\\'\\' + encodeURIComponent(t.id) + \\'\\'))">🗑️ Delete</button>';
             transHtml += '</td>';
             transHtml += '</tr>';
@@ -4462,10 +4467,17 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             }, 5000);
         };
 
-        window.downloadTranscript = function(name, safeHtml) {
+        window.downloadTranscript = async function(id, name) {
             try {
-                const html = decodeURIComponent(safeHtml);
-                const blob = new Blob([html], { type: 'text/html' });
+                const res = await fetch('/api/action', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'get_transcript', id: id, pin: PIN })
+                });
+                const data = await res.json();
+                if(!data.html) return showToast('Transcript not found', 'error');
+                
+                const blob = new Blob([data.html], { type: 'text/html' });
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.style.display = 'none';
@@ -4476,7 +4488,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                 window.URL.revokeObjectURL(url);
                 document.body.removeChild(a);
                 showToast('Transcript downloaded!', 'success');
-            } catch(e) { showToast('Error decoding transcript', 'error'); }
+            } catch(e) { showToast('Error downloading transcript', 'error'); }
         };
 
         window.deleteTranscript = async function(id) {
