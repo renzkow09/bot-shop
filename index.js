@@ -2511,41 +2511,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                     <div class='nav-brand' style='font-size: 1.2em;'>Admin Dashboard</div>
                 </div>
                 <div class='controls' style='display:flex; align-items:center; gap:10px;'>
-                    <button class='btn-icon' onclick='window.testNotification = function() {
-            showToast('Notification scheduled in 5 seconds...', 'success');
-            setTimeout(() => {
-                if (Notification.permission === "granted") {
-                    new Notification("Nexus Dashboard", { body: "This is a test notification!", icon: "https://cdn.discordapp.com/embed/avatars/0.png" });
-                } else {
-                    showToast('Notification permission not granted.', 'error');
-                }
-            }, 5000);
-        };
-        
-        window.downloadTranscript = function(name, safeHtml) {
-            try {
-                const html = decodeURIComponent(safeHtml);
-                const blob = new Blob([html], { type: 'text/html' });
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.style.display = 'none';
-                a.href = url;
-                a.download = 'Transcript_' + name + '.html';
-                document.body.appendChild(a);
-                a.click();
-                window.URL.revokeObjectURL(url);
-                document.body.removeChild(a);
-                showToast('Transcript downloaded!', 'success');
-            } catch(e) { showToast('Error decoding transcript', 'error'); }
-        };
-
-        window.deleteTranscript = async function(id) {
-            if(confirm("Delete this transcript permanently?")) {
-                await window.executeAction({action: 'delete_transcript', id: id}, false);
-            }
-        };
-
-        window.requestNotificationPermission()' id='notifBtn' title='Enable Notifications' style='color: var(--accent-green);'>🔔</button>
+                    <button class='btn-icon' onclick='window.requestNotificationPermission()' id='notifBtn' title='Enable Notifications' style='color: var(--accent-green);'>🔔</button>
                     <button class='btn-icon' onclick='window.toggleMute()' id='audioBtn' title='Toggle Sound'>🔊</button>
                     <button class='btn-icon' onclick='window.manualRefresh()' id='refreshBtn' title='Sync Data'>🔄</button>
                     <div class='bot-status'><div class='status-dot'></div> Online</div>
@@ -4126,6 +4092,41 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
            try { const canvas = document.getElementById('funnelChart'); if(canvas) { const ticketsOpened = rawStats.analytics?.tickets_opened || 0; const salesClosed = rawStats.total_transactions || 0; const ctxFunnel = canvas.getContext('2d'); if(window.funnelChartInst instanceof Chart) window.funnelChartInst.destroy(); window.funnelChartInst = new Chart(ctxFunnel, { type: 'doughnut', data: { labels: ['Tickets Opened (No Purchase)', 'Successful Sales'], datasets: [{ data: [Math.max(0, ticketsOpened - salesClosed), salesClosed], backgroundColor: ['rgba(239, 68, 68, 0.8)', 'rgba(' + getThemeVal('rgb') + ', 0.8)'], hoverOffset: 15, borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, cutout: '75%', plugins: { legend: { position: 'bottom', labels: { color: '#8e8e93' } } } } }); } } catch(e) { console.error("Funnel Chart Error", e); }
         }
         // 🚀 [UI_ACTION_ASYNC: loadBackups] - Action asynchrone d'interface Dashboard
+        
+        window.testNotification = function() {
+            showToast('Notification scheduled in 5 seconds...', 'success');
+            setTimeout(() => {
+                if (Notification.permission === "granted") {
+                    new Notification("Nexus Dashboard", { body: "This is a test notification!", icon: "https://cdn.discordapp.com/embed/avatars/0.png" });
+                } else {
+                    showToast('Notification permission not granted.', 'error');
+                }
+            }, 5000);
+        };
+
+        window.downloadTranscript = function(name, safeHtml) {
+            try {
+                const html = decodeURIComponent(safeHtml);
+                const blob = new Blob([html], { type: 'text/html' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = 'Transcript_' + name + '.html';
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+                showToast('Transcript downloaded!', 'success');
+            } catch(e) { showToast('Error decoding transcript', 'error'); }
+        };
+
+        window.deleteTranscript = async function(id) {
+            if(confirm("Delete this transcript permanently?")) {
+                await window.executeAction({action: 'delete_transcript', id: id}, false);
+            }
+        };
+
         window.requestNotificationPermission = async function() {
             if (!("Notification" in window)) {
                 showToast("This browser does not support desktop notifications", "error");
