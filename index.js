@@ -4148,6 +4148,178 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         // 🚀 [UI_ACTION_ASYNC: modAction] - Action asynchrone d'interface Dashboard
         window.modAction = async function(action, userId, extra) { extra = extra || {}; let payload = { action: action, userId: userId, pin: PIN }; if (extra.channelId) payload.channelId = extra.channelId; if (extra.duration) payload.duration = extra.duration; if (action === 'warn') { payload.reason = await window.customPrompt('WARNING', 'Input warning parameter (User will be DM\\'d)'); if (!payload.reason) return; } else if (action === 'clear_warns') { if (!(await window.customConfirm('PURGE', 'Purge all risk logs for this node?'))) return; } else if (action === 'mute') { if(!payload.duration) payload.duration = await window.customPrompt('TIMEOUT', 'Timeout duration (minutes)?', '60', '60'); if(!payload.duration) return; payload.reason = await window.customPrompt('TIMEOUT', 'Reason for timeout?'); if (!payload.reason) return; } else if (action === 'kick' || action === 'ban') { payload.reason = await window.customPrompt('EXPULSION', 'Reason for ' + action + '?'); if (!payload.reason || !(await window.customConfirm('CONFIRM', 'Execute ' + action + '?'))) return; } else if (action === 'toggle_blacklist') { if (!(await window.customConfirm('ACCESS', 'Toggle shop access for this node?'))) return; } else if (action === 'close_channel') { if (!(await window.customConfirm('SEVER', 'Sever this link?'))) return; } try { const res = await fetch('/api/action', { method: 'POST', body: JSON.stringify(payload) }); if (res.ok) { showToast('Action Successful'); setTimeout(function() { window.loadAllMembers(); }, 1000); } else showToast('Action Failed', 'error'); } catch(e) { showToast('Network Error', 'error'); } };
         // 🚀 [UI_ACTION_ASYNC: refundTx] - Action asynchrone d'interface Dashboard
+
+
+        window.closeTxModal = function() {
+            const modal = document.getElementById('txAiModal');
+            const inner = document.getElementById('txAiModalInner');
+            if(modal && inner) {
+                modal.style.opacity = '0';
+                inner.style.transform = 'translateY(20px)';
+                setTimeout(() => { modal.style.display = 'none'; }, 300);
+            }
+        };
+
+        window.toggleManualTxForm = function() {
+            const form = document.getElementById('manualTxForm');
+            if(form) form.style.display = form.style.display === 'none' ? 'block' : 'none';
+        };
+
+        window.exportTransactionsCSV = function() {
+            let txs = [];
+            if(Array.isArray(rawStats.recent_transactions)) {
+                txs = [...rawStats.recent_transactions];
+            } else if(rawStats.recent_transactions && typeof rawStats.recent_transactions === 'object') {
+                Object.values(rawStats.recent_transactions).forEach(t => txs.push(t));
+            }
+
+            if(txs.length === 0) return alert("No transactions to export.");
+            let csv = "Date,Client,Product,Price\n";
+            txs.forEach(tx => {
+                csv += '"' + tx.date + '","' + tx.username + '","' + tx.product + '","' + tx.price + '"\n';
+            });
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.setAttribute('hidden', '');
+            a.setAttribute('href', url);
+            a.setAttribute('download', 'nexus_ledger_export.csv');
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        };
+
+        window.renderTransactionsList = function() {
+            if (!rawStats.recent_transactions) return;
+            
+            let txs = [];
+            if(Array.isArray(rawStats.recent_transactions)) {
+                txs = [...rawStats.recent_transactions];
+            } else if(typeof rawStats.recent_transactions === 'object') {
+                Object.values(rawStats.recent_transactions).forEach(t => txs.push(t));
+            }
+            
+            const searchInput = document.getElementById('txSearch');
+            const search = searchInput ? searchInput.value.toLowerCase() : '';
+            if (search) {
+                txs = txs.filter(tx => (tx.username && tx.username.toLowerCase().includes(search)) || (tx.product && tx.product.toLowerCase().includes(search)));
+            }
+            
+            const sortInput = document.getElementById('txSort');
+            const sort = sortInput ? sortInput.value : 'date_desc';
+            txs.sort((a,b) => {
+                if (sort === 'date_desc') return new Date(b.date) - new Date(a.date);
+                if (sort === 'date_asc') return new Date(a.date) - new Date(b.date);
+                if (sort === 'price_desc') return parseFloat(b.price || 0) - parseFloat(a.price || 0);
+                if (sort === 'price_asc') return parseFloat(a.price || 0) - parseFloat(b.price || 0);
+                return 0;
+            });
+            
+            let totalVol = 0;
+            txs.forEach(t => totalVol += parseFloat(t.price || 0));
+            if(document.getElementById('tx-total-vol')) document.getElementById('tx-total-vol').innerText = '£' + totalVol.toFixed(2);
+            if(document.getElementById('tx-count')) document.getElementById('tx-count').innerText = txs.length;
+            if(document.getElementById('tx-avg-order')) document.getElementById('tx-avg-order').innerText = '£' + (txs.length ? (totalVol/txs.length).toFixed(2) : '0.00');
+
+            let html = '';
+            if (txs.length === 0) {
+                html = '<tr><td colspan="5" style="text-align:center; padding:50px; color:var(--text-muted); font-size:1.1em;"><svg style="display:block; margin:0 auto 15px auto; color:rgba(255,255,255,0.1);" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>No transactions logged in the database.</td></tr>';
+            } else {
+                txs.forEach(tx => {
+                    const avatarId = (tx.username && tx.username.length > 0) ? (tx.username.charCodeAt(0) % 5) : 0;
+                    const avatar = 'https://cdn.discordapp.com/embed/avatars/' + avatarId + '.png';
+                    
+                    html += "<tr style='border-bottom:1px solid rgba(255,255,255,0.03); transition:all 0.3s ease;' onmouseover=\"this.style.background='rgba(255,255,255,0.03)'; this.style.transform='scale(1.002)';\" onmouseout=\"this.style.background='transparent'; this.style.transform='scale(1)';\">" +
+                        "<td style='padding:20px 30px; display:flex; align-items:center; gap:15px;'>" +
+                            "<img src='" + avatar + "' style='width:40px; height:40px; border-radius:50%; border:2px solid rgba(255,255,255,0.1); box-shadow:0 4px 10px rgba(0,0,0,0.3);'>" +
+                            "<span style='font-weight:600; font-size:1.05em; color:#f3f4f6;'>" + escapeHTML(tx.username) + "</span>" +
+                        "</td>" +
+                        "<td style='padding:20px 30px; color:var(--text-main);'>" +
+                            "<div style='background:rgba(255,255,255,0.05); padding:6px 14px; border-radius:8px; display:inline-block; font-size:0.9em; font-weight:500; border:1px solid rgba(255,255,255,0.05); box-shadow:inset 0 1px 0 rgba(255,255,255,0.1); color:#e5e7eb;'>" +
+                                escapeHTML(tx.product) +
+                            "</div>" +
+                        "</td>" +
+                        "<td style='padding:20px 30px;'>" +
+                            "<div style='display:inline-flex; align-items:center; gap:8px; color:var(--accent-green); font-weight:800; font-size:1.1em; background:rgba(16,185,129,0.1); padding:6px 12px; border-radius:8px; border:1px solid rgba(16,185,129,0.2);'>" +
+                                "£" + parseFloat(tx.price).toFixed(2) +
+                            "</div>" +
+                        "</td>" +
+                        "<td style='padding:20px 30px; color:var(--text-muted); font-size:0.95em;'>" +
+                            "<div style='display:flex; align-items:center; gap:8px;'>" +
+                                "<svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><circle cx='12' cy='12' r='10'></circle><polyline points='12 6 12 12 16 14'></polyline></svg>" +
+                                new Date(tx.date).toLocaleString('en-GB', { day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) +
+                            "</div>" +
+                        "</td>" +
+                        "<td style='padding:20px 30px; text-align:right;'>" +
+                            "<div style='display:flex; justify-content:flex-end; gap:10px;'>" +
+                                "<button class='admin-btn' style='padding:8px 14px; background:rgba(10,132,255,0.1); color:var(--accent-blue); margin:0; border:1px solid rgba(10,132,255,0.2); font-size:0.85em; display:flex; align-items:center; gap:6px; font-weight:600; border-radius:8px; transition:all 0.2s;' onmouseover=\"this.style.background='rgba(10,132,255,0.2)';\" onmouseout=\"this.style.background='rgba(10,132,255,0.1)';\" onclick=\"window.checkMarketPrice('" + escapeInlineJS(tx.product) + "')\">" +
+                                    "<svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><circle cx='11' cy='11' r='8'></circle><line x1='21' y1='21' x2='16.65' y2='16.65'></line></svg> Market" +
+                                "</button>" +
+                                "<button class='admin-btn' style='padding:8px 14px; background:rgba(255,69,58,0.1); color:var(--accent-red); margin:0; border:1px solid rgba(255,69,58,0.2); font-size:0.85em; display:flex; align-items:center; gap:6px; font-weight:600; border-radius:8px; transition:all 0.2s;' onmouseover=\"this.style.background='rgba(255,69,58,0.2)';\" onmouseout=\"this.style.background='rgba(255,69,58,0.1)';\" onclick=\"window.refundTx('" + escapeInlineJS(tx.date) + "', '" + escapeInlineJS(tx.username) + "')\">" +
+                                    "<svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><polyline points='3 6 5 6 21 6'></polyline><path d='M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2'></path></svg> Refund" +
+                                "</button>" +
+                            "</div>" +
+                        "</td>" +
+                    "</tr>";
+                });
+            }
+            if(document.getElementById('target-tx')) document.getElementById('target-tx').innerHTML = html;
+        };
+
+        window.analyzeTransactionsAI = async function() {
+            const modal = document.getElementById('txAiModal');
+            const inner = document.getElementById('txAiModalInner');
+            const content = document.getElementById('txAiContent');
+            if(!modal || !content) return;
+            
+            modal.style.display = 'flex';
+            setTimeout(() => {
+                modal.style.opacity = '1';
+                inner.style.transform = 'translateY(0)';
+            }, 10);
+
+            content.innerHTML = '<div style="text-align:center; padding:60px 20px; color:var(--text-muted);"><div class="loader" style="margin:0 auto 20px auto; width:40px; height:40px; border:3px solid rgba(255,255,255,0.05); border-top-color:var(--accent-purple); border-radius:50%; animation:spin 1s linear infinite; box-shadow:0 0 15px rgba(139,92,246,0.3);"></div><div style="font-size:1.2em; color:#fff; font-weight:600; margin-bottom:10px;">Interrogating Neural Net...</div><span style="font-size:0.9em; opacity:0.8;">Running Deep Financial Analysis via Gemini 3.1 Pro</span><br><br><span style="font-size:0.8em; padding:6px 12px; background:rgba(255,255,255,0.05); border-radius:20px; border:1px solid rgba(255,255,255,0.1); margin-top:10px; display:inline-block;">Estimated time: 3-8 seconds</span></div>';
+            
+            try {
+                const res = await fetch('/api/action', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'ai_analyze_tx' })
+                });
+                const data = await res.json();
+                content.innerHTML = '<div style="animation:fadeInSmooth 0.5s ease;">' + (data.result || data) + '</div>';
+            } catch (e) {
+                content.innerHTML = '<div style="text-align:center; padding:40px; background:rgba(255,69,58,0.1); border:1px solid rgba(255,69,58,0.3); border-radius:16px; color:var(--accent-red);"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-bottom:10px;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg><br><h3>Analysis Failed</h3><p>' + escapeHTML(e.message) + '</p></div>';
+            }
+        };
+
+        window.checkMarketPrice = async function(productName) {
+            const modal = document.getElementById('txAiModal');
+            const inner = document.getElementById('txAiModalInner');
+            const content = document.getElementById('txAiContent');
+            if(!modal || !content) return;
+            
+            modal.style.display = 'flex';
+            setTimeout(() => {
+                modal.style.opacity = '1';
+                inner.style.transform = 'translateY(0)';
+            }, 10);
+
+            content.innerHTML = '<div style="text-align:center; padding:60px 20px; color:var(--text-muted);"><div class="loader" style="margin:0 auto 20px auto; width:40px; height:40px; border:3px solid rgba(255,255,255,0.05); border-top-color:var(--accent-blue); border-radius:50%; animation:spin 1s linear infinite; box-shadow:0 0 15px rgba(59,130,246,0.3);"></div><div style="font-size:1.2em; color:#fff; font-weight:600; margin-bottom:10px;">Scanning Live Market...</div><span style="font-size:0.9em; opacity:0.8;">Analyzing competitors for <strong style="color:var(--accent-blue)">' + escapeHTML(productName) + '</strong> via Gemini 3.5 Flash</span></div>';
+            
+            try {
+                const res = await fetch('/api/action', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'check_market', product: productName })
+                });
+                const data = await res.json();
+                content.innerHTML = '<div style="animation:fadeInSmooth 0.5s ease;">' + (data.result || data) + '</div>';
+            } catch (e) {
+                content.innerHTML = '<div style="text-align:center; padding:40px; background:rgba(255,69,58,0.1); border:1px solid rgba(255,69,58,0.3); border-radius:16px; color:var(--accent-red);"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-bottom:10px;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg><br><h3>Market Scan Failed</h3><p>' + escapeHTML(e.message) + '</p></div>';
+            }
+        };
+
         window.refundTx = async function(date, username) { if(await window.customConfirm('REVERSE TX', 'Reverse this transaction? Yield will be adjusted.')) { await window.executeAction({action: 'refund_tx', date: date, username: username}); } };
         // 🚀 [UI_ACTION_ASYNC: testActionLatency] - Action asynchrone d'interface Dashboard
         window.testActionLatency = async function() { const resultDiv = document.getElementById('latency-result'); resultDiv.innerText = 'Pinging...'; resultDiv.style.color = 'var(--text-muted)'; const startTime = Date.now(); try { const res = await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'ping_test', pin: PIN }) }); if (res.ok) { const totalTime = Date.now() - startTime; resultDiv.innerText = totalTime + ' ms'; if (totalTime < 500) resultDiv.style.color = getThemeVal('hex'); else if (totalTime < 1500) resultDiv.style.color = 'var(--accent-orange)'; else resultDiv.style.color = 'var(--accent-red)'; } else { resultDiv.innerText = 'Error'; resultDiv.style.color = 'var(--accent-red)'; } } catch(e) { resultDiv.innerText = 'Net Error'; resultDiv.style.color = 'var(--accent-red)'; } };
