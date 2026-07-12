@@ -694,9 +694,30 @@ client.on('interactionCreate', async (interaction) => {
                 if (channel) {
                     addActivity('ticket', `🎫 New shop ticket opened by ${interaction.user.username}`);
                     systemLog('INFO', 'TICKET_SYS', `Shop ticket generated for ${interaction.user.username}`);
-                    channelStates.set(channel.id, { validated: false, processing: false, promo: null, redeemed: false });
-                    await channel.send(`👋 Welcome <@${interaction.user.id}>!\n\n**Please paste your Rewarble voucher code or Promo Code below.**`).catch(() => {});
-                    await interaction.editReply({ content: `✅ Your channel is ready: <#${channel.id}>` }).catch(() => {});
+                    channelStates.set(channel.id, { validated: false, processing: false, promo: null, redeemed: false, cart: [], cartTotal: 0 });
+                    
+                    const pmenu = new StringSelectMenuBuilder()
+                        .setCustomId('product_select')
+                        .setPlaceholder('🛒 Select the products you want to buy')
+                        .setMinValues(1)
+                        .setMaxValues(10);
+                        
+                    let optCount = 0;
+                    for (const id in memoryStats.products) {
+                        const p = memoryStats.products[id];
+                        if (p.stock && p.stock !== "∞" && parseInt(p.stock) <= 0) continue;
+                        pmenu.addOptions(new StringSelectMenuOptionBuilder()
+                            .setLabel(p.name + (p.price === "Custom" ? " (Custom)" : " (£" + p.price + ")"))
+                            .setDescription(p.category || 'Item')
+                            .setValue(id));
+                        optCount++;
+                    }
+                    if(optCount > 0) {
+                        const row = new ActionRowBuilder().addComponents(pmenu);
+                        await channel.send({ content: `👋 Welcome <@${interaction.user.id}>!\n\n**🛒 Step 1: Select items from the menu below.**\n**🔐 Step 2: Paste your Rewarble voucher or promo code.**`, components: [row] }).catch(() => {});
+                    } else {
+                        await channel.send(`👋 Welcome <@${interaction.user.id}>!\n\n❌ The shop is currently empty.`).catch(() => {});
+                    }
                 } else { await interaction.editReply({ content: `❌ Error creating the room.` }).catch(() => {}); }
             
             } else if (interaction.customId === 'open_support_ticket') {
@@ -957,18 +978,18 @@ client.on('messageCreate', async (message) => {
            }
         }
         if (message.channel?.name?.startsWith('shop-')) {
-                if (memoryStats.blacklist && memoryStats.blacklist.includes(message.author.id)) return;
-                if (memoryStats.settings && memoryStats.settings.maintenance && memoryStats.settings.maintenance.active && message.author.id !== ADMIN_DISCORD_ID) {
-                    return message.reply('Le bot est actuellement en maintenance.');
-                }
+            if (memoryStats.blacklist && memoryStats.blacklist.includes(message.author.id)) return;
+            if (memoryStats.settings && memoryStats.settings.maintenance && memoryStats.settings.maintenance.active && message.author.id !== ADMIN_DISCORD_ID) {
+                return message.reply('Le bot est actuellement en maintenance.');
+            }
             let state = channelStates.get(message.channel.id); 
             if (!state) {
-                state = { validated: false, processing: false, promo: null, redeemed: false };
+                state = { validated: false, processing: false, promo: null, redeemed: false, cart: [], cartTotal: 0 };
                 channelStates.set(message.channel.id, state);
             }
-            
             if (state.validated || state.processing) return;
-
+            if (!state.cart || state.cart.length === 0) return message.reply("🛒 Please select items from the menu above before entering a code.").catch(()=>{});
+            
             const input = message.content.trim().toUpperCase();
             state.processing = true; 
             let promoApplied = null;
@@ -1004,26 +1025,19 @@ client.on('messageCreate', async (message) => {
                         if (err.response && err.response.status === 402) { throw new Error("REWARBLE_402_INSUFFICIENT_FUNDS"); }
                         rewarbleCircuitBreaker.fails++;
                         if (rewarbleCircuitBreaker.fails >= 5) {
-                            rewarbleCircuitBreaker.nextTry = Date.now() + 5 * 60 * 1000; // 5 min cooldown
+                            rewarbleCircuitBreaker.nextTry = Date.now() + 5 * 60 * 1000;
                             systemLog('CRITICAL', 'REWARBLE_API', `Circuit breaker tripped! Pausing API calls for 5 minutes.`);
                         }
                         throw err; 
                     });
-
-                    // 🔍 RECHERCHE DE SÉCURITÉ MAXIMALE POUR EXTRAIRE LA VALEUR
                     
                     let rawData = apiResponse.data;
-                    if (typeof rawData === 'string') {
-                        try { rawData = JSON.parse(rawData); } catch(e) {}
-                    }
-                    
-                    // Prevent falsely validating if the API returned an error string with 200 OK
+                    if (typeof rawData === 'string') { try { rawData = JSON.parse(rawData); } catch(e) {} }
                     if (rawData && typeof rawData === 'object') {
                         if (rawData.error || rawData.status === 'error' || rawData.status === 'failed' || rawData.success === false) {
                             throw new Error(rawData.error || rawData.message || "Invalid voucher code or failed redemption");
                         }
                     }
-
                     if (rawData) {
                         const extractVal = (v) => {
                             if (v === null || v === undefined) return null;
@@ -1058,73 +1072,87 @@ client.on('messageCreate', async (message) => {
                         }
                     }
                     
-                    if (voucherValue === 0) {
-                         throw new Error("REWARBLE_ZERO_VALUE_OR_INVALID");
-                    }
+                    if (voucherValue === 0) { throw new Error("REWARBLE_ZERO_VALUE_OR_INVALID"); }
+                    logStat('revenue', voucherValue, { source: 'rewarble', username: message.author.username });
+                    
+                    // Call redeem API to invalidate code (mock / simulate redeem as standard Rewarble flows require this)
+                    try {
+                        await fetch('https://api.rewarble.com/v1/voucher/redeem', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + process.env.REWARBLE_API_KEY },
+                            body: JSON.stringify({ code: input })
+                        });
+                    } catch(e) {}
                 } else if (TEST_VOUCHERS[input]) {
-
                     voucherValue = parseFloat(TEST_VOUCHERS[input]); 
+                    logStat('revenue', voucherValue, { source: 'test_voucher', username: message.author.username });
                 } else if (promoApplied) {
                     voucherValue = Infinity; 
                 }
                 
-                state.validated = true; 
-                state.processing = false; 
-                state.promo = promoApplied; 
-                state.voucherValue = voucherValue; 
+                let finalPrice = state.cartTotal || 0;
+                if (promoApplied) {
+                    finalPrice = Math.max(0, finalPrice - (finalPrice * promoApplied.discount / 100));
+                    memoryStats.promo_codes[promoApplied.name].used++;
+                }
+
+                if (!promoApplied && voucherValue < finalPrice) {
+                    state.processing = false;
+                    return message.channel.send(`❌ **Error:** Your cart total (£${finalPrice}) exceeds your voucher value (£${voucherValue}). Transaction aborted.`).catch(()=>{});
+                }
                 
-                const menu = new StringSelectMenuBuilder().setCustomId('product_select').setPlaceholder('Select your product...');
-                const isUserVIP = memoryStats.subscriptions && memoryStats.subscriptions[message.author.id];
-
-                let availableItems = 0; 
-
-                for (const [id, prod] of Object.entries(memoryStats.products)) { 
-                    if (prod.stock && prod.stock !== "∞" && parseInt(prod.stock) <= 0) continue;
-
-                    let finalPriceStr = "£" + prod.price;
-                    let numericFinalPrice = 0;
-
-                    if (prod.price === "Custom") {
-                        finalPriceStr = "Custom";
-                    } else {
-                        let originalPrice = parseFloat(prod.price);
-                        let discountToApply = 0;
-                        let isVIPItem = id === "VIP" || (prod.category && prod.category.includes("SUBSCRIPTION"));
-
-                        if (!isVIPItem && isUserVIP) { discountToApply = 20; } 
-                        else if (promoApplied) { discountToApply = promoApplied.discount; }
-
-                        if (discountToApply > 0) {
-                            numericFinalPrice = Math.max(0, originalPrice - (originalPrice * discountToApply / 100));
-                            finalPriceStr = `£${numericFinalPrice.toFixed(2)} (-${discountToApply}%)`;
+                state.validated = true;
+                
+                for(const selected of state.cart) {
+                    const product = memoryStats.products[selected];
+                    if(!product) continue;
+                    
+                    if (product.price === "Custom") {
+                        logStat('custom_request', 0, { username: message.author.username, userId: message.author.id, productName: product.name });
+                        continue;
+                    }
+                    
+                    if (product.stock && product.stock !== "∞") {
+                        let s = parseInt(product.stock);
+                        if (!isNaN(s) && s > 0) memoryStats.products[selected].stock = (s - 1).toString();
+                    }
+                    
+                    let isVIPPurchase = selected === "VIP" || (product.category && product.category.includes("SUBSCRIPTION"));
+                    if (isVIPPurchase) {
+                        const now = Date.now();
+                        const thirtyDays = 30 * 24 * 60 * 60 * 1000;
+                        if (!memoryStats.subscriptions) memoryStats.subscriptions = {};
+                        if (memoryStats.subscriptions[message.author.id]) {
+                            memoryStats.subscriptions[message.author.id].expiresAt += thirtyDays;
+                            memoryStats.subscriptions[message.author.id].notified = false;
                         } else {
-                            numericFinalPrice = originalPrice;
+                            memoryStats.subscriptions[message.author.id] = { username: message.author.username, expiresAt: now + thirtyDays, notified: false };
+                        }
+                        try {
+                            const member = await message.guild.members.fetch(message.author.id);
+                            await member.roles.add(VIP_ROLE_ID).catch(()=>{});
+                            const reviewRowVIP = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`review_${selected}`).setLabel('⭐ Leave a Review').setStyle(ButtonStyle.Secondary));
+                            await message.author.send({ content: "👑 **WELCOME TO VIP!** Your 30-Day pass is now active. Enjoy your exclusive content and 20% off all future purchases in the shop!", components: [reviewRowVIP] }).catch(()=>{});
+                        } catch(e) {}
+                    } else {
+                        const successEmbed = new EmbedBuilder().setColor('#10b981').setTitle(`✨ Purchase Successful: ${product.name}`).setDescription(`🔗 ${product.link || 'Link not configured.'}`);
+                        const reviewRow = new ActionRowBuilder().addComponents(
+                            new ButtonBuilder().setCustomId(`review_${selected}`).setLabel('⭐ Leave a Review').setStyle(ButtonStyle.Secondary)
+                        );
+                        try {
+                            await message.author.send({ embeds: [successEmbed], components: [reviewRow] });
+                        } catch(e) {
+                            await message.channel.send(`⚠️ I couldn't DM you the product '${product.name}'. Please check your privacy settings.`).catch(()=>{});
                         }
                     }
-
-                    if (!promoApplied && prod.price !== "Custom" && numericFinalPrice > voucherValue) {
-                        continue; 
-                    }
-
-                    availableItems++;
-                    menu.addOptions(new StringSelectMenuOptionBuilder().setLabel(prod.name).setDescription(`Price: ${finalPriceStr}`).setValue(id)); 
                 }
+                syncCloud();
                 
-                if (availableItems === 0) {
-                    state.validated = false; 
-                    return message.reply(`❌ **Insufficient Funds.** Your code is valid, but its value (**£${voucherValue}**) is too low to purchase any available items.`).catch(()=>{});
-                }
-
-                let replyMsg = `✅ **Code validated! Value detected: £${voucherValue}.**\nPlease select an item you can afford below:`;
-                if (promoApplied) replyMsg = `✅ **Promo Code Accepted (-${promoApplied.discount}%)! Select your item below:**`;
-                else if (isUserVIP) replyMsg = `👑 **VIP Status Active! (-20% on all items). Code Value: £${voucherValue}.**\nSelect your item below:`;
-
-                await message.reply({ content: replyMsg, components: [new ActionRowBuilder().addComponents(menu)] }).catch(()=>{});
-                systemLog('INFO', 'VALIDATION', `Code successfully validated for ${message.author.username} (Value: ${voucherValue})`);
+                await message.channel.send("✅ **Products delivered to your DMs!** Closing ticket in 5 seconds...").catch(()=>{});
+                setTimeout(() => { channelStates.delete(message.channel.id); message.channel.delete().catch(()=>{}); }, 5000);
 
             } catch (e) { 
                 state.processing = false; 
-                
                 if (e.message === "REWARBLE_402_INSUFFICIENT_FUNDS") {
                     systemLog('ERROR', 'REWARBLE_API', `402 Payment Required - Balance is depleted.`);
                     message.reply("⚠️ **Rewarble Error (402) :** Insufficient API balance.").catch(()=>{});
