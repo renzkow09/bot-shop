@@ -2441,7 +2441,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
         .patchnote-item::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--accent); border-radius: 4px 0 0 4px; }
         .patchnote-date { color: var(--accent); font-size: 0.85em; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; display: flex; align-items: center; gap: 8px; }
         .patchnote-date::before { content: '🗓️'; font-size: 1.1em; }
-        .patchnote-text { color: #e5e5ea; font-size: 1.05em; line-height: 1.6; }
+        .patchnote-text { color: #e5e5ea; font-size: 1.05em; line-height: 1.6; white-space: pre-wrap; }
         .patchnote-text strong { color: #fff; font-weight: 600; }
         
         @media screen and (max-width: 900px) {
@@ -3371,8 +3371,8 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
           if(document.getElementById('target-leaves')) document.getElementById('target-leaves').innerHTML = lHtml||'<tr><td colspan="3" class="text-muted text-center">No drops recorded.</td></tr>';
            let pnHtml = '';
            if(rawStats.patchnotes && rawStats.patchnotes.length > 0) {
-               [...rawStats.patchnotes].reverse().forEach(pn => {
-                   pnHtml += '<div class="patchnote-item"><div class="patchnote-date">' + new Date(pn.date).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) + '</div><div class="patchnote-text">' + pn.text + '</div></div>';
+               [...rawStats.patchnotes].sort((a, b) => new Date(b.date) - new Date(a.date)).forEach(pn => {
+                   pnHtml += '<div class="patchnote-item"><div class="patchnote-date">' + new Date(pn.date).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) + '</div><div class="patchnote-text">' + escapeHTML(pn.text) + '</div></div>';
                });
            } else {
                pnHtml = "<div style='text-align:center; color:gray;'>No patchnotes available yet.</div>";
