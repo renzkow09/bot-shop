@@ -2178,6 +2178,53 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                         return res.writeHead(400).end('Invalid JSON format');
                     }
                 }
+                else if (data.action === 'ai_analyze_tx') {
+                    if (process.env.GEMINI_API_KEY) {
+                        try {
+                            const { GoogleGenAI, ThinkingLevel } = require("@google/genai");
+                            const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+                            const recent = (memoryStats.recent_transactions || []).slice(0, 50).map(t => `${t.date} | User: ${t.username} | Prod: ${t.product} | £${t.price}`).join("\n");
+                            const prompt = `Analyze these recent transactions and provide a professional financial summary, identify trends, and note any anomalies or insights:\n\n${recent}`;
+                            const aiRes = await ai.models.generateContent({
+                                model: 'gemini-3.1-pro-preview',
+                                contents: prompt,
+                                config: {
+                                    systemInstruction: 'You are an expert financial analyst. Return the response in clean HTML format (using <h3>, <p>, <ul>, <li>, <strong>) ready to be injected into a dashboard modal. Keep it concise, qualitative, and professional. Do not use markdown blocks.',
+                                    responseMimeType: "text/html",
+                                    thinkingConfig: { thinkingLevel: 'HIGH' }
+                                }
+                            });
+                            return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ result: aiRes.text }));
+                        } catch(e) {
+                            return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ result: "<p>API Error: " + escapeHTML(e.message) + "</p>" }));
+                        }
+                    } else {
+                        return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ result: "<p>Gemini API Key missing.</p>" }));
+                    }
+                }
+                else if (data.action === 'check_market') {
+                    if (process.env.GEMINI_API_KEY) {
+                        try {
+                            const { GoogleGenAI } = require("@google/genai");
+                            const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+                            const prompt = `Search the current market for the digital product: "${data.product}". What is the typical price range, competitor landscape, and is our product priced competitively?`;
+                            const aiRes = await ai.models.generateContent({
+                                model: 'gemini-3.5-flash',
+                                contents: prompt,
+                                config: {
+                                    systemInstruction: 'You are a market researcher. Keep your response brief, professional and return it in simple HTML format (using <h3>, <p>, <ul>, <li>). Do not use markdown formatting blocks.',
+                                    responseMimeType: "text/html",
+                                    tools: [{ googleSearch: {} }]
+                                }
+                            });
+                            return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ result: aiRes.text }));
+                        } catch(e) {
+                            return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ result: "<p>API Error: " + escapeHTML(e.message) + "</p>" }));
+                        }
+                    } else {
+                        return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ result: "<p>Gemini API Key missing.</p>" }));
+                    }
+                }
                 else if (data.action === 'force_backup') {
                     await syncCloud(true);
                 }
@@ -2681,21 +2728,147 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
              </div>
          </div>
          
-         <div id='transactions' class='tab-content'>
-               <div class='box'>
-                   <h2>➕ Manual Transaction Entry</h2>
-                   <div style='display:flex; gap:15px; flex-wrap:wrap; margin-bottom:15px;'>
-                       <input type='text' id='manTxUser' placeholder='Discord Username' style='flex:1; min-width:150px;'>
-                       <input type='text' id='manTxProd' placeholder='Product Name' style='flex:1; min-width:150px;'>
-                       <input type='number' id='manTxPrice' placeholder='Price (£)' style='width:120px;'>
-                       <input type='datetime-local' id='manTxDate' style='width:200px;'>
-                   </div>
-                   <button class='admin-btn btn-green' style='width:100%;' onclick='window.createManualTx()'>Log Transaction</button>
-               </div>
-               <div class='box'><h2>🛒 Financial Ledger</h2><div style='overflow-x:auto; margin-top:20px;'><table><thead><tr><th>Client ID</th><th>Asset Acquired</th><th>Volume</th><th>Timestamp</th><th>Action</th></tr></thead><tbody id='target-tx'></tbody></table></div></div>
-           </div>
+         
+            <div id='transactions' class='tab-content'>
+                <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:30px; flex-wrap:wrap; gap:15px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:20px;'>
+                    <div>
+                        <h2 style='margin:0; font-size:2.4em; font-weight:800; background:linear-gradient(135deg, #ffffff 0%, #a1a1aa 100%); -webkit-background-clip:text; -webkit-text-fill-color:transparent; display:flex; align-items:center; gap:12px;'>
+                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="url(#txGrad)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><defs><linearGradient id="txGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#3b82f6" /><stop offset="100%" stop-color="#8b5cf6" /></linearGradient></defs><rect x="2" y="5" width="20" height="14" rx="2" ry="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line></svg>
+                            Financial Operations
+                        </h2>
+                        <p style='color:var(--text-muted); margin-top:8px; font-size:0.95em; font-weight:400;'>Real-time analysis and ledger management.</p>
+                    </div>
+                    <div style='display:flex; gap:12px; flex-wrap:wrap;'>
+                         <button class='admin-btn' style='margin:0; background:rgba(139,92,246,0.1); color:#c4b5fd; border:1px solid rgba(139,92,246,0.3); backdrop-filter:blur(10px); display:flex; align-items:center; gap:8px; transition:all 0.3s ease;' onmouseover="this.style.background='rgba(139,92,246,0.2)'; this.style.transform='translateY(-2px)';" onmouseout="this.style.background='rgba(139,92,246,0.1)'; this.style.transform='translateY(0)';" onclick='window.analyzeTransactionsAI()'>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+                            Deep AI Analysis
+                         </button>
+                         <button class='admin-btn' style='margin:0; background:rgba(255,255,255,0.03); color:#fff; border:1px solid rgba(255,255,255,0.1); backdrop-filter:blur(10px); display:flex; align-items:center; gap:8px; transition:all 0.3s ease;' onmouseover="this.style.background='rgba(255,255,255,0.08)';" onmouseout="this.style.background='rgba(255,255,255,0.03)';" onclick='window.exportTransactionsCSV()'>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+                            Export CSV
+                         </button>
+                         <button class='admin-btn btn-green' style='margin:0; background:linear-gradient(135deg, #10b981 0%, #059669 100%); border:none; box-shadow:0 4px 15px rgba(16,185,129,0.3); display:flex; align-items:center; gap:8px; transition:all 0.3s ease;' onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(16,185,129,0.4)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(16,185,129,0.3)';" onclick='window.toggleManualTxForm()'>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                            Log Entry
+                         </button>
+                    </div>
+                </div>
                 
-           <div id='products' class='tab-content'>
+                <div class='stats-grid' style='margin-bottom:30px; display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:20px;'>
+                     <div class='card' style='background:rgba(20,20,22,0.6); backdrop-filter:blur(12px); border:1px solid rgba(16,185,129,0.2); border-radius:20px; padding:25px; position:relative; overflow:hidden;'>
+                         <div style='position:absolute; top:-20px; right:-20px; width:100px; height:100px; background:radial-gradient(circle, rgba(16,185,129,0.2) 0%, transparent 70%); border-radius:50%;'></div>
+                         <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;'>
+                             <span style='font-size:0.85em; text-transform:uppercase; color:var(--accent-green); letter-spacing:1.5px; font-weight:600;'>Total Volume</span>
+                             <div style='padding:8px; background:rgba(16,185,129,0.1); border-radius:12px;'><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent-green)" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+                         </div>
+                         <div class='value text-green' id='tx-total-vol' style='font-size:2.8em; font-weight:800; text-shadow:0 0 20px rgba(16,185,129,0.3);'>£0.00</div>
+                     </div>
+                     
+                     <div class='card' style='background:rgba(20,20,22,0.6); backdrop-filter:blur(12px); border:1px solid rgba(59,130,246,0.2); border-radius:20px; padding:25px; position:relative; overflow:hidden;'>
+                         <div style='position:absolute; top:-20px; right:-20px; width:100px; height:100px; background:radial-gradient(circle, rgba(59,130,246,0.2) 0%, transparent 70%); border-radius:50%;'></div>
+                         <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;'>
+                             <span style='font-size:0.85em; text-transform:uppercase; color:var(--accent-blue); letter-spacing:1.5px; font-weight:600;'>Avg Order Value</span>
+                             <div style='padding:8px; background:rgba(59,130,246,0.1); border-radius:12px;'><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent-blue)" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg></div>
+                         </div>
+                         <div class='value' id='tx-avg-order' style='color:#fff; font-size:2.8em; font-weight:800; text-shadow:0 0 20px rgba(255,255,255,0.1);'>£0.00</div>
+                     </div>
+                     
+                     <div class='card' style='background:rgba(20,20,22,0.6); backdrop-filter:blur(12px); border:1px solid rgba(139,92,246,0.2); border-radius:20px; padding:25px; position:relative; overflow:hidden;'>
+                         <div style='position:absolute; top:-20px; right:-20px; width:100px; height:100px; background:radial-gradient(circle, rgba(139,92,246,0.2) 0%, transparent 70%); border-radius:50%;'></div>
+                         <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;'>
+                             <span style='font-size:0.85em; text-transform:uppercase; color:#c4b5fd; letter-spacing:1.5px; font-weight:600;'>Transactions</span>
+                             <div style='padding:8px; background:rgba(139,92,246,0.1); border-radius:12px;'><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#c4b5fd" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg></div>
+                         </div>
+                         <div class='value' id='tx-count' style='color:#fff; font-size:2.8em; font-weight:800; text-shadow:0 0 20px rgba(255,255,255,0.1);'>0</div>
+                     </div>
+                </div>
+
+                <!-- Hidden Manual Entry Form -->
+                <div id='manualTxForm' style='display:none; background:rgba(20,20,22,0.8); backdrop-filter:blur(15px); border:1px solid rgba(255,255,255,0.1); border-left:4px solid var(--accent-green); border-radius:20px; padding:30px; margin-bottom:30px; animation: fadeInSmooth 0.4s ease; box-shadow:0 20px 40px rgba(0,0,0,0.4);'>
+                    <h3 style='margin-top:0; color:var(--accent-green); font-size:1.4em; display:flex; align-items:center; gap:10px;'><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg> Create Manual Entry</h3>
+                    <div style='display:flex; gap:20px; flex-wrap:wrap; margin-bottom:20px;'>
+                        <div style='flex:1; min-width:200px;'>
+                            <label style='display:block; margin-bottom:8px; color:var(--text-muted); font-size:0.85em; text-transform:uppercase; letter-spacing:1px;'>Client Designation</label>
+                            <input type='text' id='manTxUser' placeholder='e.g. NexusUser#1234' style='width:100%; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:15px; color:#fff; font-size:1em; transition:border-color 0.3s;' onfocus="this.style.borderColor='var(--accent-green)'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
+                        </div>
+                        <div style='flex:1; min-width:200px;'>
+                            <label style='display:block; margin-bottom:8px; color:var(--text-muted); font-size:0.85em; text-transform:uppercase; letter-spacing:1px;'>Asset Acquired</label>
+                            <input type='text' id='manTxProd' placeholder='e.g. VIP Subscription' style='width:100%; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:15px; color:#fff; font-size:1em; transition:border-color 0.3s;' onfocus="this.style.borderColor='var(--accent-green)'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
+                        </div>
+                        <div style='width:150px;'>
+                            <label style='display:block; margin-bottom:8px; color:var(--text-muted); font-size:0.85em; text-transform:uppercase; letter-spacing:1px;'>Value (£)</label>
+                            <input type='number' id='manTxPrice' placeholder='0.00' style='width:100%; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:15px; color:#fff; font-size:1em; transition:border-color 0.3s;' onfocus="this.style.borderColor='var(--accent-green)'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
+                        </div>
+                        <div style='width:220px;'>
+                            <label style='display:block; margin-bottom:8px; color:var(--text-muted); font-size:0.85em; text-transform:uppercase; letter-spacing:1px;'>Timestamp</label>
+                            <input type='datetime-local' id='manTxDate' style='width:100%; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:15px; color:#fff; font-size:1em; transition:border-color 0.3s;' onfocus="this.style.borderColor='var(--accent-green)'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
+                        </div>
+                    </div>
+                    <div style='display:flex; gap:15px;'>
+                        <button class='admin-btn btn-green' style='flex:1; margin:0; font-size:1.1em; padding:15px; border-radius:12px;' onclick='window.createManualTx()'>Confirm Transaction</button>
+                        <button class='admin-btn' style='margin:0; background:rgba(255,255,255,0.05); padding:15px 30px; border-radius:12px;' onclick='window.toggleManualTxForm()'>Cancel</button>
+                    </div>
+                </div>
+
+                <div style='padding:0; overflow:hidden; background:rgba(20,20,22,0.4); backdrop-filter:blur(20px); border:1px solid rgba(255,255,255,0.05); border-radius:24px; box-shadow:0 10px 30px rgba(0,0,0,0.5);'>
+                    <div style='padding:25px 30px; border-bottom:1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:20px; background:rgba(0,0,0,0.2);'>
+                        <h3 style='margin:0; font-size:1.5em; display:flex; align-items:center; gap:10px;'>
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                            Ledger History
+                        </h3>
+                        <div style='display:flex; gap:15px; flex:1; justify-content:flex-end;'>
+                            <div style='position:relative; max-width:350px; width:100%;'>
+                                <svg style='position:absolute; left:15px; top:15px; color:var(--text-muted);' width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                                <input type='text' id='txSearch' placeholder='Search client, asset, or ID...' style='width:100%; margin:0; border-radius:12px; font-size:0.95em; padding:14px 14px 14px 45px; background:rgba(0,0,0,0.6); border:1px solid rgba(255,255,255,0.1); color:#fff; transition:border-color 0.3s;' onfocus="this.style.borderColor='rgba(255,255,255,0.3)'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'" oninput='window.renderTransactionsList()'>
+                            </div>
+                            <div style='position:relative;'>
+                                <select id='txSort' style='padding:14px 40px 14px 20px; border-radius:12px; background:rgba(0,0,0,0.6); border:1px solid rgba(255,255,255,0.1); color:#fff; outline:none; appearance:none; font-size:0.95em; cursor:pointer; transition:border-color 0.3s;' onfocus="this.style.borderColor='rgba(255,255,255,0.3)'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'" onchange='window.renderTransactionsList()'>
+                                    <option value='date_desc'>Date (Newest)</option>
+                                    <option value='date_asc'>Date (Oldest)</option>
+                                    <option value='price_desc'>Value (Highest)</option>
+                                    <option value='price_asc'>Value (Lowest)</option>
+                                </select>
+                                <svg style='position:absolute; right:15px; top:16px; color:var(--text-muted); pointer-events:none;' width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                            </div>
+                        </div>
+                    </div>
+                    <div style='overflow-x:auto;'>
+                        <table class='admin-table' style='width:100%; border-collapse:collapse;'>
+                            <thead>
+                                <tr style='background:rgba(0,0,0,0.3);'>
+                                    <th style='padding:18px 30px; text-align:left; color:var(--text-muted); font-weight:600; letter-spacing:1px; font-size:0.8em; text-transform:uppercase;'>Client</th>
+                                    <th style='padding:18px 30px; text-align:left; color:var(--text-muted); font-weight:600; letter-spacing:1px; font-size:0.8em; text-transform:uppercase;'>Asset Acquired</th>
+                                    <th style='padding:18px 30px; text-align:left; color:var(--text-muted); font-weight:600; letter-spacing:1px; font-size:0.8em; text-transform:uppercase;'>Financial Value</th>
+                                    <th style='padding:18px 30px; text-align:left; color:var(--text-muted); font-weight:600; letter-spacing:1px; font-size:0.8em; text-transform:uppercase;'>Timestamp</th>
+                                    <th style='padding:18px 30px; text-align:right; color:var(--text-muted); font-weight:600; letter-spacing:1px; font-size:0.8em; text-transform:uppercase;'>Operations</th>
+                                </tr>
+                            </thead>
+                            <tbody id='target-tx'>
+                                <!-- Populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal for AI Analysis -->
+            <div id='txAiModal' style='display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:9999; backdrop-filter:blur(15px); align-items:center; justify-content:center; opacity:0; transition:opacity 0.3s ease;'>
+                <div style='background:rgba(28,28,30,0.9); width:95%; max-width:750px; border-radius:28px; padding:40px; border:1px solid rgba(255,255,255,0.08); box-shadow:0 25px 60px rgba(0,0,0,0.8), inset 0 0 0 1px rgba(255,255,255,0.05); max-height:85vh; overflow-y:auto; position:relative; transform:translateY(20px); transition:transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);' id='txAiModalInner'>
+                    <div style='position:absolute; top:0; left:0; width:100%; height:150px; background:linear-gradient(180deg, rgba(59,130,246,0.1) 0%, transparent 100%); pointer-events:none; border-radius:28px 28px 0 0;'></div>
+                    <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:30px; position:relative; z-index:1; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:20px;'>
+                        <h2 style='margin:0; color:#fff; display:flex; align-items:center; gap:15px; font-size:1.8em; font-weight:700;'>
+                            <div style='padding:10px; background:linear-gradient(135deg, rgba(139,92,246,0.2) 0%, rgba(59,130,246,0.2) 100%); border-radius:14px; border:1px solid rgba(139,92,246,0.3);'><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg></div>
+                            AI Deep Analysis
+                        </h2>
+                        <button onclick='window.closeTxModal()' style='background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:50%; width:40px; height:40px; color:#fff; font-size:1.2em; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all 0.2s ease;' onmouseover="this.style.background='rgba(255,255,255,0.1)'; this.style.transform='scale(1.05)';" onmouseout="this.style.background='rgba(255,255,255,0.05)'; this.style.transform='scale(1)';">&times;</button>
+                    </div>
+                    <div id='txAiContent' style='line-height:1.8; color:#d1d5db; font-size:1.05em; position:relative; z-index:1;'>
+                        <!-- Content -->
+                    </div>
+                </div>
+            </div>
+            <div id='products' class='tab-content'>
+
                <div class='box'>
                    <h2>📝 Asset Configuration</h2>
                    <div style='display:flex; gap:20px; flex-wrap:wrap; margin-bottom:15px;'>
@@ -3302,12 +3475,8 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
     // 🚀 [FUNCTION: buildStaticTables] - Déclaration de fonction
         function buildStaticTables(){
           let txHtml=''; 
-          if(rawStats.recent_transactions && rawStats.recent_transactions.length>0){ 
-              rawStats.recent_transactions.forEach(tx=>{ 
-                  txHtml+= '<tr><td>' + escapeHTML(tx.username) + '</td><td>' + escapeHTML(tx.product) + '</td><td class="text-green font-bold">£' + tx.price + '</td><td class="text-muted">' + tx.date + '</td><td><button class="admin-btn" style="padding:6px 12px; color:var(--accent-red); margin:0;" onclick="window.refundTx(\\'' + escapeInlineJS(tx.date) + '\\', \\'' + escapeInlineJS(tx.username) + '\\')">Refund</button></td></tr>'; 
-              }); 
-          } 
-          if(document.getElementById('target-tx')) document.getElementById('target-tx').innerHTML = txHtml;
+          if (typeof window.renderTransactionsList === 'function') window.renderTransactionsList();
+          
 
           let prodHtml=''; 
           const filterSelect = document.getElementById('product-category-filter');
