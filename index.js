@@ -373,6 +373,39 @@ function logStat(type, value = 1, extraData = null) {
 
 // === [ANCHOR: DISCORD_SHOP_EMBED_GENERATOR] ===
     // 🚀 [FUNCTION: sendShopSetup] - Déclaration de fonction
+
+async function generateTranscript(channel) {
+    try {
+        let messages = [];
+        let lastId;
+        while (true) {
+            const options = { limit: 100 };
+            if (lastId) options.before = lastId;
+            const fetched = await channel.messages.fetch(options);
+            if (fetched.size === 0) break;
+            messages.push(...Array.from(fetched.values()));
+            lastId = fetched.last().id;
+        }
+        messages.reverse();
+        
+        let html = `<html><head><meta charset="utf-8"><title>Transcript ${channel.name}</title>
+        <style>body{font-family:sans-serif; background:#36393f; color:#dcddde;} .msg{margin-bottom:10px; padding:10px; border-bottom:1px solid #444;} .author{font-weight:bold; color:#fff;} .time{font-size:0.8em; color:#72767d;} img{max-width:400px;}</style>
+        </head><body><h2>Transcript of ${channel.name}</h2>`;
+        
+        messages.forEach(m => {
+            html += `<div class="msg"><span class="author">${m.author.username}</span> <span class="time">${m.createdAt.toLocaleString()}</span><br>${m.content}`;
+            if (m.attachments.size > 0) {
+                m.attachments.forEach(a => html += `<br><img src="${a.url}">`);
+            }
+            html += `</div>`;
+        });
+        html += `</body></html>`;
+        
+        fs.writeFileSync(`./transcript-${channel.id}.html`, html);
+        return `./transcript-${channel.id}.html`;
+    } catch(e) { console.error("Transcript err:", e); return null; }
+}
+
 async function sendShopSetup(channel) {
     let buyRows = [];
     let currentComponents = [];
@@ -860,7 +893,12 @@ client.on('messageCreate', async (message) => {
                 const textToSend = message.content.substring(5);
                 if (textToSend) { await message.channel.send(textToSend).catch(() => {}); await message.delete().catch(() => {}); }
             }
-            if (message.content === '!close') { channelStates.delete(message.channel.id); await message.channel.delete().catch(() => {}); }
+            if (message.content === '!close') { 
+    channelStates.delete(message.channel.id); 
+    const tPath = await generateTranscript(message.channel);
+    // we can save it or do something
+    await message.channel.delete().catch(() => {}); 
+}
         }
 
         if (message.channel?.name?.startsWith('shop-') || message.channel?.name?.startsWith('support-')) {
@@ -878,43 +916,46 @@ client.on('messageCreate', async (message) => {
             }
         }
 
+        
         if (message.channel?.name?.startsWith('support-') && !message.author.bot) {
            if (memoryStats.settings && memoryStats.settings.ai_enabled === false) {
-               console.log("AI Support is disabled. Silently ignoring support message.");
                return;
            }
            try {
                if (process.env.GEMINI_API_KEY) {
                    const { GoogleGenAI, ThinkingLevel } = require("@google/genai");
-                   const ai = new GoogleGenAI({
-                       apiKey: process.env.GEMINI_API_KEY,
-                       httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
-                   });
+                   const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+                   
+                   let catalogStr = Object.values(memoryStats.products).map(p => p.name + " (£" + p.price + ")").join(", ");
+                   
                    const aiRes = await ai.models.generateContent({
-                       model: 'gemini-3.1-pro-preview',
-                       contents: message.content,
+                       model: 'gemini-3.5-flash',
+                       contents: "User message: " + message.content + "\nCatalog: " + catalogStr,
                        config: {
-                           thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
-                           tools: [{ googleSearch: {} }],
-                           systemInstruction: 'You are an AI support agent. Provide a helpful, polite, and detailed reply directly to the user.'
+                           systemInstruction: 'You are an AI support agent. Format your response exactly as JSON: {"sentiment": "Urgent" | "Angry" | "Neutral" | "Happy", "reply": "Your helpful response"}. Use the catalog to answer product questions.',
+                           responseMimeType: "application/json",
                        }
                    });
+                   
+                   let parsed = { sentiment: "Neutral", reply: aiRes.text };
+                   try { parsed = JSON.parse(aiRes.text); } catch(e){}
+                   
+                   if (!memoryStats.ticket_sentiments) memoryStats.ticket_sentiments = {};
+                   memoryStats.ticket_sentiments[message.channel.id] = parsed.sentiment;
+                   syncCloud();
                    
                    const { EmbedBuilder } = require('discord.js');
                    const embed = new EmbedBuilder()
                        .setColor('#10b981')
                        .setTitle('🤖 AI Support Agent')
-                       .setDescription(aiRes.text || 'N/A')
+                       .setDescription(parsed.reply)
                        .setFooter({ text: 'This is an AI generated response.' });
                    await message.reply({ embeds: [embed] }).catch(()=>{});
-               } else {
-                   console.log("AI Support: GEMINI_API_KEY missing, ignoring message silently.");
                }
            } catch (e) {
                console.log("AI Error:", e.message);
            }
         }
-
         if (message.channel?.name?.startsWith('shop-')) {
                 if (memoryStats.blacklist && memoryStats.blacklist.includes(message.author.id)) return;
                 if (memoryStats.settings && memoryStats.settings.maintenance && memoryStats.settings.maintenance.active && message.author.id !== ADMIN_DISCORD_ID) {
@@ -1144,6 +1185,36 @@ client.on('guildMemberRemove', async (member) => {
 // WEB SERVER API & DASHBOARD HTML
 // ==========================================
 // === [ANCHOR: HTTP_SERVER_AND_AUTH] ===
+
+const TOTP_SECRET_FALLBACK = "NEXUSCORE2FASECRET";
+function base32tohex(base32) {
+    const base32chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+    let bits = ""; let hex = "";
+    for (let i = 0; i < base32.length; i++) {
+        const val = base32chars.indexOf(base32.charAt(i).toUpperCase());
+        if(val === -1) continue;
+        bits += val.toString(2).padStart(5, '0');
+    }
+    for (let i = 0; i < bits.length - 3; i += 4) hex += parseInt(bits.substr(i, 4), 2).toString(16);
+    return hex;
+}
+function verifyTOTP(token, secretBase32 = TOTP_SECRET_FALLBACK) {
+    if(!token || token.length !== 6) return false;
+    const hex = base32tohex(secretBase32);
+    const key = Buffer.from(hex, 'hex');
+    const epoch = Math.floor(Date.now() / 1000);
+    for (let i = -1; i <= 1; i++) {
+        const time = Buffer.alloc(8);
+        const t = Math.floor(epoch / 30) + i;
+        time.writeUInt32BE(0, 0); time.writeUInt32BE(t, 4);
+        const hmac = require('crypto').createHmac('sha1', key).update(time).digest();
+        const offset = hmac[hmac.length - 1] & 0xf;
+        const code = (((hmac[offset] & 0x7f) << 24) | ((hmac[offset + 1] & 0xff) << 16) | ((hmac[offset + 2] & 0xff) << 8) | (hmac[offset + 3] & 0xff)) % 1000000;
+        if (code.toString().padStart(6, '0') === token.toString()) return true;
+    }
+    return false;
+}
+
 const rateLimits = new Map();
 const bruteForceLocks = new Map();
 
@@ -1223,6 +1294,12 @@ const server = http.createServer(async (req, res) => {
                         const a = Buffer.from(data.pin || '');
                         const b = Buffer.from(DASHBOARD_PIN);
                         if (a.length === b.length && crypto.timingSafeEqual(a, b)) {
+                            if (!verifyTOTP(data.totp)) {
+                                lock.attempts++; if (lock.attempts >= 5) lock.lockout = now + 15 * 60 * 1000;
+                                bruteForceLocks.set(clientIp, lock); 
+                                systemLog('WARN', 'SECURITY', 'Failed login attempt (Invalid TOTP) from IP: ' + clientIp);
+                                return res.writeHead(401).end(JSON.stringify({ success: false, error: "Invalid TOTP Code" }));
+                            }
                     bruteForceLocks.delete(clientIp);
                     if(!global.activeAdminSessions) global.activeAdminSessions = new Set();
                     const sessionToken = require('crypto').randomBytes(32).toString('hex');
@@ -1336,7 +1413,7 @@ const server = http.createServer(async (req, res) => {
   }
 }
     // 🚀 [FUNCTION: login] - Déclaration de fonction
-async function login(){  const btn = document.getElementById('btn');  btn.style.opacity = '0.7';  btn.style.transform = 'scale(0.98)';  if (!document.getElementById('spin-keyframes')) { const style = document.createElement('style'); style.id = 'spin-keyframes'; style.innerHTML = '@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }'; document.head.appendChild(style); } btn.innerHTML = '<svg style="animation: spin 1s linear infinite; width: 20px; height: 20px; vertical-align: middle; margin-right: 10px;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" style="opacity: 0.25;"></circle><path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" style="opacity: 0.75;"></path></svg> Verifying...';  const res=await fetch('/api/login',{method:'POST',body:JSON.stringify({pin:document.getElementById('pin').value})});  if(res.ok) {    btn.style.background = '#fff';    btn.innerHTML = '<svg style="width: 20px; height: 20px; vertical-align: middle; margin-right: 10px;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Granted';    btn.style.transform = 'scale(1.05)';    setTimeout(() => location.reload(), 500);  } else {     btn.style.opacity = '1';    btn.style.transform = 'scale(1)';    btn.innerText = 'Authenticate';    const err = document.getElementById('err'); err.style.display='block';    err.style.animation = 'none'; void err.offsetWidth; err.style.animation = 'slideUpFade 0.3s ease forwards';    setTimeout(() => err.style.display='none', 3000);  }} document.getElementById('pin').addEventListener('keypress', e=>{if(e.key==='Enter')login();});</script></body></html>`);
+async function login(){  const btn = document.getElementById('btn');  btn.style.opacity = '0.7';  btn.style.transform = 'scale(0.98)';  if (!document.getElementById('spin-keyframes')) { const style = document.createElement('style'); style.id = 'spin-keyframes'; style.innerHTML = '@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }'; document.head.appendChild(style); } btn.innerHTML = '<svg style="animation: spin 1s linear infinite; width: 20px; height: 20px; vertical-align: middle; margin-right: 10px;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" style="opacity: 0.25;"></circle><path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" style="opacity: 0.75;"></path></svg> Verifying...';  const res=await fetch('/api/login',{method:'POST',body:JSON.stringify({pin:document.getElementById('pin').value, totp:document.getElementById('totp').value})});  if(res.ok) {    btn.style.background = '#fff';    btn.innerHTML = '<svg style="width: 20px; height: 20px; vertical-align: middle; margin-right: 10px;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Granted';    btn.style.transform = 'scale(1.05)';    setTimeout(() => location.reload(), 500);  } else {     btn.style.opacity = '1';    btn.style.transform = 'scale(1)';    btn.innerText = 'Authenticate';    const err = document.getElementById('err'); err.style.display='block';    err.style.animation = 'none'; void err.offsetWidth; err.style.animation = 'slideUpFade 0.3s ease forwards';    setTimeout(() => err.style.display='none', 3000);  }} document.getElementById('pin').addEventListener('keypress', e=>{if(e.key==='Enter')login();});</script></body></html>`);
     }
 
     // === [ANCHOR: API_ROUTES_GET] ===
@@ -1748,6 +1825,22 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                         syncCloud();
                     }
                 }
+                
+                else if (data.action === 'send_embed') {
+                    if (data.channelId && data.title && data.desc) {
+                        const c = guild.channels.cache.get(data.channelId);
+                        if (c) {
+                            const { EmbedBuilder } = require('discord.js');
+                            const embed = new EmbedBuilder()
+                                .setTitle(data.title)
+                                .setDescription(data.desc)
+                                .setColor(data.color || '#10b981');
+                            if (data.img) embed.setImage(data.img);
+                            await c.send({ embeds: [embed] }).catch(()=>{});
+                        }
+                    }
+                }
+
                 else if (data.action === 'create_manual_tx') {
                     const price = parseFloat(data.price);
                     if (isNaN(price) || price < 0) throw new Error("Invalid price");
@@ -1936,21 +2029,13 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                     systemLog('WARN', 'SECURITY', `Blacklist state toggled for User ${data.userId}`);
                 }
                 else if (data.action === 'close_channel') {
-                    const c = guild.channels.cache.get(data.channelId);
-                    if (c) { 
-                        try {
-                            const msgs = await c.messages.fetch({ limit: 100 });
-                            const transcript = msgs.map(m => `[${new Date(m.createdTimestamp).toISOString()}] ${m.author.tag}: ${m.content}`).reverse().join('\n');
-                            if (!memoryStats.transcripts) memoryStats.transcripts = [];
-                            memoryStats.transcripts.push({
-                                id: c.id,
-                                name: c.name,
-                                date: new Date().toISOString(),
-                                content: transcript
-                            });
-                            syncCloud();
-                        } catch(e) {}
-                        channelStates.delete(c.id); await c.delete().catch(()=>{}); 
+                    if (data.channelId) {
+                        const c = guild.channels.cache.get(data.channelId);
+                        if (c) {
+                            channelStates.delete(c.id);
+                            await generateTranscript(c);
+                            await c.delete().catch(()=>{});
+                        }
                     }
                 }
                 else if (data.action === 'delete_transcript') {
@@ -3369,6 +3454,29 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         window.deleteBuyLink = async function(id) { if(await window.customConfirm('GATEWAY SEVER', 'Sever this gateway link?')) await window.executeAction({action:'delete_buy_link', id:id}, false); };
 
         // 🚀 [UI_ACTION_ASYNC: createManualTx] - Action asynchrone d'interface Dashboard
+        
+        window.sendEmbed = async function() {
+            const channelId = document.getElementById('embedChannel').value;
+            const title = document.getElementById('embedTitle').value;
+            const desc = document.getElementById('embedDesc').value;
+            const color = document.getElementById('embedColor').value;
+            const img = document.getElementById('embedImg').value;
+            if(!channelId || !title || !desc) return showToast('Channel ID, Title and Desc required', 'error');
+            
+            try {
+                const res = await fetch('/api/action', {
+                    method: 'POST',
+                    headers: { 'x-csrf-token': window.CSRF_TOKEN },
+                    body: JSON.stringify({ action: 'send_embed', channelId, title, desc, color, img })
+                });
+                if(res.ok) {
+                    showToast('Embed Sent!');
+                    document.getElementById('embedTitle').value = '';
+                    document.getElementById('embedDesc').value = '';
+                } else showToast('Failed to send', 'error');
+            } catch(e) { showToast('Error', 'error'); }
+        };
+
         window.createManualTx = async function() {
             const user = document.getElementById('manTxUser').value;
             const prod = document.getElementById('manTxProd').value;
