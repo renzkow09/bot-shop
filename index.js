@@ -212,6 +212,7 @@ function ensureMemoryInitialized() {
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "✨ DESIGN UPDATE: Overview tab has been completely redesigned with an ultra-premium, glassmorphic aesthetic. Enjoy the new animated stats cards, custom SVG icons, glowing gradients, and improved typography." });
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "💎 DESIGN UPGRADE: Deployed 'Ultra Premium Glassmorphism' design system to the Overview page. Features deep backdrop blur, sub-pixel borders, inset shadows, floating SVG icons, glowing ambient lights, and refined typography." });
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🧠 AI UPGRADE: Interrogation Neural Net now uses gemini-3.1-pro-preview with HIGH thinking level. Market scanner uses gemini-3.5-flash with Google Search grounding enabled." });
+            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "💫 UX FIX: Corrected duplicate Revenue Timeline & Live Pulse bugs. Added highly fluid interactions, staggered loading animations, breathing ambient glows, and hover micro-interactions across the Overview dashboard." });
             if (memoryStats.patchnotes.length === 0) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "Ajout de la sidebar et de la catégorie Patchnotes." });
             }
@@ -226,6 +227,7 @@ function ensureMemoryInitialized() {
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "✨ DESIGN UPDATE: Overview tab has been completely redesigned with an ultra-premium, glassmorphic aesthetic. Enjoy the new animated stats cards, custom SVG icons, glowing gradients, and improved typography." });
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "💎 DESIGN UPGRADE: Deployed 'Ultra Premium Glassmorphism' design system to the Overview page. Features deep backdrop blur, sub-pixel borders, inset shadows, floating SVG icons, glowing ambient lights, and refined typography." });
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🧠 AI UPGRADE: Interrogation Neural Net now uses gemini-3.1-pro-preview with HIGH thinking level. Market scanner uses gemini-3.5-flash with Google Search grounding enabled." });
+            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "💫 UX FIX: Corrected duplicate Revenue Timeline & Live Pulse bugs. Added highly fluid interactions, staggered loading animations, breathing ambient glows, and hover micro-interactions across the Overview dashboard." });
             if (memoryStats.patchnotes.length === 0) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "Ajout de la sidebar et de la catégorie Patchnotes." });
                 syncCloud();
@@ -2431,6 +2433,77 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
             z-index: 0;
         }
         /* End Ultra Premium Glassmorphism */
+
+        /* Ultra Fluid Animations */
+        @keyframes floatEffect {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0px); }
+        }
+        @keyframes breatheGlow {
+            0% { opacity: 0.15; transform: scale(1); filter: blur(40px); }
+            100% { opacity: 0.3; transform: scale(1.2); filter: blur(50px); }
+        }
+        @keyframes slideInRight {
+            from { opacity: 0; transform: translateX(30px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes popIn {
+            0% { opacity: 0; transform: scale(0.9); }
+            50% { transform: scale(1.05); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+        @keyframes numberPulse {
+            0% { text-shadow: 0 0 5px rgba(255,255,255,0.1); }
+            100% { text-shadow: 0 0 20px rgba(255,255,255,0.5); }
+        }
+        .premium-stats-grid .glass-panel {
+            animation: slideUpFade 0.7s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+        }
+        .premium-stats-grid .glass-panel:nth-child(1) { animation-delay: 0.1s; }
+        .premium-stats-grid .glass-panel:nth-child(2) { animation-delay: 0.2s; }
+        .premium-stats-grid .glass-panel:nth-child(3) { animation-delay: 0.3s; }
+        .premium-stats-grid .glass-panel:nth-child(4) { animation-delay: 0.4s; }
+        .premium-stats-grid .glass-panel:nth-child(5) { animation-delay: 0.5s; }
+        .premium-stats-grid .glass-panel:nth-child(6) { animation-delay: 0.6s; }
+
+        .overview-grid .glass-panel {
+            animation: slideUpFade 0.9s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+        }
+        .overview-grid .glass-panel:nth-child(1) { animation-delay: 0.3s; }
+        .overview-grid .glass-panel:nth-child(2) { animation-delay: 0.4s; }
+
+        .glass-panel:hover .ambient-glow {
+            animation: breatheGlow 2s infinite alternate cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .glass-panel:hover .glass-icon-wrapper {
+            animation: floatEffect 3s infinite ease-in-out;
+            box-shadow: 0 10px 25px rgba(255,255,255,0.1);
+        }
+        .glass-stat-value {
+            animation: popIn 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+            animation-delay: 0.4s;
+        }
+        .glass-panel:hover .glass-stat-value {
+            animation: numberPulse 1.5s infinite alternate;
+        }
+        .feed-item {
+            animation: slideInRight 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+            border-left: 3px solid transparent;
+            transition: all 0.3s ease;
+        }
+        .feed-item:hover {
+            border-left-color: var(--accent-green);
+            background: rgba(255,255,255,0.05) !important;
+            transform: translateX(5px);
+        }
+        .trend {
+            transition: all 0.3s ease;
+        }
+        .glass-panel:hover .trend {
+            transform: translateX(4px);
+        }
+        /* End Ultra Fluid Animations */
         .premium-card { background: linear-gradient(145deg, rgba(30,30,35,0.7), rgba(20,20,25,0.9)); border: 1px solid rgba(255,255,255,0.06); border-radius: 24px; padding: 24px; box-shadow: 0 10px 30px -10px rgba(0,0,0,0.5); display: flex; flex-direction: column; position: relative; overflow: hidden; transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
         .premium-card::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(120deg, transparent, rgba(255,255,255,0.03), transparent); transform: translateX(-100%); transition: 0.6s; }
         .premium-card:hover::before { transform: translateX(100%); }
@@ -2852,24 +2925,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                        </div>
                    </div>
                </div>
-               <div style='display:grid; grid-template-columns: 2fr 1fr; gap:25px; align-items:stretch;' class='overview-grid'>
-                   <div class='box' style='margin:0;'>
-                       <div style='display:flex; justify-content:space-between; align-items:center;'>
-                           <h2 style='margin:0; border:none;'>Revenue Timeline</h2>
-                           <div style='display:flex; gap:8px;'>
-                               <button class='admin-btn' style='margin:0; padding:6px 12px;' onclick='window.location.href="/api/export"'>Export</button>
-                               <button class='admin-btn btn-green' id='btn-chart-7' style='margin:0; padding:6px 12px;' onclick='window.updateSalesChart(7)'>7D</button>
-                               <button class='admin-btn' id='btn-chart-30' style='margin:0; padding:6px 12px;' onclick='window.updateSalesChart(30)'>30D</button>
-                               <button class='admin-btn' id='btn-chart-all' style='margin:0; padding:6px 12px;' onclick='window.updateSalesChart(0)'>ALL</button>
-                           </div>
-                       </div>
-                       <div style='height:280px; margin-top:20px;'><canvas id='salesChart'></canvas></div>
-                   </div>
-                   <div class='box' style='margin:0; display:flex; flex-direction:column; overflow:hidden;'>
-                       <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:0.5px solid rgba(255,255,255,0.05); padding-bottom:15px;'><h2 style='margin:0; border:none;'>Live Pulse</h2><div class='status-dot' style='margin:0;'></div></div>
-                       <div class='feed-container' id='target-feed' style='flex:1;'></div>
-                   </div>
-               </div>
+               
            </div>
                 
            <div id='kanban' class='tab-content'>
