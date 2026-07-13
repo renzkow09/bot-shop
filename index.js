@@ -1,13 +1,5 @@
 try { require('dotenv').config({ path: __dirname + '/.env' }); } catch (e) { console.warn("⚠️ dotenv module not found. Running with system environment variables."); }
 // === [ANCHOR: IMPORTS_AND_CRASH_HANDLER] ===
-const { GoogleGenAI } = require('@google/genai');
-let ai;
-try {
-    ai = new GoogleGenAI({
-        apiKey: process.env.GEMINI_API_KEY || 'dummy_key',
-        httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
-    });
-} catch(e) { console.error("GoogleGenAI init error", e); }
 const { Client, GatewayIntentBits, Partials, ButtonBuilder, ActionRowBuilder, ButtonStyle, ChannelType, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, EmbedBuilder, AttachmentBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 
 const CircuitBreaker = {
@@ -2234,18 +2226,22 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                     }
                 }
                 
-                                else if (data.action === 'ai_analyze_tx') {
+                                                else if (data.action === 'ai_analyze_tx') {
                     if (!process.env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY not configured.");
                     const recent = (memoryStats.recent_transactions || []).slice(0, 50);
                     if (!recent.length) return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ result: "<p>No recent transactions to analyze.</p>" }));
                     
                     try {
-                        const response = await ai.models.generateContent({
-                            model: "gemini-3.1-pro-preview",
-                            contents: "Analyze the following recent transactions and provide a short financial analysis report in HTML format. " + JSON.stringify(recent),
-                            config: { thinkingConfig: { thinkingLevel: "HIGH" } }
+                        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                contents: [{ parts: [{ text: "Analyze the following recent transactions and provide a short financial analysis report in HTML format. " + JSON.stringify(recent) }] }]
+                            })
                         });
-                        return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ result: response.text }));
+                        const json = await response.json();
+                        if (json.error) throw new Error(json.error.message);
+                        return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ result: json.candidates[0].content.parts[0].text }));
                     } catch(e) {
                         throw e;
                     }
@@ -2253,12 +2249,16 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                                 else if (data.action === 'check_market') {
                     if (!process.env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY not configured.");
                     try {
-                        const response = await ai.models.generateContent({
-                            model: "gemini-3.5-flash",
-                            contents: "Perform a quick market analysis for the digital product: " + data.product + ". Provide a short HTML report with pricing recommendations and insights.",
-                            config: { tools: [{ googleSearch: {} }] }
+                        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                contents: [{ parts: [{ text: "Perform a quick market analysis for the digital product: " + data.product + ". Provide a short HTML report with pricing recommendations and insights." }] }]
+                            })
                         });
-                        return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ result: response.text }));
+                        const json = await response.json();
+                        if (json.error) throw new Error(json.error.message);
+                        return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ result: json.candidates[0].content.parts[0].text }));
                     } catch(e) {
                         throw e;
                     }
