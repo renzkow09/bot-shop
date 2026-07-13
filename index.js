@@ -209,6 +209,7 @@ function ensureMemoryInitialized() {
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔥 CRITICAL FIX: Resolved dashboard freeze by forcefully removing the splash screen. 🛡️ DISCORD FIX: Fixed 'Redeem Code' channel creation crash caused by invalid Admin ID in permission overwrites. Added strict try/catch error boundaries." });
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔥 FIX: Categories now correctly display and group on the Discord shop overview page instead of being overridden by prices. 📊 UI FIX: Dynamic categories are now properly added to the dashboard filter dropdown. 🛡️ PATCH: Hardened Analytics chart renderings." });
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔧 UI FIX: Corrected a CSS rendering issue where all background tabs were bleeding into the active Overview tab. Each category is now strictly sandboxed to its respective view." });
+            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "✨ DESIGN UPDATE: Overview tab has been completely redesigned with an ultra-premium, glassmorphic aesthetic. Enjoy the new animated stats cards, custom SVG icons, glowing gradients, and improved typography." });
             if (memoryStats.patchnotes.length === 0) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "Ajout de la sidebar et de la catégorie Patchnotes." });
             }
@@ -220,6 +221,7 @@ function ensureMemoryInitialized() {
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔥 CRITICAL FIX: Resolved dashboard freeze by forcefully removing the splash screen. 🛡️ DISCORD FIX: Fixed 'Redeem Code' channel creation crash caused by invalid Admin ID in permission overwrites. Added strict try/catch error boundaries." });
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔥 FIX: Categories now correctly display and group on the Discord shop overview page instead of being overridden by prices. 📊 UI FIX: Dynamic categories are now properly added to the dashboard filter dropdown. 🛡️ PATCH: Hardened Analytics chart renderings." });
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔧 UI FIX: Corrected a CSS rendering issue where all background tabs were bleeding into the active Overview tab. Each category is now strictly sandboxed to its respective view." });
+            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "✨ DESIGN UPDATE: Overview tab has been completely redesigned with an ultra-premium, glassmorphic aesthetic. Enjoy the new animated stats cards, custom SVG icons, glowing gradients, and improved typography." });
             if (memoryStats.patchnotes.length === 0) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "Ajout de la sidebar et de la catégorie Patchnotes." });
                 syncCloud();
@@ -2338,6 +2340,29 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
         .card:hover { transform: translateY(-3px); border-color: rgba(255,255,255,0.15); box-shadow: 0 12px 40px rgba(0,0,0,0.4); }
         .card h3 { margin: 0 0 10px 0; font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); font-weight: 600; }
         .card .value { font-size: 2.2em; font-weight: 700; letter-spacing: -1px; }
+
+        /* Premium CSS Updates */
+        .premium-stats-grid { gap: 24px; }
+        .premium-card { background: linear-gradient(145deg, rgba(30,30,35,0.7), rgba(20,20,25,0.9)); border: 1px solid rgba(255,255,255,0.06); border-radius: 24px; padding: 24px; box-shadow: 0 10px 30px -10px rgba(0,0,0,0.5); display: flex; flex-direction: column; position: relative; overflow: hidden; transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+        .premium-card::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(120deg, transparent, rgba(255,255,255,0.03), transparent); transform: translateX(-100%); transition: 0.6s; }
+        .premium-card:hover::before { transform: translateX(100%); }
+        .premium-card:hover { transform: translateY(-5px); border-color: rgba(255,255,255,0.12); box-shadow: 0 20px 40px -10px rgba(0,0,0,0.6); }
+        .premium-card h3 { font-size: 0.85em; color: #8e8e93; font-weight: 600; text-transform: none; margin-bottom: 12px; letter-spacing: 0px; }
+        .premium-card .value { font-size: 2.5em; font-weight: 800; letter-spacing: -1.5px; margin-bottom: 8px; line-height: 1; }
+        .premium-card .card-icon { position: absolute; top: 24px; right: 24px; width: 42px; height: 42px; border-radius: 12px; display: flex; align-items: center; justify-content: center; }
+        .premium-card .trend { font-size: 0.8em; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+        .premium-card .trend.positive { color: #10b981; }
+        .premium-card .trend.negative { color: #ef4444; }
+
+        .premium-box { background: linear-gradient(180deg, rgba(25,25,30,0.6), rgba(15,15,20,0.9)); border: 1px solid rgba(255,255,255,0.06); border-radius: 30px; padding: 30px; box-shadow: 0 20px 50px -20px rgba(0,0,0,0.7); backdrop-filter: blur(20px); }
+        .btn-pill { background: transparent; color: #8e8e93; border: none; padding: 6px 14px; border-radius: 10px; font-weight: 600; font-size: 0.85em; transition: all 0.3s; cursor: pointer; }
+        .btn-pill:hover { color: #fff; background: rgba(255,255,255,0.05); }
+        .btn-pill.active { background: rgba(255,255,255,0.1); color: #fff; box-shadow: 0 2px 10px rgba(0,0,0,0.2); }
+
+        .premium-feed::-webkit-scrollbar { width: 4px; }
+        .premium-feed::-webkit-scrollbar-track { background: transparent; }
+        .premium-feed::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+        /* End Premium CSS Updates */
         .box { background: var(--bg-card); padding: 25px; border-radius: 24px; border: 1px solid var(--border-color); margin-bottom: 25px; transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1); backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px); box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
         .box h2 { font-size: 1.3em; font-weight: 600; margin-top: 0; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; color: #fff; letter-spacing: 0px; border-bottom: 0.5px solid rgba(255,255,255,0.05); padding-bottom: 15px; }
         table { width: 100%; border-collapse: separate; border-spacing: 0; } th { padding: 15px; text-align: left; color: var(--text-muted); font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 0.5px solid rgba(255,255,255,0.1); font-weight: 600; } td { padding: 15px; text-align: left; border-bottom: 0.5px solid rgba(255,255,255,0.05); vertical-align: middle; } tr { transition: all 0.3s ease; } tr:hover { background: rgba(255,255,255,0.02); transform: scale(1.005); }
