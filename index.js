@@ -1,5 +1,13 @@
 try { require('dotenv').config({ path: __dirname + '/.env' }); } catch (e) { console.warn("⚠️ dotenv module not found. Running with system environment variables."); }
 // === [ANCHOR: IMPORTS_AND_CRASH_HANDLER] ===
+const { GoogleGenAI } = require('@google/genai');
+let ai;
+try {
+    ai = new GoogleGenAI({
+        apiKey: process.env.GEMINI_API_KEY || 'dummy_key',
+        httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+    });
+} catch(e) { console.error("GoogleGenAI init error", e); }
 const { Client, GatewayIntentBits, Partials, ButtonBuilder, ActionRowBuilder, ButtonStyle, ChannelType, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, EmbedBuilder, AttachmentBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 
 const CircuitBreaker = {
@@ -207,6 +215,8 @@ function ensureMemoryInitialized() {
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔥 CRITICAL FIX: Resolved dashboard freezing caused by unhandled exceptions in UI overlay and missing JS canvas compatibility. 🛡️ DISCORD FIX: Prevented category creation crashes for shop/support tickets if parent category ID is invalid on the host server. 🛠️ SECURITY: Blinded try/catch error logging on frontend. 🚀 The system is now 100% operational." });
             if (memoryStats.patchnotes.length > 50) memoryStats.patchnotes = memoryStats.patchnotes.slice(0, 50);
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔥 CRITICAL FIX: Resolved dashboard freeze by forcefully removing the splash screen. 🛡️ DISCORD FIX: Fixed 'Redeem Code' channel creation crash caused by invalid Admin ID in permission overwrites. Added strict try/catch error boundaries." });
+            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔥 FIX: Categories now correctly display and group on the Discord shop overview page instead of being overridden by prices. 📊 UI FIX: Dynamic categories are now properly added to the dashboard filter dropdown. 🛡️ PATCH: Hardened Analytics chart renderings." });
+            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔧 UI FIX: Corrected a CSS rendering issue where all background tabs were bleeding into the active Overview tab. Each category is now strictly sandboxed to its respective view." });
             if (memoryStats.patchnotes.length === 0) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "Ajout de la sidebar et de la catégorie Patchnotes." });
             }
@@ -216,6 +226,8 @@ function ensureMemoryInitialized() {
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔥 CRITICAL FIX: Resolved dashboard freezing caused by unhandled exceptions in UI overlay and missing JS canvas compatibility. 🛡️ DISCORD FIX: Prevented category creation crashes for shop/support tickets if parent category ID is invalid on the host server. 🛠️ SECURITY: Blinded try/catch error logging on frontend. 🚀 The system is now 100% operational." });
             if (memoryStats.patchnotes.length > 50) memoryStats.patchnotes = memoryStats.patchnotes.slice(0, 50);
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔥 CRITICAL FIX: Resolved dashboard freeze by forcefully removing the splash screen. 🛡️ DISCORD FIX: Fixed 'Redeem Code' channel creation crash caused by invalid Admin ID in permission overwrites. Added strict try/catch error boundaries." });
+            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔥 FIX: Categories now correctly display and group on the Discord shop overview page instead of being overridden by prices. 📊 UI FIX: Dynamic categories are now properly added to the dashboard filter dropdown. 🛡️ PATCH: Hardened Analytics chart renderings." });
+            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔧 UI FIX: Corrected a CSS rendering issue where all background tabs were bleeding into the active Overview tab. Each category is now strictly sandboxed to its respective view." });
             if (memoryStats.patchnotes.length === 0) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "Ajout de la sidebar et de la catégorie Patchnotes." });
                 syncCloud();
@@ -478,7 +490,7 @@ async function sendShopSetup(channel) {
     for (const [id, prod] of Object.entries(memoryStats.products)) {
         if (prod.stock && prod.stock !== "∞" && parseInt(prod.stock) <= 0) continue;
         
-        const catName = prod.price === "Custom" ? "💌 PERSONALIZED (On Request)" : `✨ ITEMS (£${prod.price})`;
+        const catName = prod.category || (prod.price === "Custom" ? "💌 PERSONALIZED (On Request)" : `✨ ITEMS (£${prod.price})`);
         if (!groupedProducts[catName]) groupedProducts[catName] = [];
         groupedProducts[catName].push(`**${id}.** ${prod.name}`);
     }
@@ -2222,27 +2234,34 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                     }
                 }
                 
-                else if (data.action === 'ai_analyze_tx') {
-                    const fallbackAnalysis = () => {
-                        const recent = (memoryStats.recent_transactions || []).slice(0, 50);
-                        if (!recent.length) return "<p>No recent transactions to analyze.</p>";
-                        let total = recent.reduce((s, t) => s + parseFloat(t.price || 0), 0);
-                        let avg = total / recent.length;
-                        let prods = {};
-                        recent.forEach(t => prods[t.product] = (prods[t.product] || 0) + 1);
-                        let top = Object.keys(prods).sort((a,b)=>prods[b]-prods[a])[0];
-                        return `<h3>Nexus Local Analysis</h3><p>Using offline heuristic engine.</p><ul><li><strong>Total Revenue:</strong> £${total.toFixed(2)}</li><li><strong>Average Transaction:</strong> £${avg.toFixed(2)}</li><li><strong>Top Product:</strong> ${top}</li><li><strong>Volume:</strong> ${recent.length} recent transactions</li></ul><p><em>Insight:</em> The market indicates strong interest in ${top}. Consider adjusting pricing or offering bundles to maximize yield.</p>`;
-                    };
-
-                    return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ result: fallbackAnalysis() }));
+                                else if (data.action === 'ai_analyze_tx') {
+                    if (!process.env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY not configured.");
+                    const recent = (memoryStats.recent_transactions || []).slice(0, 50);
+                    if (!recent.length) return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ result: "<p>No recent transactions to analyze.</p>" }));
+                    
+                    try {
+                        const response = await ai.models.generateContent({
+                            model: "gemini-3.1-pro-preview",
+                            contents: "Analyze the following recent transactions and provide a short financial analysis report in HTML format. " + JSON.stringify(recent),
+                            config: { thinkingConfig: { thinkingLevel: "HIGH" } }
+                        });
+                        return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ result: response.text }));
+                    } catch(e) {
+                        throw e;
+                    }
                 }
-                
-                else if (data.action === 'check_market') {
-                    const fallbackMarket = () => {
-                        return `<h3>Nexus Local Market Analysis</h3><p>Using offline heuristic engine.</p><p>Based on internal data models, "${escapeHTML(data.product)}" is positioned well in its competitive bracket. Recommended price range is between £10 and £25 depending on feature scope.</p><p><em>Insight:</em> Demand for this digital asset type is currently stable.</p>`;
-                    };
-
-                    return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ result: fallbackMarket() }));
+                                else if (data.action === 'check_market') {
+                    if (!process.env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY not configured.");
+                    try {
+                        const response = await ai.models.generateContent({
+                            model: "gemini-3.5-flash",
+                            contents: "Perform a quick market analysis for the digital product: " + data.product + ". Provide a short HTML report with pricing recommendations and insights.",
+                            config: { tools: [{ googleSearch: {} }] }
+                        });
+                        return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ result: response.text }));
+                    } catch(e) {
+                        throw e;
+                    }
                 }
                 else if (data.action === 'force_backup') {
                     await syncCloud(true);
@@ -2313,7 +2332,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
         .btn-icon:hover { background: rgba(255,255,255,0.15); transform: translateY(-3px) scale(1.1); box-shadow: 0 8px 20px rgba(0,0,0,0.3); border-color: rgba(255,255,255,0.2); }
         .btn-icon:active { transform: translateY(0) scale(0.95); box-shadow: 0 2px 10px rgba(0,0,0,0.2); }
         .nav-badge { background: var(--accent-red); color: white; border-radius: 10px; padding: 2px 6px; font-size: 0.75em; margin-left: 8px; box-shadow: 0 0 10px var(--accent-red); }
-        .tab-content {  animation: fadeInSmooth 0.4s cubic-bezier(0.25, 1, 0.5, 1); } .tab-content.active { display: block; }
+        .tab-content { display: none; animation: fadeInSmooth 0.4s cubic-bezier(0.25, 1, 0.5, 1); } .tab-content.active { display: block; }
         .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; margin-bottom: 30px; }
         .card { background: var(--bg-card); padding: 25px; border-radius: 24px; border: 1px solid var(--border-color); transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1); position: relative; overflow: hidden; backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px); box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
         .card:hover { transform: translateY(-3px); border-color: rgba(255,255,255,0.15); box-shadow: 0 12px 40px rgba(0,0,0,0.4); }
@@ -3693,6 +3712,20 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             document.getElementById('newProdStock').value = p.stock || '∞'; 
             document.getElementById('newProdLink').value = p.link; 
             document.getElementById('newProdDesc').value = p.desc || ''; 
+            
+            if (document.getElementById('product-category-filter')) {
+                const filterOpts = document.getElementById('product-category-filter').options;
+                let foundFilter = false;
+                for(let i=0; i<filterOpts.length; i++) {
+                    if(filterOpts[i].value === p.category) { foundFilter = true; break; }
+                }
+                if (!foundFilter && p.category) {
+                    const opt = document.createElement('option');
+                    opt.value = p.category;
+                    opt.text = p.category;
+                    document.getElementById('product-category-filter').add(opt);
+                }
+            }
             if(document.getElementById('newProdCategory')) {
                 const catOpts = document.getElementById('newProdCategory').options;
                 let found = false;
@@ -4474,11 +4507,11 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
     // 🚀 [FUNCTION: renderAnalyticsCharts] - Déclaration de fonction
         function renderAnalyticsCharts() { 
            if(typeof Chart === 'undefined') return;
-           try { const canvas = document.getElementById('hourlyChart'); if(canvas) { const ctxHourly = canvas.getContext('2d'); if(window.hourlyChart instanceof Chart) window.hourlyChart.destroy(); window.hourlyChart = new Chart(ctxHourly, { type: 'bar', data: { labels: Array.from({length: 24}, (_, i) => i+'h'), datasets: [{ label: 'Sales', data: rawStats.analytics.hourly_sales || Array(24).fill(0), backgroundColor: getThemeVal('hex'), hoverBackgroundColor: '#fff', borderRadius: 6 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false } }, scales: { y: { grid: { color: 'rgba(255,255,255,0.05)' }, border: {display: false}, beginAtZero: true }, x: { grid: { display: false }, border: {display: false} } } } }); } } catch(e) { console.error("Hourly Chart Error", e); }
-           try { const canvas = document.getElementById('topProductsBarChart'); if(canvas) { const prodIds = Object.keys(rawStats.product_sales || {}); const prodLabels = prodIds.map(id => rawStats.products[id] ? rawStats.products[id].name : 'Unknown'); const prodData = Object.values(rawStats.product_sales || {}); const ctxTopProd = canvas.getContext('2d'); if(window.topProdChart instanceof Chart) window.topProdChart.destroy(); window.topProdChart = new Chart(ctxTopProd, { type: 'bar', data: { labels: prodLabels.length?prodLabels:['No Data'], datasets: [{ label: 'Sales', data: prodData.length?prodData:[0], backgroundColor: getThemeVal('hex'), hoverBackgroundColor: '#fff', borderRadius: 6 }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' }, border: {display: false}, beginAtZero: true }, y: { grid: { display: false }, border: {display: false} } } } }); } } catch(e) { console.error("Top Prod Chart Error", e); }
-           try { const canvas = document.getElementById('categoryRevenueChart'); if(canvas) { const catRevs = {}; Object.entries(rawStats.product_sales || {}).forEach(([id, count]) => { const p = rawStats.products[id]; if(p && p.price !== 'Custom'){ const cat = p.category || 'Other'; if(!catRevs[cat]) catRevs[cat] = 0; catRevs[cat] += (parseInt(p.price) * count); } }); const ctxCat = canvas.getContext('2d'); if(window.catChart instanceof Chart) window.catChart.destroy(); window.catChart = new Chart(ctxCat, { type: 'polarArea', data: { labels: Object.keys(catRevs).length?Object.keys(catRevs):['No Data'], datasets: [{ data: Object.values(catRevs).length?Object.values(catRevs):[0], backgroundColor: [getThemeVal('hex'), getThemeVal('hover'), '#059669', '#f59e0b', '#ef4444'], hoverBackgroundColor: ['#fff', '#fff', '#fff', '#fff', '#fff'], borderWidth: 0, hoverOffset: 15 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, plugins: { legend: { position: 'right', labels: {color: '#8e8e93', font: { family: '-apple-system' }} } } } }); } } catch(e) { console.error("Cat Chart Error", e); }
-           try { const canvas = document.getElementById('dowChart'); if(canvas) { const dowSales = { 'Sun':0, 'Mon':0, 'Tue':0, 'Wed':0, 'Thu':0, 'Fri':0, 'Sat':0 }; const daysArr = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']; Object.entries(rawStats.revenue || {}).forEach(([dateStr, val]) => { const d = new Date(dateStr); if(!isNaN(d)) { dowSales[daysArr[d.getDay()]] += parseFloat(val); } }); const ctxDow = canvas.getContext('2d'); if(window.dowChartInst instanceof Chart) window.dowChartInst.destroy(); window.dowChartInst = new Chart(ctxDow, { type: 'bar', data: { labels: daysArr, datasets: [{ label: 'Revenue (£)', data: daysArr.map(d=>dowSales[d]), backgroundColor: getThemeVal('hex'), hoverBackgroundColor: '#fff', borderRadius: 8 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false } }, scales: { y: { grid: { color: 'rgba(255,255,255,0.05)' }, border: {display: false}, beginAtZero: true }, x: { grid: { display: false }, border: {display: false} } } } }); } } catch(e) { console.error("Dow Chart Error", e); }
-           try { const canvas = document.getElementById('funnelChart'); if(canvas) { const ticketsOpened = rawStats.analytics?.tickets_opened || 0; const salesClosed = rawStats.total_transactions || 0; const ctxFunnel = canvas.getContext('2d'); if(window.funnelChartInst instanceof Chart) window.funnelChartInst.destroy(); window.funnelChartInst = new Chart(ctxFunnel, { type: 'doughnut', data: { labels: ['Tickets Opened (No Purchase)', 'Successful Sales'], datasets: [{ data: [Math.max(0, ticketsOpened - salesClosed), salesClosed], backgroundColor: ['rgba(239, 68, 68, 0.8)', 'rgba(' + getThemeVal('rgb') + ', 0.8)'], hoverOffset: 15, borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, cutout: '75%', plugins: { legend: { position: 'bottom', labels: { color: '#8e8e93' } } } } }); } } catch(e) { console.error("Funnel Chart Error", e); }
+           try { const canvas = document.getElementById('hourlyChart'); if(canvas) { const ctxHourly = canvas.getContext('2d'); if(!ctxHourly) return; if(window.hourlyChart instanceof Chart) window.hourlyChart.destroy(); window.hourlyChart = new Chart(ctxHourly, { type: 'bar', data: { labels: Array.from({length: 24}, (_, i) => i+'h'), datasets: [{ label: 'Sales', data: rawStats.analytics.hourly_sales || Array(24).fill(0), backgroundColor: getThemeVal('hex'), hoverBackgroundColor: '#fff', borderRadius: 6 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false } }, scales: { y: { grid: { color: 'rgba(255,255,255,0.05)' }, border: {display: false}, beginAtZero: true }, x: { grid: { display: false }, border: {display: false} } } } }); } } catch(e) { console.error("Hourly Chart Error", e); }
+           try { const canvas = document.getElementById('topProductsBarChart'); if(canvas) { const prodIds = Object.keys(rawStats.product_sales || {}); const prodLabels = prodIds.map(id => rawStats.products[id] ? rawStats.products[id].name : 'Unknown'); const prodData = Object.values(rawStats.product_sales || {}); const ctxTopProd = canvas.getContext('2d'); if(!ctxTopProd) return; if(window.topProdChart instanceof Chart) window.topProdChart.destroy(); window.topProdChart = new Chart(ctxTopProd, { type: 'bar', data: { labels: prodLabels.length?prodLabels:['No Data'], datasets: [{ label: 'Sales', data: prodData.length?prodData:[0], backgroundColor: getThemeVal('hex'), hoverBackgroundColor: '#fff', borderRadius: 6 }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' }, border: {display: false}, beginAtZero: true }, y: { grid: { display: false }, border: {display: false} } } } }); } } catch(e) { console.error("Top Prod Chart Error", e); }
+           try { const canvas = document.getElementById('categoryRevenueChart'); if(canvas) { const catRevs = {}; Object.entries(rawStats.product_sales || {}).forEach(([id, count]) => { const p = rawStats.products[id]; if(p && p.price !== 'Custom'){ const cat = p.category || 'Other'; if(!catRevs[cat]) catRevs[cat] = 0; catRevs[cat] += (parseInt(p.price) * count); } }); const ctxCat = canvas.getContext('2d'); if(!ctxCat) return; if(window.catChart instanceof Chart) window.catChart.destroy(); window.catChart = new Chart(ctxCat, { type: 'polarArea', data: { labels: Object.keys(catRevs).length?Object.keys(catRevs):['No Data'], datasets: [{ data: Object.values(catRevs).length?Object.values(catRevs):[0], backgroundColor: [getThemeVal('hex'), getThemeVal('hover'), '#059669', '#f59e0b', '#ef4444'], hoverBackgroundColor: ['#fff', '#fff', '#fff', '#fff', '#fff'], borderWidth: 0, hoverOffset: 15 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, plugins: { legend: { position: 'right', labels: {color: '#8e8e93', font: { family: '-apple-system' }} } } } }); } } catch(e) { console.error("Cat Chart Error", e); }
+           try { const canvas = document.getElementById('dowChart'); if(canvas) { const dowSales = { 'Sun':0, 'Mon':0, 'Tue':0, 'Wed':0, 'Thu':0, 'Fri':0, 'Sat':0 }; const daysArr = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']; Object.entries(rawStats.revenue || {}).forEach(([dateStr, val]) => { const d = new Date(dateStr); if(!isNaN(d)) { dowSales[daysArr[d.getDay()]] += parseFloat(val); } }); const ctxDow = canvas.getContext('2d'); if(!ctxDow) return; if(window.dowChartInst instanceof Chart) window.dowChartInst.destroy(); window.dowChartInst = new Chart(ctxDow, { type: 'bar', data: { labels: daysArr, datasets: [{ label: 'Revenue (£)', data: daysArr.map(d=>dowSales[d]), backgroundColor: getThemeVal('hex'), hoverBackgroundColor: '#fff', borderRadius: 8 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false } }, scales: { y: { grid: { color: 'rgba(255,255,255,0.05)' }, border: {display: false}, beginAtZero: true }, x: { grid: { display: false }, border: {display: false} } } } }); } } catch(e) { console.error("Dow Chart Error", e); }
+           try { const canvas = document.getElementById('funnelChart'); if(canvas) { const ticketsOpened = rawStats.analytics?.tickets_opened || 0; const salesClosed = rawStats.total_transactions || 0; const ctxFunnel = canvas.getContext('2d'); if(!ctxFunnel) return; if(window.funnelChartInst instanceof Chart) window.funnelChartInst.destroy(); window.funnelChartInst = new Chart(ctxFunnel, { type: 'doughnut', data: { labels: ['Tickets Opened (No Purchase)', 'Successful Sales'], datasets: [{ data: [Math.max(0, ticketsOpened - salesClosed), salesClosed], backgroundColor: ['rgba(239, 68, 68, 0.8)', 'rgba(' + getThemeVal('rgb') + ', 0.8)'], hoverOffset: 15, borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, cutout: '75%', plugins: { legend: { position: 'bottom', labels: { color: '#8e8e93' } } } } }); } } catch(e) { console.error("Funnel Chart Error", e); }
         }
         // 🚀 [UI_ACTION_ASYNC: loadBackups] - Action asynchrone d'interface Dashboard
         
