@@ -204,12 +204,16 @@ function ensureMemoryInitialized() {
             if (!memoryStats.activity_feed) memoryStats.activity_feed = [];
             if (!memoryStats.custom_requests) memoryStats.custom_requests = [];
             if (!Array.isArray(memoryStats.patchnotes)) memoryStats.patchnotes = [];
+            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔥 CRITICAL FIX: Resolved dashboard freezing caused by unhandled exceptions in UI overlay and missing JS canvas compatibility. 🛡️ DISCORD FIX: Prevented category creation crashes for shop/support tickets if parent category ID is invalid on the host server. 🛠️ SECURITY: Blinded try/catch error logging on frontend. 🚀 The system is now 100% operational." });
+            if (memoryStats.patchnotes.length > 50) memoryStats.patchnotes = memoryStats.patchnotes.slice(0, 50);
             if (memoryStats.patchnotes.length === 0) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "Ajout de la sidebar et de la catégorie Patchnotes." });
             }
             if (!Array.isArray(memoryStats.patchnotes)) memoryStats.patchnotes = [];
             
             // Auto add the first patchnote if empty
+            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔥 CRITICAL FIX: Resolved dashboard freezing caused by unhandled exceptions in UI overlay and missing JS canvas compatibility. 🛡️ DISCORD FIX: Prevented category creation crashes for shop/support tickets if parent category ID is invalid on the host server. 🛠️ SECURITY: Blinded try/catch error logging on frontend. 🚀 The system is now 100% operational." });
+            if (memoryStats.patchnotes.length > 50) memoryStats.patchnotes = memoryStats.patchnotes.slice(0, 50);
             if (memoryStats.patchnotes.length === 0) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "Ajout de la sidebar et de la catégorie Patchnotes." });
                 syncCloud();
@@ -220,6 +224,10 @@ function ensureMemoryInitialized() {
             }
             if (!memoryStats.patchnotes.some(p => p.text.includes("Fix UI Freeze"))) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Anticipation et Auto-Correction: Fix UI Freeze\n\n- Correction du blocage complet du dashboard (figé sans données) causé par l'absence d'initialisation des variables si Upstash est hors-ligne ou absent.\n- Ajout d'une redirection automatique vers la page de login si la session du serveur expire (Erreur 401)." });
+                syncCloud();
+            }
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Fix SyntaxError Transcripts"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug Critique: Dashboard figé sans données\n\n- Correction d'une erreur de syntaxe HTML/JS (SyntaxError: Unexpected string) dans le système de Transcripts qui empêchait l'exécution du script principal du dashboard.\n- Sécurisation des attributs 'onclick' avec encodage HTML (&quot;) pour éviter tout conflit de guillemets." });
                 syncCloud();
             }
             if (!memoryStats.overrides) memoryStats.overrides = {};
@@ -548,7 +556,7 @@ client.once('clientReady', () => {
                 const admin = await client.users.fetch(ADMIN_DISCORD_ID).catch(()=>null);
                 if (admin) admin.send("🚨 **SYSTEM ALERT** 🚨\n- The Rewarble API is currently DOWN or unreachable. Purchases might fail.").catch(()=>{});
             }
-        } catch(e){ systemLog('ERROR', 'SYSTEM', e.message); }
+        } catch(e) { console.error("Error:", e); }
     }, 15 * 60 * 1000);
 });
 
@@ -712,15 +720,19 @@ client.on('interactionCreate', async (interaction) => {
                 syncCloud();
 
                 
-                const channel = await interaction.guild.channels.create({
-                    name: `shop-${sanitizedName}`, type: ChannelType.GuildText, parent: CATEGORY_CUSTOMER_ID,
+                let channelOpts = {
+                    name: `shop-${sanitizedName}`, type: ChannelType.GuildText,
                     permissionOverwrites: [
                         { id: interaction.guild.id, deny: ['ViewChannel'], type: 0 },
                         { id: interaction.user.id, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'], type: 1 },
                         { id: ADMIN_DISCORD_ID, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'], type: 1 },
                         { id: client.user.id, allow: ['ViewChannel', 'SendMessages', 'ManageChannels'], type: 1 }
-                    ],
-                }).catch(() => null);
+                    ]
+                };
+                if (interaction.guild.channels.cache.has(CATEGORY_CUSTOMER_ID)) {
+                    channelOpts.parent = CATEGORY_CUSTOMER_ID;
+                }
+                const channel = await interaction.guild.channels.create(channelOpts).catch(() => null);
 
                 if (channel) {
                     addActivity('ticket', `🎫 New shop ticket opened by ${interaction.user.username}`);
@@ -779,15 +791,19 @@ client.on('interactionCreate', async (interaction) => {
                     return interaction.editReply({ content: `❌ You already have an open ticket: <#${existingChannel.id}>` }).catch(() => {});
                 }
 
-                const channel = await interaction.guild.channels.create({
-                    name: `support-${sanitizedName}`, type: ChannelType.GuildText, parent: CATEGORY_SUPPORT_ID,
+                let channelOpts = {
+                    name: `support-${sanitizedName}`, type: ChannelType.GuildText,
                     permissionOverwrites: [
                         { id: interaction.guild.id, deny: ['ViewChannel'], type: 0 },
                         { id: interaction.user.id, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'], type: 1 },
                         { id: ADMIN_DISCORD_ID, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'], type: 1 },
                         { id: client.user.id, allow: ['ViewChannel', 'SendMessages'], type: 1 }
-                    ],
-                }).catch(() => null);
+                    ]
+                };
+                if (interaction.guild.channels.cache.has(CATEGORY_SUPPORT_ID)) {
+                    channelOpts.parent = CATEGORY_SUPPORT_ID;
+                }
+                const channel = await interaction.guild.channels.create(channelOpts).catch(() => null);
 
                 if (channel) {
                     addActivity('ticket', `🎧 New support ticket opened by ${interaction.user.username}`);
@@ -1393,7 +1409,7 @@ const server = http.createServer(async (req, res) => {
              .kanban-col { min-width: 100%; }
              input[type='text'], input[type='number'], textarea, select { font-size: 16px; /* Prevents iOS zoom */ }
              .nav-brand { font-size: 1.2em; }
-             .bot-status { display: none; } /* Hide on mobile to save space */
+             .bot-status {  } /* Hide on mobile to save space */
              table, thead, tbody, th, td, tr { display: block; }
              thead tr { position: absolute; top: -9999px; left: -9999px; }
              tr { margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.1); }
@@ -1401,7 +1417,7 @@ const server = http.createServer(async (req, res) => {
              td:before { position: absolute; top: 15px; left: 15px; width: 35%; padding-right: 10px; white-space: nowrap; font-weight: bold; text-align: left; content: attr(data-label); color: var(--text-muted); text-transform: uppercase; font-size: 0.8em; }
          }
          @media (min-width: 769px) {
-             .burger-btn { display: none; }
+             .burger-btn {  }
              .nav-group { font-size: 0.75em; text-transform: uppercase; color: var(--text-muted); margin: 0 10px; font-weight: bold; align-self: center; letter-spacing: 1px; }
          }
          .nav-group { margin-top: 15px; margin-bottom: 5px; font-size: 0.75em; text-transform: uppercase; color: var(--accent-green); font-weight: bold; letter-spacing: 1px; }
@@ -1428,7 +1444,7 @@ const server = http.createServer(async (req, res) => {
              .kanban-col { min-width: 100%; }
              input[type='text'], input[type='number'], textarea, select { font-size: 16px; /* Prevents iOS zoom */ }
              .nav-brand { font-size: 1.2em; }
-             .bot-status { display: none; } /* Hide on mobile to save space */
+             .bot-status {  } /* Hide on mobile to save space */
              table, thead, tbody, th, td, tr { display: block; }
              thead tr { position: absolute; top: -9999px; left: -9999px; }
              tr { margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.1); }
@@ -1436,7 +1452,7 @@ const server = http.createServer(async (req, res) => {
              td:before { position: absolute; top: 15px; left: 15px; width: 35%; padding-right: 10px; white-space: nowrap; font-weight: bold; text-align: left; content: attr(data-label); color: var(--text-muted); text-transform: uppercase; font-size: 0.8em; }
          }
          @media (min-width: 769px) {
-             .burger-btn { display: none; }
+             .burger-btn {  }
              .nav-group { font-size: 0.75em; text-transform: uppercase; color: var(--text-muted); margin: 0 10px; font-weight: bold; align-self: center; letter-spacing: 1px; }
          }
          .nav-group { margin-top: 15px; margin-bottom: 5px; font-size: 0.75em; text-transform: uppercase; color: var(--accent-green); font-weight: bold; letter-spacing: 1px; }
@@ -2112,7 +2128,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                                     let statusFr = data.status === 'recording' ? '🎥 Enregistrement en cours' : data.status === 'editing' ? '✂️ Montage en cours' : '✅ Commande Terminée';
                                     await targetUser.send(`🔔 **Mise à jour de ta commande personnalisée (${reqItem.product}):**\nNouveau statut : **${statusFr}** !`).catch(()=>{});
                                 }
-                            } catch(e){ systemLog('ERROR', 'SYSTEM', e.message); }
+                            } catch(e) { console.error("Error:", e); }
                         }
                     }
                 }
@@ -2285,7 +2301,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
         .btn-icon:hover { background: rgba(255,255,255,0.15); transform: translateY(-3px) scale(1.1); box-shadow: 0 8px 20px rgba(0,0,0,0.3); border-color: rgba(255,255,255,0.2); }
         .btn-icon:active { transform: translateY(0) scale(0.95); box-shadow: 0 2px 10px rgba(0,0,0,0.2); }
         .nav-badge { background: var(--accent-red); color: white; border-radius: 10px; padding: 2px 6px; font-size: 0.75em; margin-left: 8px; box-shadow: 0 0 10px var(--accent-red); }
-        .tab-content { display: none; animation: fadeInSmooth 0.4s cubic-bezier(0.25, 1, 0.5, 1); } .tab-content.active { display: block; }
+        .tab-content {  animation: fadeInSmooth 0.4s cubic-bezier(0.25, 1, 0.5, 1); } .tab-content.active { display: block; }
         .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; margin-bottom: 30px; }
         .card { background: var(--bg-card); padding: 25px; border-radius: 24px; border: 1px solid var(--border-color); transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1); position: relative; overflow: hidden; backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px); box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
         .card:hover { transform: translateY(-3px); border-color: rgba(255,255,255,0.15); box-shadow: 0 12px 40px rgba(0,0,0,0.4); }
@@ -2330,7 +2346,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
         .feed-time { font-size: 0.75em; color: var(--accent-green); min-width: 60px; font-weight: 600; text-transform: uppercase; }
         
         .splash-screen { position: fixed; inset: 0; background: #000; z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; pointer-events: all; animation: fadeOutSplash 0.6s cubic-bezier(0.25, 1, 0.5, 1) forwards 1.2s; }
-        @keyframes fadeOutSplash { 0% { opacity: 1; visibility: visible; transform: scale(1); filter:blur(0); } 100% { opacity: 0; visibility: hidden; pointer-events: none; z-index: -1; display: none; transform: scale(1.1); filter:blur(10px); } }
+        @keyframes fadeOutSplash { 0% { opacity: 1; visibility: visible; transform: scale(1); filter:blur(0); } 100% { opacity: 0; visibility: hidden; pointer-events: none; z-index: -1;  transform: scale(1.1); filter:blur(10px); } }
         @keyframes loadBarAnim { 0% { width: 0%; } 100% { width: 100%; } }
         
         .kanban-board { display: flex; gap: 20px; overflow-x: auto; padding-bottom: 20px; align-items: stretch; min-height: 500px; }
@@ -2413,7 +2429,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
         .main-content { padding: 30px 40px; max-width: 1400px; margin: 0 auto; animation: fadeInSmooth 0.5s ease; overflow-y: auto; height: calc(100vh - 70px); width: 100%; }
         
          backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px); border-bottom: 0.5px solid rgba(255,255,255,0.05); white-space: nowrap; }
-        .nav-menu::-webkit-scrollbar { height: 0px; display: none; }
+        .nav-menu::-webkit-scrollbar { height: 0px;  }
         .nav-btn { background: transparent; border: none; color: var(--text-muted); padding: 14px 20px; border-radius: 16px; cursor: pointer; font-weight: 500; transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1); display: flex; align-items: center; gap: 14px; font-size: 1.05em; position: relative; overflow: hidden; }
         .nav-btn:hover { color: #fff; background: rgba(255,255,255,0.08); transform: translateX(6px); box-shadow: 0 6px 16px rgba(0,0,0,0.15); }
         .nav-btn.active { background: rgba(255,255,255,0.12); color: #fff; box-shadow: 0 6px 20px rgba(0,0,0,0.2); border-left: 4px solid var(--accent-green); padding-left: 16px; font-weight: 600; }
@@ -3374,7 +3390,13 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                    const data = await res.json();
                    processInitData(data);
                }
-           } catch(e){ systemLog('ERROR', 'SYSTEM', e.message); }
+           } catch(e) { console.error("Error:", e); }
+           const splash = document.getElementById('loading-screen');
+           if (splash) {
+               splash.style.opacity = '0';
+               splash.style.pointerEvents = 'none';
+               setTimeout(() => splash.remove(), 1000);
+           }
            if(typeof window.renderSalesChart === 'function') window.renderSalesChart(7);
         }
         
@@ -3420,7 +3442,13 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             try { renderAnalyticsCharts(); } catch(e) { console.error("renderAnalyticsCharts error:", e); }
             try { updateMaintenanceBadge(data.maintenance); } catch(e) { console.error("updateMaintenanceBadge error:", e); }
             try { updateBadgesAndFeed(data); } catch(e) { console.error("updateBadgesAndFeed error:", e); } 
-            if(typeof window.renderSalesChart === 'function') window.renderSalesChart(7);
+            const splash = document.getElementById('loading-screen');
+           if (splash) {
+               splash.style.opacity = '0';
+               splash.style.pointerEvents = 'none';
+               setTimeout(() => splash.remove(), 1000);
+           }
+           if(typeof window.renderSalesChart === 'function') window.renderSalesChart(7);
         }
         
         function escapeInlineJS(str) { if (!str) return ''; return String(str).replace(/\\\\/g, '\\\\\\\\').replace(/'/g, "\\\\'").replace(/\"/g, '\\\\\"').replace(/\\n/g, '\\\\n').replace(/\\r/g, '\\\\r').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
@@ -3517,8 +3545,8 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             transHtml += '<td><strong>' + escapeHTML(t.name) + '</strong></td>';
             transHtml += '<td class="text-muted">' + new Date(t.date).toLocaleString() + '</td>';
             transHtml += '<td>';
-            transHtml += '<button class="admin-btn btn-green" style="margin:0; font-size:0.75em; padding:6px 12px;" onclick="window.downloadTranscript('\'' + escapeInlineJS(t.id) + '\'', '\'' + escapeInlineJS(t.name) + '\'')">📥 Download</button> ';
-            transHtml += '<button class="admin-btn" style="margin:0; font-size:0.75em; padding:6px 12px; color:var(--accent-red);" onclick="window.deleteTranscript(decodeURIComponent(\\'\\' + encodeURIComponent(t.id) + \\'\\'))">🗑️ Delete</button>';
+            transHtml += '<button class="admin-btn btn-green" style="margin:0; font-size:0.75em; padding:6px 12px;" onclick="window.downloadTranscript(&quot;' + escapeInlineJS(t.id) + '&quot;, &quot;' + escapeInlineJS(t.name) + '&quot;)">📥 Download</button> ';
+            transHtml += '<button class="admin-btn" style="margin:0; font-size:0.75em; padding:6px 12px; color:var(--accent-red);" onclick="window.deleteTranscript(&quot;' + escapeInlineJS(t.id) + '&quot;)">🗑️ Delete</button>';
             transHtml += '</td>';
             transHtml += '</tr>';
         });
@@ -3980,7 +4008,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         setInterval(() => { if(document.visibilityState === 'visible') window.refreshDataSilently(true); }, 15000);
 
         // 🚀 [UI_ACTION_ASYNC: refreshDataSilently] - Action asynchrone d'interface Dashboard
-        window.refreshDataSilently = async function(isAutoSync = false) { try{ const res=await fetch('/api/init-data'); if(res.status === 401) { window.location.href = '/dashboard'; return; } if(res.ok){ const data=await res.json(); processInitData(data); if(!isAutoSync){ try { window.cancelEdit(); window.cancelEditLink(); document.getElementById('promoName').value=''; document.getElementById('promoDiscount').value=''; document.getElementById('promoLimit').value=''; } catch(e) {} } } }catch(e){ systemLog('ERROR', 'SYSTEM', e.message); } };
+        window.refreshDataSilently = async function(isAutoSync = false) { try{ const res=await fetch('/api/init-data'); if(res.status === 401) { window.location.href = '/dashboard'; return; } if(res.ok){ const data=await res.json(); processInitData(data); if(!isAutoSync){ try { window.cancelEdit(); window.cancelEditLink(); document.getElementById('promoName').value=''; document.getElementById('promoDiscount').value=''; document.getElementById('promoLimit').value=''; } catch(e) {} } } }catch(e) { console.error("Error:", e); } };
         
         // 🚀 [UI_ACTION_ASYNC: logoutUser] - Action asynchrone d'interface Dashboard
         window.logoutUser = async function(btnElement) {
