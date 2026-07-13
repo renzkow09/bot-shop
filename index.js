@@ -1,4 +1,4 @@
-require('dotenv').config({ path: __dirname + '/.env' });
+try { require('dotenv').config({ path: __dirname + '/.env' }); } catch (e) { console.warn("⚠️ dotenv module not found. Running with system environment variables."); }
 // === [ANCHOR: IMPORTS_AND_CRASH_HANDLER] ===
 const { Client, GatewayIntentBits, Partials, ButtonBuilder, ActionRowBuilder, ButtonStyle, ChannelType, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, EmbedBuilder, AttachmentBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 
@@ -201,6 +201,10 @@ async function loadCloudStats() {
             // Auto add the first patchnote if empty
             if (memoryStats.patchnotes.length === 0) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "Ajout de la sidebar et de la catégorie Patchnotes." });
+                syncCloud();
+            }
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Crash dotenv"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Anticipation et Auto-Correction: Fix Crash dotenv\n\n- Encapsulation de l'import dotenv dans un bloc try/catch pour éviter un plantage (Crash Node.js 'Cannot find module dotenv') lors du déploiement en environnement cloud." });
                 syncCloud();
             }
             if (!memoryStats.overrides) memoryStats.overrides = {};
