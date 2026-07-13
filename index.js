@@ -215,6 +215,7 @@ function ensureMemoryInitialized() {
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "💫 UX FIX: Corrected duplicate Revenue Timeline & Live Pulse bugs. Added highly fluid interactions, staggered loading animations, breathing ambient glows, and hover micro-interactions across the Overview dashboard." });
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "💎 DESIGN UPGRADE: Overhauled System Log timeline with ultra premium glassmorphism, fluid staggered animations, and timeline tracing hooks." });
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔧 FIX: Resolved layout bug causing the Overview dashboard to incorrectly persist across all administrative tabs due to tab-content display priority." });
+            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔧 AUTO-CORRECTION: Résolution d'une erreur de syntaxe JS causée par une coupure de regex incomplète dans la fonction switchTab. Bloc try/catch global ajouté. Les pages se chargent à nouveau correctement." });
             if (memoryStats.patchnotes.length === 0) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "Ajout de la sidebar et de la catégorie Patchnotes." });
             }
@@ -4543,32 +4544,29 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                 if(tabId === 'moderation' && typeof isMembersLoaded !== 'undefined' && !isMembersLoaded && typeof window.loadAllMembers === 'function') window.loadAllMembers();
                 if(tabId === 'monitoring' && typeof window.runDiagnostics === 'function') window.runDiagnostics();
                 if(tabId === 'livechat' && typeof window.loadTicketsForChat === 'function') window.loadTicketsForChat();
+
+                if(tabId === 'overview') {
+                    if(window.renderSalesChart) setTimeout(() => window.renderSalesChart(7), 50);
+                }
+                if(tabId === 'analytics') {
+                    if(typeof renderAnalyticsCharts === 'function') setTimeout(() => renderAnalyticsCharts(), 50);
+                    else if(window.renderAnalyticsCharts) setTimeout(() => window.renderAnalyticsCharts(), 50);
+                }
+                
+                if(tabId === 'terminal') {
+                    if(typeof window.fetchLogs === 'function') window.fetchLogs();
+                    if(!terminalInterval && typeof window.fetchLogs === 'function') terminalInterval = setInterval(window.fetchLogs, 3000);
+                } else {
+                    if(terminalInterval) { clearInterval(terminalInterval); terminalInterval = null; }
+                }
+                
+                if(tabId === 'backups' && typeof window.loadBackups === 'function'){ window.loadBackups(); }
+                
             } catch (e) {
                 console.error("Tab switch error", e);
             }
-        }
-            
-            if(tabId === 'overview') {
-                if(window.renderSalesChart) setTimeout(() => window.renderSalesChart(), 50);
-            }
-            if(tabId === 'analytics') {
-                if(window.renderAnalyticsCharts) setTimeout(() => window.renderAnalyticsCharts(), 50);
-            }
-            
-            if(tabId === 'terminal') {
-                window.fetchLogs();
-                if(!terminalInterval) terminalInterval = setInterval(window.fetchLogs, 3000);
-            } else {
-                if(terminalInterval) { clearInterval(terminalInterval); terminalInterval = null; }
-            }
-            
-            if(tabId === 'monitoring'){ window.runDiagnostics(); }
-            if(tabId === 'analytics'){ renderAnalyticsCharts(); }
-            if(tabId === 'overview'){ window.renderSalesChart(7); }
-            if(tabId === 'backups'){ window.loadBackups(); }
         };
-        
-    // 🚀 [FUNCTION: showToast] - Déclaration de fonction
+// 🚀 [FUNCTION: showToast] - Déclaration de fonction
         function showToast(msg, type='success') { const t=document.getElementById('toast'); t.innerHTML = (type==='error'?'❌':'✅') + ' <span style="letter-spacing:0.5px;">' + msg + '</span>'; t.style.borderColor = type === 'error' ? 'rgba(239,68,68,0.5)' : 'rgba(var(--accent-green-rgb),0.5)'; t.style.boxShadow = type === 'error' ? '0 10px 30px rgba(239,68,68,0.2)' : '0 10px 30px rgba(var(--accent-green-rgb),0.2)'; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 3000); }
         
         // 🚀 [UI_ACTION_ASYNC: manualRefresh] - Action asynchrone d'interface Dashboard
