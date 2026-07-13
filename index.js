@@ -213,6 +213,8 @@ function ensureMemoryInitialized() {
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "💎 DESIGN UPGRADE: Deployed 'Ultra Premium Glassmorphism' design system to the Overview page. Features deep backdrop blur, sub-pixel borders, inset shadows, floating SVG icons, glowing ambient lights, and refined typography." });
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🧠 AI UPGRADE: Interrogation Neural Net now uses gemini-3.1-pro-preview with HIGH thinking level. Market scanner uses gemini-3.5-flash with Google Search grounding enabled." });
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "💫 UX FIX: Corrected duplicate Revenue Timeline & Live Pulse bugs. Added highly fluid interactions, staggered loading animations, breathing ambient glows, and hover micro-interactions across the Overview dashboard." });
+            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "💎 DESIGN UPGRADE: Overhauled System Log timeline with ultra premium glassmorphism, fluid staggered animations, and timeline tracing hooks." });
+            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔧 FIX: Resolved layout bug causing the Overview dashboard to incorrectly persist across all administrative tabs due to tab-content display priority." });
             if (memoryStats.patchnotes.length === 0) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "Ajout de la sidebar et de la catégorie Patchnotes." });
             }
@@ -228,6 +230,8 @@ function ensureMemoryInitialized() {
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "💎 DESIGN UPGRADE: Deployed 'Ultra Premium Glassmorphism' design system to the Overview page. Features deep backdrop blur, sub-pixel borders, inset shadows, floating SVG icons, glowing ambient lights, and refined typography." });
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🧠 AI UPGRADE: Interrogation Neural Net now uses gemini-3.1-pro-preview with HIGH thinking level. Market scanner uses gemini-3.5-flash with Google Search grounding enabled." });
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "💫 UX FIX: Corrected duplicate Revenue Timeline & Live Pulse bugs. Added highly fluid interactions, staggered loading animations, breathing ambient glows, and hover micro-interactions across the Overview dashboard." });
+            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "💎 DESIGN UPGRADE: Overhauled System Log timeline with ultra premium glassmorphism, fluid staggered animations, and timeline tracing hooks." });
+            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔧 FIX: Resolved layout bug causing the Overview dashboard to incorrectly persist across all administrative tabs due to tab-content display priority." });
             if (memoryStats.patchnotes.length === 0) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "Ajout de la sidebar et de la catégorie Patchnotes." });
                 syncCloud();
@@ -2434,6 +2438,97 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
         }
         /* End Ultra Premium Glassmorphism */
 
+        
+        /* Global UI Animations */
+        .card, .box {
+            animation: slideUpFade 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+        }
+        .card:nth-child(1) { animation-delay: 0.1s; }
+        .card:nth-child(2) { animation-delay: 0.2s; }
+        .card:nth-child(3) { animation-delay: 0.3s; }
+        .card:nth-child(4) { animation-delay: 0.4s; }
+        .card:nth-child(5) { animation-delay: 0.5s; }
+        
+        .box:nth-child(1) { animation-delay: 0.2s; }
+        .box:nth-child(2) { animation-delay: 0.3s; }
+        .box:nth-child(3) { animation-delay: 0.4s; }
+        .box:nth-child(4) { animation-delay: 0.5s; }
+        .box:nth-child(5) { animation-delay: 0.6s; }
+        
+        .admin-btn {
+            position: relative;
+            overflow: hidden;
+        }
+        .admin-btn::after {
+            content: '';
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 5px; height: 5px;
+            background: rgba(255,255,255,0.4);
+            opacity: 0;
+            border-radius: 100%;
+            transform: scale(1) translate(-50%, -50%);
+            transform-origin: 50% 50%;
+        }
+        .admin-btn:focus:not(:active)::after {
+            animation: ripple 1s ease-out;
+        }
+        @keyframes ripple {
+            0% { transform: scale(0) translate(-50%, -50%); opacity: 0.5; }
+            100% { transform: scale(20) translate(-50%, -50%); opacity: 0; }
+        }
+        
+        .nav-btn {
+            transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+            position: relative;
+        }
+        .nav-btn:hover {
+            transform: translateX(5px);
+            background: rgba(255,255,255,0.05);
+        }
+        .nav-btn::before {
+            content: '';
+            position: absolute;
+            left: -15px;
+            top: 50%;
+            transform: translateY(-50%) scaleY(0);
+            width: 3px;
+            height: 60%;
+            background: var(--accent);
+            border-radius: 3px;
+            transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+        .nav-btn:hover::before {
+            transform: translateY(-50%) scaleY(1);
+        }
+        .nav-btn.active::before {
+            transform: translateY(-50%) scaleY(1);
+            background: var(--accent);
+            box-shadow: 0 0 10px var(--accent);
+        }
+        .nav-btn.active {
+            transform: translateX(10px);
+        }
+        
+        tbody tr {
+            transition: background 0.3s ease, transform 0.3s ease;
+        }
+        tbody tr:hover {
+            background: rgba(255,255,255,0.02);
+            transform: scale(1.01);
+        }
+        
+        .card:hover, .box:hover {
+            border-color: rgba(255,255,255,0.1);
+        }
+        
+        input, select, textarea {
+            transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+        input:focus, select:focus, textarea:focus {
+            transform: translateY(-1px);
+        }
+        /* End Global UI Animations */
         /* Ultra Fluid Animations */
         @keyframes floatEffect {
             0% { transform: translateY(0px); }
@@ -2504,6 +2599,108 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
             transform: translateX(4px);
         }
         /* End Ultra Fluid Animations */
+
+        /* Ultra Premium Patchnotes Styles */
+        .patchnotes-container {
+            position: relative;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px 0 60px 0;
+        }
+        .patchnotes-timeline {
+            position: relative;
+            padding-left: 40px;
+        }
+        .patchnotes-timeline::before {
+            content: '';
+            position: absolute;
+            left: 11px;
+            top: 10px;
+            bottom: 0;
+            width: 2px;
+            background: linear-gradient(180deg, rgba(59, 130, 246, 0.5) 0%, rgba(139, 92, 246, 0.5) 50%, transparent 100%);
+            border-radius: 2px;
+        }
+        .premium-patchnote-item {
+            position: relative;
+            margin-bottom: 40px;
+            background: rgba(20, 20, 25, 0.6);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 24px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+            transition: all 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+            animation: slideUpFade 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+            opacity: 0;
+            animation-fill-mode: forwards;
+        }
+        .premium-patchnote-item::before {
+            content: '';
+            position: absolute;
+            left: -37px;
+            top: 25px;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #0f0f11;
+            border: 2px solid #3b82f6;
+            box-shadow: 0 0 15px rgba(59, 130, 246, 0.8);
+            z-index: 2;
+            transition: all 0.4s ease;
+        }
+        .premium-patchnote-item:hover {
+            transform: translateY(-5px);
+            border-color: rgba(255, 255, 255, 0.15);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        }
+        .premium-patchnote-item:hover::before {
+            background: #3b82f6;
+            transform: scale(1.3);
+            box-shadow: 0 0 25px rgba(59, 130, 246, 1);
+        }
+        
+        .pn-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .pn-version-tag {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(139, 92, 246, 0.2));
+            color: #fff;
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            font-weight: 700;
+            letter-spacing: 1px;
+            box-shadow: 0 0 15px rgba(139, 92, 246, 0.2);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .pn-date {
+            color: var(--text-muted);
+            font-size: 0.9em;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .pn-content {
+            color: #d1d5db;
+            line-height: 1.7;
+            font-size: 1.05em;
+        }
+        .pn-highlight {
+            color: #fff;
+            font-weight: 600;
+        }
+        /* End Ultra Premium Patchnotes Styles */
         .glass-textarea:focus {
             border-color: rgba(255,255,255,0.2) !important;
             box-shadow: inset 0 2px 10px rgba(0,0,0,0.5), 0 0 15px rgba(255,255,255,0.05) !important;
@@ -2802,7 +2999,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                 </div>
             </header>
             <main class='main-content'>
-           <div id='overview' class='tab-content active' style='animation: fadeInSmooth 0.8s cubic-bezier(0.2, 0.8, 0.2, 1);'>
+           <div id='overview' class='tab-content active' style='display:block;'>
                <div style='display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 35px; padding: 0 10px; position: relative; z-index: 10;'>
                    <div>
                        <h1 style='font-size: 2.8em; font-weight: 800; letter-spacing: -1.5px; margin: 0; background: linear-gradient(135deg, #ffffff 0%, #a1a1aa 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;'>Nexus Engine</h1>
@@ -3058,15 +3255,19 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                </div>
            </div>
 
-           <div id='patchnotes' class='tab-content'>
-             <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom: 25px;'>
-                 <h2 style='font-size: 1.8em; font-weight: 700; letter-spacing: -0.5px;'>Patchnotes</h2>
-                 
-             </div>
-             <div class='patchnotes-list' id='patchnotesList'>
-                 <!-- Dynamically generated -->
-             </div>
-         </div>
+                      <div id='patchnotes' class='tab-content'>
+               <div class='patchnotes-container'>
+                   <div style='text-align: center; margin-bottom: 50px; position: relative;'>
+                       <div class='ambient-glow' style='--glow-color: rgba(139,92,246,1); top: -50px; left: 50%; transform: translateX(-50%); width: 400px; height: 200px;'></div>
+                       <h1 style='font-size: 3em; font-weight: 800; letter-spacing: -1.5px; margin: 0; background: linear-gradient(135deg, #fff 0%, #8b5cf6 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;'>System Log</h1>
+                       <p style='color: var(--text-muted); font-size: 1.1em; margin-top: 10px; max-width: 500px; margin-left: auto; margin-right: auto;'>Chronological registry of system upgrades, architectural modifications, and AI insights.</p>
+                   </div>
+                   
+                   <div class='patchnotes-timeline' id='patchnotesList'>
+                       <!-- Dynamically generated -->
+                   </div>
+               </div>
+           </div>
          
          
             <div id='transactions' class='tab-content'>
@@ -3893,13 +4094,29 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
               }); 
           } 
           if(document.getElementById('target-leaves')) document.getElementById('target-leaves').innerHTML = lHtml||'<tr><td colspan="3" class="text-muted text-center">No drops recorded.</td></tr>';
-           let pnHtml = '';
+                      let pnHtml = '';
            if(rawStats.patchnotes && rawStats.patchnotes.length > 0) {
-               [...rawStats.patchnotes].sort((a, b) => new Date(b.date) - new Date(a.date)).forEach(pn => {
-                   pnHtml += '<div class="patchnote-item"><div class="patchnote-date">' + new Date(pn.date).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) + '</div><div class="patchnote-text">' + escapeHTML(pn.text) + '</div></div>';
+               [...rawStats.patchnotes].sort((a, b) => new Date(b.date) - new Date(a.date)).forEach((pn, index) => {
+                   let emoji = "✨";
+                   if(pn.text.includes("DESIGN")) emoji = "💎";
+                   else if(pn.text.includes("AI")) emoji = "🧠";
+                   else if(pn.text.includes("UX")) emoji = "💫";
+                   else if(pn.text.includes("FIX")) emoji = "🔧";
+                   else if(pn.text.includes("SEC")) emoji = "🛡️";
+                   
+                   // Highlight tags inside the text (e.g. "DESIGN UPGRADE:")
+                   let highlightedText = escapeHTML(pn.text).replace(/^([^:]+):/g, '<span class="pn-highlight">$1:</span>');
+
+                   pnHtml += '<div class="premium-patchnote-item" style="animation-delay: ' + (index * 0.15) + 's;">';
+                   pnHtml += '   <div class="pn-header">';
+                   pnHtml += '       <div class="pn-version-tag">' + emoji + ' SYSTEM UPDATE</div>';
+                   pnHtml += '       <div class="pn-date"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>&nbsp;' + new Date(pn.date).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) + '</div>';
+                   pnHtml += '   </div>';
+                   pnHtml += '   <div class="pn-content">' + highlightedText + '</div>';
+                   pnHtml += '</div>';
                });
            } else {
-               pnHtml = "<div style='text-align:center; color:gray;'>No patchnotes available yet.</div>";
+               pnHtml = "<div style='text-align:center; color:gray; padding: 40px;'>No system logs available yet.</div>";
            }
            if(document.getElementById('patchnotesList')) document.getElementById('patchnotesList').innerHTML = pnHtml;
         
@@ -4297,26 +4514,39 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         
         // 🚀 [UI_ACTION: switchTab] - Action d'interface Dashboard
         window.switchTab = function(tabId, btn) {
-            if(window.innerWidth <= 900) {
-                const sidebar = document.getElementById('sidebar');
-                if (sidebar) sidebar.classList.add('closed');
+            try {
+                if(window.innerWidth <= 900) {
+                    const sidebar = document.getElementById('sidebar');
+                    if (sidebar) sidebar.classList.add('closed');
+                }
+                const tabs = document.getElementsByClassName('tab-content');
+                for(let i=0; i<tabs.length; i++) {
+                    tabs[i].classList.remove('active');
+                    tabs[i].style.display = 'none';
+                }
+                const navBtns = document.getElementsByClassName('nav-btn');
+                for(let i=0; i<navBtns.length; i++) {
+                    navBtns[i].classList.remove('active');
+                }
+                const target = document.getElementById(tabId);
+                if(target) {
+                    target.classList.add('active');
+                    target.style.display = 'block';
+                    // Trigger reflow for animations
+                    void target.offsetWidth;
+                    target.style.animation = 'none';
+                    target.style.animation = 'fadeInSmooth 0.4s cubic-bezier(0.25, 1, 0.5, 1)';
+                }
+                if(btn) btn.classList.add('active');
+                
+                if(window.innerWidth <= 900 && typeof window.closeSidebar === 'function') { window.closeSidebar(); }
+                if(tabId === 'moderation' && typeof isMembersLoaded !== 'undefined' && !isMembersLoaded && typeof window.loadAllMembers === 'function') window.loadAllMembers();
+                if(tabId === 'monitoring' && typeof window.runDiagnostics === 'function') window.runDiagnostics();
+                if(tabId === 'livechat' && typeof window.loadTicketsForChat === 'function') window.loadTicketsForChat();
+            } catch (e) {
+                console.error("Tab switch error", e);
             }
-
-            document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
-            document.querySelectorAll('.nav-btn').forEach(el=>el.classList.remove('active'));
-            document.getElementById(tabId).classList.add('active');
-            btn.classList.add('active');
-            
-            if(window.innerWidth <= 900 && typeof window.closeSidebar === 'function') { window.closeSidebar(); }
-            if(tabId === 'moderation' && !isMembersLoaded) window.loadAllMembers();
-            if(tabId === 'monitoring') window.runDiagnostics();
-            
-            if(tabId === 'livechat'){
-                window.loadTicketsForChat();
-                // chatPollInterval replaced by websocket
-            } else {
-                // chatPollInterval replaced by websocket
-            }
+        }
             
             if(tabId === 'overview') {
                 if(window.renderSalesChart) setTimeout(() => window.renderSalesChart(), 50);
