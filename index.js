@@ -210,6 +210,8 @@ function ensureMemoryInitialized() {
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔥 FIX: Categories now correctly display and group on the Discord shop overview page instead of being overridden by prices. 📊 UI FIX: Dynamic categories are now properly added to the dashboard filter dropdown. 🛡️ PATCH: Hardened Analytics chart renderings." });
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔧 UI FIX: Corrected a CSS rendering issue where all background tabs were bleeding into the active Overview tab. Each category is now strictly sandboxed to its respective view." });
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "✨ DESIGN UPDATE: Overview tab has been completely redesigned with an ultra-premium, glassmorphic aesthetic. Enjoy the new animated stats cards, custom SVG icons, glowing gradients, and improved typography." });
+            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "💎 DESIGN UPGRADE: Deployed 'Ultra Premium Glassmorphism' design system to the Overview page. Features deep backdrop blur, sub-pixel borders, inset shadows, floating SVG icons, glowing ambient lights, and refined typography." });
+            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🧠 AI UPGRADE: Interrogation Neural Net now uses gemini-3.1-pro-preview with HIGH thinking level. Market scanner uses gemini-3.5-flash with Google Search grounding enabled." });
             if (memoryStats.patchnotes.length === 0) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "Ajout de la sidebar et de la catégorie Patchnotes." });
             }
@@ -222,6 +224,8 @@ function ensureMemoryInitialized() {
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔥 FIX: Categories now correctly display and group on the Discord shop overview page instead of being overridden by prices. 📊 UI FIX: Dynamic categories are now properly added to the dashboard filter dropdown. 🛡️ PATCH: Hardened Analytics chart renderings." });
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔧 UI FIX: Corrected a CSS rendering issue where all background tabs were bleeding into the active Overview tab. Each category is now strictly sandboxed to its respective view." });
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "✨ DESIGN UPDATE: Overview tab has been completely redesigned with an ultra-premium, glassmorphic aesthetic. Enjoy the new animated stats cards, custom SVG icons, glowing gradients, and improved typography." });
+            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "💎 DESIGN UPGRADE: Deployed 'Ultra Premium Glassmorphism' design system to the Overview page. Features deep backdrop blur, sub-pixel borders, inset shadows, floating SVG icons, glowing ambient lights, and refined typography." });
+            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🧠 AI UPGRADE: Interrogation Neural Net now uses gemini-3.1-pro-preview with HIGH thinking level. Market scanner uses gemini-3.5-flash with Google Search grounding enabled." });
             if (memoryStats.patchnotes.length === 0) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "Ajout de la sidebar et de la catégorie Patchnotes." });
                 syncCloud();
@@ -2228,17 +2232,22 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                     }
                 }
                 
-                                                else if (data.action === 'ai_analyze_tx') {
+                                                                else if (data.action === 'ai_analyze_tx') {
                     if (!process.env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY not configured.");
                     const recent = (memoryStats.recent_transactions || []).slice(0, 50);
                     if (!recent.length) return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ result: "<p>No recent transactions to analyze.</p>" }));
                     
                     try {
-                        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+                        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent?key=${process.env.GEMINI_API_KEY}`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
-                                contents: [{ parts: [{ text: "Analyze the following recent transactions and provide a short financial analysis report in HTML format. " + JSON.stringify(recent) }] }]
+                                contents: [{ parts: [{ text: "Analyze the following recent transactions and provide a short financial analysis report in HTML format. " + JSON.stringify(recent) }] }],
+                                generationConfig: {
+                                    thinkingConfig: {
+                                        thinkingLevel: "HIGH"
+                                    }
+                                }
                             })
                         });
                         const json = await response.json();
@@ -2251,16 +2260,26 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                                 else if (data.action === 'check_market') {
                     if (!process.env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY not configured.");
                     try {
-                        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+                        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
-                                contents: [{ parts: [{ text: "Perform a quick market analysis for the digital product: " + data.product + ". Provide a short HTML report with pricing recommendations and insights." }] }]
+                                contents: [{ parts: [{ text: "Perform a quick market analysis for the digital product: " + data.product + ". Provide a short HTML report with pricing recommendations and insights." }] }],
+                                tools: [
+                                    { googleSearch: {} }
+                                ]
                             })
                         });
                         const json = await response.json();
                         if (json.error) throw new Error(json.error.message);
-                        return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ result: json.candidates[0].content.parts[0].text }));
+                        let finalHtml = json.candidates[0].content.parts.map(p => p.text).join('');
+                        
+                        // Check if search grounding was used
+                        if (json.candidates[0].groundingMetadata && json.candidates[0].groundingMetadata.searchEntryPoint) {
+                            finalHtml += `<br><br><div style="font-size:0.8em; padding:10px; background:rgba(255,255,255,0.05); border-radius:10px;">${json.candidates[0].groundingMetadata.searchEntryPoint.renderedContent}</div>`;
+                        }
+
+                        return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ result: finalHtml }));
                     } catch(e) {
                         throw e;
                     }
@@ -2343,6 +2362,75 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
 
         /* Premium CSS Updates */
         .premium-stats-grid { gap: 24px; }
+
+        /* Ultra Premium Glassmorphism Design System */
+        .glass-panel {
+            background: rgba(18, 18, 22, 0.4);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 24px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255,255,255,0.05);
+            transition: all 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+        .glass-panel::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            border-radius: inherit;
+            background: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, transparent 100%);
+            pointer-events: none;
+        }
+        .glass-panel:hover {
+            border-color: rgba(255, 255, 255, 0.1);
+            transform: translateY(-4px);
+            box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255,255,255,0.1);
+        }
+        .glass-stat-value {
+            font-size: 2.8em;
+            font-weight: 800;
+            letter-spacing: -2px;
+            background: linear-gradient(135deg, #fff, #9ca3af);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 8px;
+            line-height: 1;
+        }
+        .glass-title {
+            font-size: 0.85em;
+            font-weight: 600;
+            color: #8e8e93;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 15px;
+        }
+        .glass-icon-wrapper {
+            position: absolute;
+            top: 24px;
+            right: 24px;
+            width: 48px;
+            height: 48px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            box-shadow: inset 0 2px 10px rgba(255,255,255,0.02);
+        }
+        .ambient-glow {
+            position: absolute;
+            width: 300px;
+            height: 300px;
+            background: radial-gradient(circle, var(--glow-color) 0%, transparent 60%);
+            opacity: 0.15;
+            pointer-events: none;
+            filter: blur(40px);
+            z-index: 0;
+        }
+        /* End Ultra Premium Glassmorphism */
         .premium-card { background: linear-gradient(145deg, rgba(30,30,35,0.7), rgba(20,20,25,0.9)); border: 1px solid rgba(255,255,255,0.06); border-radius: 24px; padding: 24px; box-shadow: 0 10px 30px -10px rgba(0,0,0,0.5); display: flex; flex-direction: column; position: relative; overflow: hidden; transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
         .premium-card::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(120deg, transparent, rgba(255,255,255,0.03), transparent); transform: translateX(-100%); transition: 0.6s; }
         .premium-card:hover::before { transform: translateX(100%); }
@@ -2635,14 +2723,107 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                 </div>
             </header>
             <main class='main-content'>
-           <div id='overview' class='tab-content active'>
-               <div class='stats-grid'>
-                   <div class='card' onclick='window.editStat("today_rev")' style='cursor:pointer;' title='Click to edit'><h3>Today's Earnings</h3><div class='value text-green' id='ui-today-rev'>£0</div></div>
-                   <div class='card' onclick='window.editStat("total_rev")' style='cursor:pointer;' title='Click to edit'><h3>Total Earnings</h3><div class='value text-green' id='ui-total-rev'>£0</div></div>
-                   <div class='card' onclick='window.editStat("conv_rate")' style='cursor:pointer;' title='Click to edit'><h3>Conversion Rate</h3><div class='value' id='ui-conv-rate'>0%</div></div>
-                   <div class='card' onclick='window.editStat("online_total")' style='cursor:pointer;' title='Click to edit'><h3>Online / Total</h3><div class='value' id='ui-online-total'>0</div></div>
-                   <div class='card' onclick='window.editStat("retention")' style='cursor:pointer;' title='Click to edit'><h3>Retention Rate</h3><div class='value' id='ui-retention'>0%</div></div>
+           <div id='overview' class='tab-content active' style='animation: fadeInSmooth 0.8s cubic-bezier(0.2, 0.8, 0.2, 1);'>
+               <div style='display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 35px; padding: 0 10px; position: relative; z-index: 10;'>
+                   <div>
+                       <h1 style='font-size: 2.8em; font-weight: 800; letter-spacing: -1.5px; margin: 0; background: linear-gradient(135deg, #ffffff 0%, #a1a1aa 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;'>Nexus Engine</h1>
+                       <p style='color: var(--text-muted); margin: 8px 0 0 0; font-size: 1.05em; font-weight: 500;'>Real-time financial telemetry & network pulse</p>
+                   </div>
+                   <div style='display: flex; gap: 15px;'>
+                       <div class='glass-panel' style='padding: 8px 16px; border-radius: 20px; font-size: 0.85em; font-weight: 600; display: flex; align-items: center; gap: 8px; box-shadow: none;'>
+                           <div class='status-dot' style='margin:0;'></div> ALL SYSTEMS NOMINAL
+                       </div>
+                   </div>
                </div>
+
+               <div class='stats-grid premium-stats-grid' style='position: relative; z-index: 10;'>
+                   <div class='glass-panel' onclick='window.editStat("today_rev")' style='cursor:pointer; padding: 28px;' title='Click to edit'>
+                       <div class='ambient-glow' style='--glow-color: rgba(16,185,129,1); top: -100px; right: -100px;'></div>
+                       <div class='glass-icon-wrapper' style='color: #10b981;'>
+                           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                       </div>
+                       <h3 class='glass-title'>Today's Revenue</h3>
+                       <div class='glass-stat-value text-green' id='ui-today-rev'>£0</div>
+                       <div class='trend positive' style='font-weight: 600; font-size: 0.9em;'>+14% <span style='color:var(--text-muted); font-weight:normal;'>vs yesterday</span></div>
+                   </div>
+                   <div class='glass-panel' onclick='window.editStat("total_rev")' style='cursor:pointer; padding: 28px;' title='Click to edit'>
+                       <div class='ambient-glow' style='--glow-color: rgba(139,92,246,1); top: -100px; right: -100px;'></div>
+                       <div class='glass-icon-wrapper' style='color: #8b5cf6;'>
+                           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 8h20M6 16h.01"/></svg>
+                       </div>
+                       <h3 class='glass-title'>Total Yield</h3>
+                       <div class='glass-stat-value' id='ui-total-rev'>£0</div>
+                       <div class='trend' style='color:var(--text-muted); font-weight: 500; font-size: 0.9em;'>Lifetime Revenue</div>
+                   </div>
+                   <div class='glass-panel' onclick='window.editStat("conv_rate")' style='cursor:pointer; padding: 28px;' title='Click to edit'>
+                       <div class='ambient-glow' style='--glow-color: rgba(59,130,246,1); top: -100px; right: -100px;'></div>
+                       <div class='glass-icon-wrapper' style='color: #3b82f6;'>
+                           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h4l3-9 5 18 3-9h5"/></svg>
+                       </div>
+                       <h3 class='glass-title'>Conversion</h3>
+                       <div class='glass-stat-value' id='ui-conv-rate'>0%</div>
+                       <div class='trend positive' style='font-weight: 600; font-size: 0.9em;'>High Engagement</div>
+                   </div>
+                   <div class='glass-panel' onclick='window.editStat("online_total")' style='cursor:pointer; padding: 28px;' title='Click to edit'>
+                       <div class='ambient-glow' style='--glow-color: rgba(245,158,11,1); top: -100px; right: -100px;'></div>
+                       <div class='glass-icon-wrapper' style='color: #f59e0b;'>
+                           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                       </div>
+                       <h3 class='glass-title'>Network Activity</h3>
+                       <div class='glass-stat-value' id='ui-online-total'>0</div>
+                       <div class='trend' style='color:var(--text-muted); font-weight: 500; font-size: 0.9em;'>Active Members</div>
+                   </div>
+                   <div class='glass-panel' onclick='window.editStat("active_subs")' style='cursor:pointer; padding: 28px;' title='Click to edit'>
+                       <div class='ambient-glow' style='--glow-color: rgba(236,72,153,1); top: -100px; right: -100px;'></div>
+                       <div class='glass-icon-wrapper' style='color: #ec4899;'>
+                           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                       </div>
+                       <h3 class='glass-title'>Active Subs</h3>
+                       <div class='glass-stat-value' id='ui-active-subs'>0</div>
+                       <div class='trend positive' style='font-weight: 600; font-size: 0.9em;'>Recurring Yield</div>
+                   </div>
+                   <div class='glass-panel' onclick='window.editStat("pending_orders")' style='cursor:pointer; padding: 28px;' title='Click to edit'>
+                       <div class='ambient-glow' style='--glow-color: rgba(239,68,68,1); top: -100px; right: -100px;'></div>
+                       <div class='glass-icon-wrapper' style='color: #ef4444;'>
+                           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                       </div>
+                       <h3 class='glass-title'>Pending Orders</h3>
+                       <div class='glass-stat-value' id='ui-pending-orders'>0</div>
+                       <div class='trend negative' style='font-weight: 600; font-size: 0.9em;'>Awaiting processing</div>
+                   </div>
+               </div>
+
+               <div style='display:grid; grid-template-columns: 2fr 1fr; gap:25px; align-items:stretch; margin-top:35px; position:relative; z-index:10;' class='overview-grid'>
+                   <div class='glass-panel' style='padding: 30px; display:flex; flex-direction:column;'>
+                       <div class='ambient-glow' style='--glow-color: rgba(16,185,129,1); top: 0; left: 0;'></div>
+                       <div style='display:flex; justify-content:space-between; align-items:flex-start; position:relative; z-index:1; margin-bottom: 20px;'>
+                           <div>
+                               <h2 style='margin:0; border:none; font-size:1.5em; font-weight:700; letter-spacing:-0.5px; color:#fff;'>Revenue Trajectory</h2>
+                               <p style='color:var(--text-muted); font-size:0.95em; margin:8px 0 0 0;'>Financial throughput over time</p>
+                           </div>
+                           <div style='display:flex; gap:8px; background:rgba(0,0,0,0.5); padding:6px; border-radius:14px; border:1px solid rgba(255,255,255,0.05);'>
+                               <button class='admin-btn btn-pill' style='margin:0; font-size: 0.8em; padding: 6px 16px;' onclick='window.location.href="/api/export"'>Export</button>
+                               <button class='admin-btn btn-pill active' id='btn-chart-7' style='margin:0; font-size: 0.8em; padding: 6px 16px;' onclick='window.updateSalesChart(7)'>7D</button>
+                               <button class='admin-btn btn-pill' id='btn-chart-30' style='margin:0; font-size: 0.8em; padding: 6px 16px;' onclick='window.updateSalesChart(30)'>30D</button>
+                               <button class='admin-btn btn-pill' id='btn-chart-all' style='margin:0; font-size: 0.8em; padding: 6px 16px;' onclick='window.updateSalesChart(0)'>ALL</button>
+                           </div>
+                       </div>
+                       <div style='flex:1; min-height:300px; position:relative; z-index:1; margin-top: 10px;'><canvas id='salesChart'></canvas></div>
+                   </div>
+                   
+                   <div class='glass-panel' style='padding: 30px; display:flex; flex-direction:column;'>
+                       <div class='ambient-glow' style='--glow-color: rgba(139,92,246,1); top: 0; right: 0;'></div>
+                       <div style='display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; padding-bottom:15px; border-bottom: 1px solid rgba(255,255,255,0.05); position:relative; z-index:1;'>
+                           <div>
+                               <h2 style='margin:0; border:none; font-size:1.5em; font-weight:700; letter-spacing:-0.5px; color:#fff;'>Live Pulse</h2>
+                               <p style='color:var(--text-muted); font-size:0.95em; margin:8px 0 0 0;'>Real-time network events</p>
+                           </div>
+                           <div class='status-dot' style='margin:0; background:#8b5cf6; box-shadow:0 0 15px rgba(139,92,246,0.8); width:12px; height:12px; margin-top:5px;'></div>
+                       </div>
+                       <div class='feed-container premium-feed' id='target-feed' style='flex:1; position:relative; z-index:1; padding-right:10px;'></div>
+                   </div>
+               </div>
+           </div>
                <div class='stats-grid'>
                    <div class='card' onclick='window.editStat("tickets")' style='cursor:pointer;' title='Click to edit'><h3>Tickets Opened</h3><div class='value' id='ui-tickets-opened'>0</div></div>
                    <div class='card' onclick='window.editStat("dropoff")' style='cursor:pointer;' title='Click to edit'><h3>Drop-off Rate</h3><div class='value' id='ui-dropoff'>0%</div></div>
