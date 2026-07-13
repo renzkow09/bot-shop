@@ -206,6 +206,7 @@ function ensureMemoryInitialized() {
             if (!Array.isArray(memoryStats.patchnotes)) memoryStats.patchnotes = [];
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔥 CRITICAL FIX: Resolved dashboard freezing caused by unhandled exceptions in UI overlay and missing JS canvas compatibility. 🛡️ DISCORD FIX: Prevented category creation crashes for shop/support tickets if parent category ID is invalid on the host server. 🛠️ SECURITY: Blinded try/catch error logging on frontend. 🚀 The system is now 100% operational." });
             if (memoryStats.patchnotes.length > 50) memoryStats.patchnotes = memoryStats.patchnotes.slice(0, 50);
+            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔥 CRITICAL FIX: Resolved dashboard freeze by forcefully removing the splash screen. 🛡️ DISCORD FIX: Fixed 'Redeem Code' channel creation crash caused by invalid Admin ID in permission overwrites. Added strict try/catch error boundaries." });
             if (memoryStats.patchnotes.length === 0) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "Ajout de la sidebar et de la catégorie Patchnotes." });
             }
@@ -214,6 +215,7 @@ function ensureMemoryInitialized() {
             // Auto add the first patchnote if empty
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔥 CRITICAL FIX: Resolved dashboard freezing caused by unhandled exceptions in UI overlay and missing JS canvas compatibility. 🛡️ DISCORD FIX: Prevented category creation crashes for shop/support tickets if parent category ID is invalid on the host server. 🛠️ SECURITY: Blinded try/catch error logging on frontend. 🚀 The system is now 100% operational." });
             if (memoryStats.patchnotes.length > 50) memoryStats.patchnotes = memoryStats.patchnotes.slice(0, 50);
+            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔥 CRITICAL FIX: Resolved dashboard freeze by forcefully removing the splash screen. 🛡️ DISCORD FIX: Fixed 'Redeem Code' channel creation crash caused by invalid Admin ID in permission overwrites. Added strict try/catch error boundaries." });
             if (memoryStats.patchnotes.length === 0) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "Ajout de la sidebar et de la catégorie Patchnotes." });
                 syncCloud();
@@ -725,14 +727,19 @@ client.on('interactionCreate', async (interaction) => {
                     permissionOverwrites: [
                         { id: interaction.guild.id, deny: ['ViewChannel'], type: 0 },
                         { id: interaction.user.id, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'], type: 1 },
-                        { id: ADMIN_DISCORD_ID, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'], type: 1 },
                         { id: client.user.id, allow: ['ViewChannel', 'SendMessages', 'ManageChannels'], type: 1 }
                     ]
                 };
                 if (interaction.guild.channels.cache.has(CATEGORY_CUSTOMER_ID)) {
                     channelOpts.parent = CATEGORY_CUSTOMER_ID;
                 }
-                const channel = await interaction.guild.channels.create(channelOpts).catch(() => null);
+                let channel = null;
+                try {
+                    channel = await interaction.guild.channels.create(channelOpts);
+                } catch (createErr) {
+                    systemLog('ERROR', 'TICKET', 'Failed to create channel: ' + createErr.message);
+                    console.error('Channel creation failed:', createErr);
+                }
 
                 if (channel) {
                     addActivity('ticket', `🎫 New shop ticket opened by ${interaction.user.username}`);
@@ -796,14 +803,19 @@ client.on('interactionCreate', async (interaction) => {
                     permissionOverwrites: [
                         { id: interaction.guild.id, deny: ['ViewChannel'], type: 0 },
                         { id: interaction.user.id, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'], type: 1 },
-                        { id: ADMIN_DISCORD_ID, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'], type: 1 },
                         { id: client.user.id, allow: ['ViewChannel', 'SendMessages'], type: 1 }
                     ]
                 };
                 if (interaction.guild.channels.cache.has(CATEGORY_SUPPORT_ID)) {
                     channelOpts.parent = CATEGORY_SUPPORT_ID;
                 }
-                const channel = await interaction.guild.channels.create(channelOpts).catch(() => null);
+                let channel = null;
+                try {
+                    channel = await interaction.guild.channels.create(channelOpts);
+                } catch (createErr) {
+                    systemLog('ERROR', 'TICKET', 'Failed to create channel: ' + createErr.message);
+                    console.error('Channel creation failed:', createErr);
+                }
 
                 if (channel) {
                     addActivity('ticket', `🎧 New support ticket opened by ${interaction.user.username}`);
@@ -3392,11 +3404,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                }
            } catch(e) { console.error("Error:", e); }
            const splash = document.getElementById('loading-screen');
-           if (splash) {
-               splash.style.opacity = '0';
-               splash.style.pointerEvents = 'none';
-               setTimeout(() => splash.remove(), 1000);
-           }
+           if (splash) { splash.style.display = 'none'; splash.remove(); }
            if(typeof window.renderSalesChart === 'function') window.renderSalesChart(7);
         }
         
@@ -3443,11 +3451,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             try { updateMaintenanceBadge(data.maintenance); } catch(e) { console.error("updateMaintenanceBadge error:", e); }
             try { updateBadgesAndFeed(data); } catch(e) { console.error("updateBadgesAndFeed error:", e); } 
             const splash = document.getElementById('loading-screen');
-           if (splash) {
-               splash.style.opacity = '0';
-               splash.style.pointerEvents = 'none';
-               setTimeout(() => splash.remove(), 1000);
-           }
+           if (splash) { splash.style.display = 'none'; splash.remove(); }
            if(typeof window.renderSalesChart === 'function') window.renderSalesChart(7);
         }
         
@@ -4420,7 +4424,8 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                 } 
                 const canvas = document.getElementById('salesChart');
                 if(!canvas) return;
-                const ctxSales = canvas.getContext('2d'); 
+                const ctxSales = canvas.getContext('2d');
+                if (!ctxSales) return;
                 let grad = ctxSales.createLinearGradient(0,0,0,400); 
                 grad.addColorStop(0, 'rgba(' + getThemeVal('rgb') + ', 0.5)'); 
                 grad.addColorStop(1, 'transparent'); 
