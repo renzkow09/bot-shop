@@ -2504,6 +2504,12 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
             transform: translateX(4px);
         }
         /* End Ultra Fluid Animations */
+        .glass-textarea:focus {
+            border-color: rgba(255,255,255,0.2) !important;
+            box-shadow: inset 0 2px 10px rgba(0,0,0,0.5), 0 0 15px rgba(255,255,255,0.05) !important;
+            background: rgba(0,0,0,0.5) !important;
+        }
+    
         .premium-card { background: linear-gradient(145deg, rgba(30,30,35,0.7), rgba(20,20,25,0.9)); border: 1px solid rgba(255,255,255,0.06); border-radius: 24px; padding: 24px; box-shadow: 0 10px 30px -10px rgba(0,0,0,0.5); display: flex; flex-direction: column; position: relative; overflow: hidden; transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
         .premium-card::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(120deg, transparent, rgba(255,255,255,0.03), transparent); transform: translateX(-100%); transition: 0.6s; }
         .premium-card:hover::before { transform: translateX(100%); }
@@ -2896,38 +2902,72 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                        <div class='feed-container premium-feed' id='target-feed' style='flex:1; position:relative; z-index:1; padding-right:10px;'></div>
                    </div>
                </div>
-           </div>
-               <div class='stats-grid'>
-                   <div class='card' onclick='window.editStat("tickets")' style='cursor:pointer;' title='Click to edit'><h3>Tickets Opened</h3><div class='value' id='ui-tickets-opened'>0</div></div>
-                   <div class='card' onclick='window.editStat("dropoff")' style='cursor:pointer;' title='Click to edit'><h3>Drop-off Rate</h3><div class='value' id='ui-dropoff'>0%</div></div>
-                   <div class='card' onclick='window.editStat("peak")' style='cursor:pointer;' title='Click to edit'><h3>Peak Sales Hour</h3><div class='value' id='ui-peak-hour'>N/A</div></div>
-               </div>
-               
-                <div class='box'>
-                    <h2>📝 Notes Personnelles</h2>
-                    <textarea id='personal-notes' rows='5' placeholder='Tapez vos notes ici... Elles sont synchronisées automatiquement.' oninput='window.saveNotes()' style='resize:vertical;'>${(memoryStats.notes || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</textarea>
-                </div>
-<div class='box' style='background:rgba(10, 132, 255, 0.05); border:1px solid rgba(10, 132, 255, 0.2); margin-bottom: 25px;'>
-                   <h2 style='color:var(--accent-blue); margin-top:0; border-bottom:0.5px solid rgba(10, 132, 255, 0.2); padding-bottom:10px;'>💱 Live Currency Converter (GBP to EUR)</h2>
-                   <div style='display:flex; gap:15px; align-items:center; flex-wrap:wrap; margin-top:20px;'>
-                       <div style='flex:1; min-width:120px;'>
-                           <label class='text-muted' style='font-size:0.8em; margin-bottom:8px; display:block;'>Pounds (£)</label>
-                           <input type='number' id='conv-gbp' placeholder='0.00' oninput='window.calcCurrency("gbp")' style='font-size:1.2em; font-weight:bold; color:var(--accent-green);'>
+
+               <div class='stats-grid premium-stats-grid' style='position: relative; z-index: 10; margin-top: 25px;'>
+                   <div class='glass-panel' onclick='window.editStat("tickets")' style='cursor:pointer; padding: 28px;' title='Click to edit'>
+                       <div class='ambient-glow' style='--glow-color: rgba(239,68,68,1); top: -100px; right: -100px;'></div>
+                       <div class='glass-icon-wrapper' style='color: #ef4444;'>
+                           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
                        </div>
-                       <div style='font-size:2em; color:var(--text-muted);'>⇄</div>
-                       <div style='flex:1; min-width:120px;'>
-                           <label class='text-muted' style='font-size:0.8em; margin-bottom:8px; display:block;'>Euros (€)</label>
-                           <input type='number' id='conv-eur' placeholder='0.00' oninput='window.calcCurrency("eur")' style='font-size:1.2em; font-weight:bold; color:var(--accent-blue);'>
+                       <h3 class='glass-title'>Tickets Opened</h3>
+                       <div class='glass-stat-value text-red' id='ui-tickets-opened'>0</div>
+                       <div class='trend' style='color:var(--text-muted); font-weight: 500; font-size: 0.9em;'>Support Requests</div>
+                   </div>
+                   <div class='glass-panel' onclick='window.editStat("dropoff")' style='cursor:pointer; padding: 28px;' title='Click to edit'>
+                       <div class='ambient-glow' style='--glow-color: rgba(245,158,11,1); top: -100px; right: -100px;'></div>
+                       <div class='glass-icon-wrapper' style='color: #f59e0b;'>
+                           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
                        </div>
-                       <div style='flex:1; min-width:100px;'>
-                           <label class='text-muted' style='font-size:0.8em; margin-bottom:8px; display:block;'>Exchange Rate</label>
-                           <input type='number' step='0.01' id='conv-rate' value='1.18' oninput='window.calcCurrency("gbp")' style='font-size:1.2em;'>
+                       <h3 class='glass-title'>Drop-off Rate</h3>
+                       <div class='glass-stat-value' id='ui-dropoff'>0%</div>
+                       <div class='trend negative' style='font-weight: 600; font-size: 0.9em;'>Funnel Loss</div>
+                   </div>
+                   <div class='glass-panel' onclick='window.editStat("peak")' style='cursor:pointer; padding: 28px;' title='Click to edit'>
+                       <div class='ambient-glow' style='--glow-color: rgba(59,130,246,1); top: -100px; right: -100px;'></div>
+                       <div class='glass-icon-wrapper' style='color: #3b82f6;'>
+                           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                        </div>
+                       <h3 class='glass-title'>Peak Sales Hour</h3>
+                       <div class='glass-stat-value' id='ui-peak-hour'>N/A</div>
+                       <div class='trend positive' style='font-weight: 600; font-size: 0.9em;'>Highest Traffic</div>
                    </div>
                </div>
                
+               <div style='display:grid; grid-template-columns: 1fr 1fr; gap:25px; align-items:stretch; margin-top:25px; position:relative; z-index:10;' class='overview-grid'>
+                    <div class='glass-panel' style='padding: 30px; display:flex; flex-direction:column;'>
+                        <div class='ambient-glow' style='--glow-color: rgba(255,255,255,1); top: 0; left: 0;'></div>
+                        <h2 style='margin:0 0 15px 0; border:none; font-size:1.5em; font-weight:700; letter-spacing:-0.5px; color:#fff; display:flex; align-items:center; gap:10px;'>
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg> 
+                            Executive Notes
+                        </h2>
+                        <textarea id='personal-notes' class='glass-textarea' rows='5' placeholder='Enter your strategic notes here... Auto-sync enabled.' oninput='window.saveNotes()' style='resize:vertical; flex:1; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05); color: #fff; padding: 15px; border-radius: 14px; outline: none; font-family: inherit; font-size: 0.95em; transition: all 0.3s;'>${(memoryStats.notes || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</textarea>
+                    </div>
+                    
+                    <div class='glass-panel' style='padding: 30px; display:flex; flex-direction:column; background: linear-gradient(135deg, rgba(10,132,255,0.05), rgba(10,132,255,0.1)); border: 1px solid rgba(10,132,255,0.2);'>
+                        <div class='ambient-glow' style='--glow-color: rgba(10,132,255,1); top: 0; right: 0;'></div>
+                        <h2 style='margin:0 0 15px 0; border:none; font-size:1.5em; font-weight:700; letter-spacing:-0.5px; color:var(--accent-blue); display:flex; align-items:center; gap:10px;'>
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> 
+                            Live Currency Exchange
+                        </h2>
+                        <div style='display:flex; gap:15px; align-items:center; flex-wrap:wrap; margin-top:auto;'>
+                            <div style='flex:1; min-width:120px;'>
+                                <label class='text-muted' style='font-size:0.8em; margin-bottom:8px; display:block; font-weight:600;'>British Pounds (£)</label>
+                                <input type='number' id='conv-gbp' placeholder='0.00' oninput='window.calcCurrency("gbp")' style='font-size:1.2em; font-weight:bold; color:var(--accent-green); background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; padding: 12px; width: 100%; box-sizing: border-box; outline: none; transition: 0.3s;' onfocus='this.style.borderColor="#10b981"; this.style.background="rgba(0,0,0,0.5)"' onblur='this.style.borderColor="rgba(255,255,255,0.05)"; this.style.background="rgba(0,0,0,0.3)"'>
+                            </div>
+                            <div style='font-size:2em; color:var(--text-muted); opacity: 0.5;'>⇄</div>
+                            <div style='flex:1; min-width:120px;'>
+                                <label class='text-muted' style='font-size:0.8em; margin-bottom:8px; display:block; font-weight:600;'>Euros (€)</label>
+                                <input type='number' id='conv-eur' placeholder='0.00' oninput='window.calcCurrency("eur")' style='font-size:1.2em; font-weight:bold; color:var(--accent-blue); background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; padding: 12px; width: 100%; box-sizing: border-box; outline: none; transition: 0.3s;' onfocus='this.style.borderColor="#0a84ff"; this.style.background="rgba(0,0,0,0.5)"' onblur='this.style.borderColor="rgba(255,255,255,0.05)"; this.style.background="rgba(0,0,0,0.3)"'>
+                            </div>
+                            <div style='flex:1; min-width:100px;'>
+                                <label class='text-muted' style='font-size:0.8em; margin-bottom:8px; display:block; font-weight:600;'>Exchange Rate</label>
+                                <input type='number' step='0.01' id='conv-rate' value='1.18' oninput='window.calcCurrency("gbp")' style='font-size:1.2em; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; padding: 12px; width: 100%; box-sizing: border-box; outline:none;'>
+                            </div>
+                        </div>
+                    </div>
+               </div>
+
            </div>
-                
            <div id='kanban' class='tab-content'>
                <div class='box'>
                    <h2>📋 Custom Orders Kanban</h2>
