@@ -178,6 +178,7 @@ async function loadCloudStats() {
     const token = process.env.UPSTASH_REDIS_REST_TOKEN;
     if (!url || !token) {
         systemLog('WARN', 'UPSTASH', 'Upstash variables missing. Running local-only mode.');
+        ensureMemoryInitialized();
         return;
     }
     try {
@@ -185,6 +186,16 @@ async function loadCloudStats() {
         const res = await axios.get(`${cleanUrl}/get/bot_stats`, { headers: { Authorization: `Bearer ${token}` } });
         if (res.data && res.data.result) {
             memoryStats = { ...memoryStats, ...JSON.parse(res.data.result) };
+
+            // sync silent
+        }
+    } catch (e) { 
+        systemLog('ERROR', 'UPSTASH', `Cloud GET Error: ${e.message}`); 
+    }
+    ensureMemoryInitialized();
+}
+
+function ensureMemoryInitialized() {
             if (!memoryStats.promo_codes) memoryStats.promo_codes = {};
             if (!memoryStats.user_notes) memoryStats.user_notes = {};
             if (!memoryStats.referrals) memoryStats.referrals = {};
@@ -192,11 +203,11 @@ async function loadCloudStats() {
             if (!memoryStats.pending_reviews) memoryStats.pending_reviews = [];
             if (!memoryStats.activity_feed) memoryStats.activity_feed = [];
             if (!memoryStats.custom_requests) memoryStats.custom_requests = [];
-            if (!memoryStats.patchnotes) memoryStats.patchnotes = [];
+            if (!Array.isArray(memoryStats.patchnotes)) memoryStats.patchnotes = [];
             if (memoryStats.patchnotes.length === 0) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "Ajout de la sidebar et de la catégorie Patchnotes." });
             }
-            if (!memoryStats.patchnotes) memoryStats.patchnotes = [];
+            if (!Array.isArray(memoryStats.patchnotes)) memoryStats.patchnotes = [];
             
             // Auto add the first patchnote if empty
             if (memoryStats.patchnotes.length === 0) {
@@ -205,6 +216,10 @@ async function loadCloudStats() {
             }
             if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Crash dotenv"))) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Anticipation et Auto-Correction: Fix Crash dotenv\n\n- Encapsulation de l'import dotenv dans un bloc try/catch pour éviter un plantage (Crash Node.js 'Cannot find module dotenv') lors du déploiement en environnement cloud." });
+                syncCloud();
+            }
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Fix UI Freeze"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Anticipation et Auto-Correction: Fix UI Freeze\n\n- Correction du blocage complet du dashboard (figé sans données) causé par l'absence d'initialisation des variables si Upstash est hors-ligne ou absent.\n- Ajout d'une redirection automatique vers la page de login si la session du serveur expire (Erreur 401)." });
                 syncCloud();
             }
             if (!memoryStats.overrides) memoryStats.overrides = {};
@@ -219,7 +234,7 @@ async function loadCloudStats() {
             if (!memoryStats.joins) memoryStats.joins = {};
             if (!memoryStats.leaves) memoryStats.leaves = {};
             if (!memoryStats.product_sales) memoryStats.product_sales = {};
-            if (!memoryStats.recent_transactions) memoryStats.recent_transactions = {};
+            if (!Array.isArray(memoryStats.recent_transactions)) memoryStats.recent_transactions = [];
             if (!memoryStats.user_history) memoryStats.user_history = {};
             if (!memoryStats.user_spending) memoryStats.user_spending = {};
             if (memoryStats.revenue) {
@@ -229,11 +244,6 @@ async function loadCloudStats() {
                 }
                 memoryStats.total_revenue = total;
             }
-            // sync silent
-        }
-    } catch (e) { 
-        systemLog('ERROR', 'UPSTASH', `Cloud GET Error: ${e.message}`); 
-    }
 }
 
     // 🚀 [FUNCTION: syncCloud] - Déclaration de fonction
@@ -3359,6 +3369,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
 
            try{
                const res = await fetch('/api/init-data');
+               if(res.status === 401) { window.location.href = '/dashboard'; return; }
                if(res.ok) {
                    const data = await res.json();
                    processInitData(data);
@@ -3969,7 +3980,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         setInterval(() => { if(document.visibilityState === 'visible') window.refreshDataSilently(true); }, 15000);
 
         // 🚀 [UI_ACTION_ASYNC: refreshDataSilently] - Action asynchrone d'interface Dashboard
-        window.refreshDataSilently = async function(isAutoSync = false) { try{ const res=await fetch('/api/init-data'); if(res.ok){ const data=await res.json(); processInitData(data); if(!isAutoSync){ try { window.cancelEdit(); window.cancelEditLink(); document.getElementById('promoName').value=''; document.getElementById('promoDiscount').value=''; document.getElementById('promoLimit').value=''; } catch(e) {} } } }catch(e){ systemLog('ERROR', 'SYSTEM', e.message); } };
+        window.refreshDataSilently = async function(isAutoSync = false) { try{ const res=await fetch('/api/init-data'); if(res.status === 401) { window.location.href = '/dashboard'; return; } if(res.ok){ const data=await res.json(); processInitData(data); if(!isAutoSync){ try { window.cancelEdit(); window.cancelEditLink(); document.getElementById('promoName').value=''; document.getElementById('promoDiscount').value=''; document.getElementById('promoLimit').value=''; } catch(e) {} } } }catch(e){ systemLog('ERROR', 'SYSTEM', e.message); } };
         
         // 🚀 [UI_ACTION_ASYNC: logoutUser] - Action asynchrone d'interface Dashboard
         window.logoutUser = async function(btnElement) {
