@@ -1,6 +1,7 @@
 try { require('dotenv').config({ path: __dirname + '/.env' }); } catch (e) { console.warn("⚠️ dotenv module not found. Running with system environment variables."); }
 // === [ANCHOR: IMPORTS_AND_CRASH_HANDLER] ===
 const { Client, GatewayIntentBits, Partials, ButtonBuilder, ActionRowBuilder, ButtonStyle, ChannelType, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, EmbedBuilder, AttachmentBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
+const { GoogleGenAI } = require('@google/genai');
 
 const CircuitBreaker = {
     failures: 0,
@@ -345,6 +346,12 @@ function ensureMemoryInitialized() {
             
             if (!memoryStats.patchnotes.some(p => p.text.includes("SDK Google GenAI"))) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Migration: SDK Google GenAI\n\n- Remplacement des appels `fetch` bruts par le SDK officiel `@google/genai` pour une meilleure stabilité et gestion des erreurs.\n- Le problème de limite de quota (Service Busy / You exceed) est lié à l'utilisation du modèle `gemini-3.1-pro-preview` qui nécessite une clé API facturée sur Google Cloud. Si le message persiste sur Render, il faut upgrader le compte Google Cloud de la clé API, ou passer sur `gemini-3.5-flash`." });
+                syncCloud();
+            }
+
+            
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Fix SDK Initialization"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug: GoogleGenAI is not defined\n\n- L'import du SDK @google/genai manquait à l'appel lors de la précédente mise à jour suite à un échec d'injection du module.\n- L'import est désormais correctement déclaré dans l'en-tête du fichier, rétablissant l'accès aux requêtes IA de Deep Analysis et Market Scan." });
                 syncCloud();
             }
 
