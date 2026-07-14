@@ -312,6 +312,30 @@ function ensureMemoryInitialized() {
                 syncCloud();
             }
 
+            
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Deep AI Analysis Error"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug: Deep AI Analysis Error\n\n- Le module d'IA financière plantait l'interface (Unexpected token 'G', \"GEMINI_API\"...) lorsque la clé Gemini n'était pas configurée, le serveur renvoyant une réponse textuelle brute inattendue par le client JSON.\n- Réécriture du backend pour retourner de véritables exceptions JSON rattrapables coté client, avec des messages d'erreurs élégants et explicites dans le dashboard." });
+                syncCloud();
+            }
+
+            
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Render: Gemini API Key"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Configuration requise pour Render\n\n- Pour utiliser les fonctionnalités d'IA (Deep AI Analysis & Market Check) sur votre hébergement Render, n'oubliez pas d'ajouter la variable d'environnement `GEMINI_API_KEY` dans l'onglet Environment de votre service Render." });
+                syncCloud();
+            }
+
+            
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Gemini JSON Parse Error"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug: Analysis Failed (Unexpected token 'Y')\n\n- Correction d'un crash de l'interface Deep AI Analysis lorsque l'API Google Gemini renvoyait un message d'erreur texte (ex: Quota exceeded) au lieu de JSON.\n- Le backend intercepte désormais les réponses texte pour les afficher élégamment dans le Dashboard sans générer d'exception ParseError." });
+                syncCloud();
+            }
+
+            
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Graceful Quota Handling"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug: Gestion des Limites d'IA\n\n- Le backend intercepte désormais les erreurs de quota Google Gemini (ex: \"You exceed\") et renvoie un statut standardisé.\n- Le Dashboard affiche maintenant une interface dédiée 'Service Busy' avec une couleur d'avertissement orange au lieu d'un crash d'analyse brutal en rouge." });
+                syncCloud();
+            }
+
             if (!memoryStats.overrides) memoryStats.overrides = {};
             if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } };
             if (!memoryStats.settings.maintenance) memoryStats.settings.maintenance = { active: false, endsAt: 0, channelId: "" };
@@ -2301,7 +2325,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                 }
                 
                                                                 else if (data.action === 'ai_analyze_tx') {
-                    if (!process.env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY not configured.");
+                    if (!process.env.GEMINI_API_KEY) return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ error: "GEMINI_API_KEY not configured." }));
                     const recent = (memoryStats.recent_transactions || []).slice(0, 50);
                     if (!recent.length) return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ result: "<p>No recent transactions to analyze.</p>" }));
                     
@@ -2311,49 +2335,67 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
                                 contents: [{ parts: [{ text: "Analyze the following recent transactions and provide a short financial analysis report in HTML format. " + JSON.stringify(recent) }] }],
-                                generationConfig: {
-                                    thinkingConfig: {
-                                        thinkingLevel: "HIGH"
-                                    }
-                                }
+                                generationConfig: { thinkingConfig: { thinkingLevel: "HIGH" } }
                             })
                         });
-                        const json = await response.json();
-                        if (json.error) throw new Error(json.error.message);
+                        
+                        const textData = await response.text();
+                        let json;
+                        try { 
+                            json = JSON.parse(textData); 
+                        } catch(err) { 
+                            let msg = textData || "API Error";
+                            if(msg.toLowerCase().includes('exceed') || msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('429')) msg = "RATE_LIMIT_EXCEEDED";
+                            return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ error: msg })); 
+                        }
+                        
+                        if (json.error) {
+                            let msg = json.error.message;
+                            if(msg.toLowerCase().includes('exceed') || msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('429')) msg = "RATE_LIMIT_EXCEEDED";
+                            return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ error: msg }));
+                        }
                         return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ result: json.candidates[0].content.parts[0].text }));
                     } catch(e) {
-                        throw e;
+                        return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ error: e.message }));
                     }
                 }
-                                else if (data.action === 'check_market') {
-                    if (!process.env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY not configured.");
+                else if (data.action === 'check_market') {
+                    if (!process.env.GEMINI_API_KEY) return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ error: "GEMINI_API_KEY not configured." }));
                     try {
                         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
                                 contents: [{ parts: [{ text: "Perform a quick market analysis for the digital product: " + data.product + ". Provide a short HTML report with pricing recommendations and insights." }] }],
-                                tools: [
-                                    { googleSearch: {} }
-                                ]
+                                tools: [ { googleSearch: {} } ]
                             })
                         });
-                        const json = await response.json();
-                        if (json.error) throw new Error(json.error.message);
+                        
+                        const textData = await response.text();
+                        let json;
+                        try { 
+                            json = JSON.parse(textData); 
+                        } catch(err) { 
+                            let msg = textData || "API Error";
+                            if(msg.toLowerCase().includes('exceed') || msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('429')) msg = "RATE_LIMIT_EXCEEDED";
+                            return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ error: msg })); 
+                        }
+
+                        if (json.error) {
+                            let msg = json.error.message;
+                            if(msg.toLowerCase().includes('exceed') || msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('429')) msg = "RATE_LIMIT_EXCEEDED";
+                            return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ error: msg }));
+                        }
                         let finalHtml = json.candidates[0].content.parts.map(p => p.text).join('');
                         
-                        // Check if search grounding was used
                         if (json.candidates[0].groundingMetadata && json.candidates[0].groundingMetadata.searchEntryPoint) {
                             finalHtml += `<br><br><div style="font-size:0.8em; padding:10px; background:rgba(255,255,255,0.05); border-radius:10px;">${json.candidates[0].groundingMetadata.searchEntryPoint.renderedContent}</div>`;
                         }
-
                         return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ result: finalHtml }));
                     } catch(e) {
-                        throw e;
+                        return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ error: e.message }));
                     }
                 }
-                
-                
                 else if (data.action === 'save_bot_control') {
                     if (data.config) {
                         if (!memoryStats.bot_config) memoryStats.bot_config = {};
@@ -5428,9 +5470,14 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                     body: JSON.stringify({ action: 'ai_analyze_tx' })
                 });
                 const data = await res.json();
-                content.innerHTML = '<div style="animation:fadeInSmooth 0.5s ease;">' + (data.result || data) + '</div>';
+                if(data.error) throw new Error(data.error);
+                content.innerHTML = '<div style="animation:fadeInSmooth 0.5s ease;">' + (data.result || JSON.stringify(data)) + '</div>';
             } catch (e) {
-                content.innerHTML = '<div style="text-align:center; padding:40px; background:rgba(255,69,58,0.1); border:1px solid rgba(255,69,58,0.3); border-radius:16px; color:var(--accent-red);"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-bottom:10px;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg><br><h3>Analysis Failed</h3><p>' + escapeHTML(e.message) + '</p></div>';
+                if (e.message === "RATE_LIMIT_EXCEEDED") {
+                    content.innerHTML = '<div style="text-align:center; padding:40px; background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.3); border-radius:16px; color:#f59e0b;"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-bottom:10px;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg><br><h3>Service Busy</h3><p>The AI neural net is currently experiencing high load or has reached its quota limits. Please try again later.</p></div>';
+                } else {
+                    content.innerHTML = '<div style="text-align:center; padding:40px; background:rgba(255,69,58,0.1); border:1px solid rgba(255,69,58,0.3); border-radius:16px; color:var(--accent-red);"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-bottom:10px;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg><br><h3>Analysis Failed</h3><p>' + escapeHTML(e.message) + '</p></div>';
+                }
             }
         };
 
@@ -5455,9 +5502,14 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                     body: JSON.stringify({ action: 'check_market', product: productName })
                 });
                 const data = await res.json();
-                content.innerHTML = '<div style="animation:fadeInSmooth 0.5s ease;">' + (data.result || data) + '</div>';
+                if(data.error) throw new Error(data.error);
+                content.innerHTML = '<div style="animation:fadeInSmooth 0.5s ease;">' + (data.result || JSON.stringify(data)) + '</div>';
             } catch (e) {
-                content.innerHTML = '<div style="text-align:center; padding:40px; background:rgba(255,69,58,0.1); border:1px solid rgba(255,69,58,0.3); border-radius:16px; color:var(--accent-red);"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-bottom:10px;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg><br><h3>Market Scan Failed</h3><p>' + escapeHTML(e.message) + '</p></div>';
+                if (e.message === "RATE_LIMIT_EXCEEDED") {
+                    content.innerHTML = '<div style="text-align:center; padding:40px; background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.3); border-radius:16px; color:#f59e0b;"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-bottom:10px;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg><br><h3>Service Busy</h3><p>The AI neural net is currently experiencing high load or has reached its quota limits. Please try again later.</p></div>';
+                } else {
+                    content.innerHTML = '<div style="text-align:center; padding:40px; background:rgba(255,69,58,0.1); border:1px solid rgba(255,69,58,0.3); border-radius:16px; color:var(--accent-red);"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-bottom:10px;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg><br><h3>Market Scan Failed</h3><p>' + escapeHTML(e.message) + '</p></div>';
+                }
             }
         };
 
