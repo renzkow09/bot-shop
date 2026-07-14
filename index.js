@@ -245,6 +245,9 @@ function ensureMemoryInitialized() {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Anticipation et Auto-Correction: Fix UI Freeze\n\n- Correction du blocage complet du dashboard (figé sans données) causé par l'absence d'initialisation des variables si Upstash est hors-ligne ou absent.\n- Ajout d'une redirection automatique vers la page de login si la session du serveur expire (Erreur 401)." });
                 syncCloud();
             }
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Ticket Lock Freeze"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Anticipation et Auto-Correction: Fix Ticket Lock Freeze\n\n- Ajout d'un timeout strict (3000ms) sur les appels Axios vers Upstash pour acquireDistributedLock et syncCloud pour éviter un blocage indéfini du bot.\n- Sécurisation du parentId lors de la création de channels : vérification que la catégorie ciblée est bien de type GuildCategory pour éviter un crash API Discord." });
+            }
             if (!memoryStats.patchnotes.some(p => p.text.includes("Fix SyntaxError Transcripts"))) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug Critique: Dashboard figé sans données\n\n- Correction d'une erreur de syntaxe HTML/JS (SyntaxError: Unexpected string) dans le système de Transcripts qui empêchait l'exécution du script principal du dashboard.\n- Sécurisation des attributs 'onclick' avec encodage HTML (&quot;) pour éviter tout conflit de guillemets." });
                 syncCloud();
@@ -322,7 +325,8 @@ async function syncCloud(isManualForce = false) {
     try {
         const cleanUrl = url.endsWith('/') ? url.slice(0, -1) : url;
         await axios.post(cleanUrl, ["SET", "bot_stats", JSON.stringify(memoryStats)], { 
-            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } 
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            timeout: 3000
         });
     } catch (err) { 
         systemLog('ERROR', 'UPSTASH', `Cloud Sync Error: ${err.message}`); 
@@ -604,7 +608,8 @@ async function acquireDistributedLock(lockKey, ttl_ms = 5000) {
     try {
         const cleanUrl = url.endsWith('/') ? url.slice(0, -1) : url;
         const res = await axios.post(cleanUrl, ["SET", `lock_${lockKey}`, "1", "NX", "PX", ttl_ms.toString()], {
-            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            timeout: 3000
         });
         return res.data.result === "OK";
     } catch (e) {
@@ -724,7 +729,7 @@ client.on('interactionCreate', async (interaction) => {
                 
                 // Distributed Lock to prevent multiple instances from processing simultaneous clicks
                 const dLock = await acquireDistributedLock('ticket_' + interaction.user.id, 10000);
-                if (!dLock) return;
+                if (!dLock) return interaction.editReply({ content: '❌ Please wait, processing previous request.' }).catch(() => {});
                 
                 // 🛡️ ANTI-SPAM TICKET CHECK (Redirect to existing channel if already created)
                 const sanitizedName = interaction.user.username.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -747,7 +752,8 @@ client.on('interactionCreate', async (interaction) => {
                         { id: client.user.id, allow: ['ViewChannel', 'SendMessages', 'ManageChannels'], type: 1 }
                     ]
                 };
-                if (interaction.guild.channels.cache.has(CATEGORY_CUSTOMER_ID)) {
+                const customerCat = interaction.guild.channels.cache.get(CATEGORY_CUSTOMER_ID);
+                if (customerCat && customerCat.type === ChannelType.GuildCategory) {
                     channelOpts.parent = CATEGORY_CUSTOMER_ID;
                 }
                 let channel = null;
@@ -805,7 +811,7 @@ client.on('interactionCreate', async (interaction) => {
                 
                 // Distributed Lock to prevent multiple instances from processing simultaneous clicks
                 const dLock = await acquireDistributedLock('ticket_' + interaction.user.id, 10000);
-                if (!dLock) return;
+                if (!dLock) return interaction.editReply({ content: '❌ Please wait, processing previous request.' }).catch(() => {});
                 
                 // 🛡️ ANTI-SPAM TICKET CHECK (Redirect to existing channel if already created)
                 const sanitizedName = interaction.user.username.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -823,7 +829,8 @@ client.on('interactionCreate', async (interaction) => {
                         { id: client.user.id, allow: ['ViewChannel', 'SendMessages'], type: 1 }
                     ]
                 };
-                if (interaction.guild.channels.cache.has(CATEGORY_SUPPORT_ID)) {
+                const supportCat = interaction.guild.channels.cache.get(CATEGORY_SUPPORT_ID);
+                if (supportCat && supportCat.type === ChannelType.GuildCategory) {
                     channelOpts.parent = CATEGORY_SUPPORT_ID;
                 }
                 let channel = null;
