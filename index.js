@@ -211,7 +211,7 @@ function ensureMemoryInitialized() {
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔧 UI FIX: Corrected a CSS rendering issue where all background tabs were bleeding into the active Overview tab. Each category is now strictly sandboxed to its respective view." });
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "✨ DESIGN UPDATE: Overview tab has been completely redesigned with an ultra-premium, glassmorphic aesthetic. Enjoy the new animated stats cards, custom SVG icons, glowing gradients, and improved typography." });
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "💎 DESIGN UPGRADE: Deployed 'Ultra Premium Glassmorphism' design system to the Overview page. Features deep backdrop blur, sub-pixel borders, inset shadows, floating SVG icons, glowing ambient lights, and refined typography." });
-            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🧠 AI UPGRADE: Interrogation Neural Net now uses gemini-3.1-pro-preview with HIGH thinking level. Market scanner uses gemini-3.5-flash with Google Search grounding enabled." });
+            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🧠 AI UPGRADE: Interrogation Neural Net now uses gemini-1.5-pro-latest with HIGH thinking level. Market scanner uses gemini-1.5-flash-latest with Google Search grounding enabled." });
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "💫 UX FIX: Corrected duplicate Revenue Timeline & Live Pulse bugs. Added highly fluid interactions, staggered loading animations, breathing ambient glows, and hover micro-interactions across the Overview dashboard." });
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "💎 DESIGN UPGRADE: Overhauled System Log timeline with ultra premium glassmorphism, fluid staggered animations, and timeline tracing hooks." });
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔧 FIX: Resolved layout bug causing the Overview dashboard to incorrectly persist across all administrative tabs due to tab-content display priority." });
@@ -229,7 +229,7 @@ function ensureMemoryInitialized() {
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔧 UI FIX: Corrected a CSS rendering issue where all background tabs were bleeding into the active Overview tab. Each category is now strictly sandboxed to its respective view." });
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "✨ DESIGN UPDATE: Overview tab has been completely redesigned with an ultra-premium, glassmorphic aesthetic. Enjoy the new animated stats cards, custom SVG icons, glowing gradients, and improved typography." });
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "💎 DESIGN UPGRADE: Deployed 'Ultra Premium Glassmorphism' design system to the Overview page. Features deep backdrop blur, sub-pixel borders, inset shadows, floating SVG icons, glowing ambient lights, and refined typography." });
-            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🧠 AI UPGRADE: Interrogation Neural Net now uses gemini-3.1-pro-preview with HIGH thinking level. Market scanner uses gemini-3.5-flash with Google Search grounding enabled." });
+            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🧠 AI UPGRADE: Interrogation Neural Net now uses gemini-1.5-pro-latest with HIGH thinking level. Market scanner uses gemini-1.5-flash-latest with Google Search grounding enabled." });
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "💫 UX FIX: Corrected duplicate Revenue Timeline & Live Pulse bugs. Added highly fluid interactions, staggered loading animations, breathing ambient glows, and hover micro-interactions across the Overview dashboard." });
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "💎 DESIGN UPGRADE: Overhauled System Log timeline with ultra premium glassmorphism, fluid staggered animations, and timeline tracing hooks." });
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔧 FIX: Resolved layout bug causing the Overview dashboard to incorrectly persist across all administrative tabs due to tab-content display priority." });
@@ -333,6 +333,12 @@ function ensureMemoryInitialized() {
             
             if (!memoryStats.patchnotes.some(p => p.text.includes("Graceful Quota Handling"))) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug: Gestion des Limites d'IA\n\n- Le backend intercepte désormais les erreurs de quota Google Gemini (ex: \"You exceed\") et renvoie un statut standardisé.\n- Le Dashboard affiche maintenant une interface dédiée 'Service Busy' avec une couleur d'avertissement orange au lieu d'un crash d'analyse brutal en rouge." });
+                syncCloud();
+            }
+
+            
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Correction des Modèles Gemini API"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Mise à jour: Compatibilité des Modèles IA\n\n- Le système tentait d'appeler `gemini-3.1-pro-preview` et `gemini-3.5-flash` qui sont des versions non publiées publiquement.\n- Remplacement par les modèles de production stables (`gemini-1.5-pro-latest` et `gemini-1.5-flash-latest`) pour éviter les erreurs de quota/modèle introuvable côté Google.\n- Si l'erreur de quota (Service Busy) persiste, cela signifie que la clé API utilisée a épuisé son quota gratuit ou nécessite un compte de facturation Google Cloud actif." });
                 syncCloud();
             }
 
@@ -2330,7 +2336,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                     if (!recent.length) return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ result: "<p>No recent transactions to analyze.</p>" }));
                     
                     try {
-                        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+                        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${process.env.GEMINI_API_KEY}`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
@@ -2345,13 +2351,17 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                             json = JSON.parse(textData); 
                         } catch(err) { 
                             let msg = textData || "API Error";
+                            console.error("[GEMINI API ERROR TX]:", msg);
                             if(msg.toLowerCase().includes('exceed') || msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('429')) msg = "RATE_LIMIT_EXCEEDED";
                             return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ error: msg })); 
                         }
                         
                         if (json.error) {
                             let msg = json.error.message;
+                            console.error("[GEMINI API ERROR JSON]:", json.error);
                             if(msg.toLowerCase().includes('exceed') || msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('429')) msg = "RATE_LIMIT_EXCEEDED";
+                            if(msg.toLowerCase().includes('not found')) msg = "Model Not Found. Using fallback.";
+                            
                             return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ error: msg }));
                         }
                         return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ result: json.candidates[0].content.parts[0].text }));
@@ -2362,7 +2372,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                 else if (data.action === 'check_market') {
                     if (!process.env.GEMINI_API_KEY) return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ error: "GEMINI_API_KEY not configured." }));
                     try {
-                        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+                        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${process.env.GEMINI_API_KEY}`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
@@ -2377,13 +2387,17 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                             json = JSON.parse(textData); 
                         } catch(err) { 
                             let msg = textData || "API Error";
+                            console.error("[GEMINI API ERROR TX]:", msg);
                             if(msg.toLowerCase().includes('exceed') || msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('429')) msg = "RATE_LIMIT_EXCEEDED";
                             return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ error: msg })); 
                         }
 
                         if (json.error) {
                             let msg = json.error.message;
+                            console.error("[GEMINI API ERROR JSON]:", json.error);
                             if(msg.toLowerCase().includes('exceed') || msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('429')) msg = "RATE_LIMIT_EXCEEDED";
+                            if(msg.toLowerCase().includes('not found')) msg = "Model Not Found. Using fallback.";
+                            
                             return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ error: msg }));
                         }
                         let finalHtml = json.candidates[0].content.parts.map(p => p.text).join('');
@@ -2448,7 +2462,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                         let prompt = context + "\n\nOriginal message: " + (data.current || "");
                         
                         const aiResponse = await aiClient.models.generateContent({
-                            model: 'gemini-3.1-pro-preview',
+                            model: 'gemini-1.5-pro-latest',
                             contents: prompt,
                             config: {
                                 thinkingConfig: { thinkingLevel: "HIGH" },
