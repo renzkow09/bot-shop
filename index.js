@@ -306,6 +306,12 @@ function ensureMemoryInitialized() {
                 syncCloud();
             }
 
+            
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Bot Control Crash"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug Critique: Dashboard figé sur Loading\n\n- Correction d'une erreur d'hydratation (ReferenceError: data is not defined) dans l'interface Bot Control qui stoppait l'exécution de Javascript.\n- Optimisation de l'affichage de l'uptime et de l'état du mode anti-raid sans écrasement en direct." });
+                syncCloud();
+            }
+
             if (!memoryStats.overrides) memoryStats.overrides = {};
             if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } };
             if (!memoryStats.settings.maintenance) memoryStats.settings.maintenance = { active: false, endsAt: 0, channelId: "" };
@@ -4336,28 +4342,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         
     // 🚀 [FUNCTION: processInitData] - Déclaration de fonction
         
-           
-           if (rawStats.bot_config) {
-               if(document.getElementById('bot_activity_type')) document.getElementById('bot_activity_type').value = rawStats.bot_config.activity_type || 'PLAYING';
-               if(document.getElementById('bot_activity_text')) document.getElementById('bot_activity_text').value = rawStats.bot_config.activity_text || '';
-               if(document.getElementById('bot_status')) document.getElementById('bot_status').value = rawStats.bot_config.status || 'online';
-               if(document.getElementById('bot_antiraid')) document.getElementById('bot_antiraid').checked = rawStats.bot_config.antiraid || false;
-               if(document.getElementById('bot_antiraid_threshold')) document.getElementById('bot_antiraid_threshold').value = rawStats.bot_config.antiraid_threshold || 5;
-               if(document.getElementById('bot_backup_interval')) document.getElementById('bot_backup_interval').value = rawStats.bot_config.backup_interval || '12';
-               
-               if(document.getElementById('bot_antiraid') && document.getElementById('bot_antiraid').checked) {
-                   document.getElementById('anti_raid_container').style.borderColor = 'rgba(239,68,68,0.6)';
-                   document.getElementById('anti_raid_container').style.background = 'rgba(239,68,68,0.1)';
-               }
-           }
-           if (data.uptime && document.getElementById('bot_uptime_display')) {
-               let sec = Math.floor(data.uptime);
-               let d = Math.floor(sec / (3600*24));
-               let h = Math.floor(sec % (3600*24) / 3600);
-               let m = Math.floor(sec % 3600 / 60);
-               document.getElementById('bot_uptime_display').innerText = d + "d " + h + "h " + m + "m";
-           }
-           
+                      
            window.saveBotControl = function(event) {
                const btn = event.currentTarget;
                const originalHTML = btn.innerHTML;
@@ -4477,6 +4462,15 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             if(document.getElementById('ui-dropoff')) document.getElementById('ui-dropoff').innerText = overrides['dropoff'] || ((data.dropOffRate||0)+'%');
             if(document.getElementById('ui-peak-hour')) document.getElementById('ui-peak-hour').innerText = overrides['peak'] || (data.peakHourStr||'N/A');
             
+            
+            if (data.uptime && document.getElementById('bot_uptime_display')) {
+               let sec = Math.floor(data.uptime);
+               let d = Math.floor(sec / (3600*24));
+               let h = Math.floor(sec % (3600*24) / 3600);
+               let m = Math.floor(sec % 3600 / 60);
+               document.getElementById('bot_uptime_display').innerText = d + "d " + h + "h " + m + "m";
+            }
+
             trackedTickets = data.activeTickets || 0; trackedReviews = data.pendingReviewsCount || 0; trackedSales = rawStats.total_transactions || 0; 
             try { buildStaticTables(); } catch(e) { console.error("buildStaticTables error:", e); }
             try { renderAnalyticsCharts(); } catch(e) { console.error("renderAnalyticsCharts error:", e); }
@@ -4539,6 +4533,36 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
           const filterValue = filterSelect ? filterSelect.value : 'all';
 
           
+           
+           if (rawStats.bot_config) {
+               const el_type = document.getElementById('bot_activity_type');
+               if(el_type && document.activeElement !== el_type) el_type.value = rawStats.bot_config.activity_type || 'PLAYING';
+               
+               const el_text = document.getElementById('bot_activity_text');
+               if(el_text && document.activeElement !== el_text) el_text.value = rawStats.bot_config.activity_text || '';
+               
+               const el_status = document.getElementById('bot_status');
+               if(el_status && document.activeElement !== el_status) el_status.value = rawStats.bot_config.status || 'online';
+               
+               const el_raid = document.getElementById('bot_antiraid');
+               if(el_raid && document.activeElement !== el_raid) {
+                   el_raid.checked = rawStats.bot_config.antiraid || false;
+                   if (el_raid.checked) {
+                       document.getElementById('anti_raid_container').style.borderColor = 'rgba(239,68,68,0.6)';
+                       document.getElementById('anti_raid_container').style.background = 'rgba(239,68,68,0.1)';
+                   } else {
+                       document.getElementById('anti_raid_container').style.borderColor = 'rgba(239,68,68,0.2)';
+                       document.getElementById('anti_raid_container').style.background = 'rgba(239,68,68,0.05)';
+                   }
+               }
+               
+               const el_threshold = document.getElementById('bot_antiraid_threshold');
+               if(el_threshold && document.activeElement !== el_threshold) el_threshold.value = rawStats.bot_config.antiraid_threshold || 5;
+               
+               const el_backup = document.getElementById('bot_backup_interval');
+               if(el_backup && document.activeElement !== el_backup) el_backup.value = rawStats.bot_config.backup_interval || '12';
+           }
+
            // Populate Messages
                      if (rawStats.messages) {
                               const fields = [
