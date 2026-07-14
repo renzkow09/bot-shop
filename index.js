@@ -2603,6 +2603,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
         /* End Ultra Fluid Animations */
 
         /* Ultra Premium Patchnotes Styles */
+        @keyframes slideUpFade { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
         .patchnotes-container {
             position: relative;
             max-width: 900px;
