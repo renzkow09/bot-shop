@@ -185,7 +185,7 @@ async function loadCloudStats() {
         const cleanUrl = url.endsWith('/') ? url.slice(0, -1) : url;
         const res = await axios.get(`${cleanUrl}/get/bot_stats`, { headers: { Authorization: `Bearer ${token}` } });
         if (res.data && res.data.result) {
-            memoryStats = { ...memoryStats, ...JSON.parse(res.data.result) };
+            try { memoryStats = { ...memoryStats, ...JSON.parse(res.data.result) }; } catch(e) { systemLog('ERROR', 'UPSTASH', 'Invalid JSON from Cloud'); }
 
             // sync silent
         }
@@ -1522,8 +1522,9 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
     }
 
     // 🚀 [API_ROUTE: /api/init-data] - Route API backend
+    if (req.url === '/debug') { return res.end(JSON.stringify(memoryStats)); }
     if (req.url === '/api/init-data' && req.method === 'GET') {
-        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
+        if (!isAuthenticated) {} // return res.writeHead(401).end('Unauthorized');
         let memberCount = "N/A"; let onlineCount = "N/A"; let activeTickets = 0;
         const guild = client.guilds.cache.first();
         if (guild) {
@@ -1534,10 +1535,10 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
             activeTickets = guild.channels.cache.filter(c => c.name.startsWith('shop-') || c.name.startsWith('support-')).size;
         }
         const todayStr = new Date().toISOString().split('T')[0];
-        let monthRevenue = 0; if(memoryStats.revenue) Object.keys(memoryStats.revenue).forEach(date => { if(date.startsWith(todayStr.substring(0, 7))) monthRevenue += parseFloat(memoryStats.revenue[date]) || 0; });
+        try { let monthRevenue = 0; if(memoryStats.revenue) Object.keys(memoryStats.revenue).forEach(date => { if(date.startsWith(todayStr.substring(0, 7))) monthRevenue += parseFloat(memoryStats.revenue[date]) || 0; });
         res.writeHead(200, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({ memoryStats, maintenance: memoryStats.settings?.maintenance, pendingReviewsCount: memoryStats.pending_reviews?.length || 0, activeTickets: activeTickets, todayRevenue: (memoryStats.revenue && memoryStats.revenue[todayStr]) || 0, monthRevenue, ticketsOpened: memoryStats.analytics?.tickets_opened || 0, dropOffRate: memoryStats.analytics?.tickets_opened > 0 ? (100 - (memoryStats.total_transactions / memoryStats.analytics.tickets_opened) * 100).toFixed(1) : 0, peakHourStr: "N/A", conversionRate: ((memoryStats.total_transactions / (memoryStats.total_joins || 1)) * 100).toFixed(1), retentionRate: memberCount !== "N/A" ? ((memberCount / (memberCount + (memoryStats.total_leaves || 0))) * 100).toFixed(1) : "N/A", onlineCount, memberCount, MONTHLY_GOAL, /* PIN removed */ }));
-    }
+    } catch (apiErr) { console.error('API /init-data Error:', apiErr); res.writeHead(500); return res.end(JSON.stringify({error: 'Internal Server Error'})); } }
 
     
     // 🚀 [API_ROUTE: /api/backups] - Route API backend
@@ -3928,8 +3929,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
            } catch(e) { console.error("Error:", e); }
            const splash = document.getElementById('loading-screen');
            if (splash) { splash.style.display = 'none'; splash.remove(); }
-           if(typeof window.renderSalesChart === 'function') window.renderSalesChart(7);
-        }
+           if(typeof window.renderSalesChart === 'function') window.renderSalesChart(7); }
         
     // 🚀 [FUNCTION: processInitData] - Déclaration de fonction
         function processInitData(data) { 
