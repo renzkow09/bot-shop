@@ -776,29 +776,17 @@ client.on('interactionCreate', async (interaction) => {
                 if (channel) {
                     addActivity('ticket', `🎫 New shop ticket opened by ${interaction.user.username}`);
                     systemLog('INFO', 'TICKET_SYS', `Shop ticket generated for ${interaction.user.username}`);
-                    channelStates.set(channel.id, { validated: false, processing: false, promo: null, redeemed: false, cart: [], cartTotal: 0 });
+                    channelStates.set(channel.id, { validated: false, processing: false, promo: null, redeemed: false, cart: [], cartTotal: 0, balance: 0 });
                     
-                    const pmenu = new StringSelectMenuBuilder()
-                        .setCustomId('product_select')
-                        .setPlaceholder('🛒 Select the products you want to buy')
-                        .setMinValues(1);
-                        
                     let optCount = 0;
                     for (const id in memoryStats.products) {
-                        if (optCount >= 25) break; 
                         const p = memoryStats.products[id];
                         if (p.stock && p.stock !== "∞" && parseInt(p.stock) <= 0) continue;
-                        pmenu.addOptions(new StringSelectMenuOptionBuilder()
-                            .setLabel(String(p.name + (p.price === "Custom" ? " (Custom)" : " (£" + p.price + ")")).substring(0, 100))
-                            .setDescription(String(p.category || 'Item').substring(0, 100))
-                            .setValue(id));
                         optCount++;
                     }
-                    if (optCount > 0) pmenu.setMaxValues(Math.min(optCount, 10)); 
-
+                    
                     if(optCount > 0) {
-                        const row = new ActionRowBuilder().addComponents(pmenu);
-                        await channel.send({ content: `👋 Welcome <@${interaction.user.id}>!\n\n**🛒 Step 1: Select items from the menu below.**\n**🔐 Step 2: Paste your Rewarble voucher or promo code.**`, components: [row] }).catch(() => {});
+                        await channel.send({ content: `👋 Welcome <@${interaction.user.id}>!\n\n**🔐 Step 1: Please paste your Rewarble voucher or promo code in this channel to fund your session.**\nAfter validation, you will be able to select your items.` }).catch(() => {});
                     } else {
                         await channel.send(`👋 Welcome <@${interaction.user.id}>!\n\n❌ The shop is currently empty.`).catch(() => {});
                     }
@@ -878,6 +866,8 @@ client.on('interactionCreate', async (interaction) => {
             if (state.validated || state.processing) {
                 return await interaction.reply({ content: "❌ **SECURITY ALERT:** Order is already being processed or has been redeemed.", ephemeral: true }).catch(()=>{});
             }
+            
+            state.processing = true;
 
             try {
                 let total = 0;
@@ -901,28 +891,94 @@ client.on('interactionCreate', async (interaction) => {
                         if (!isVIPPurchase && memoryStats.subscriptions && memoryStats.subscriptions[interaction.user.id]) {
                             appliedDiscount = 20;
                         }
+                        if (state.promo && !isVIPPurchase) {
+                            appliedDiscount = Math.max(appliedDiscount, state.promo.discount);
+                        }
                         
                         if (appliedDiscount > 0) price = Math.max(0, price - (price * appliedDiscount / 100));
                         
                         total += price;
-                        cartList += `- ${product.name} (£${price.toFixed(2)})` + (appliedDiscount > 0 ? ' *(VIP Discount applied)*' : '') + `\n`;
+                        cartList += `- ${product.name} (£${price.toFixed(2)})` + (appliedDiscount > 0 ? ' *(Discount applied)*' : '') + `\n`;
                     }
                 }
                 
                 state.cartTotal = total;
                 
-                let responseMsg = `📦 **CART UPDATED**\n\n${cartList}\n`;
-                if (hasCustom) {
-                    responseMsg += `📩 **Custom item detected.** An admin will contact you shortly to review your request.\n`;
-                } else {
-                    responseMsg += `💰 **Total to pay: £${total.toFixed(2)}**\n\n**🔐 Step 2: Paste your Rewarble voucher or promo code in this channel to complete the payment.**`;
+                if (state.balance === undefined) {
+                    state.processing = false;
+                    return await interaction.reply({ content: `❌ Error: No balance available. Please enter a code first.`, ephemeral: true }).catch(() => {});
                 }
+
+                if (state.balance < state.cartTotal) {
+                    state.processing = false;
+                    return await interaction.reply({ content: `❌ **Error:** Your cart total (£${state.cartTotal.toFixed(2)}) exceeds your available balance (£${state.balance.toFixed(2)}). Please select fewer items.`, ephemeral: true }).catch(() => {});
+                }
+
+                state.validated = true;
+                if (state.promo) {
+                    memoryStats.promo_codes[state.promo.name].used++;
+                }
+
+                await interaction.update({ content: `📦 **Processing your order... The menu has been locked.**\n\n${cartList}\n💰 **Total paid: £${state.cartTotal.toFixed(2)}**`, components: [] }).catch(() => {});
                 
-                await interaction.update({ content: responseMsg }).catch(() => {});
+                for(const selected of state.cart) {
+                    const product = memoryStats.products[selected];
+                    if(!product) continue;
+                    
+                    if (product.price === "Custom") {
+                        logStat('custom_request', 0, { username: interaction.user.username, userId: interaction.user.id, productName: product.name });
+                        continue;
+                    }
+                    
+                    if (product.stock && product.stock !== "∞") {
+                        let s = parseInt(product.stock);
+                        if (!isNaN(s) && s > 0) memoryStats.products[selected].stock = (s - 1).toString();
+                    }
+                    
+                    let isVIPPurchase = selected === "VIP" || (product.category && product.category.includes("SUBSCRIPTION"));
+                    if (isVIPPurchase) {
+                        const now = Date.now();
+                        const thirtyDays = 30 * 24 * 60 * 60 * 1000;
+                        if (!memoryStats.subscriptions) memoryStats.subscriptions = {};
+                        if (memoryStats.subscriptions[interaction.user.id]) {
+                            memoryStats.subscriptions[interaction.user.id].expiresAt += thirtyDays;
+                            memoryStats.subscriptions[interaction.user.id].notified = false;
+                        } else {
+                            memoryStats.subscriptions[interaction.user.id] = { username: interaction.user.username, expiresAt: now + thirtyDays, notified: false };
+                        }
+                        try {
+                            const member = await interaction.guild.members.fetch(interaction.user.id);
+                            await member.roles.add(VIP_ROLE_ID).catch(()=>{});
+                            const reviewRowVIP = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`review_${selected}`).setLabel('⭐ Leave a Review').setStyle(ButtonStyle.Secondary));
+                            await interaction.user.send({ content: "👑 **WELCOME TO VIP!** Your 30-Day pass is now active. Enjoy your exclusive content and 20% off all future purchases in the shop!", components: [reviewRowVIP] }).catch(()=>{});
+                        } catch(e) {}
+                    } else {
+                        const successEmbed = new EmbedBuilder().setColor('#10b981').setTitle(`✨ Purchase Successful: ${product.name}`).setDescription(`🔗 ${product.link || 'Link not configured.'}`);
+                        const reviewRow = new ActionRowBuilder().addComponents(
+                            new ButtonBuilder().setCustomId(`review_${selected}`).setLabel('⭐ Leave a Review').setStyle(ButtonStyle.Secondary)
+                        );
+                        try {
+                            await interaction.user.send({ embeds: [successEmbed], components: [reviewRow] });
+                        } catch(e) {
+                            await interaction.channel.send(`⚠️ I couldn't DM you the product '${product.name}'. Please check your privacy settings.`).catch(()=>{});
+                        }
+                    }
+                }
+                syncCloud();
+                
+                let responseMsg = `✅ **Products delivered to your DMs!** Closing ticket in 5 seconds...`;
+                if (hasCustom) {
+                    responseMsg += `\n📩 **Custom item detected.** An admin will contact you shortly to review your request.`;
+                }
+                await interaction.channel.send(responseMsg).catch(()=>{});
+                
+                setTimeout(() => { channelStates.delete(interaction.channel.id); interaction.channel.delete().catch(()=>{}); }, 5000);
+
             } catch (err) {
-                systemLog('ERROR', 'STORE', 'Cart update crashed: ' + err.message);
+                state.processing = false;
+                systemLog('ERROR', 'STORE', 'Checkout crashed: ' + err.message);
                 if (interaction.channel) {
-                    interaction.channel.send("❌ **Critical Error during cart update:** Une erreur est survenue, contactez le support.").catch(()=>{});
+                    interaction.channel.send("❌ **Critical Error during checkout:** Une erreur est survenue, contactez le support.").catch(()=>{});
                 }
             }
         }} catch (globalError) {
@@ -1009,11 +1065,13 @@ client.on('messageCreate', async (message) => {
             }
             let state = channelStates.get(message.channel.id); 
             if (!state) {
-                state = { validated: false, processing: false, promo: null, redeemed: false, cart: [], cartTotal: 0 };
+                state = { validated: false, processing: false, promo: null, redeemed: false, cart: [], cartTotal: 0, balance: 0 };
                 channelStates.set(message.channel.id, state);
             }
             if (state.validated || state.processing) return;
-            if (!state.cart || state.cart.length === 0) return message.reply("🛒 Please select items from the menu above before entering a code.").catch(()=>{});
+            if (state.balance > 0 || state.promo) {
+                return message.reply("✅ Your code is already validated! Please select your items from the menu.").catch(()=>{});
+            }
             
             const input = message.content.trim().toUpperCase();
             state.processing = true; 
@@ -1115,66 +1173,35 @@ client.on('messageCreate', async (message) => {
                     voucherValue = Infinity; 
                 }
                 
-                let finalPrice = state.cartTotal || 0;
-                if (promoApplied) {
-                    finalPrice = Math.max(0, finalPrice - (finalPrice * promoApplied.discount / 100));
-                    memoryStats.promo_codes[promoApplied.name].used++;
-                }
-
-                if (!promoApplied && voucherValue < finalPrice) {
-                    state.processing = false;
-                    return message.channel.send(`❌ **Error:** Your cart total (£${finalPrice}) exceeds your voucher value (£${voucherValue}). Transaction aborted.`).catch(()=>{});
-                }
+                state.balance = voucherValue;
+                state.promo = promoApplied;
+                state.processing = false;
                 
-                state.validated = true;
-                
-                for(const selected of state.cart) {
-                    const product = memoryStats.products[selected];
-                    if(!product) continue;
+                const pmenu = new StringSelectMenuBuilder()
+                    .setCustomId('product_select')
+                    .setPlaceholder('🛒 Select the products you want to buy')
+                    .setMinValues(1);
                     
-                    if (product.price === "Custom") {
-                        logStat('custom_request', 0, { username: message.author.username, userId: message.author.id, productName: product.name });
-                        continue;
-                    }
-                    
-                    if (product.stock && product.stock !== "∞") {
-                        let s = parseInt(product.stock);
-                        if (!isNaN(s) && s > 0) memoryStats.products[selected].stock = (s - 1).toString();
-                    }
-                    
-                    let isVIPPurchase = selected === "VIP" || (product.category && product.category.includes("SUBSCRIPTION"));
-                    if (isVIPPurchase) {
-                        const now = Date.now();
-                        const thirtyDays = 30 * 24 * 60 * 60 * 1000;
-                        if (!memoryStats.subscriptions) memoryStats.subscriptions = {};
-                        if (memoryStats.subscriptions[message.author.id]) {
-                            memoryStats.subscriptions[message.author.id].expiresAt += thirtyDays;
-                            memoryStats.subscriptions[message.author.id].notified = false;
-                        } else {
-                            memoryStats.subscriptions[message.author.id] = { username: message.author.username, expiresAt: now + thirtyDays, notified: false };
-                        }
-                        try {
-                            const member = await message.guild.members.fetch(message.author.id);
-                            await member.roles.add(VIP_ROLE_ID).catch(()=>{});
-                            const reviewRowVIP = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`review_${selected}`).setLabel('⭐ Leave a Review').setStyle(ButtonStyle.Secondary));
-                            await message.author.send({ content: "👑 **WELCOME TO VIP!** Your 30-Day pass is now active. Enjoy your exclusive content and 20% off all future purchases in the shop!", components: [reviewRowVIP] }).catch(()=>{});
-                        } catch(e) {}
-                    } else {
-                        const successEmbed = new EmbedBuilder().setColor('#10b981').setTitle(`✨ Purchase Successful: ${product.name}`).setDescription(`🔗 ${product.link || 'Link not configured.'}`);
-                        const reviewRow = new ActionRowBuilder().addComponents(
-                            new ButtonBuilder().setCustomId(`review_${selected}`).setLabel('⭐ Leave a Review').setStyle(ButtonStyle.Secondary)
-                        );
-                        try {
-                            await message.author.send({ embeds: [successEmbed], components: [reviewRow] });
-                        } catch(e) {
-                            await message.channel.send(`⚠️ I couldn't DM you the product '${product.name}'. Please check your privacy settings.`).catch(()=>{});
-                        }
-                    }
+                let optCount = 0;
+                for (const id in memoryStats.products) {
+                    if (optCount >= 25) break; 
+                    const p = memoryStats.products[id];
+                    if (p.stock && p.stock !== "∞" && parseInt(p.stock) <= 0) continue;
+                    pmenu.addOptions(new StringSelectMenuOptionBuilder()
+                        .setLabel(String(p.name + (p.price === "Custom" ? " (Custom)" : " (£" + p.price + ")")).substring(0, 100))
+                        .setDescription(String(p.category || 'Item').substring(0, 100))
+                        .setValue(id));
+                    optCount++;
                 }
-                syncCloud();
+                if (optCount > 0) pmenu.setMaxValues(Math.min(optCount, 10)); 
                 
-                await message.channel.send("✅ **Products delivered to your DMs!** Closing ticket in 5 seconds...").catch(()=>{});
-                setTimeout(() => { channelStates.delete(message.channel.id); message.channel.delete().catch(()=>{}); }, 5000);
+                if(optCount > 0) {
+                    const row = new ActionRowBuilder().addComponents(pmenu);
+                    let balText = promoApplied ? `${promoApplied.discount}% OFF (Promo)` : `£${state.balance.toFixed(2)}`;
+                    await message.reply({ content: `✅ **Code validated successfully!**\n💰 **Balance Available:** ${balText}\n\n**🛒 Step 2: Select items from the menu below.**`, components: [row] }).catch(()=>{});
+                } else {
+                    await message.reply({ content: `✅ **Code validated successfully!**\n❌ Unfortunately, the shop is currently empty.` }).catch(()=>{});
+                }
 
             } catch (e) { 
                 state.processing = false; 
