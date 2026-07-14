@@ -300,6 +300,12 @@ function ensureMemoryInitialized() {
                 syncCloud();
             }
 
+            
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Bot Control Center"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "💎 DESIGN UPGRADE: Bot Control Center\n\n- Ajout d'une interface premium ultra complète pour gérer le bot en direct.\n- Contrôle de la présence (Playing, Watching, etc).\n- Module Anti-Raid dynamique avec seuil paramétrable et auto-kick.\n- Scheduler de sauvegarde cloud paramétrable de 1h à 24h.\n- Affichage de l'Uptime en direct." });
+                syncCloud();
+            }
+
             if (!memoryStats.overrides) memoryStats.overrides = {};
             if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } };
             if (!memoryStats.settings.maintenance) memoryStats.settings.maintenance = { active: false, endsAt: 0, channelId: "" };
@@ -606,7 +612,15 @@ client.once('clientReady', () => {
         } catch (err) {}
     });
     
-    setInterval(checkSubscriptions, 60 * 60 * 1000); 
+    setInterval(checkSubscriptions, 60 * 60 * 1000);
+
+    const intervalHrs = memoryStats.bot_config?.backup_interval || 12;
+    systemLog('INFO', 'SYSTEM', `Backup Scheduler initialized: Every ${intervalHrs} hours.`);
+    setInterval(async () => {
+        systemLog('INFO', 'SYSTEM', 'Running scheduled cloud backup...');
+        await syncCloud(true);
+    }, intervalHrs * 60 * 60 * 1000);
+ 
 
     setInterval(async () => {
         try {
@@ -1265,7 +1279,27 @@ client.on('messageCreate', async (message) => {
 
 // === [ANCHOR: DISCORD_GUILD_MEMBER_EVENTS] ===
 // 🚀 [EVENT_LISTENER: guildMemberAdd] - Écouteur d'événement Discord
+
+let recentJoins = [];
 client.on('guildMemberAdd', async (member) => { 
+    if (memoryStats.bot_config && memoryStats.bot_config.antiraid) {
+        const threshold = memoryStats.bot_config.antiraid_threshold || 5;
+        const now = Date.now();
+        recentJoins.push(now);
+        recentJoins = recentJoins.filter(time => now - time < 60000);
+        
+        if (recentJoins.length > threshold) {
+            try {
+                await member.kick('Auto-kick: Anti-Raid System Activated');
+                systemLog('WARN', 'SECURITY', `Anti-Raid triggered! Kicked ${member.user.tag}`);
+                addActivity('security', `Anti-Raid Kicked ${member.user.username}`);
+                return;
+            } catch(e) {
+                systemLog('ERROR', 'SECURITY', `Anti-Raid failed to kick ${member.user.tag}`);
+            }
+        }
+    }
+ 
     logStat('joins', 1, { username: member.user.username }); 
     try {
         const newInvites = await member.guild.invites.fetch();
@@ -1557,7 +1591,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
         const todayStr = new Date().toISOString().split('T')[0];
         try { let monthRevenue = 0; if(memoryStats.revenue) Object.keys(memoryStats.revenue).forEach(date => { if(date.startsWith(todayStr.substring(0, 7))) monthRevenue += parseFloat(memoryStats.revenue[date]) || 0; });
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify({ memoryStats, maintenance: memoryStats.settings?.maintenance, pendingReviewsCount: memoryStats.pending_reviews?.length || 0, activeTickets: activeTickets, todayRevenue: (memoryStats.revenue && memoryStats.revenue[todayStr]) || 0, monthRevenue, ticketsOpened: memoryStats.analytics?.tickets_opened || 0, dropOffRate: memoryStats.analytics?.tickets_opened > 0 ? (100 - (memoryStats.total_transactions / memoryStats.analytics.tickets_opened) * 100).toFixed(1) : 0, peakHourStr: "N/A", conversionRate: ((memoryStats.total_transactions / (memoryStats.total_joins || 1)) * 100).toFixed(1), retentionRate: memberCount !== "N/A" ? ((memberCount / (memberCount + (memoryStats.total_leaves || 0))) * 100).toFixed(1) : "N/A", onlineCount, memberCount, MONTHLY_GOAL, /* PIN removed */ }));
+        return res.end(JSON.stringify({ uptime: process.uptime(), memoryStats, maintenance: memoryStats.settings?.maintenance, pendingReviewsCount: memoryStats.pending_reviews?.length || 0, activeTickets: activeTickets, todayRevenue: (memoryStats.revenue && memoryStats.revenue[todayStr]) || 0, monthRevenue, ticketsOpened: memoryStats.analytics?.tickets_opened || 0, dropOffRate: memoryStats.analytics?.tickets_opened > 0 ? (100 - (memoryStats.total_transactions / memoryStats.analytics.tickets_opened) * 100).toFixed(1) : 0, peakHourStr: "N/A", conversionRate: ((memoryStats.total_transactions / (memoryStats.total_joins || 1)) * 100).toFixed(1), retentionRate: memberCount !== "N/A" ? ((memberCount / (memberCount + (memoryStats.total_leaves || 0))) * 100).toFixed(1) : "N/A", onlineCount, memberCount, MONTHLY_GOAL, /* PIN removed */ }));
     } catch (apiErr) { console.error('API /init-data Error:', apiErr); res.writeHead(500); return res.end(JSON.stringify({error: 'Internal Server Error'})); } }
 
     
@@ -2313,6 +2347,38 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                     }
                 }
                 
+                
+                else if (data.action === 'save_bot_control') {
+                    if (data.config) {
+                        if (!memoryStats.bot_config) memoryStats.bot_config = {};
+                        memoryStats.bot_config.activity_type = data.config.activity_type;
+                        memoryStats.bot_config.activity_text = data.config.activity_text;
+                        memoryStats.bot_config.status = data.config.status;
+                        memoryStats.bot_config.antiraid = data.config.antiraid;
+                        memoryStats.bot_config.antiraid_threshold = data.config.antiraid_threshold;
+                        memoryStats.bot_config.backup_interval = data.config.backup_interval;
+                        
+                        try {
+                            if (client.user) {
+                                let typeId = 0;
+                                if(data.config.activity_type === 'PLAYING') typeId = 0;
+                                if(data.config.activity_type === 'WATCHING') typeId = 3;
+                                if(data.config.activity_type === 'LISTENING') typeId = 2;
+                                if(data.config.activity_type === 'COMPETING') typeId = 5;
+                                
+                                client.user.setPresence({
+                                    activities: [{ name: data.config.activity_text || 'Premium Services', type: typeId }],
+                                    status: data.config.status || 'online'
+                                });
+                            }
+                        } catch(e) { console.error("Could not set presence", e); }
+                        
+                        syncCloud();
+                        return res.writeHead(200).end('OK');
+                    }
+                    return res.writeHead(400).end('Bad Request');
+                }
+
                 else if (data.action === 'save_messages') {
                     if (data.messages) {
                         if (!memoryStats.messages) memoryStats.messages = {};
@@ -3041,6 +3107,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                 <button class='nav-btn' onclick='window.switchTab("backups", this)'>Backups</button>
                 <button class='nav-btn' onclick='window.switchTab("admin", this)'>Settings <span class='nav-badge' id='badge-admin'>0</span></button>
                 <button class='nav-btn' onclick='window.switchTab("messages", this)'>Messages</button>
+                <button class='nav-btn' onclick='window.switchTab("botcontrol", this)'>Bot Control</button>
                 
                 <button class='btn-red' id='logout-btn' style='margin-top:auto;' onclick='window.logoutUser(this)'>Logout</button>
             </nav>
@@ -3896,6 +3963,95 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                 </div>
             </div>
 
+            
+            <div id='botcontrol' class='tab-content'>
+                <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:30px;'>
+                    <div>
+                        <h2>🤖 Bot Control Center</h2>
+                        <p class='text-muted'>Manage your bot's core systems, presence, and security protocols in real-time.</p>
+                    </div>
+                    <button class='admin-btn' onclick='window.saveBotControl(event)' style='background: linear-gradient(135deg, #10b981 0%, #059669 100%); color:#fff; border:none; padding:12px 24px; font-weight:600; box-shadow:0 4px 15px rgba(16,185,129,0.3); border-radius:12px; cursor:pointer;'>
+                        <svg style='width:18px; height:18px; margin-right:8px; vertical-align:middle; fill:currentColor' viewBox='0 0 24 24'><path d='M17.59 3.59c-.38-.38-.89-.59-1.42-.59H5c-1.11 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V7.83c0-.53-.21-1.04-.59-1.41l-2.82-2.83zM12 19c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm1-10H7c-1.1 0-2-.9-2-2s.9-2 2-2h6c1.1 0 2 .9 2 2s-.9 2-2 2z'/></svg>
+                        Save Configuration
+                    </button>
+                </div>
+
+                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap:24px;">
+                    <!-- Status & Presence -->
+                    <div class='box' style='position:relative; overflow:hidden; transition:all 0.4s ease;' onmouseover="this.style.transform='translateY(-5px)'; this.style.boxShadow='0 10px 30px rgba(0,0,0,0.5)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none';">
+                        <h3 style="color:var(--accent-blue); margin-top:0; display:flex; align-items:center; gap:8px;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg> Presence & Activity</h3>
+                        <p class='text-muted' style="font-size:0.85em;">Set what the bot is doing right now.</p>
+                        <div style="margin-top:15px;">
+                            <label style="color:var(--text-muted); font-size:0.85em;">Activity Type</label>
+                            <select id="bot_activity_type" style="width:100%; margin-top:5px; background:rgba(15,17,21,0.6); border:1px solid rgba(255,255,255,0.1); color:#fff; padding:10px; border-radius:8px; outline:none; transition:border-color 0.3s;">
+                                <option value="PLAYING">Playing</option>
+                                <option value="WATCHING">Watching</option>
+                                <option value="LISTENING">Listening to</option>
+                                <option value="COMPETING">Competing in</option>
+                            </select>
+                        </div>
+                        <div style="margin-top:15px;">
+                            <label style="color:var(--text-muted); font-size:0.85em;">Activity Text</label>
+                            <input type="text" id="bot_activity_text" placeholder="e.g. Nexus Dashboard" style="width:100%; margin-top:5px; background:rgba(15,17,21,0.6); border:1px solid rgba(255,255,255,0.1); color:#fff; padding:10px; border-radius:8px; outline:none; transition:border-color 0.3s;" onfocus="this.style.borderColor='var(--accent-blue)'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
+                        </div>
+                        <div style="margin-top:15px;">
+                            <label style="color:var(--text-muted); font-size:0.85em;">Status Mode</label>
+                            <select id="bot_status" style="width:100%; margin-top:5px; background:rgba(15,17,21,0.6); border:1px solid rgba(255,255,255,0.1); color:#fff; padding:10px; border-radius:8px; outline:none; transition:border-color 0.3s;">
+                                <option value="online">Online</option>
+                                <option value="idle">Idle</option>
+                                <option value="dnd">Do Not Disturb</option>
+                                <option value="invisible">Invisible</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Security -->
+                    <div class='box' style='position:relative; overflow:hidden; transition:all 0.4s ease;' onmouseover="this.style.transform='translateY(-5px)'; this.style.boxShadow='0 10px 30px rgba(0,0,0,0.5)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none';">
+                        <h3 style="color:var(--accent-red); margin-top:0; display:flex; align-items:center; gap:8px;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg> Security & Anti-Raid</h3>
+                        <p class='text-muted' style="font-size:0.85em;">Protect your server dynamically from bots.</p>
+                        
+                        <div style="margin-top:20px; display:flex; align-items:center; justify-content:space-between; background:rgba(239,68,68,0.05); border:1px solid rgba(239,68,68,0.2); padding:15px; border-radius:12px; transition:all 0.3s;" id="anti_raid_container">
+                            <div>
+                                <strong style="color:#ef4444; display:block;">Anti-Raid Mode</strong>
+                                <span style="font-size:0.8em; color:var(--text-muted);">Auto-kick fast-joining spam waves.</span>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" id="bot_antiraid" onchange="document.getElementById('anti_raid_container').style.borderColor=this.checked?'rgba(239,68,68,0.6)':'rgba(239,68,68,0.2)'; document.getElementById('anti_raid_container').style.background=this.checked?'rgba(239,68,68,0.1)':'rgba(239,68,68,0.05)';">
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                        
+                        <div style="margin-top:15px;">
+                            <label style="color:var(--text-muted); font-size:0.85em;">Join Rate Threshold (Members / Min)</label>
+                            <input type="number" id="bot_antiraid_threshold" placeholder="5" style="width:100%; margin-top:5px; background:rgba(15,17,21,0.6); border:1px solid rgba(255,255,255,0.1); color:#fff; padding:10px; border-radius:8px; outline:none; transition:border-color 0.3s;" onfocus="this.style.borderColor='var(--accent-red)'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
+                        </div>
+                    </div>
+                    
+                    <!-- System Data -->
+                    <div class='box' style='position:relative; overflow:hidden; transition:all 0.4s ease;' onmouseover="this.style.transform='translateY(-5px)'; this.style.boxShadow='0 10px 30px rgba(0,0,0,0.5)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none';">
+                        <h3 style="color:var(--accent-green); margin-top:0; display:flex; align-items:center; gap:8px;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7"></path><path d="M16 5l3-3 3 3"></path><path d="M19 2v9"></path></svg> Data & Integrity</h3>
+                        <p class='text-muted' style="font-size:0.85em;">Monitor bot health and cloud syncs.</p>
+                        
+                        <div style="margin-top:20px; display:flex; align-items:center; justify-content:space-between; background:rgba(16,185,129,0.05); border:1px solid rgba(16,185,129,0.2); padding:15px; border-radius:12px;">
+                            <div>
+                                <strong style="color:var(--accent-green); display:block;">Live Uptime</strong>
+                                <span id="bot_uptime_display" style="font-size:1.1em; font-family:'JetBrains Mono', monospace; color:#fff; font-weight:bold;">Loading...</span>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-top:20px;">
+                            <label style="color:var(--text-muted); font-size:0.85em;">Backup Scheduler Interval</label>
+                            <select id="bot_backup_interval" style="width:100%; margin-top:5px; background:rgba(15,17,21,0.6); border:1px solid rgba(255,255,255,0.1); color:#fff; padding:10px; border-radius:8px; outline:none; transition:border-color 0.3s;">
+                                <option value="1">Every 1 Hour</option>
+                                <option value="6">Every 6 Hours</option>
+                                <option value="12">Every 12 Hours</option>
+                                <option value="24">Every 24 Hours</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div id='admin' class='tab-content'>
 
                 <div class='box' style='border:1px solid rgba(16,185,129,0.2); background:rgba(16,185,129,0.05); margin-bottom:20px;'>
@@ -4180,6 +4336,58 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         
     // 🚀 [FUNCTION: processInitData] - Déclaration de fonction
         
+           
+           if (rawStats.bot_config) {
+               if(document.getElementById('bot_activity_type')) document.getElementById('bot_activity_type').value = rawStats.bot_config.activity_type || 'PLAYING';
+               if(document.getElementById('bot_activity_text')) document.getElementById('bot_activity_text').value = rawStats.bot_config.activity_text || '';
+               if(document.getElementById('bot_status')) document.getElementById('bot_status').value = rawStats.bot_config.status || 'online';
+               if(document.getElementById('bot_antiraid')) document.getElementById('bot_antiraid').checked = rawStats.bot_config.antiraid || false;
+               if(document.getElementById('bot_antiraid_threshold')) document.getElementById('bot_antiraid_threshold').value = rawStats.bot_config.antiraid_threshold || 5;
+               if(document.getElementById('bot_backup_interval')) document.getElementById('bot_backup_interval').value = rawStats.bot_config.backup_interval || '12';
+               
+               if(document.getElementById('bot_antiraid') && document.getElementById('bot_antiraid').checked) {
+                   document.getElementById('anti_raid_container').style.borderColor = 'rgba(239,68,68,0.6)';
+                   document.getElementById('anti_raid_container').style.background = 'rgba(239,68,68,0.1)';
+               }
+           }
+           if (data.uptime && document.getElementById('bot_uptime_display')) {
+               let sec = Math.floor(data.uptime);
+               let d = Math.floor(sec / (3600*24));
+               let h = Math.floor(sec % (3600*24) / 3600);
+               let m = Math.floor(sec % 3600 / 60);
+               document.getElementById('bot_uptime_display').innerText = d + "d " + h + "h " + m + "m";
+           }
+           
+           window.saveBotControl = function(event) {
+               const btn = event.currentTarget;
+               const originalHTML = btn.innerHTML;
+               btn.innerHTML = '⚙️ Saving...';
+               
+               let payload = {
+                   activity_type: document.getElementById('bot_activity_type').value,
+                   activity_text: document.getElementById('bot_activity_text').value,
+                   status: document.getElementById('bot_status').value,
+                   antiraid: document.getElementById('bot_antiraid').checked,
+                   antiraid_threshold: parseInt(document.getElementById('bot_antiraid_threshold').value) || 5,
+                   backup_interval: document.getElementById('bot_backup_interval').value
+               };
+               
+               fetch('/api/action', {
+                   method: 'POST',
+                   headers: { 'Content-Type': 'application/json' },
+                   body: JSON.stringify({ action: 'save_bot_control', config: payload })
+               }).then(res => {
+                   if (res.ok) {
+                       showToast('✅ Bot control settings updated!');
+                   }
+                   else showToast('❌ Error saving config.', 'error');
+                   btn.innerHTML = originalHTML;
+               }).catch(e => {
+                   showToast('❌ Network error.', 'error');
+                   btn.innerHTML = originalHTML;
+               });
+           };
+
            window.saveAllMessages = function() {
                const fields = [
                    'shop_welcome', 'shop_empty', 'ticket_ready', 'vip_welcome',
