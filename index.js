@@ -266,6 +266,34 @@ function ensureMemoryInitialized() {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug: DiscordAPIError[10003] Unknown Channel\n\n- Correction d'un crash de la fonction de génération de transcript (generateTranscript) lorsque le salon avait déjà été supprimé par l'utilisateur ou le système avant l'exécution (catch du code 10003 sans alarme).\n- Ajout de blocs try/catch et suppressions sécurisées (catch(()=>{...})) sur toutes les tentatives d'envoi de messages de broadcast pour prévenir les fuites de mémoire et rejets de promesses non gérés." });
                 syncCloud();
             }
+            
+            const defaultMessages = {
+                shop_welcome: "👋 Welcome {user}!\n\n**🔐 Step 1: Please paste your Rewarble voucher or promo code in this channel to fund your session.**\nAfter validation, you will be able to select your items.",
+                shop_empty: "👋 Welcome {user}!\n\n❌ The shop is currently empty.",
+                ticket_ready: "✅ Your channel is ready: {channel}",
+                vip_welcome: "👑 **WELCOME TO VIP!** Your 30-Day pass is now active. Enjoy your exclusive content and 20% off all future purchases in the shop!",
+                maintenance_embed_title: "🚧 Shop Under Maintenance",
+                maintenance_embed_desc: "Our system is currently undergoing updates or restocking.\n\n⏳ **Expected return:** {time}.\n\nPlease try again later. Your codes and purchases are perfectly safe!",
+                checkout_success_dm: "✨ **Purchase Successful!** Here is your item: {product}",
+                checkout_failed_dm: "⚠️ I couldn't DM you the product '{product}'. Please check your privacy settings.",
+                checkout_complete_channel: "✅ **Products delivered to your DMs!** Closing ticket in 5 seconds...",
+                invalid_code: "❌ Invalid format. Please enter a valid Rewarble code or Promo code.",
+                already_validated: "✅ Your code is already validated! Please select your items from the menu.",
+                code_limit_reached: "❌ Sorry, this code has reached its usage limit!"
+            };
+            if (!memoryStats.messages) memoryStats.messages = defaultMessages;
+            else {
+                for (const key in defaultMessages) {
+                    if (memoryStats.messages[key] === undefined) memoryStats.messages[key] = defaultMessages[key];
+                }
+            }
+
+            
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Bot Messages Configuration Panel"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "✨ NOUVEAUTÉ: Bot Messages Configuration Panel\n\n- Ajout d'un panel ultra premium pour configurer tous les messages automatisés du bot.\n- Support total des variables de personnalisation ({user}, {channel}, etc).\n- Intégration de l'Intelligence Artificielle (Gemini 3.1 Pro avec Thinking Level: HIGH) pour générer des messages captivants, professionnels et personnalisés." });
+                syncCloud();
+            }
+
             if (!memoryStats.overrides) memoryStats.overrides = {};
             if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } };
             if (!memoryStats.settings.maintenance) memoryStats.settings.maintenance = { active: false, endsAt: 0, channelId: "" };
@@ -648,8 +676,8 @@ client.on('interactionCreate', async (interaction) => {
                     const unixTime = Math.floor(mMode.endsAt / 1000);
                     const embed = new EmbedBuilder()
                         .setColor('#10b981')
-                        .setTitle('🚧 Shop Under Maintenance')
-                        .setDescription(`Our system is currently undergoing updates or restocking.\n\n⏳ **Expected return:** <t:${unixTime}:R>.\n\nPlease try again later. Your codes and purchases are perfectly safe!`);
+                        .setTitle(memoryStats.messages.maintenance_embed_title || '🚧 Shop Under Maintenance')
+                        .setDescription((memoryStats.messages.maintenance_embed_desc || '').replace('{time}', '<t:' + unixTime + ':R>'));
                     systemLog('DEBUG', 'MAINTENANCE', `Blocked interaction from user ${interaction.user.username} due to active lockout.`);
                     return interaction.reply({ embeds: [embed], ephemeral: true }).catch(()=>{});
                 }
@@ -794,11 +822,11 @@ client.on('interactionCreate', async (interaction) => {
                     }
                     
                     if(optCount > 0) {
-                        await channel.send({ content: `👋 Welcome <@${interaction.user.id}>!\n\n**🔐 Step 1: Please paste your Rewarble voucher or promo code in this channel to fund your session.**\nAfter validation, you will be able to select your items.` }).catch(() => {});
+                        await channel.send({ content: memoryStats.messages.shop_welcome.replace('{user}', '<@' + interaction.user.id + '>') }).catch(() => {});
                     } else {
-                        await channel.send(`👋 Welcome <@${interaction.user.id}>!\n\n❌ The shop is currently empty.`).catch(() => {});
+                        await channel.send({ content: memoryStats.messages.shop_empty.replace('{user}', '<@' + interaction.user.id + '>') }).catch(() => {});
                     }
-                    await interaction.editReply({ content: `✅ Your channel is ready: <#${channel.id}>` }).catch(() => {});
+                    await interaction.editReply({ content: memoryStats.messages.ticket_ready.replace('{channel}', '<#' + channel.id + '>') }).catch(() => {});
                     userTicketLocks.delete(interaction.user.id);
                 } else {
                     userTicketLocks.delete(interaction.user.id); 
@@ -855,7 +883,7 @@ client.on('interactionCreate', async (interaction) => {
                     addActivity('ticket', `🎧 New support ticket opened by ${interaction.user.username}`);
                     systemLog('INFO', 'TICKET_SYS', `Support ticket generated for ${interaction.user.username}`);
                     await channel.send(`🎧 **Support Ticket for <@${interaction.user.id}>**`).catch(() => {});
-                    await interaction.editReply({ content: `✅ Your channel is ready: <#${channel.id}>` }).catch(() => {});
+                    await interaction.editReply({ content: memoryStats.messages.ticket_ready.replace('{channel}', '<#' + channel.id + '>') }).catch(() => {});
                     userTicketLocks.delete(interaction.user.id);
                 } else {
                     userTicketLocks.delete(interaction.user.id);
@@ -958,17 +986,17 @@ client.on('interactionCreate', async (interaction) => {
                             const member = await interaction.guild.members.fetch(interaction.user.id);
                             await member.roles.add(VIP_ROLE_ID).catch(()=>{});
                             const reviewRowVIP = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`review_${selected}`).setLabel('⭐ Leave a Review').setStyle(ButtonStyle.Secondary));
-                            await interaction.user.send({ content: "👑 **WELCOME TO VIP!** Your 30-Day pass is now active. Enjoy your exclusive content and 20% off all future purchases in the shop!", components: [reviewRowVIP] }).catch(()=>{});
+                            await interaction.user.send({ content: memoryStats.messages.vip_welcome, components: [reviewRowVIP] }).catch(()=>{});
                         } catch(e) {}
                     } else {
-                        const successEmbed = new EmbedBuilder().setColor('#10b981').setTitle(`✨ Purchase Successful: ${product.name}`).setDescription(`🔗 ${product.link || 'Link not configured.'}`);
+                        const successEmbed = new EmbedBuilder().setColor('#10b981').setTitle((memoryStats.messages.checkout_success_dm || '✨ Purchase Successful: {product}').replace('{product}', product.name)).setDescription(`🔗 ${product.link || 'Link not configured.'}`);
                         const reviewRow = new ActionRowBuilder().addComponents(
                             new ButtonBuilder().setCustomId(`review_${selected}`).setLabel('⭐ Leave a Review').setStyle(ButtonStyle.Secondary)
                         );
                         try {
                             await interaction.user.send({ embeds: [successEmbed], components: [reviewRow] });
                         } catch(e) {
-                            await interaction.channel.send(`⚠️ I couldn't DM you the product '${product.name}'. Please check your privacy settings.`).catch(()=>{});
+                            await interaction.channel.send((memoryStats.messages.checkout_failed_dm || '').replace('{product}', product.name)).catch(()=>{});
                         }
                     }
                 }
@@ -1078,7 +1106,7 @@ client.on('messageCreate', async (message) => {
             }
             if (state.validated || state.processing) return;
             if (state.balance > 0 || state.promo) {
-                return message.reply("✅ Your code is already validated! Please select your items from the menu.").catch(()=>{});
+                return message.reply(memoryStats.messages.already_validated || '✅ Your code is already validated! Please select your items from the menu.').catch(()=>{});
             }
             
             const input = message.content.trim().toUpperCase();
@@ -1091,13 +1119,13 @@ client.on('messageCreate', async (message) => {
                     if (promo.used < promo.limit) promoApplied = { name: input, discount: promo.discount };
                     else { 
                         state.processing = false; 
-                        return message.reply("❌ Sorry, this code has reached its usage limit!").catch(()=>{}); 
+                        return message.reply(memoryStats.messages.code_limit_reached || '❌ Sorry, this code has reached its usage limit!').catch(()=>{}); 
                     }
                 }
 
                 if (!promoApplied && !TEST_VOUCHERS[input] && input.length < 8) {
                     state.processing = false;
-                    return message.reply("❌ Invalid format. Please enter a valid Rewarble code or Promo code.").catch(()=>{});
+                    return message.reply(memoryStats.messages.invalid_code || '❌ Invalid format. Please enter a valid Rewarble code or Promo code.').catch(()=>{});
                 }
 
                 let voucherValue = 0; 
@@ -2278,6 +2306,43 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                         throw e;
                     }
                 }
+                
+                else if (data.action === 'save_messages') {
+                    if (data.messages) {
+                        if (!memoryStats.messages) memoryStats.messages = {};
+                        for (const key in data.messages) {
+                            memoryStats.messages[key] = data.messages[key];
+                        }
+                        syncCloud();
+                        return res.writeHead(200).end('OK');
+                    }
+                    return res.writeHead(400).end('Bad Request');
+                }
+                else if (data.action === 'ai_generate_message') {
+                    try {
+                        const { GoogleGenAI } = require('@google/genai');
+                        const aiClient = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+                        
+                        let context = "You are a professional, premium copywriter for a top-tier digital product Discord bot. Rewrite the following system message to sound ultra-premium, modern, and engaging. Keep it concise. Preserve any Discord markdown (like **bold**) or emojis where appropriate. Do NOT add new variables, and YOU MUST KEEP EXACTLY the variables listed in the original text (e.g. {user}, {product}, etc). Return ONLY the rewritten text.";
+                        
+                        let prompt = context + "\n\nOriginal message: " + (data.current || "");
+                        
+                        const aiResponse = await aiClient.models.generateContent({
+                            model: 'gemini-3.1-pro-preview',
+                            contents: prompt,
+                            config: {
+                                thinkingConfig: { thinkingLevel: "HIGH" },
+                                temperature: 0.7
+                            }
+                        });
+                        
+                        return res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ success: true, text: aiResponse.text.trim() }));
+                    } catch(e) {
+                        systemLog('ERROR', 'AI', 'Failed to generate message: ' + e.message);
+                        return res.writeHead(500).end(JSON.stringify({ success: false, error: e.message }));
+                    }
+                }
+
                 else if (data.action === 'force_backup') {
                     await syncCloud(true);
                 }
@@ -2969,6 +3034,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                 <button class='nav-btn' onclick='window.switchTab("terminal", this)'>🖥️ Terminal</button>
                 <button class='nav-btn' onclick='window.switchTab("backups", this)'>Backups</button>
                 <button class='nav-btn' onclick='window.switchTab("admin", this)'>Settings <span class='nav-badge' id='badge-admin'>0</span></button>
+                <button class='nav-btn' onclick='window.switchTab("messages", this)'>Messages</button>
                 
                 <button class='btn-red' id='logout-btn' style='margin-top:auto;' onclick='window.logoutUser(this)'>Logout</button>
             </nav>
@@ -3636,6 +3702,194 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                 </div>
             </div>
             
+            
+            <div id='messages' class='tab-content'>
+                <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:30px;'>
+                    <div>
+                        <h2>💬 Bot Messages Configuration</h2>
+                        <p class='text-muted'>Customize all automated messages sent by the bot across your server and DMs.</p>
+                    </div>
+                    <button class='admin-btn' onclick='window.saveAllMessages()' style='background: linear-gradient(135deg, #10b981 0%, #059669 100%); color:#fff; border:none; padding:12px 24px; font-weight:600; box-shadow:0 4px 15px rgba(16,185,129,0.3); border-radius:12px; cursor:pointer;'>
+                        <svg style='width:18px; height:18px; margin-right:8px; vertical-align:middle; fill:currentColor' viewBox='0 0 24 24'><path d='M17.59 3.59c-.38-.38-.89-.59-1.42-.59H5c-1.11 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V7.83c0-.53-.21-1.04-.59-1.41l-2.82-2.83zM12 19c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm1-10H7c-1.1 0-2-.9-2-2s.9-2 2-2h6c1.1 0 2 .9 2 2s-.9 2-2 2z'/></svg>
+                        Save All Changes
+                    </button>
+                </div>
+
+                <style>
+                    .msg-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 24px; }
+                    .msg-card { background: rgba(30,32,38,0.7); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 24px; transition: all 0.3s ease; display:flex; flex-direction:column; gap:16px; position:relative; overflow:hidden; }
+                    .msg-card:hover { border-color: rgba(255,255,255,0.15); box-shadow: 0 8px 30px rgba(0,0,0,0.4); transform: translateY(-2px); }
+                    .msg-card::before { content:''; position:absolute; top:0; left:0; width:4px; height:100%; background:var(--accent-blue); opacity:0.5; transition:opacity 0.3s; }
+                    .msg-card:hover::before { opacity: 1; }
+                    .msg-header { display: flex; justify-content: space-between; align-items: flex-start; }
+                    .msg-title { font-size: 1.1rem; font-weight: 600; color: #fff; margin:0 0 4px 0; }
+                    .msg-desc { font-size: 0.85rem; color: var(--text-muted); margin:0; line-height:1.4; }
+                    .msg-input { width: 100%; background: rgba(15,17,21,0.6); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #fff; padding: 12px; font-family: inherit; font-size: 0.95rem; line-height: 1.5; resize: vertical; min-height: 100px; transition: all 0.2s; outline: none; }
+                    .msg-input:focus { border-color: var(--accent-blue); background: rgba(15,17,21,0.9); box-shadow: 0 0 0 3px rgba(59,130,246,0.15); }
+                    .msg-vars { font-size: 0.8rem; background: rgba(59,130,246,0.1); color: var(--accent-blue); padding: 4px 10px; border-radius: 6px; display:inline-block; margin-top:8px; border:1px solid rgba(59,130,246,0.2); }
+                    .ai-generate-btn { position:absolute; top:24px; right:24px; background: rgba(16,185,129,0.1); color: var(--accent-green); border: 1px solid rgba(16,185,129,0.3); border-radius: 8px; padding: 6px 12px; font-size:0.8rem; cursor:pointer; transition:all 0.2s; display:flex; align-items:center; gap:6px; }
+                    .ai-generate-btn:hover { background: rgba(16,185,129,0.2); border-color: rgba(16,185,129,0.5); }
+                </style>
+
+                <div class="msg-grid">
+                    <!-- Shop Welcome -->
+                    <div class="msg-card">
+                        <div class="msg-header">
+                            <div>
+                                <h3 class="msg-title">Shop Welcome</h3>
+                                <p class="msg-desc">First message sent when a user opens a shop ticket.</p>
+                            </div>
+                        </div>
+                        <button class="ai-generate-btn" onclick="window.generateMessageAI('shop_welcome')">✨ AI Rewrite</button>
+                        <textarea id="msg_shop_welcome" class="msg-input" placeholder="Loading..."></textarea>
+                        <div><span class="msg-vars">Variables: {user}</span></div>
+                    </div>
+
+                    <!-- Shop Empty -->
+                    <div class="msg-card">
+                        <div class="msg-header">
+                            <div>
+                                <h3 class="msg-title">Shop Empty</h3>
+                                <p class="msg-desc">Message sent if the shop has no products.</p>
+                            </div>
+                        </div>
+                        <button class="ai-generate-btn" onclick="window.generateMessageAI('shop_empty')">✨ AI Rewrite</button>
+                        <textarea id="msg_shop_empty" class="msg-input" placeholder="Loading..."></textarea>
+                        <div><span class="msg-vars">Variables: {user}</span></div>
+                    </div>
+
+                    <!-- Ticket Ready -->
+                    <div class="msg-card">
+                        <div class="msg-header">
+                            <div>
+                                <h3 class="msg-title">Ticket Ready Reply</h3>
+                                <p class="msg-desc">Ephemeral reply when the user clicks the shop menu.</p>
+                            </div>
+                        </div>
+                        <button class="ai-generate-btn" onclick="window.generateMessageAI('ticket_ready')">✨ AI Rewrite</button>
+                        <textarea id="msg_ticket_ready" class="msg-input" placeholder="Loading..."></textarea>
+                        <div><span class="msg-vars">Variables: {channel}</span></div>
+                    </div>
+
+                    <!-- VIP Welcome -->
+                    <div class="msg-card" style="border-left-color: var(--accent-gold);">
+                        <div class="msg-header">
+                            <div>
+                                <h3 class="msg-title" style="color:var(--accent-gold);">VIP Welcome</h3>
+                                <p class="msg-desc">DM sent when a user purchases the VIP pass.</p>
+                            </div>
+                        </div>
+                        <button class="ai-generate-btn" onclick="window.generateMessageAI('vip_welcome')">✨ AI Rewrite</button>
+                        <textarea id="msg_vip_welcome" class="msg-input" placeholder="Loading..."></textarea>
+                        <div><span class="msg-vars">Variables: None</span></div>
+                    </div>
+
+                    <!-- Maintenance Title -->
+                    <div class="msg-card">
+                        <div class="msg-header">
+                            <div>
+                                <h3 class="msg-title">Maintenance Title</h3>
+                                <p class="msg-desc">Embed title shown during maintenance mode.</p>
+                            </div>
+                        </div>
+                        <button class="ai-generate-btn" onclick="window.generateMessageAI('maintenance_embed_title')">✨ AI Rewrite</button>
+                        <textarea id="msg_maintenance_embed_title" class="msg-input" style="min-height:50px;" placeholder="Loading..."></textarea>
+                        <div><span class="msg-vars">Variables: None</span></div>
+                    </div>
+
+                    <!-- Maintenance Desc -->
+                    <div class="msg-card">
+                        <div class="msg-header">
+                            <div>
+                                <h3 class="msg-title">Maintenance Description</h3>
+                                <p class="msg-desc">Embed description shown during maintenance mode.</p>
+                            </div>
+                        </div>
+                        <button class="ai-generate-btn" onclick="window.generateMessageAI('maintenance_embed_desc')">✨ AI Rewrite</button>
+                        <textarea id="msg_maintenance_embed_desc" class="msg-input" placeholder="Loading..."></textarea>
+                        <div><span class="msg-vars">Variables: {time}</span></div>
+                    </div>
+
+                    <!-- Checkout Success DM -->
+                    <div class="msg-card" style="border-left-color: var(--accent-green);">
+                        <div class="msg-header">
+                            <div>
+                                <h3 class="msg-title" style="color:var(--accent-green);">Delivery Success (DM)</h3>
+                                <p class="msg-desc">Message sent in DMs upon successful purchase.</p>
+                            </div>
+                        </div>
+                        <button class="ai-generate-btn" onclick="window.generateMessageAI('checkout_success_dm')">✨ AI Rewrite</button>
+                        <textarea id="msg_checkout_success_dm" class="msg-input" placeholder="Loading..."></textarea>
+                        <div><span class="msg-vars">Variables: {product}</span></div>
+                    </div>
+
+                    <!-- Checkout Failed DM -->
+                    <div class="msg-card" style="border-left-color: var(--accent-red);">
+                        <div class="msg-header">
+                            <div>
+                                <h3 class="msg-title" style="color:var(--accent-red);">Delivery Failed (Channel)</h3>
+                                <p class="msg-desc">Channel warning if DM delivery fails.</p>
+                            </div>
+                        </div>
+                        <button class="ai-generate-btn" onclick="window.generateMessageAI('checkout_failed_dm')">✨ AI Rewrite</button>
+                        <textarea id="msg_checkout_failed_dm" class="msg-input" placeholder="Loading..."></textarea>
+                        <div><span class="msg-vars">Variables: {product}</span></div>
+                    </div>
+                    
+                    <!-- Checkout Complete (Ticket) -->
+                    <div class="msg-card">
+                        <div class="msg-header">
+                            <div>
+                                <h3 class="msg-title">Checkout Complete (Ticket)</h3>
+                                <p class="msg-desc">Sent in the ticket right before it closes automatically.</p>
+                            </div>
+                        </div>
+                        <button class="ai-generate-btn" onclick="window.generateMessageAI('checkout_complete_channel')">✨ AI Rewrite</button>
+                        <textarea id="msg_checkout_complete_channel" class="msg-input" style="min-height:70px;" placeholder="Loading..."></textarea>
+                        <div><span class="msg-vars">Variables: None</span></div>
+                    </div>
+
+                    <!-- Invalid Code -->
+                    <div class="msg-card">
+                        <div class="msg-header">
+                            <div>
+                                <h3 class="msg-title">Invalid Code Error</h3>
+                                <p class="msg-desc">Reply when user enters a wrong format.</p>
+                            </div>
+                        </div>
+                        <button class="ai-generate-btn" onclick="window.generateMessageAI('invalid_code')">✨ AI Rewrite</button>
+                        <textarea id="msg_invalid_code" class="msg-input" style="min-height:70px;" placeholder="Loading..."></textarea>
+                        <div><span class="msg-vars">Variables: None</span></div>
+                    </div>
+
+                    <!-- Code Already Validated -->
+                    <div class="msg-card">
+                        <div class="msg-header">
+                            <div>
+                                <h3 class="msg-title">Code Already Validated</h3>
+                                <p class="msg-desc">Reply when user tries to enter multiple codes.</p>
+                            </div>
+                        </div>
+                        <button class="ai-generate-btn" onclick="window.generateMessageAI('already_validated')">✨ AI Rewrite</button>
+                        <textarea id="msg_already_validated" class="msg-input" style="min-height:70px;" placeholder="Loading..."></textarea>
+                        <div><span class="msg-vars">Variables: None</span></div>
+                    </div>
+
+                    <!-- Code Limit Reached -->
+                    <div class="msg-card">
+                        <div class="msg-header">
+                            <div>
+                                <h3 class="msg-title">Promo Limit Reached</h3>
+                                <p class="msg-desc">Reply when a promo code is exhausted.</p>
+                            </div>
+                        </div>
+                        <button class="ai-generate-btn" onclick="window.generateMessageAI('code_limit_reached')">✨ AI Rewrite</button>
+                        <textarea id="msg_code_limit_reached" class="msg-input" style="min-height:70px;" placeholder="Loading..."></textarea>
+                        <div><span class="msg-vars">Variables: None</span></div>
+                    </div>
+                </div>
+            </div>
+
             <div id='admin' class='tab-content'>
 
                 <div class='box' style='border:1px solid rgba(16,185,129,0.2); background:rgba(16,185,129,0.05); margin-bottom:20px;'>
