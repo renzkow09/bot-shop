@@ -251,6 +251,10 @@ function ensureMemoryInitialized() {
             if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Discord API Crash on Shop Channel"))) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug Critique: Le bot ne créait plus de channels\n\n- Correction d'un plantage critique lié aux limites de l'API Discord (Select Menu max_values ne pouvant pas dépasser le nombre d'options et limite stricte de 25 produits).\n- Le bot gère maintenant correctement les catalogues de toutes tailles sans crasher lors de l'ouverture du ticket." });
             }
+                        if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Checkout Bypass"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug Critique: Livraison produit sans paiement (Bypass Rewarble)\n\n- Le bot livrait immédiatement le produit en message privé dès qu'un client cliquait sur le menu déroulant du shop, contournant le paiement Rewarble.\n- Refonte totale du processus de commande: la sélection de produits ajoute désormais les articles au panier, calcule le prix total et demande la validation du paiement avant toute livraison.\n- Ajout d'une gestion multi-articles dynamique.\n- Ajout d'un système de libération instantanée des verrous de création de ticket (userTicketLocks) pour éviter de bloquer l'utilisateur." });
+                syncCloud();
+            }
             if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Ticket Lock Freeze"))) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Anticipation et Auto-Correction: Fix Ticket Lock Freeze\n\n- Ajout d'un timeout strict (3000ms) sur les appels Axios vers Upstash pour acquireDistributedLock et syncCloud pour éviter un blocage indéfini du bot.\n- Sécurisation du parentId lors de la création de channels : vérification que la catégorie ciblée est bien de type GuildCategory pour éviter un crash API Discord." });
             }
@@ -737,6 +741,7 @@ client.on('interactionCreate', async (interaction) => {
                 const existingChannel = interaction.guild.channels.cache.find(c => c.name === `shop-${sanitizedName}` || c.name === `support-${sanitizedName}`);
                 
                 if (existingChannel) {
+                    userTicketLocks.delete(interaction.user.id);
                     return interaction.editReply({ content: `✅ You already have an open ticket: <#${existingChannel.id}>` }).catch(() => {});
                 }
 
@@ -764,6 +769,7 @@ client.on('interactionCreate', async (interaction) => {
                 } catch (createErr) {
                     systemLog('ERROR', 'TICKET', 'Failed to create channel: ' + createErr.message);
                     console.error('Channel creation failed:', createErr);
+                    userTicketLocks.delete(interaction.user.id);
                     return interaction.editReply({ content: `❌ Critical Error: The bot failed to create a channel. Please check that I have "Manage Channels" permission and that the server has not reached the 500 channels limit.\nDetails: ${createErr.message}` }).catch(() => {});
                 }
 
@@ -797,7 +803,9 @@ client.on('interactionCreate', async (interaction) => {
                         await channel.send(`👋 Welcome <@${interaction.user.id}>!\n\n❌ The shop is currently empty.`).catch(() => {});
                     }
                     await interaction.editReply({ content: `✅ Your channel is ready: <#${channel.id}>` }).catch(() => {});
-                } else { 
+                    userTicketLocks.delete(interaction.user.id);
+                } else {
+                    userTicketLocks.delete(interaction.user.id); 
                     await interaction.editReply({ content: `❌ Error creating the room.` }).catch(() => {}); 
                 }
             } else if (interaction.customId === 'open_support_ticket') {
@@ -819,6 +827,7 @@ client.on('interactionCreate', async (interaction) => {
                 const existingChannel = interaction.guild.channels.cache.find(c => c.name === `shop-${sanitizedName}` || c.name === `support-${sanitizedName}`);
                 
                 if (existingChannel) {
+                    userTicketLocks.delete(interaction.user.id);
                     return interaction.editReply({ content: `✅ You already have an open ticket: <#${existingChannel.id}>` }).catch(() => {});
                 }
 
@@ -842,6 +851,7 @@ client.on('interactionCreate', async (interaction) => {
                 } catch (createErr) {
                     systemLog('ERROR', 'TICKET', 'Failed to create channel: ' + createErr.message);
                     console.error('Channel creation failed:', createErr);
+                    userTicketLocks.delete(interaction.user.id);
                     return interaction.editReply({ content: `❌ Critical Error: The bot failed to create a channel. Please check permissions and limits.\nDetails: ${createErr.message}` }).catch(() => {});
                 }
 
@@ -850,7 +860,9 @@ client.on('interactionCreate', async (interaction) => {
                     systemLog('INFO', 'TICKET_SYS', `Support ticket generated for ${interaction.user.username}`);
                     await channel.send(`🎧 **Support Ticket for <@${interaction.user.id}>**`).catch(() => {});
                     await interaction.editReply({ content: `✅ Your channel is ready: <#${channel.id}>` }).catch(() => {});
+                    userTicketLocks.delete(interaction.user.id);
                 } else {
+                    userTicketLocks.delete(interaction.user.id);
                     await interaction.editReply({ content: `❌ Error creating the room.` }).catch(() => {});
                 }
             }
@@ -859,133 +871,61 @@ client.on('interactionCreate', async (interaction) => {
         if (interaction.isStringSelectMenu() && interaction.customId === 'product_select') {
             const state = interaction.channel ? channelStates.get(interaction.channel.id) : null;
             
-            // 🛡️ VERROUILLAGE STRICT (BACKEND REPLAY PROTECTION)
-            if (state) {
-                if (state.redeemed) {
-                    return await interaction.reply({ content: "❌ **SECURITY ALERT:** This code has already been redeemed for a product.", ephemeral: true }).catch(()=>{});
-                }
-                state.redeemed = true; 
+            if (!state) {
+                return await interaction.reply({ content: "❌ Session expired or invalid channel state. Please close this ticket and open a new one.", ephemeral: true }).catch(()=>{});
             }
 
-            // 💥 DESTRUCTION VISUELLE DE L'UI
-            await interaction.update({ content: "📦 **Processing your order... The menu has been locked.**", components: [] }).catch(() => {});
+            if (state.validated || state.processing) {
+                return await interaction.reply({ content: "❌ **SECURITY ALERT:** Order is already being processed or has been redeemed.", ephemeral: true }).catch(()=>{});
+            }
 
             try {
-                const selected = interaction.values[0]; const product = memoryStats.products[selected]; 
-                if (!product) return;
-            
-            const promo = state ? state.promo : null;
-
-            if (product.price === "Custom") {
-                logStat('custom_request', 0, { username: interaction.user.username, userId: interaction.user.id, productName: product.name });
-                if (interaction.channel) {
-                    await interaction.channel.send(`📩 **Custom request registered!** An admin will review it. Closing ticket in 10 seconds...`).catch(() => {});
-                    setTimeout(() => { channelStates.delete(interaction.channel.id); interaction.channel.delete().catch(()=>{}); }, 10000);
-                }
-            } else {
-                let finalPrice = parseFloat(product.price);
-                let isVIPPurchase = selected === "VIP" || (product.category && product.category.includes("SUBSCRIPTION"));
-                let appliedDiscount = 0;
-
-                if (!isVIPPurchase && memoryStats.subscriptions[interaction.user.id]) {
-                    appliedDiscount = 20;
-                } else if (promo) {
-                    appliedDiscount = promo.discount;
-                    if (memoryStats.promo_codes && memoryStats.promo_codes[promo.name]) {
-                        memoryStats.promo_codes[promo.name].used++;
-                    }
-                }
-
-                if (appliedDiscount > 0) finalPrice = Math.max(0, finalPrice - (finalPrice * appliedDiscount / 100));
-
-                // DOUBLE VERIFICATION DE SECURITE AU MOMENT DE L'ACHAT
-                if (!promo && state && state.voucherValue !== undefined && state.voucherValue !== Infinity && finalPrice > state.voucherValue) {
-                    return interaction.channel.send(`❌ **Error:** This product (£${finalPrice}) exceeds your voucher value (£${state.voucherValue}). Transaction aborted.`).catch(()=>{});
-                }
-
-                if (product.stock && product.stock !== "∞") {
-                    let s = parseInt(product.stock);
-                    if (!isNaN(s) && s > 0) memoryStats.products[selected].stock = (s - 1).toString();
-                }
-
-                logStat('revenue', finalPrice, { productId: selected, productName: product.name, username: interaction.user.username });
+                let total = 0;
+                let cartList = "";
+                let hasCustom = false;
                 
-                // 🚀 UPSELL ENGINE LOGIC
-                let upsellEmbed = null;
-                if (product.upsellId && memoryStats.products[product.upsellId]) {
-                    const upsellProduct = memoryStats.products[product.upsellId];
-                    const uDiscount = product.upsellDiscount || 20;
+                state.cart = interaction.values;
+                
+                for (const selected of state.cart) {
+                    const product = memoryStats.products[selected];
+                    if (!product) continue;
                     
-                    const codeName = "UPSELL-" + Math.random().toString(36).substring(2, 8).toUpperCase();
-                    if (!memoryStats.promo_codes) memoryStats.promo_codes = {};
-                    memoryStats.promo_codes[codeName] = { discount: uDiscount, limit: 1, used: 0, createdAt: new Date().toLocaleDateString('en-US') };
-                    syncCloud();
-                    
-                    upsellEmbed = new EmbedBuilder()
-                        .setColor('#10b981')
-                        .setTitle('🎁 OFFRE EXCLUSIVE DEBLOCQUÉE !')
-                        .setDescription(`Parce que tu as acheté **${product.name}**, tu as droit à une offre unique !\n\nObtiens **${upsellProduct.name}** avec **-${uDiscount}% de réduction**.\n\n👉 Utilise ce code promo lors de ton prochain achat :\n\`${codeName}\`\n\n*(Code valable pour 1 seule utilisation)*`);
-                }
-
-                if (isVIPPurchase) {
-                    const now = Date.now();
-                    const thirtyDays = 30 * 24 * 60 * 60 * 1000;
-                    if (!memoryStats.subscriptions) memoryStats.subscriptions = {};
-                    
-                    if (memoryStats.subscriptions[interaction.user.id]) {
-                        memoryStats.subscriptions[interaction.user.id].expiresAt += thirtyDays;
-                        memoryStats.subscriptions[interaction.user.id].notified = false;
+                    if (product.price === "Custom") {
+                        hasCustom = true;
+                        cartList += `- ${product.name} (Custom Request)\n`;
                     } else {
-                        memoryStats.subscriptions[interaction.user.id] = { username: interaction.user.username, expiresAt: now + thirtyDays, notified: false };
-                    }
-                    syncCloud();
-
-                    try {
-                        const member = await interaction.guild.members.fetch(interaction.user.id);
-                        await member.roles.add(VIP_ROLE_ID).catch(()=>{});
+                        let price = parseFloat(product.price);
                         
-                        const reviewRowVIP = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`review_${selected}`).setLabel('⭐ Leave a Review').setStyle(ButtonStyle.Secondary));
-                        await interaction.user.send({ content: "👑 **WELCOME TO VIP!** Your 30-Day pass is now active. Enjoy your exclusive content and 20% off all future purchases in the shop!", components: [reviewRowVIP] }).catch(()=>{});
-                    } catch(e) {}
-                    
-                    if (interaction.channel) {
-                        await interaction.channel.send("✅ **VIP Pass Activated successfully!** Closing ticket in 5 seconds...").catch(()=>{});
-                        setTimeout(() => { channelStates.delete(interaction.channel.id); interaction.channel.delete().catch(()=>{}); }, 5000);
+                        let isVIPPurchase = selected === "VIP" || (product.category && product.category.includes("SUBSCRIPTION"));
+                        let appliedDiscount = 0;
+                        if (!isVIPPurchase && memoryStats.subscriptions && memoryStats.subscriptions[interaction.user.id]) {
+                            appliedDiscount = 20;
+                        }
+                        
+                        if (appliedDiscount > 0) price = Math.max(0, price - (price * appliedDiscount / 100));
+                        
+                        total += price;
+                        cartList += `- ${product.name} (£${price.toFixed(2)})` + (appliedDiscount > 0 ? ' *(VIP Discount applied)*' : '') + `\n`;
                     }
-                    return;
                 }
-
-                const successEmbed = new EmbedBuilder().setColor('#10b981').setTitle('✨ Purchase Successful!').setDescription(`🔗 ${product.link || 'Link not configured.'}`);
-                const reviewRow = new ActionRowBuilder().addComponents(
-                    new ButtonBuilder().setCustomId(`review_${selected}`).setLabel('⭐ Leave a Review').setStyle(ButtonStyle.Secondary)
-                );
-
-                try {
-                    let dmMessages = { embeds: [successEmbed], components: [reviewRow] };
-                    await interaction.user.send(dmMessages);
-                    if (upsellEmbed) await interaction.user.send({ embeds: [upsellEmbed] });
-                    
-                    if (interaction.channel) {
-                        await interaction.channel.send("✅ **Product delivered to your DMs!** Closing ticket in 5 seconds...").catch(()=>{});
-                        setTimeout(() => { channelStates.delete(interaction.channel.id); interaction.channel.delete().catch(()=>{}); }, 5000);
-                    }
-                } catch (e) { 
-                    if (interaction.channel) {
-                        let chMsg = { content: "⚠️ **Warning: Could not DM you.** Here is your product. Ticket closes in 30 seconds.", embeds: [successEmbed], components: [reviewRow] };
-                        await interaction.channel.send(chMsg).catch(()=>{}); 
-                        if(upsellEmbed) await interaction.channel.send({ embeds: [upsellEmbed] }).catch(()=>{});
-                        setTimeout(() => { channelStates.delete(interaction.channel.id); interaction.channel.delete().catch(()=>{}); }, 30000);
-                    } 
+                
+                state.cartTotal = total;
+                
+                let responseMsg = `📦 **CART UPDATED**\n\n${cartList}\n`;
+                if (hasCustom) {
+                    responseMsg += `📩 **Custom item detected.** An admin will contact you shortly to review your request.\n`;
+                } else {
+                    responseMsg += `💰 **Total to pay: £${total.toFixed(2)}**\n\n**🔐 Step 2: Paste your Rewarble voucher or promo code in this channel to complete the payment.**`;
                 }
-            } 
+                
+                await interaction.update({ content: responseMsg }).catch(() => {});
             } catch (err) {
-                systemLog('ERROR', 'STORE', 'Transaction crashed: ' + err.message);
+                systemLog('ERROR', 'STORE', 'Cart update crashed: ' + err.message);
                 if (interaction.channel) {
-                    interaction.channel.send("❌ **Critical Error during transaction:** Une erreur est survenue, contactez le support.").catch(()=>{});
+                    interaction.channel.send("❌ **Critical Error during cart update:** Une erreur est survenue, contactez le support.").catch(()=>{});
                 }
             }
-        }
-    } catch (globalError) {
+        }} catch (globalError) {
         systemLog('ERROR', 'INTERACTION', `Failed processing interaction: ${globalError.message}`);
     }
 });
