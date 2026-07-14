@@ -245,6 +245,9 @@ function ensureMemoryInitialized() {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Anticipation et Auto-Correction: Fix UI Freeze\n\n- Correction du blocage complet du dashboard (figé sans données) causé par l'absence d'initialisation des variables si Upstash est hors-ligne ou absent.\n- Ajout d'une redirection automatique vers la page de login si la session du serveur expire (Erreur 401)." });
                 syncCloud();
             }
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Discord API Crash on Shop Channel"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug Critique: Le bot ne créait plus de channels\n\n- Correction d'un plantage critique lié aux limites de l'API Discord (Select Menu max_values ne pouvant pas dépasser le nombre d'options et limite stricte de 25 produits).\n- Le bot gère maintenant correctement les catalogues de toutes tailles sans crasher lors de l'ouverture du ticket." });
+            }
             if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Ticket Lock Freeze"))) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Anticipation et Auto-Correction: Fix Ticket Lock Freeze\n\n- Ajout d'un timeout strict (3000ms) sur les appels Axios vers Upstash pour acquireDistributedLock et syncCloud pour éviter un blocage indéfini du bot.\n- Sécurisation du parentId lors de la création de channels : vérification que la catégorie ciblée est bien de type GuildCategory pour éviter un crash API Discord." });
             }
@@ -772,19 +775,20 @@ client.on('interactionCreate', async (interaction) => {
                     const pmenu = new StringSelectMenuBuilder()
                         .setCustomId('product_select')
                         .setPlaceholder('🛒 Select the products you want to buy')
-                        .setMinValues(1)
-                        .setMaxValues(10);
+                        .setMinValues(1);
                         
                     let optCount = 0;
                     for (const id in memoryStats.products) {
+                        if (optCount >= 25) break; // Discord limit: max 25 options per select menu
                         const p = memoryStats.products[id];
                         if (p.stock && p.stock !== "∞" && parseInt(p.stock) <= 0) continue;
                         pmenu.addOptions(new StringSelectMenuOptionBuilder()
-                            .setLabel(p.name + (p.price === "Custom" ? " (Custom)" : " (£" + p.price + ")"))
-                            .setDescription(p.category || 'Item')
+                            .setLabel(String(p.name + (p.price === "Custom" ? " (Custom)" : " (£" + p.price + ")")).substring(0, 100))
+                            .setDescription(String(p.category || 'Item').substring(0, 100))
                             .setValue(id));
                         optCount++;
                     }
+                    if (optCount > 0) pmenu.setMaxValues(Math.min(optCount, 10)); // Crucial fix: max_values cannot exceed optCount
                     if(optCount > 0) {
                         const row = new ActionRowBuilder().addComponents(pmenu);
                         await channel.send({ content: `👋 Welcome <@${interaction.user.id}>!\n\n**🛒 Step 1: Select items from the menu below.**\n**🔐 Step 2: Paste your Rewarble voucher or promo code.**`, components: [row] }).catch(() => {});
