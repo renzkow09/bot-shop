@@ -262,6 +262,10 @@ function ensureMemoryInitialized() {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug Critique: Dashboard figé sans données\n\n- Correction d'une erreur de syntaxe HTML/JS (SyntaxError: Unexpected string) dans le système de Transcripts qui empêchait l'exécution du script principal du dashboard.\n- Sécurisation des attributs 'onclick' avec encodage HTML (&quot;) pour éviter tout conflit de guillemets." });
                 syncCloud();
             }
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Unknown Channel API Error"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug: DiscordAPIError[10003] Unknown Channel\n\n- Correction d'un crash de la fonction de génération de transcript (generateTranscript) lorsque le salon avait déjà été supprimé par l'utilisateur ou le système avant l'exécution (catch du code 10003 sans alarme).\n- Ajout de blocs try/catch et suppressions sécurisées (catch(()=>{...})) sur toutes les tentatives d'envoi de messages de broadcast pour prévenir les fuites de mémoire et rejets de promesses non gérés." });
+                syncCloud();
+            }
             if (!memoryStats.overrides) memoryStats.overrides = {};
             if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } };
             if (!memoryStats.settings.maintenance) memoryStats.settings.maintenance = { active: false, endsAt: 0, channelId: "" };
@@ -475,7 +479,11 @@ async function generateTranscript(channel) {
         if (memoryStats.transcripts.length > 30) memoryStats.transcripts.length = 30;
         syncCloud();
         return `./transcript-${channel.id}.html`;
-    } catch(e) { console.error("Transcript err:", e); return null; }
+    } catch(e) { 
+        if (e.code === 10003) return null; // Unknown Channel (already deleted)
+        console.error("Transcript err:", e.message); 
+        return null; 
+    }
 }
 
 async function sendShopSetup(channel) {
@@ -1061,7 +1069,7 @@ client.on('messageCreate', async (message) => {
         if (message.channel?.name?.startsWith('shop-')) {
             if (memoryStats.blacklist && memoryStats.blacklist.includes(message.author.id)) return;
             if (memoryStats.settings && memoryStats.settings.maintenance && memoryStats.settings.maintenance.active && message.author.id !== ADMIN_DISCORD_ID) {
-                return message.reply('Le bot est actuellement en maintenance.');
+                return message.reply('Le bot est actuellement en maintenance.').catch(()=>{});
             }
             let state = channelStates.get(message.channel.id); 
             if (!state) {
@@ -1866,14 +1874,14 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                             payload.files = [attachment];
                         }
                         if (!payload.content && !payload.files) throw new Error("Empty message");
-                        await channel.send(payload);
+                        await channel.send(payload).catch(()=>{});
                     } else throw new Error("Can't find channel");
                 }
                 else if (data.action === 'send_channel_message') {
                     const channel = guild.channels.cache.get(data.channelId);
                     if (!channel) throw new Error("Channel not found on server.");
                     if (!data.message) throw new Error("Message content missing.");
-                    await channel.send(data.message);
+                    await channel.send(data.message).catch(()=>{});
                     systemLog('INFO', 'DISCORD_CORE', `Global broadcast sent to channel ${data.channelId}`);
                 }
                 else if (data.action === 'react_ticket_message') {
@@ -2142,7 +2150,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                 }
                 else if (data.action === 'announce') {
                     const channel = guild.channels.cache.get(data.channelId);
-                    if(channel) await channel.send(`📢 **Announcement**\n\n${data.message}`);
+                    if(channel) await channel.send(`📢 **Announcement**\n\n${data.message}`).catch(()=>{});
                 }
                 else if (data.action === 'close_all') {
                     guild.channels.cache.forEach(c => {
@@ -2171,7 +2179,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                 }
                 else if (data.action === 'send_dm') {
                     const targetUser = await client.users.fetch(data.userId).catch(() => null);
-                    if (targetUser) await targetUser.send(`📩 **Message from Admin:**\n\n${data.message}`);
+                    if (targetUser) await targetUser.send(`📩 **Message from Admin:**\n\n${data.message}`).catch(()=>{});
                 }
                 else if (data.action === 'add_vip_days') {
                     if (!memoryStats.subscriptions) memoryStats.subscriptions = {};
