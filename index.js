@@ -1,7 +1,6 @@
 try { require('dotenv').config({ path: __dirname + '/.env' }); } catch (e) { console.warn("⚠️ dotenv module not found. Running with system environment variables."); }
 // === [ANCHOR: IMPORTS_AND_CRASH_HANDLER] ===
 const { Client, GatewayIntentBits, Partials, ButtonBuilder, ActionRowBuilder, ButtonStyle, ChannelType, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, EmbedBuilder, AttachmentBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
-const { GoogleGenAI } = require('@google/genai');
 
 const CircuitBreaker = {
     failures: 0,
@@ -352,6 +351,12 @@ function ensureMemoryInitialized() {
             
             if (!memoryStats.patchnotes.some(p => p.text.includes("Fix SDK Initialization"))) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug: GoogleGenAI is not defined\n\n- L'import du SDK @google/genai manquait à l'appel lors de la précédente mise à jour suite à un échec d'injection du module.\n- L'import est désormais correctement déclaré dans l'en-tête du fichier, rétablissant l'accès aux requêtes IA de Deep Analysis et Market Scan." });
+                syncCloud();
+            }
+
+            
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Retrait SDK & Flash-Latest"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug Critique: Crash au déploiement (Render)\n\n- L'environnement Render plantait sur l'erreur (Cannot find module '@google/genai') car le SDK n'était pas inclus dans les dépendances par défaut de l'utilisateur.\n- Suppression totale de la dépendance externe : le Dashboard utilise désormais un pont d'API REST natif (Fetch) garantissant un fonctionnement 'Zero Install'.\n- Les requêtes sont redirigées vers le modèle 'gemini-1.5-flash-latest', universellement compatible et rapide." });
                 syncCloud();
             }
 
@@ -2349,58 +2354,75 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                     if (!recent.length) return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ result: "<p>No recent transactions to analyze.</p>" }));
                     
                     try {
-                        const ai = new GoogleGenAI({
-                            apiKey: process.env.GEMINI_API_KEY,
-                            httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+                        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                contents: [{ parts: [{ text: "Analyze the following recent transactions and provide a short financial analysis report in HTML format. " + JSON.stringify(recent) }] }]
+                            })
                         });
                         
-                        let response;
-                        try {
-                            response = await ai.models.generateContent({
-                                model: "gemini-3.1-pro-preview",
-                                contents: "Analyze the following recent transactions and provide a short financial analysis report in HTML format. " + JSON.stringify(recent),
-                                config: { thinkingConfig: { thinkingLevel: "HIGH" } }
-                            });
-                        } catch(apiErr) {
-                            // Fallback to flash if pro is not found or rate limited on free tier
-                            console.warn("Fallback to gemini-3.5-flash due to:", apiErr.message);
-                            response = await ai.models.generateContent({
-                                model: "gemini-3.5-flash",
-                                contents: "Analyze the following recent transactions and provide a short financial analysis report in HTML format. " + JSON.stringify(recent)
-                            });
+                        const textData = await response.text();
+                        let json;
+                        try { 
+                            json = JSON.parse(textData); 
+                        } catch(err) { 
+                            let msg = textData || "API Error";
+                            console.error("[GEMINI API ERROR TX]:", msg);
+                            if(msg.toLowerCase().includes('exceed') || msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('429')) msg = "RATE_LIMIT_EXCEEDED";
+                            return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ error: msg })); 
                         }
-                        return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ result: response.text }));
+                        
+                        if (json.error) {
+                            let msg = json.error.message;
+                            console.error("[GEMINI API ERROR JSON]:", json.error);
+                            if(msg.toLowerCase().includes('exceed') || msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('429')) msg = "RATE_LIMIT_EXCEEDED";
+                            if(msg.toLowerCase().includes('not found')) msg = "Model Not Found. Using fallback.";
+                            return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ error: msg }));
+                        }
+                        return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ result: json.candidates[0].content.parts[0].text }));
                     } catch(e) {
-                        let msg = e.message || "API Error";
-                        console.error("[GEMINI API ERROR]:", msg);
-                        if(msg.toLowerCase().includes('exceed') || msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('429')) msg = "RATE_LIMIT_EXCEEDED";
-                        return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ error: msg }));
+                        return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ error: e.message }));
                     }
                 }
                 else if (data.action === 'check_market') {
                     if (!process.env.GEMINI_API_KEY) return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ error: "GEMINI_API_KEY not configured." }));
                     try {
-                        const ai = new GoogleGenAI({
-                            apiKey: process.env.GEMINI_API_KEY,
-                            httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
-                        });
-                        const response = await ai.models.generateContent({
-                            model: "gemini-3.5-flash",
-                            contents: "Perform a quick market analysis for the digital product: " + data.product + ". Provide a short HTML report with pricing recommendations and insights.",
-                            config: { tools: [ { googleSearch: {} } ] }
+                        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                contents: [{ parts: [{ text: "Perform a quick market analysis for the digital product: " + data.product + ". Provide a short HTML report with pricing recommendations and insights." }] }],
+                                tools: [ { googleSearch: {} } ]
+                            })
                         });
                         
-                        let finalHtml = response.text;
-                        if (response.candidates?.[0]?.groundingMetadata?.searchEntryPoint) {
-                            finalHtml += `<br><br><div style="font-size:0.8em; padding:10px; background:rgba(255,255,255,0.05); border-radius:10px;">${response.candidates[0].groundingMetadata.searchEntryPoint.renderedContent}</div>`;
+                        const textData = await response.text();
+                        let json;
+                        try { 
+                            json = JSON.parse(textData); 
+                        } catch(err) { 
+                            let msg = textData || "API Error";
+                            console.error("[GEMINI API ERROR TX]:", msg);
+                            if(msg.toLowerCase().includes('exceed') || msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('429')) msg = "RATE_LIMIT_EXCEEDED";
+                            return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ error: msg })); 
+                        }
+
+                        if (json.error) {
+                            let msg = json.error.message;
+                            console.error("[GEMINI API ERROR JSON]:", json.error);
+                            if(msg.toLowerCase().includes('exceed') || msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('429')) msg = "RATE_LIMIT_EXCEEDED";
+                            if(msg.toLowerCase().includes('not found')) msg = "Model Not Found. Using fallback.";
+                            return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ error: msg }));
+                        }
+                        let finalHtml = json.candidates[0].content.parts.map(p => p.text).join('');
+                        
+                        if (json.candidates[0].groundingMetadata && json.candidates[0].groundingMetadata.searchEntryPoint) {
+                            finalHtml += `<br><br><div style="font-size:0.8em; padding:10px; background:rgba(255,255,255,0.05); border-radius:10px;">${json.candidates[0].groundingMetadata.searchEntryPoint.renderedContent}</div>`;
                         }
                         return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ result: finalHtml }));
                     } catch(e) {
-                        let msg = e.message || "API Error";
-                        console.error("[GEMINI API ERROR]:", msg);
-                        if(msg.toLowerCase().includes('exceed') || msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('429')) msg = "RATE_LIMIT_EXCEEDED";
-                        if(msg.toLowerCase().includes('not found')) msg = "Model Not Found. Using fallback.";
-                        return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ error: msg }));
+                        return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ error: e.message }));
                     }
                 }
                 else if (data.action === 'save_bot_control') {
@@ -2447,29 +2469,30 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                 }
                 else if (data.action === 'ai_generate_message') {
                     try {
-                        const { GoogleGenAI } = require('@google/genai');
-                        const aiClient = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-                        
+                        if (!process.env.GEMINI_API_KEY) return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ success: false, error: "GEMINI_API_KEY not configured" }));
                         let context = "You are a professional, premium copywriter for a top-tier digital product Discord bot. Rewrite the following system message to sound ultra-premium, modern, and engaging. Keep it concise. Preserve any Discord markdown (like **bold**) or emojis where appropriate. Do NOT add new variables, and YOU MUST KEEP EXACTLY the variables listed in the original text (e.g. {user}, {product}, etc). Return ONLY the rewritten text.";
-                        
                         let prompt = context + "\n\nOriginal message: " + (data.current || "");
                         
-                        const aiResponse = await aiClient.models.generateContent({
-                            model: 'gemini-1.5-pro-latest',
-                            contents: prompt,
-                            config: {
-                                thinkingConfig: { thinkingLevel: "HIGH" },
-                                temperature: 0.7
-                            }
+                        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                contents: [{ parts: [{ text: prompt }] }]
+                            })
                         });
                         
-                        return res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ success: true, text: aiResponse.text.trim() }));
+                        const textData = await response.text();
+                        let json;
+                        try { json = JSON.parse(textData); } catch(e) { return res.writeHead(500).end(JSON.stringify({ success: false, error: "API Parse Error" })); }
+                        
+                        if (json.error) return res.writeHead(500).end(JSON.stringify({ success: false, error: json.error.message }));
+                        
+                        return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ success: true, text: json.candidates[0].content.parts[0].text.trim() }));
                     } catch(e) {
                         systemLog('ERROR', 'AI', 'Failed to generate message: ' + e.message);
                         return res.writeHead(500).end(JSON.stringify({ success: false, error: e.message }));
                     }
                 }
-
                 else if (data.action === 'force_backup') {
                     await syncCloud(true);
                 }
