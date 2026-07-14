@@ -342,6 +342,12 @@ function ensureMemoryInitialized() {
                 syncCloud();
             }
 
+            
+            if (!memoryStats.patchnotes.some(p => p.text.includes("SDK Google GenAI"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Migration: SDK Google GenAI\n\n- Remplacement des appels `fetch` bruts par le SDK officiel `@google/genai` pour une meilleure stabilité et gestion des erreurs.\n- Le problème de limite de quota (Service Busy / You exceed) est lié à l'utilisation du modèle `gemini-3.1-pro-preview` qui nécessite une clé API facturée sur Google Cloud. Si le message persiste sur Render, il faut upgrader le compte Google Cloud de la clé API, ou passer sur `gemini-3.5-flash`." });
+                syncCloud();
+            }
+
             if (!memoryStats.overrides) memoryStats.overrides = {};
             if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } };
             if (!memoryStats.settings.maintenance) memoryStats.settings.maintenance = { active: false, endsAt: 0, channelId: "" };
@@ -2336,78 +2342,58 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                     if (!recent.length) return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ result: "<p>No recent transactions to analyze.</p>" }));
                     
                     try {
-                        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${process.env.GEMINI_API_KEY}`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                contents: [{ parts: [{ text: "Analyze the following recent transactions and provide a short financial analysis report in HTML format. " + JSON.stringify(recent) }] }],
-                                generationConfig: { thinkingConfig: { thinkingLevel: "HIGH" } }
-                            })
+                        const ai = new GoogleGenAI({
+                            apiKey: process.env.GEMINI_API_KEY,
+                            httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
                         });
                         
-                        const textData = await response.text();
-                        let json;
-                        try { 
-                            json = JSON.parse(textData); 
-                        } catch(err) { 
-                            let msg = textData || "API Error";
-                            console.error("[GEMINI API ERROR TX]:", msg);
-                            if(msg.toLowerCase().includes('exceed') || msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('429')) msg = "RATE_LIMIT_EXCEEDED";
-                            return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ error: msg })); 
+                        let response;
+                        try {
+                            response = await ai.models.generateContent({
+                                model: "gemini-3.1-pro-preview",
+                                contents: "Analyze the following recent transactions and provide a short financial analysis report in HTML format. " + JSON.stringify(recent),
+                                config: { thinkingConfig: { thinkingLevel: "HIGH" } }
+                            });
+                        } catch(apiErr) {
+                            // Fallback to flash if pro is not found or rate limited on free tier
+                            console.warn("Fallback to gemini-3.5-flash due to:", apiErr.message);
+                            response = await ai.models.generateContent({
+                                model: "gemini-3.5-flash",
+                                contents: "Analyze the following recent transactions and provide a short financial analysis report in HTML format. " + JSON.stringify(recent)
+                            });
                         }
-                        
-                        if (json.error) {
-                            let msg = json.error.message;
-                            console.error("[GEMINI API ERROR JSON]:", json.error);
-                            if(msg.toLowerCase().includes('exceed') || msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('429')) msg = "RATE_LIMIT_EXCEEDED";
-                            if(msg.toLowerCase().includes('not found')) msg = "Model Not Found. Using fallback.";
-                            
-                            return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ error: msg }));
-                        }
-                        return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ result: json.candidates[0].content.parts[0].text }));
+                        return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ result: response.text }));
                     } catch(e) {
-                        return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ error: e.message }));
+                        let msg = e.message || "API Error";
+                        console.error("[GEMINI API ERROR]:", msg);
+                        if(msg.toLowerCase().includes('exceed') || msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('429')) msg = "RATE_LIMIT_EXCEEDED";
+                        return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ error: msg }));
                     }
                 }
                 else if (data.action === 'check_market') {
                     if (!process.env.GEMINI_API_KEY) return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ error: "GEMINI_API_KEY not configured." }));
                     try {
-                        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${process.env.GEMINI_API_KEY}`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                contents: [{ parts: [{ text: "Perform a quick market analysis for the digital product: " + data.product + ". Provide a short HTML report with pricing recommendations and insights." }] }],
-                                tools: [ { googleSearch: {} } ]
-                            })
+                        const ai = new GoogleGenAI({
+                            apiKey: process.env.GEMINI_API_KEY,
+                            httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+                        });
+                        const response = await ai.models.generateContent({
+                            model: "gemini-3.5-flash",
+                            contents: "Perform a quick market analysis for the digital product: " + data.product + ". Provide a short HTML report with pricing recommendations and insights.",
+                            config: { tools: [ { googleSearch: {} } ] }
                         });
                         
-                        const textData = await response.text();
-                        let json;
-                        try { 
-                            json = JSON.parse(textData); 
-                        } catch(err) { 
-                            let msg = textData || "API Error";
-                            console.error("[GEMINI API ERROR TX]:", msg);
-                            if(msg.toLowerCase().includes('exceed') || msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('429')) msg = "RATE_LIMIT_EXCEEDED";
-                            return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ error: msg })); 
-                        }
-
-                        if (json.error) {
-                            let msg = json.error.message;
-                            console.error("[GEMINI API ERROR JSON]:", json.error);
-                            if(msg.toLowerCase().includes('exceed') || msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('429')) msg = "RATE_LIMIT_EXCEEDED";
-                            if(msg.toLowerCase().includes('not found')) msg = "Model Not Found. Using fallback.";
-                            
-                            return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ error: msg }));
-                        }
-                        let finalHtml = json.candidates[0].content.parts.map(p => p.text).join('');
-                        
-                        if (json.candidates[0].groundingMetadata && json.candidates[0].groundingMetadata.searchEntryPoint) {
-                            finalHtml += `<br><br><div style="font-size:0.8em; padding:10px; background:rgba(255,255,255,0.05); border-radius:10px;">${json.candidates[0].groundingMetadata.searchEntryPoint.renderedContent}</div>`;
+                        let finalHtml = response.text;
+                        if (response.candidates?.[0]?.groundingMetadata?.searchEntryPoint) {
+                            finalHtml += `<br><br><div style="font-size:0.8em; padding:10px; background:rgba(255,255,255,0.05); border-radius:10px;">${response.candidates[0].groundingMetadata.searchEntryPoint.renderedContent}</div>`;
                         }
                         return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ result: finalHtml }));
                     } catch(e) {
-                        return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ error: e.message }));
+                        let msg = e.message || "API Error";
+                        console.error("[GEMINI API ERROR]:", msg);
+                        if(msg.toLowerCase().includes('exceed') || msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('429')) msg = "RATE_LIMIT_EXCEEDED";
+                        if(msg.toLowerCase().includes('not found')) msg = "Model Not Found. Using fallback.";
+                        return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ error: msg }));
                     }
                 }
                 else if (data.action === 'save_bot_control') {
