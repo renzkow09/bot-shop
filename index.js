@@ -294,6 +294,12 @@ function ensureMemoryInitialized() {
                 syncCloud();
             }
 
+            
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Dashboard Loading Bug"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug: Dashboard Messages figés sur 'Loading...'\n\n- Correction d'un problème d'injection du code Javascript empêchant la récupération des données de messages.\n- Sécurisation du processus d'hydratation des données côté client pour prévenir les écrasements intempestifs si l'utilisateur est en train d'éditer un champ." });
+                syncCloud();
+            }
+
             if (!memoryStats.overrides) memoryStats.overrides = {};
             if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } };
             if (!memoryStats.settings.maintenance) memoryStats.settings.maintenance = { active: false, endsAt: 0, channelId: "" };
@@ -4173,6 +4179,60 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
            if(typeof window.renderSalesChart === 'function') window.renderSalesChart(7); }
         
     // 🚀 [FUNCTION: processInitData] - Déclaration de fonction
+        
+           window.saveAllMessages = function() {
+               const fields = [
+                   'shop_welcome', 'shop_empty', 'ticket_ready', 'vip_welcome',
+                   'maintenance_embed_title', 'maintenance_embed_desc', 'checkout_success_dm',
+                   'checkout_failed_dm', 'checkout_complete_channel', 'invalid_code',
+                   'already_validated', 'code_limit_reached'
+               ];
+               let payload = {};
+               fields.forEach(f => {
+                   const el = document.getElementById('msg_' + f);
+                   if (el) payload[f] = el.value;
+               });
+               
+               fetch('/api/action', {
+                   method: 'POST',
+                   headers: { 'Content-Type': 'application/json' },
+                   body: JSON.stringify({ action: 'save_messages', messages: payload })
+               }).then(res => {
+                   if (res.ok) alert('✅ Messages saved successfully!');
+                   else alert('❌ Error saving messages.');
+               });
+           };
+
+           window.generateMessageAI = function(fieldKey) {
+               const el = document.getElementById('msg_' + fieldKey);
+               if(!el) return;
+               const originalText = el.value;
+               el.value = "🤖 Thinking... Generating premium message...";
+               
+               fetch('/api/action', {
+                   method: 'POST',
+                   headers: { 'Content-Type': 'application/json' },
+                   body: JSON.stringify({ action: 'ai_generate_message', key: fieldKey, current: originalText })
+               }).then(res => res.json()).then(data => {
+                   if(data.success && data.text) {
+                       el.value = data.text;
+                       // Add a quick pulse animation to show it updated
+                       el.style.borderColor = '#10b981';
+                       el.style.boxShadow = '0 0 15px rgba(16,185,129,0.4)';
+                       setTimeout(() => {
+                           el.style.borderColor = '';
+                           el.style.boxShadow = '';
+                       }, 1500);
+                   } else {
+                       alert('Error generating message.');
+                       el.value = originalText;
+                   }
+               }).catch(() => {
+                   alert('Network error.');
+                   el.value = originalText;
+               });
+           };
+
         function processInitData(data) { 
             rawStats=data.memoryStats || {}; PRODUCT_DATA=data.PRODUCT_DATA || {}; currentMonthRevenue=data.monthRevenue || 0; PIN=data.PIN || ''; lastTxCount=rawStats.total_transactions||0;
             const notesEl = document.getElementById('personal-notes');
@@ -4269,6 +4329,21 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
           let prodHtml=''; 
           const filterSelect = document.getElementById('product-category-filter');
           const filterValue = filterSelect ? filterSelect.value : 'all';
+
+          
+           // Populate Messages
+                     if (rawStats.messages) {
+                              const fields = [
+                   'shop_welcome', 'shop_empty', 'ticket_ready', 'vip_welcome',
+                   'maintenance_embed_title', 'maintenance_embed_desc', 'checkout_success_dm',
+                   'checkout_failed_dm', 'checkout_complete_channel', 'invalid_code',
+                   'already_validated', 'code_limit_reached'
+               ];
+               fields.forEach(f => {
+                   const el = document.getElementById('msg_' + f);
+                   if (el && document.activeElement !== el) el.value = rawStats.messages[f] || '';
+               });
+           }
 
           if(rawStats.products){ 
               Object.entries(rawStats.products).forEach(([id,p])=>{ 
