@@ -245,6 +245,9 @@ function ensureMemoryInitialized() {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Anticipation et Auto-Correction: Fix UI Freeze\n\n- Correction du blocage complet du dashboard (figé sans données) causé par l'absence d'initialisation des variables si Upstash est hors-ligne ou absent.\n- Ajout d'une redirection automatique vers la page de login si la session du serveur expire (Erreur 401)." });
                 syncCloud();
             }
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Fix ❌ Please wait, processing previous request"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug Critique: Channel Creation Error\n\n- Suppression de l'erreur persistante (❌ Please wait, processing previous request).\n- Retrait du lock distribué problématique sur l'ouverture des tickets, remplacé par une gestion en mémoire plus résiliente.\n- Ajout d'une protection fallback si le pseudo contient uniquement des caractères spéciaux, prévenant ainsi les crashs Discord API pour nom de channel vide.\n- Ajout de catch sur la création du channel pour gérer les permissions ou la limite maximale des 500 channels sans faire crash le bot." });
+            }
             if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Discord API Crash on Shop Channel"))) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug Critique: Le bot ne créait plus de channels\n\n- Correction d'un plantage critique lié aux limites de l'API Discord (Select Menu max_values ne pouvant pas dépasser le nombre d'options et limite stricte de 25 produits).\n- Le bot gère maintenant correctement les catalogues de toutes tailles sans crasher lors de l'ouverture du ticket." });
             }
@@ -720,32 +723,26 @@ client.on('interactionCreate', async (interaction) => {
                 processedInteractions.add(interaction.id);
                 setTimeout(() => processedInteractions.delete(interaction.id), 60000);
 
-                // Ignore spam clicks silently to avoid multiple ephemeral messages
                 if (userTicketLocks.has(interaction.user.id)) {
                     await interaction.deferUpdate().catch(()=>{});
                     return;
                 }
                 userTicketLocks.add(interaction.user.id);
                 setTimeout(() => userTicketLocks.delete(interaction.user.id), 15000);
-                
+
                 await interaction.reply({ content: '⏳ Channel is being created, please wait...', ephemeral: true }).catch(() => {});
-                
-                // Distributed Lock to prevent multiple instances from processing simultaneous clicks
-                const dLock = await acquireDistributedLock('ticket_' + interaction.user.id, 10000);
-                if (!dLock) return interaction.editReply({ content: '❌ Please wait, processing previous request.' }).catch(() => {});
-                
-                // 🛡️ ANTI-SPAM TICKET CHECK (Redirect to existing channel if already created)
-                const sanitizedName = interaction.user.username.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+                const rawName = interaction.user.username.toLowerCase().replace(/[^a-z0-9]/g, '');
+                const sanitizedName = rawName.length > 0 ? rawName : interaction.user.id;
                 const existingChannel = interaction.guild.channels.cache.find(c => c.name === `shop-${sanitizedName}` || c.name === `support-${sanitizedName}`);
                 
                 if (existingChannel) {
-                    return interaction.editReply({ content: `❌ You already have an open ticket: <#${existingChannel.id}>` }).catch(() => {});
+                    return interaction.editReply({ content: `✅ You already have an open ticket: <#${existingChannel.id}>` }).catch(() => {});
                 }
 
                 if (!memoryStats.analytics) memoryStats.analytics = { tickets_opened: 0, hourly_sales: Array(24).fill(0) };
                 memoryStats.analytics.tickets_opened = (memoryStats.analytics.tickets_opened || 0) + 1;
                 syncCloud();
-
                 
                 let channelOpts = {
                     name: `shop-${sanitizedName}`, type: ChannelType.GuildText,
@@ -755,16 +752,19 @@ client.on('interactionCreate', async (interaction) => {
                         { id: client.user.id, allow: ['ViewChannel', 'SendMessages', 'ManageChannels'], type: 1 }
                     ]
                 };
+
                 const customerCat = interaction.guild.channels.cache.get(CATEGORY_CUSTOMER_ID);
                 if (customerCat && customerCat.type === ChannelType.GuildCategory) {
                     channelOpts.parent = CATEGORY_CUSTOMER_ID;
                 }
+
                 let channel = null;
                 try {
                     channel = await interaction.guild.channels.create(channelOpts);
                 } catch (createErr) {
                     systemLog('ERROR', 'TICKET', 'Failed to create channel: ' + createErr.message);
                     console.error('Channel creation failed:', createErr);
+                    return interaction.editReply({ content: `❌ Critical Error: The bot failed to create a channel. Please check that I have "Manage Channels" permission and that the server has not reached the 500 channels limit.\nDetails: ${createErr.message}` }).catch(() => {});
                 }
 
                 if (channel) {
@@ -779,7 +779,7 @@ client.on('interactionCreate', async (interaction) => {
                         
                     let optCount = 0;
                     for (const id in memoryStats.products) {
-                        if (optCount >= 25) break; // Discord limit: max 25 options per select menu
+                        if (optCount >= 25) break; 
                         const p = memoryStats.products[id];
                         if (p.stock && p.stock !== "∞" && parseInt(p.stock) <= 0) continue;
                         pmenu.addOptions(new StringSelectMenuOptionBuilder()
@@ -788,7 +788,8 @@ client.on('interactionCreate', async (interaction) => {
                             .setValue(id));
                         optCount++;
                     }
-                    if (optCount > 0) pmenu.setMaxValues(Math.min(optCount, 10)); // Crucial fix: max_values cannot exceed optCount
+                    if (optCount > 0) pmenu.setMaxValues(Math.min(optCount, 10)); 
+
                     if(optCount > 0) {
                         const row = new ActionRowBuilder().addComponents(pmenu);
                         await channel.send({ content: `👋 Welcome <@${interaction.user.id}>!\n\n**🛒 Step 1: Select items from the menu below.**\n**🔐 Step 2: Paste your Rewarble voucher or promo code.**`, components: [row] }).catch(() => {});
@@ -796,33 +797,29 @@ client.on('interactionCreate', async (interaction) => {
                         await channel.send(`👋 Welcome <@${interaction.user.id}>!\n\n❌ The shop is currently empty.`).catch(() => {});
                     }
                     await interaction.editReply({ content: `✅ Your channel is ready: <#${channel.id}>` }).catch(() => {});
-                } else { await interaction.editReply({ content: `❌ Error creating the room.` }).catch(() => {}); }
-            
+                } else { 
+                    await interaction.editReply({ content: `❌ Error creating the room.` }).catch(() => {}); 
+                }
             } else if (interaction.customId === 'open_support_ticket') {
                 if (processedInteractions.has(interaction.id)) return;
                 processedInteractions.add(interaction.id);
                 setTimeout(() => processedInteractions.delete(interaction.id), 60000);
 
-                // Ignore spam clicks silently to avoid multiple ephemeral messages
                 if (userTicketLocks.has(interaction.user.id)) {
                     await interaction.deferUpdate().catch(()=>{});
                     return;
                 }
                 userTicketLocks.add(interaction.user.id);
                 setTimeout(() => userTicketLocks.delete(interaction.user.id), 15000);
-                
+
                 await interaction.reply({ content: '⏳ Channel is being created, please wait...', ephemeral: true }).catch(() => {});
-                
-                // Distributed Lock to prevent multiple instances from processing simultaneous clicks
-                const dLock = await acquireDistributedLock('ticket_' + interaction.user.id, 10000);
-                if (!dLock) return interaction.editReply({ content: '❌ Please wait, processing previous request.' }).catch(() => {});
-                
-                // 🛡️ ANTI-SPAM TICKET CHECK (Redirect to existing channel if already created)
-                const sanitizedName = interaction.user.username.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+                const rawName = interaction.user.username.toLowerCase().replace(/[^a-z0-9]/g, '');
+                const sanitizedName = rawName.length > 0 ? rawName : interaction.user.id;
                 const existingChannel = interaction.guild.channels.cache.find(c => c.name === `shop-${sanitizedName}` || c.name === `support-${sanitizedName}`);
                 
                 if (existingChannel) {
-                    return interaction.editReply({ content: `❌ You already have an open ticket: <#${existingChannel.id}>` }).catch(() => {});
+                    return interaction.editReply({ content: `✅ You already have an open ticket: <#${existingChannel.id}>` }).catch(() => {});
                 }
 
                 let channelOpts = {
@@ -830,19 +827,22 @@ client.on('interactionCreate', async (interaction) => {
                     permissionOverwrites: [
                         { id: interaction.guild.id, deny: ['ViewChannel'], type: 0 },
                         { id: interaction.user.id, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'], type: 1 },
-                        { id: client.user.id, allow: ['ViewChannel', 'SendMessages'], type: 1 }
+                        { id: client.user.id, allow: ['ViewChannel', 'SendMessages', 'ManageChannels'], type: 1 }
                     ]
                 };
+
                 const supportCat = interaction.guild.channels.cache.get(CATEGORY_SUPPORT_ID);
                 if (supportCat && supportCat.type === ChannelType.GuildCategory) {
                     channelOpts.parent = CATEGORY_SUPPORT_ID;
                 }
+
                 let channel = null;
                 try {
                     channel = await interaction.guild.channels.create(channelOpts);
                 } catch (createErr) {
                     systemLog('ERROR', 'TICKET', 'Failed to create channel: ' + createErr.message);
                     console.error('Channel creation failed:', createErr);
+                    return interaction.editReply({ content: `❌ Critical Error: The bot failed to create a channel. Please check permissions and limits.\nDetails: ${createErr.message}` }).catch(() => {});
                 }
 
                 if (channel) {
