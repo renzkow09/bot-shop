@@ -402,6 +402,24 @@ function ensureMemoryInitialized() {
                 syncCloud();
             }
 
+            
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Skeleton Dimensions"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Correction UI : Ajustement des dimensions des skeleton loaders\n\n- Correction d'un bug d'affichage où les skeletons héritaient de la taille de police proportionnelle (em), provoquant l'apparition de gros blocs carrés sur les widgets de statistiques clés (Active Subs, Pending Orders).\n- Remplacement par des dimensions fixes absolues pour préserver l'harmonie du design." });
+                syncCloud();
+            }
+
+            
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Error Boundary"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ Centralized Error Boundary\n\n- Implémentation d'un système de capture d'erreurs robuste (withErrorBoundary) pour l'ensemble des widgets du dashboard.\n- En cas d'échec de rendu d'un composant (tableau, graphique, flux d'activité), l'UI n'est plus bloquée. Un composant de fallback élégant signale l'erreur avec un message détaillé, préservant ainsi l'expérience globale." });
+                syncCloud();
+            }
+
+            
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Toast Notifications"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "✨ Modernisation des Toast Notifications\n\n- Nouveau design des popups de confirmation (toast) avec backdrop-filter et forme pilule élégante.\n- Ajout d'icônes SVG animées (popIn) et d'un shake effect en cas d'erreur.\n- Intégration d'une barre de progression animée pour la durée d'affichage de la notification." });
+                syncCloud();
+            }
+
             if (!memoryStats.overrides) memoryStats.overrides = {};
             if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } };
             if (!memoryStats.settings.maintenance) memoryStats.settings.maintenance = { active: false, endsAt: 0, channelId: "" };
@@ -3262,8 +3280,16 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
         .log-CRITICAL .log-lvl { color: #ff0000; background:rgba(255,0,0,0.2); padding:0 4px; } .log-CRITICAL { color: #ff0000; font-weight:bold; }
         .log-DEBUG .log-lvl { color: #8b5cf6; }
         
-        #toast { position:fixed; bottom: 20px; left: 50%; transform: translate(-50%, 150px) scale(0.9); background: rgba(28, 28, 30, 0.9); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); color: white; padding: 14px 24px; border-radius: 20px; font-weight: 500; font-size: 0.95em; display: flex; align-items: center; gap: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 0.5px solid rgba(255,255,255,0.1); opacity: 0; transition: all 0.5s cubic-bezier(0.25, 1, 0.5, 1); z-index: 10000; pointer-events: none; }
-        #toast.show { transform: translate(-50%, 0) scale(1); opacity: 1; }
+                #toast { position:fixed; bottom: 30px; left: 50%; transform: translate(-50%, 100px) scale(0.8); background: rgba(28, 28, 30, 0.85); backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px); color: white; padding: 16px 24px 16px 16px; border-radius: 100px; font-weight: 600; font-size: 0.95em; display: flex; align-items: center; gap: 14px; box-shadow: 0 20px 40px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.1); opacity: 0; visibility: hidden; transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); z-index: 10000; pointer-events: none; overflow: hidden; }
+        #toast.show { transform: translate(-50%, 0) scale(1); opacity: 1; visibility: visible; }
+        #toast.error-shake { animation: errorShake 0.6s cubic-bezier(0.36,0.07,0.19,0.97) both; }
+        @keyframes errorShake { 10%, 90% { transform: translate(calc(-50% - 2px), 0) scale(1); } 20%, 80% { transform: translate(calc(-50% + 4px), 0) scale(1); } 30%, 50%, 70% { transform: translate(calc(-50% - 8px), 0) scale(1); } 40%, 60% { transform: translate(calc(-50% + 8px), 0) scale(1); } }
+        .toast-icon { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0; animation: popInToast 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; animation-delay: 0.1s; transform: scale(0); }
+        @keyframes popInToast { from { transform: scale(0) rotate(-45deg); opacity: 0; } to { transform: scale(1) rotate(0); opacity: 1; } }
+        .toast-success .toast-icon { background: rgba(var(--accent-green-rgb), 0.2); color: var(--accent-green); box-shadow: 0 0 15px rgba(var(--accent-green-rgb), 0.4); }
+        .toast-error .toast-icon { background: rgba(239,68,68, 0.2); color: #ef4444; box-shadow: 0 0 15px rgba(239,68,68, 0.4); }
+        #toast::after { content: ''; position: absolute; bottom: 0; left: 0; height: 3px; background: currentColor; width: 100%; transform-origin: left; transform: scaleX(1); transition: transform 3s linear; opacity: 0.5; }
+        #toast.show::after { transform: scaleX(0); }
         
         .modal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:10000; justify-content:center; align-items:center; animation: fadeInSmooth 0.3s ease-out; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
         .modal-content { background:rgba(28, 28, 30, 0.9); padding:35px; border-radius:24px; border:0.5px solid rgba(255,255,255,0.1); text-align:center; max-width:400px; box-shadow: 0 20px 50px rgba(0,0,0,0.5); animation: zoomIn 0.3s cubic-bezier(0.25, 1, 0.5, 1) forwards; }
@@ -3390,7 +3416,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
                        </div>
                        <h3 class='glass-title'>Today's Revenue</h3>
-                       <div class='glass-stat-value text-green' id='ui-today-rev'><div class="skeleton skeleton-text" style="width: 70px;"></div></div>
+                       <div class='glass-stat-value text-green' id='ui-today-rev'><div class="skeleton" style="width: 100px; height: 38px; border-radius: 8px; display: inline-block; margin-top: 8px; margin-bottom: 4px;"></div></div>
                        <div class='trend positive' style='font-weight: 600; font-size: 0.9em;'>+14% <span style='color:var(--text-muted); font-weight:normal;'>vs yesterday</span></div>
                    </div>
                    <div class='glass-panel' onclick='window.editStat("total_rev")' style='cursor:pointer; padding: 28px;' title='Click to edit'>
@@ -3399,7 +3425,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 8h20M6 16h.01"/></svg>
                        </div>
                        <h3 class='glass-title'>Total Yield</h3>
-                       <div class='glass-stat-value' id='ui-total-rev'><div class="skeleton skeleton-text" style="width: 70px;"></div></div>
+                       <div class='glass-stat-value' id='ui-total-rev'><div class="skeleton" style="width: 100px; height: 38px; border-radius: 8px; display: inline-block; margin-top: 8px; margin-bottom: 4px;"></div></div>
                        <div class='trend' style='color:var(--text-muted); font-weight: 500; font-size: 0.9em;'>Lifetime Revenue</div>
                    </div>
                    <div class='glass-panel' onclick='window.editStat("conv_rate")' style='cursor:pointer; padding: 28px;' title='Click to edit'>
@@ -3408,7 +3434,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h4l3-9 5 18 3-9h5"/></svg>
                        </div>
                        <h3 class='glass-title'>Conversion</h3>
-                       <div class='glass-stat-value' id='ui-conv-rate'><div class="skeleton skeleton-text" style="width: 70px;"></div></div>
+                       <div class='glass-stat-value' id='ui-conv-rate'><div class="skeleton" style="width: 100px; height: 38px; border-radius: 8px; display: inline-block; margin-top: 8px; margin-bottom: 4px;"></div></div>
                        <div class='trend positive' style='font-weight: 600; font-size: 0.9em;'>High Engagement</div>
                    </div>
                    <div class='glass-panel' onclick='window.editStat("online_total")' style='cursor:pointer; padding: 28px;' title='Click to edit'>
@@ -3417,7 +3443,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                        </div>
                        <h3 class='glass-title'>Network Activity</h3>
-                       <div class='glass-stat-value' id='ui-online-total'><div class="skeleton skeleton-text" style="width: 70px;"></div></div>
+                       <div class='glass-stat-value' id='ui-online-total'><div class="skeleton" style="width: 100px; height: 38px; border-radius: 8px; display: inline-block; margin-top: 8px; margin-bottom: 4px;"></div></div>
                        <div class='trend' style='color:var(--text-muted); font-weight: 500; font-size: 0.9em;'>Active Members</div>
                    </div>
                    <div class='glass-panel' onclick='window.editStat("active_subs")' style='cursor:pointer; padding: 28px;' title='Click to edit'>
@@ -3426,7 +3452,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
                        </div>
                        <h3 class='glass-title'>Active Subs</h3>
-                       <div class='glass-stat-value' id='ui-active-subs'><div class="skeleton skeleton-text" style="width: 70px;"></div></div>
+                       <div class='glass-stat-value' id='ui-active-subs'><div class="skeleton" style="width: 100px; height: 38px; border-radius: 8px; display: inline-block; margin-top: 8px; margin-bottom: 4px;"></div></div>
                        <div class='trend positive' style='font-weight: 600; font-size: 0.9em;'>Recurring Yield</div>
                    </div>
                    <div class='glass-panel' onclick='window.editStat("pending_orders")' style='cursor:pointer; padding: 28px;' title='Click to edit'>
@@ -3435,7 +3461,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                        </div>
                        <h3 class='glass-title'>Pending Orders</h3>
-                       <div class='glass-stat-value' id='ui-pending-orders'><div class="skeleton skeleton-text" style="width: 70px;"></div></div>
+                       <div class='glass-stat-value' id='ui-pending-orders'><div class="skeleton" style="width: 100px; height: 38px; border-radius: 8px; display: inline-block; margin-top: 8px; margin-bottom: 4px;"></div></div>
                        <div class='trend negative' style='font-weight: 600; font-size: 0.9em;'>Awaiting processing</div>
                    </div>
                </div>
@@ -3478,7 +3504,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
                        </div>
                        <h3 class='glass-title'>Tickets Opened</h3>
-                       <div class='glass-stat-value text-red' id='ui-tickets-opened'><div class="skeleton skeleton-text" style="width: 70px;"></div></div>
+                       <div class='glass-stat-value text-red' id='ui-tickets-opened'><div class="skeleton" style="width: 100px; height: 38px; border-radius: 8px; display: inline-block; margin-top: 8px; margin-bottom: 4px;"></div></div>
                        <div class='trend' style='color:var(--text-muted); font-weight: 500; font-size: 0.9em;'>Support Requests</div>
                    </div>
                    <div class='glass-panel' onclick='window.editStat("dropoff")' style='cursor:pointer; padding: 28px;' title='Click to edit'>
@@ -3487,7 +3513,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
                        </div>
                        <h3 class='glass-title'>Drop-off Rate</h3>
-                       <div class='glass-stat-value' id='ui-dropoff'><div class="skeleton skeleton-text" style="width: 70px;"></div></div>
+                       <div class='glass-stat-value' id='ui-dropoff'><div class="skeleton" style="width: 100px; height: 38px; border-radius: 8px; display: inline-block; margin-top: 8px; margin-bottom: 4px;"></div></div>
                        <div class='trend negative' style='font-weight: 600; font-size: 0.9em;'>Funnel Loss</div>
                    </div>
                    <div class='glass-panel' onclick='window.editStat("peak")' style='cursor:pointer; padding: 28px;' title='Click to edit'>
@@ -3496,7 +3522,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                        </div>
                        <h3 class='glass-title'>Peak Sales Hour</h3>
-                       <div class='glass-stat-value' id='ui-peak-hour'><div class="skeleton skeleton-text" style="width: 70px;"></div></div>
+                       <div class='glass-stat-value' id='ui-peak-hour'><div class="skeleton" style="width: 100px; height: 38px; border-radius: 8px; display: inline-block; margin-top: 8px; margin-bottom: 4px;"></div></div>
                        <div class='trend positive' style='font-weight: 600; font-size: 0.9em;'>Highest Traffic</div>
                    </div>
                </div>
@@ -3981,7 +4007,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                         <div class='card' id='card-discord' style='border:none; background:rgba(255,255,255,0.02); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.05); border-radius:16px; position:relative; overflow:hidden;'>
                             <div id='glow-discord' style='position:absolute; top:0; left:0; width:100%; height:4px; background:var(--text-muted); transition:1s;'></div>
                             <h3 style='margin-top:5px;'>🔵 Discord WS</h3>
-                            <div class='value' id='ui-discord-ws' style='font-size:1.8em; margin: 15px 0; font-family:monospace;'><div class="skeleton skeleton-text" style="width: 80px;"></div></div>
+                            <div class='value' id='ui-discord-ws' style='font-size:1.8em; margin: 15px 0; font-family:monospace;'><div class="skeleton" style="width: 80px; height: 24px; border-radius: 6px; display: inline-block;"></div></div>
                             <div style='font-size:0.85em; line-height:2;'>
                                 <div style='display:flex; justify-content:space-between;'><span class='text-muted'>Status:</span> <strong id='ui-discord-status'><div class="skeleton skeleton-text" style="width: 40px; display: inline-block;"></div></strong></div>
                                 <div style='display:flex; justify-content:space-between;'><span class='text-muted'>Guilds:</span> <strong id='ui-discord-guilds' style='font-family:monospace;'><div class="skeleton skeleton-text" style="width: 40px; display: inline-block;"></div></strong></div>
@@ -3992,14 +4018,14 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                         <div class='card' id='card-upstash' style='border:none; background:rgba(255,255,255,0.02); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.05); border-radius:16px; position:relative; overflow:hidden;'>
                             <div id='glow-upstash' style='position:absolute; top:0; left:0; width:100%; height:4px; background:var(--text-muted); transition:1s;'></div>
                             <h3 style='margin-top:5px;'>🔴 Upstash DB</h3>
-                            <div class='value' id='ui-upstash-status' style='font-size:1.5em; margin: 15px 0;'><div class="skeleton skeleton-text" style="width: 100px;"></div></div>
+                            <div class='value' id='ui-upstash-status' style='font-size:1.5em; margin: 15px 0;'><div class="skeleton" style="width: 100px; height: 24px; border-radius: 6px; display: inline-block;"></div></div>
                             <p class='text-muted' style='margin:0; font-size:0.85em; display:flex; justify-content:space-between;'><span>Response Latency:</span> <strong id='ui-upstash-ping' style='font-family:monospace;'><div class="skeleton skeleton-text" style="width: 40px; display: inline-block;"></div></strong></p>
                         </div>
                         
                         <div class='card' id='card-rewarble' style='border:none; background:rgba(255,255,255,0.02); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.05); border-radius:16px; position:relative; overflow:hidden;'>
                             <div id='glow-rewarble' style='position:absolute; top:0; left:0; width:100%; height:4px; background:var(--text-muted); transition:1s;'></div>
                             <h3 style='margin-top:5px;'>🟢 Rewarble API</h3>
-                            <div class='value' id='ui-rewarble-status' style='font-size:1.5em; margin: 15px 0;'><div class="skeleton skeleton-text" style="width: 100px;"></div></div>
+                            <div class='value' id='ui-rewarble-status' style='font-size:1.5em; margin: 15px 0;'><div class="skeleton" style="width: 100px; height: 24px; border-radius: 6px; display: inline-block;"></div></div>
                             <p class='text-muted' style='margin:0; font-size:0.85em; display:flex; justify-content:space-between;'><span>Response Latency:</span> <strong id='ui-rewarble-ping' style='font-family:monospace;'><div class="skeleton skeleton-text" style="width: 40px; display: inline-block;"></div></strong></p>
                         </div>
                     </div>
@@ -4454,7 +4480,25 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
     
     <script>
         
-        // 🚀 [UI_ACTION: setTheme] - Action d'interface Dashboard
+        
+        // 🚀 [FUNCTION: withErrorBoundary] - Centralized Error Boundary
+        function withErrorBoundary(elementIds, widgetName, renderFn) {
+            try {
+                renderFn();
+            } catch (err) {
+                console.error("[ErrorBoundary] " + widgetName + " rendering failed:", err);
+                const ids = Array.isArray(elementIds) ? elementIds : [elementIds];
+                ids.forEach(id => {
+                    const el = document.getElementById(id);
+                    const container = (el && el.tagName === 'CANVAS') ? el.parentElement : el;
+                    if (container) {
+                        container.innerHTML = "<div style='display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; min-height:150px; padding:20px; text-align:center; background:rgba(255,69,58,0.05); border:1px dashed rgba(255,69,58,0.2); border-radius:12px; color:var(--accent-red); margin-top:10px;'>" + "<svg width='28' height='28' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' style='margin-bottom:8px; opacity:0.8;'><circle cx='12' cy='12' r='10'></circle><line x1='12' y1='8' x2='12' y2='12'></line><line x1='12' y1='16' x2='12.01' y2='16'></line></svg>" + "<div style='font-size:0.9em; font-weight:600; margin-bottom:4px;'>" + widgetName + " Error</div>" + "<div style='font-size:0.75em; opacity:0.7; max-width:90%; line-height:1.3; overflow:hidden; text-overflow:ellipsis;'>" + (err.message || 'Rendering failed') + "</div>" + "</div>";
+                    }
+                });
+            }
+        }
+
+                // 🚀 [UI_ACTION: setTheme] - Action d'interface Dashboard
         window.setTheme = function(color) {
             const themes = {
                 green: { hex: '#10b981', rgb: '16, 185, 129', hover: '#34d399' },
@@ -4747,10 +4791,11 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             }
 
             trackedTickets = data.activeTickets || 0; trackedReviews = data.pendingReviewsCount || 0; trackedSales = rawStats.total_transactions || 0; 
-            try { buildStaticTables(); } catch(e) { console.error("buildStaticTables error:", e); }
+            withErrorBoundary(['target-tx', 'target-products'], 'Data Tables', () => buildStaticTables());
+            // withErrorBoundary handles individual charts inside renderAnalyticsCharts
             try { renderAnalyticsCharts(); } catch(e) { console.error("renderAnalyticsCharts error:", e); }
             try { updateMaintenanceBadge(data.maintenance); } catch(e) { console.error("updateMaintenanceBadge error:", e); }
-            try { updateBadgesAndFeed(data); } catch(e) { console.error("updateBadgesAndFeed error:", e); } 
+            withErrorBoundary(['target-feed', 'target-pending-reviews', 'target-buy-links'], 'Activity Feed & Badges', () => updateBadgesAndFeed(data)); 
             const splash = document.getElementById('loading-screen');
            if (splash) { splash.style.display = 'none'; splash.remove(); }
            if(typeof window.renderSalesChart === 'function') window.renderSalesChart(7);
@@ -5380,7 +5425,41 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             }
         };
 // 🚀 [FUNCTION: showToast] - Déclaration de fonction
-        function showToast(msg, type='success') { const t=document.getElementById('toast'); t.innerHTML = (type==='error'?'❌':'✅') + ' <span style="letter-spacing:0.5px;">' + msg + '</span>'; t.style.borderColor = type === 'error' ? 'rgba(239,68,68,0.5)' : 'rgba(var(--accent-green-rgb),0.5)'; t.style.boxShadow = type === 'error' ? '0 10px 30px rgba(239,68,68,0.2)' : '0 10px 30px rgba(var(--accent-green-rgb),0.2)'; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 3000); }
+        function showToast(msg, type='success') { 
+            const t = document.getElementById('toast'); 
+            
+            // Clear existing timeouts if any
+            if(window.toastTimeout) clearTimeout(window.toastTimeout);
+            if(window.toastAnimTimeout) clearTimeout(window.toastAnimTimeout);
+            
+            t.classList.remove('show', 'error-shake', 'toast-success', 'toast-error');
+            
+            // Force reflow
+            void t.offsetWidth;
+            
+            const iconSvg = type === 'error' 
+                ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>'
+                : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+                
+            t.innerHTML = '<div class="toast-icon">' + iconSvg + '</div><span style="letter-spacing:0.5px; z-index:2;">' + msg + '</span>';
+            
+            t.style.borderColor = type === 'error' ? 'rgba(239,68,68,0.5)' : 'rgba(var(--accent-green-rgb),0.5)';
+            t.style.color = type === 'error' ? '#ef4444' : 'var(--accent-green)';
+            t.style.boxShadow = type === 'error' ? '0 15px 35px rgba(239,68,68,0.2), inset 0 1px 0 rgba(255,255,255,0.1)' : '0 15px 35px rgba(var(--accent-green-rgb),0.2), inset 0 1px 0 rgba(255,255,255,0.1)';
+            t.classList.add(type === 'error' ? 'toast-error' : 'toast-success');
+            
+            t.classList.add('show');
+            if (type === 'error') {
+                t.classList.add('error-shake');
+            }
+            
+            window.toastTimeout = setTimeout(() => {
+                t.classList.remove('show');
+                window.toastAnimTimeout = setTimeout(() => {
+                    t.classList.remove('error-shake', 'toast-success', 'toast-error');
+                }, 500);
+            }, 3000);
+        }
         
         // 🚀 [UI_ACTION_ASYNC: manualRefresh] - Action asynchrone d'interface Dashboard
         window.manualRefresh = async function() { const btn = document.getElementById('refreshBtn'); btn.classList.add('spinning'); await window.refreshDataSilently(); setTimeout(()=>btn.classList.remove('spinning'), 1000); showToast('Matrix Synced'); };
@@ -5924,11 +6003,73 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
            document.querySelectorAll('.skeleton-chart-overlay').forEach(el => el.remove());
 
            if(typeof Chart === 'undefined') return;
-           try { const canvas = document.getElementById('hourlyChart'); if(canvas) { const ctxHourly = canvas.getContext('2d'); if(!ctxHourly) return; if(window.hourlyChart instanceof Chart) window.hourlyChart.destroy(); window.hourlyChart = new Chart(ctxHourly, { type: 'bar', data: { labels: Array.from({length: 24}, (_, i) => i+'h'), datasets: [{ label: 'Sales', data: rawStats.analytics.hourly_sales || Array(24).fill(0), backgroundColor: getThemeVal('hex'), hoverBackgroundColor: '#fff', borderRadius: 6 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false } }, scales: { y: { grid: { color: 'rgba(255,255,255,0.05)' }, border: {display: false}, beginAtZero: true }, x: { grid: { display: false }, border: {display: false} } } } }); } } catch(e) { console.error("Hourly Chart Error", e); }
-           try { const canvas = document.getElementById('topProductsBarChart'); if(canvas) { const prodIds = Object.keys(rawStats.product_sales || {}); const prodLabels = prodIds.map(id => rawStats.products[id] ? rawStats.products[id].name : 'Unknown'); const prodData = Object.values(rawStats.product_sales || {}); const ctxTopProd = canvas.getContext('2d'); if(!ctxTopProd) return; if(window.topProdChart instanceof Chart) window.topProdChart.destroy(); window.topProdChart = new Chart(ctxTopProd, { type: 'bar', data: { labels: prodLabels.length?prodLabels:['No Data'], datasets: [{ label: 'Sales', data: prodData.length?prodData:[0], backgroundColor: getThemeVal('hex'), hoverBackgroundColor: '#fff', borderRadius: 6 }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' }, border: {display: false}, beginAtZero: true }, y: { grid: { display: false }, border: {display: false} } } } }); } } catch(e) { console.error("Top Prod Chart Error", e); }
-           try { const canvas = document.getElementById('categoryRevenueChart'); if(canvas) { const catRevs = {}; Object.entries(rawStats.product_sales || {}).forEach(([id, count]) => { const p = rawStats.products[id]; if(p && p.price !== 'Custom'){ const cat = p.category || 'Other'; if(!catRevs[cat]) catRevs[cat] = 0; catRevs[cat] += (parseInt(p.price) * count); } }); const ctxCat = canvas.getContext('2d'); if(!ctxCat) return; if(window.catChart instanceof Chart) window.catChart.destroy(); window.catChart = new Chart(ctxCat, { type: 'polarArea', data: { labels: Object.keys(catRevs).length?Object.keys(catRevs):['No Data'], datasets: [{ data: Object.values(catRevs).length?Object.values(catRevs):[0], backgroundColor: [getThemeVal('hex'), getThemeVal('hover'), '#059669', '#f59e0b', '#ef4444'], hoverBackgroundColor: ['#fff', '#fff', '#fff', '#fff', '#fff'], borderWidth: 0, hoverOffset: 15 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, plugins: { legend: { position: 'right', labels: {color: '#8e8e93', font: { family: '-apple-system' }} } } } }); } } catch(e) { console.error("Cat Chart Error", e); }
-           try { const canvas = document.getElementById('dowChart'); if(canvas) { const dowSales = { 'Sun':0, 'Mon':0, 'Tue':0, 'Wed':0, 'Thu':0, 'Fri':0, 'Sat':0 }; const daysArr = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']; Object.entries(rawStats.revenue || {}).forEach(([dateStr, val]) => { const d = new Date(dateStr); if(!isNaN(d)) { dowSales[daysArr[d.getDay()]] += parseFloat(val); } }); const ctxDow = canvas.getContext('2d'); if(!ctxDow) return; if(window.dowChartInst instanceof Chart) window.dowChartInst.destroy(); window.dowChartInst = new Chart(ctxDow, { type: 'bar', data: { labels: daysArr, datasets: [{ label: 'Revenue (£)', data: daysArr.map(d=>dowSales[d]), backgroundColor: getThemeVal('hex'), hoverBackgroundColor: '#fff', borderRadius: 8 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false } }, scales: { y: { grid: { color: 'rgba(255,255,255,0.05)' }, border: {display: false}, beginAtZero: true }, x: { grid: { display: false }, border: {display: false} } } } }); } } catch(e) { console.error("Dow Chart Error", e); }
-           try { const canvas = document.getElementById('funnelChart'); if(canvas) { const ticketsOpened = rawStats.analytics?.tickets_opened || 0; const salesClosed = rawStats.total_transactions || 0; const ctxFunnel = canvas.getContext('2d'); if(!ctxFunnel) return; if(window.funnelChartInst instanceof Chart) window.funnelChartInst.destroy(); window.funnelChartInst = new Chart(ctxFunnel, { type: 'doughnut', data: { labels: ['Tickets Opened (No Purchase)', 'Successful Sales'], datasets: [{ data: [Math.max(0, ticketsOpened - salesClosed), salesClosed], backgroundColor: ['rgba(239, 68, 68, 0.8)', 'rgba(' + getThemeVal('rgb') + ', 0.8)'], hoverOffset: 15, borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, cutout: '75%', plugins: { legend: { position: 'bottom', labels: { color: '#8e8e93' } } } } }); } } catch(e) { console.error("Funnel Chart Error", e); }
+           withErrorBoundary('hourlyChart', 'Hourly Sales Chart', () => {
+               const canvas = document.getElementById('hourlyChart'); 
+               if(canvas) { 
+                   const ctxHourly = canvas.getContext('2d'); 
+                   if(!ctxHourly) return; 
+                   if(window.hourlyChart instanceof Chart) window.hourlyChart.destroy(); 
+                   window.hourlyChart = new Chart(ctxHourly, { type: 'bar', data: { labels: Array.from({length: 24}, (_, i) => i+'h'), datasets: [{ label: 'Sales', data: rawStats.analytics.hourly_sales || Array(24).fill(0), backgroundColor: getThemeVal('hex'), hoverBackgroundColor: '#fff', borderRadius: 6 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false } }, scales: { y: { grid: { color: 'rgba(255,255,255,0.05)' }, border: {display: false}, beginAtZero: true }, x: { grid: { display: false }, border: {display: false} } } } }); 
+               } 
+           });
+           withErrorBoundary('topProductsBarChart', 'Top Products Chart', () => {
+               const canvas = document.getElementById('topProductsBarChart'); 
+               if(canvas) { 
+                   const prodIds = Object.keys(rawStats.product_sales || {}); 
+                   const prodLabels = prodIds.map(id => rawStats.products[id] ? rawStats.products[id].name : 'Unknown'); 
+                   const prodData = Object.values(rawStats.product_sales || {}); 
+                   const ctxTopProd = canvas.getContext('2d'); 
+                   if(!ctxTopProd) return; 
+                   if(window.topProdChart instanceof Chart) window.topProdChart.destroy(); 
+                   window.topProdChart = new Chart(ctxTopProd, { type: 'bar', data: { labels: prodLabels.length?prodLabels:['No Data'], datasets: [{ label: 'Sales', data: prodData.length?prodData:[0], backgroundColor: getThemeVal('hex'), hoverBackgroundColor: '#fff', borderRadius: 6 }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' }, border: {display: false}, beginAtZero: true }, y: { grid: { display: false }, border: {display: false} } } } }); 
+               } 
+           });
+           withErrorBoundary('categoryRevenueChart', 'Category Revenue Chart', () => {
+               const canvas = document.getElementById('categoryRevenueChart'); 
+               if(canvas) { 
+                   const catRevs = {}; 
+                   Object.entries(rawStats.product_sales || {}).forEach(([id, count]) => { 
+                       const p = rawStats.products[id]; 
+                       if(p && p.price !== 'Custom'){ 
+                           const cat = p.category || 'Other'; 
+                           if(!catRevs[cat]) catRevs[cat] = 0; 
+                           catRevs[cat] += (parseInt(p.price) * count); 
+                       } 
+                   }); 
+                   const ctxCat = canvas.getContext('2d'); 
+                   if(!ctxCat) return; 
+                   if(window.catChart instanceof Chart) window.catChart.destroy(); 
+                   window.catChart = new Chart(ctxCat, { type: 'polarArea', data: { labels: Object.keys(catRevs).length?Object.keys(catRevs):['No Data'], datasets: [{ data: Object.values(catRevs).length?Object.values(catRevs):[0], backgroundColor: [getThemeVal('hex'), getThemeVal('hover'), '#059669', '#f59e0b', '#ef4444'], hoverBackgroundColor: ['#fff', '#fff', '#fff', '#fff', '#fff'], borderWidth: 0, hoverOffset: 15 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, plugins: { legend: { position: 'right', labels: {color: '#8e8e93', font: { family: '-apple-system' }} } } } }); 
+               } 
+           });
+           withErrorBoundary('dowChart', 'Sales by Day Chart', () => {
+               const canvas = document.getElementById('dowChart'); 
+               if(canvas) { 
+                   const dowSales = { 'Sun':0, 'Mon':0, 'Tue':0, 'Wed':0, 'Thu':0, 'Fri':0, 'Sat':0 }; 
+                   const daysArr = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']; 
+                   Object.entries(rawStats.revenue || {}).forEach(([dateStr, val]) => { 
+                       const d = new Date(dateStr); 
+                       if(!isNaN(d)) { 
+                           dowSales[daysArr[d.getDay()]] += parseFloat(val); 
+                       } 
+                   }); 
+                   const ctxDow = canvas.getContext('2d'); 
+                   if(!ctxDow) return; 
+                   if(window.dowChartInst instanceof Chart) window.dowChartInst.destroy(); 
+                   window.dowChartInst = new Chart(ctxDow, { type: 'bar', data: { labels: daysArr, datasets: [{ label: 'Revenue (£)', data: daysArr.map(d=>dowSales[d]), backgroundColor: getThemeVal('hex'), hoverBackgroundColor: '#fff', borderRadius: 8 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false } }, scales: { y: { grid: { color: 'rgba(255,255,255,0.05)' }, border: {display: false}, beginAtZero: true }, x: { grid: { display: false }, border: {display: false} } } } }); 
+               } 
+           });
+           withErrorBoundary('funnelChart', 'Conversion Funnel Chart', () => {
+               const canvas = document.getElementById('funnelChart'); 
+               if(canvas) { 
+                   const ticketsOpened = rawStats.analytics?.tickets_opened || 0; 
+                   const salesClosed = rawStats.total_transactions || 0; 
+                   const ctxFunnel = canvas.getContext('2d'); 
+                   if(!ctxFunnel) return; 
+                   if(window.funnelChartInst instanceof Chart) window.funnelChartInst.destroy(); 
+                   window.funnelChartInst = new Chart(ctxFunnel, { type: 'doughnut', data: { labels: ['Tickets Opened (No Purchase)', 'Successful Sales'], datasets: [{ data: [Math.max(0, ticketsOpened - salesClosed), salesClosed], backgroundColor: ['rgba(239, 68, 68, 0.8)', 'rgba(' + getThemeVal('rgb') + ', 0.8)'], hoverOffset: 15, borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, cutout: '75%', plugins: { legend: { position: 'bottom', labels: { color: '#8e8e93' } } } } }); 
+               } 
+           });
         }
         // 🚀 [UI_ACTION_ASYNC: loadBackups] - Action asynchrone d'interface Dashboard
         
