@@ -360,6 +360,12 @@ function ensureMemoryInitialized() {
                 syncCloud();
             }
 
+            
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Mystery Box"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🎁 Nouvelle Feature: Mystery Box\n\n- Vous pouvez désormais configurer et activer une Mystery Box depuis le Dashboard.\n- Paramétrez vos différents 'Drops' (Commun, Rare, Légendaire) avec leurs pourcentages de chance et le produit associé.\n- Activez l'annonce publique automatique (Global Announce) pour les drops légendaires afin de provoquer le FOMO (Fear Of Missing Out) sur le serveur !\n- Cela permet de stimuler massivement l'engagement et les micro-transactions." });
+                syncCloud();
+            }
+
             if (!memoryStats.overrides) memoryStats.overrides = {};
             if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } };
             if (!memoryStats.settings.maintenance) memoryStats.settings.maintenance = { active: false, endsAt: 0, channelId: "" };
@@ -894,6 +900,15 @@ client.on('interactionCreate', async (interaction) => {
                         if (p.stock && p.stock !== "∞" && parseInt(p.stock) <= 0) continue;
                         optCount++;
                     }
+                if (memoryStats.mystery_box && memoryStats.mystery_box.enabled && optCount < 25) {
+                    const mbPrice = memoryStats.mystery_box.price || 10;
+                    pmenu.addOptions(new StringSelectMenuOptionBuilder()
+                        .setLabel(`🎁 Mystery Box (£${mbPrice})`)
+                        .setDescription(`Feeling lucky? Win premium random drops!`)
+                        .setValue(`mystery_box`));
+                    optCount++;
+                }
+
                     
                     if(optCount > 0) {
                         await channel.send({ content: memoryStats.messages.shop_welcome.replace('{user}', '<@' + interaction.user.id + '>') }).catch(() => {});
@@ -987,7 +1002,15 @@ client.on('interactionCreate', async (interaction) => {
                 state.cart = interaction.values;
                 
                 for (const selected of state.cart) {
-                    const product = memoryStats.products[selected];
+                    let product = memoryStats.products[selected];
+                    
+                    if (selected === 'mystery_box' && memoryStats.mystery_box && memoryStats.mystery_box.enabled) {
+                        product = {
+                            name: "🎁 Mystery Box",
+                            price: memoryStats.mystery_box.price || 10,
+                            category: "MYSTERY"
+                        };
+                    }
                     if (!product) continue;
                     
                     if (product.price === "Custom") {
@@ -1032,7 +1055,46 @@ client.on('interactionCreate', async (interaction) => {
                 await interaction.update({ content: `📦 **Processing your order... The menu has been locked.**\n\n${cartList}\n💰 **Total paid: £${state.cartTotal.toFixed(2)}**`, components: [] }).catch(() => {});
                 
                 for(const selected of state.cart) {
-                    const product = memoryStats.products[selected];
+                    let product = null;
+                    let isMysteryBox = false;
+                    let dropTier = null;
+
+                    if (selected === 'mystery_box' && memoryStats.mystery_box && memoryStats.mystery_box.enabled) {
+                        isMysteryBox = true;
+                        const roll = Math.random() * 100;
+                        let accumulated = 0;
+                        for (const tier of memoryStats.mystery_box.tiers || []) {
+                            accumulated += parseFloat(tier.chance);
+                            if (roll <= accumulated) {
+                                dropTier = tier;
+                                break;
+                            }
+                        }
+                        
+                        if (dropTier && memoryStats.products[dropTier.productId]) {
+                            product = memoryStats.products[dropTier.productId];
+                            await interaction.channel.send(`🎉 **MYSTERY BOX OPENED!**\nYou unboxed: **${product.name}** (${dropTier.tierName} Tier)!`).catch(()=>{});
+                            
+                            if (dropTier.announce) {
+                                try {
+                                    const shopChan = await client.channels.fetch(SHOP_CHANNEL_ID).catch(() => null);
+                                    if (shopChan) {
+                                        const embed = new EmbedBuilder()
+                                            .setColor('#ff9f0a')
+                                            .setTitle('🎲 MYSTERY BOX DROP!')
+                                            .setDescription(`<@${interaction.user.id}> just unboxed a **${dropTier.tierName}** item: **${product.name}**!\n\nGet yours now in the shop!`);
+                                        await shopChan.send({ embeds: [embed] }).catch(()=>{});
+                                    }
+                                } catch(e) {}
+                            }
+                        } else {
+                            product = Object.values(memoryStats.products)[0]; 
+                            await interaction.channel.send(`🎉 **MYSTERY BOX OPENED!**\nYou unboxed: **${product?.name}**!`).catch(()=>{});
+                        }
+                    } else {
+                        product = memoryStats.products[selected];
+                    }
+
                     if(!product) continue;
                     
                     if (product.price === "Custom") {
@@ -2425,6 +2487,12 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                         return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ error: e.message }));
                     }
                 }
+                else if (data.action === 'save_mystery_box') {
+                    if (!memoryStats.mystery_box) memoryStats.mystery_box = {};
+                    memoryStats.mystery_box = data.data;
+                    syncCloud();
+                    return res.writeHead(200).end('OK');
+                }
                 else if (data.action === 'save_bot_control') {
                     if (data.config) {
                         if (!memoryStats.bot_config) memoryStats.bot_config = {};
@@ -3170,6 +3238,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                 <div class='nav-group'>STORE</div>
                 <button class='nav-btn' onclick='window.switchTab("transactions", this)'>Transactions</button>
                 <button class='nav-btn' onclick='window.switchTab("products", this)'>Catalog</button>
+                <button class='nav-btn' onclick='window.switchTab("mysterybox", this)'>Mystery Box</button>
                 <button class='nav-btn' onclick='window.switchTab("kanban", this)'>Kanban</button>
                 <button class='nav-btn' onclick='window.switchTab("vip", this)'>VIP Pass</button>
                 <button class='nav-btn' onclick='window.switchTab("referrals", this)'>Promos</button>
@@ -4042,6 +4111,44 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
             </div>
 
             
+            
+            <div id='mysterybox' class='tab-content'>
+                <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:30px;'>
+                    <div>
+                        <h2>🎁 Mystery Box Manager</h2>
+                        <p class='text-muted'>Drive sales by offering a randomized drop box with customizable tiers and probabilities.</p>
+                    </div>
+                    <div>
+                        <button class='admin-btn btn-green' onclick='window.saveMysteryBox()'>Save Settings</button>
+                    </div>
+                </div>
+
+                <div class='box'>
+                    <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;'>
+                        <h3 style='margin:0;'>General Settings</h3>
+                        <label class="switch">
+                            <input type="checkbox" id="mb-enabled">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div style='display:grid; grid-template-columns: 1fr 1fr; gap:15px;'>
+                        <div>
+                            <label style='display:block; margin-bottom:5px; color:#8e8e93;'>Box Price (£)</label>
+                            <input type='number' id='mb-price' class='admin-input' value='10' step='0.01'>
+                        </div>
+                    </div>
+                </div>
+
+                <div class='box' style='margin-top:20px;'>
+                    <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;'>
+                        <h3 style='margin:0;'>Drop Tiers</h3>
+                        <button class='admin-btn' onclick='window.addMysteryBoxTier()' style='padding:5px 15px; margin:0;'>+ Add Tier</button>
+                    </div>
+                    <div id='mb-tiers-container'></div>
+                    <p class='text-muted' style='margin-top:10px;'>Make sure total chance adds up to 100%.</p>
+                </div>
+            </div>
+
             <div id='botcontrol' class='tab-content'>
                 <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:30px;'>
                     <div>
@@ -5675,6 +5782,66 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         }
         // 🚀 [UI_ACTION_ASYNC: loadBackups] - Action asynchrone d'interface Dashboard
         
+        
+        window.loadMysteryBox = function() {
+            const mb = rawStats.mystery_box || { enabled: false, price: 10, tiers: [] };
+            document.getElementById('mb-enabled').checked = mb.enabled;
+            document.getElementById('mb-price').value = mb.price;
+            
+            const container = document.getElementById('mb-tiers-container');
+            container.innerHTML = '';
+            mb.tiers.forEach(tier => window.addMysteryBoxTier(tier));
+        };
+
+        window.addMysteryBoxTier = function(data = { tierName: 'Common', chance: 50, productId: '', announce: false }) {
+            const container = document.getElementById('mb-tiers-container');
+            const div = document.createElement('div');
+            div.style.display = 'flex';
+            div.style.gap = '10px';
+            div.style.marginBottom = '10px';
+            div.style.alignItems = 'flex-end';
+            
+            let productOptions = '<option value="">-- Select Product --</option>';
+            if (rawStats.products) {
+                Object.entries(rawStats.products).forEach(([id, p]) => {
+                    if (p.price !== 'Custom') {
+                        productOptions += '<option value="' + id + '" ' + (data.productId === id ? 'selected' : '') + '>' + p.name + '</option>';
+                    }
+                });
+            }
+
+            div.innerHTML = "<div style='flex:1;'><label style='display:block; margin-bottom:5px; font-size:0.8em;'>Tier Name (e.g. Legendary)</label><input type='text' class='admin-input mb-tier-name' value='" + data.tierName + "'></div><div style='flex:2;'><label style='display:block; margin-bottom:5px; font-size:0.8em;'>Product to Drop</label><select class='admin-input mb-tier-product' style='cursor:pointer;'>" + productOptions + "</select></div><div style='flex:1;'><label style='display:block; margin-bottom:5px; font-size:0.8em;'>Chance (%)</label><input type='number' class='admin-input mb-tier-chance' value='" + data.chance + "' step='0.1'></div><div style='flex:1; display:flex; align-items:center; height:35px;'><label style='display:flex; align-items:center; gap:5px; cursor:pointer;'><input type='checkbox' class='mb-tier-announce' " + (data.announce ? 'checked' : '') + "> Announce</label></div><button class='admin-btn' style='color:#ff453a; height:35px; margin:0;' onclick='this.parentElement.remove()'>X</button>";
+            container.appendChild(div);
+        };
+
+        window.saveMysteryBox = async function() {
+            const enabled = document.getElementById('mb-enabled').checked;
+            const price = parseFloat(document.getElementById('mb-price').value) || 10;
+            
+            const tiers = [];
+            let totalChance = 0;
+            document.querySelectorAll('#mb-tiers-container > div').forEach(div => {
+                const tierName = div.querySelector('.mb-tier-name').value;
+                const productId = div.querySelector('.mb-tier-product').value;
+                const chance = parseFloat(div.querySelector('.mb-tier-chance').value) || 0;
+                const announce = div.querySelector('.mb-tier-announce').checked;
+                
+                if (tierName && productId) {
+                    tiers.push({ tierName, productId, chance, announce });
+                    totalChance += chance;
+                }
+            });
+
+            if (enabled && Math.abs(totalChance - 100) > 0.1) {
+                return showToast('Total chance must be exactly 100%!', 'error');
+            }
+
+            try {
+                await window.executeAction({ action: 'save_mystery_box', data: { enabled, price, tiers } }, false);
+                showToast('Mystery Box saved successfully!');
+            } catch(e) { showToast('Error saving Mystery Box', 'error'); }
+        };
+
         window.testNotification = function() {
             showToast('Notification scheduled in 5 seconds...', 'success');
             setTimeout(() => {
