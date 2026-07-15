@@ -183,7 +183,7 @@ async function loadCloudStats() {
     }
     try {
         const cleanUrl = url.endsWith('/') ? url.slice(0, -1) : url;
-        const res = await axios.get(`${cleanUrl}/get/bot_stats`, { headers: { Authorization: `Bearer ${token}` } });
+        const res = await axios.get(`${cleanUrl}/get/bot_stats`, { headers: { Authorization: `Bearer ${token}` }, timeout: 10000 });
         if (res.data && res.data.result) {
             try { memoryStats = { ...memoryStats, ...JSON.parse(res.data.result) }; } catch(e) { systemLog('ERROR', 'UPSTASH', 'Invalid JSON from Cloud'); }
 
@@ -290,7 +290,7 @@ function ensureMemoryInitialized() {
 
             
             if (!memoryStats.patchnotes.some(p => p.text.includes("Bot Messages Configuration Panel"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "✨ NOUVEAUTÉ: Bot Messages Configuration Panel\n\n- Ajout d'un panel ultra premium pour configurer tous les messages automatisés du bot.\n- Support total des variables de personnalisation ({user}, {channel}, etc).\n- Intégration de l'Intelligence Artificielle (Gemini 3.1 Pro avec Thinking Level: HIGH) pour générer des messages captivants, professionnels et personnalisés." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "✨ NOUVEAUTÉ: Bot Messages Configuration Panel\n\n- Ajout d'un panel ultra premium pour configurer tous les messages automatisés du bot.\n- Support total des variables de personnalisation ({user}, {channel}, etc).\n- Intégration de l'Intelligence Artificielle (Gemini 1.5 Pro avec Thinking Level: HIGH) pour générer des messages captivants, professionnels et personnalisés." });
                 syncCloud();
             }
 
@@ -420,6 +420,24 @@ function ensureMemoryInitialized() {
                 syncCloud();
             }
 
+            
+            if (!memoryStats.patchnotes.some(p => p.text.includes("UI Localization"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🌍 UI Localization & Consistency\n\n- Uniformisation complète de la langue du Dashboard en Anglais (Kanban, statuts Discord, notifications de bots, messages d'erreurs).\n- Nettoyage des textes hybrides Français/Anglais pour une expérience utilisateur cohérente.\n- Vérification de l'intégrité de tous les Squelettes de chargement (Skeletons) sur l'ensemble des modules d'analytique." });
+                syncCloud();
+            }
+
+            
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Ultra-Complete Diagnostics & Global Localization"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ Ultra-Complete Diagnostics & Global Localization\n\n- Exécution d'une passe de diagnostics profonds (analyse mot par mot) révélant des instabilités UI résiduelles.\n- Nettoyage définitif des chaînes de caractères françaises ('Veuillez remplir tous les champs', Kanban 'NOUVELLES DEMANDES', statuts de déconnexion) pour garantir une expérience 100% anglophone premium.\n- Correction du comportement des boutons temporels du graphique des ventes (perte du style 'btn-pill' lors du re-render).\n- Mise à jour des identifiants IA (Gemini 3.1 Pro -> 1.5 Pro) sur les écrans d'interrogation pour refléter l'infrastructure réelle." });
+                syncCloud();
+            }
+
+            
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Upstash Redis Timeout Optimization"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Upstash Redis Timeout Optimization\n\n- Upgraded the timeout limit for Upstash Cloud Sync from 3000ms to 10000ms to prevent background crashes during high latency periods.\n- Stabilized the dashboard background syncing." });
+                syncCloud();
+            }
+
             if (!memoryStats.overrides) memoryStats.overrides = {};
             if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } };
             if (!memoryStats.settings.maintenance) memoryStats.settings.maintenance = { active: false, endsAt: 0, channelId: "" };
@@ -494,7 +512,7 @@ async function syncCloud(isManualForce = false) {
         const cleanUrl = url.endsWith('/') ? url.slice(0, -1) : url;
         await axios.post(cleanUrl, ["SET", "bot_stats", JSON.stringify(memoryStats)], { 
             headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-            timeout: 3000
+            timeout: 10000
         });
     } catch (err) { 
         systemLog('ERROR', 'UPSTASH', `Cloud Sync Error: ${err.message}`); 
@@ -749,7 +767,7 @@ client.on('error', error => {
 // 🚀 [EVENT_LISTENER: shardDisconnect] - Écouteur d'événement Discord
 client.on('shardDisconnect', (event, id) => {
     systemLog('WARN', 'DISCORD_CORE', `Shard ${id} disconnected. Attempting auto-reconnect...`);
-    console.log(`❌ Shard ${id} déconnecté de Discord. Tentative de reconnexion automatique...`);
+    console.log(`❌ Shard ${id} disconnected from Discord. Attempting automatic reconnection...`);
 });
 
 client.once('clientReady', () => {
@@ -827,7 +845,7 @@ async function acquireDistributedLock(lockKey, ttl_ms = 5000) {
         const cleanUrl = url.endsWith('/') ? url.slice(0, -1) : url;
         const res = await axios.post(cleanUrl, ["SET", `lock_${lockKey}`, "1", "NX", "PX", ttl_ms.toString()], {
             headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-            timeout: 3000
+            timeout: 10000
         });
         return res.data.result === "OK";
     } catch (e) {
@@ -1242,7 +1260,7 @@ client.on('interactionCreate', async (interaction) => {
                 state.processing = false;
                 systemLog('ERROR', 'STORE', 'Checkout crashed: ' + err.message);
                 if (interaction.channel) {
-                    interaction.channel.send("❌ **Critical Error during checkout:** Une erreur est survenue, contactez le support.").catch(()=>{});
+                    interaction.channel.send("❌ **Critical Error during checkout:** An error occurred, please contact support.").catch(()=>{});
                 }
             }
         }} catch (globalError) {
@@ -2357,8 +2375,8 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                             try {
                                 const targetUser = await client.users.fetch(reqItem.userId).catch(() => null);
                                 if (targetUser && data.status !== 'pending') {
-                                    let statusFr = data.status === 'recording' ? '🎥 Enregistrement en cours' : data.status === 'editing' ? '✂️ Montage en cours' : '✅ Commande Terminée';
-                                    await targetUser.send(`🔔 **Mise à jour de ta commande personnalisée (${reqItem.product}):**\nNouveau statut : **${statusFr}** !`).catch(()=>{});
+                                    let statusEn = data.status === 'recording' ? '🎥 Recording in progress' : data.status === 'editing' ? '✂️ Editing in progress' : '✅ Order Completed';
+                                    await targetUser.send(`🔔 **Update on your custom order (${reqItem.product}):**\nNew status: **${statusEn}** !`).catch(()=>{});
                                 }
                             } catch(e) { console.error("Error:", e); }
                         }
@@ -3588,9 +3606,9 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                        <div style='display:flex; align-items:center; gap: 15px;'>
                            <h2 style='margin:0;'>💬 Live Support Console</h2>
                            <select id='chat-sort-select' style='margin:0; width:auto; padding: 8px;' onchange='window.loadTicketsForChat()'>
-                               <option value='asc'>⏱️ Chronologique (Ancien → Récent)</option>
-                               <option value='desc'>⏱️ Chronologique (Récent → Ancien)</option>
-                               <option value='importance'>⭐ Importance (Support d'abord)</option>
+                               <option value='asc'>⏱️ Chronological (Oldest → Newest)</option>
+                               <option value='desc'>⏱️ Chronological (Newest → Oldest)</option>
+                               <option value='importance'>⭐ Importance (Support First)</option>
                            </select>
                        </div>
                        <button class='admin-btn btn-green' style='margin:0;' onclick='window.loadTicketsForChat()'>🔄 Synchronise</button>
@@ -5050,9 +5068,9 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                       <strong style='color:var(--accent-green);font-size:1.1em'>\${escapeHTML(req.username)}</strong>
                       <div style='color:#fff;margin-bottom:10px'>\${escapeHTML(req.product)}</div>
                       <div class='kanban-actions'>\`;
-                  if(req.status === 'pending') { html += \`<button class='admin-btn' style='color:var(--accent-orange)' onclick='window.moveReq(\"\${escapeInlineJS(req.id)}\",\"recording\")'>🎥 Enregistrer</button>\`; }
-                  else if(req.status === 'recording') { html += \`<button class='admin-btn' style='color:var(--accent-purple)' onclick='window.moveReq(\"\${escapeInlineJS(req.id)}\",\"editing\")'>✂️ Monter</button>\`; }
-                  else if(req.status === 'editing') { html += \`<button class='admin-btn' style='color:var(--accent-green)' onclick='window.moveReq(\"\${escapeInlineJS(req.id)}\",\"done\")'>✅ Terminer</button>\`; }
+                  if(req.status === 'pending') { html += \`<button class='admin-btn' style='color:var(--accent-orange)' onclick='window.moveReq(\"\${escapeInlineJS(req.id)}\",\"recording\")'>🎥 Record</button>\`; }
+                  else if(req.status === 'recording') { html += \`<button class='admin-btn' style='color:var(--accent-purple)' onclick='window.moveReq(\"\${escapeInlineJS(req.id)}\",\"editing\")'>✂️ Edit</button>\`; }
+                  else if(req.status === 'editing') { html += \`<button class='admin-btn' style='color:var(--accent-green)' onclick='window.moveReq(\"\${escapeInlineJS(req.id)}\",\"done\")'>✅ Finish</button>\`; }
                   html += \`</div></div>\`;
                   if(req.status === 'pending') kPending += html;
                   else if(req.status === 'recording') kRec += html;
@@ -5061,10 +5079,10 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
               });
           }
           if(document.getElementById('target-kanban')) document.getElementById('target-kanban').innerHTML = \`
-              <div class='kanban-col'><div class='kanban-header' style='color:var(--accent-blue)'>📬 NOUVELLES DEMANDES</div>\${kPending||'<p class="text-muted">Vide</p>'}</div>
-              <div class='kanban-col'><div class='kanban-header' style='color:var(--accent-orange)'>🎥 ENREGISTREMENT</div>\${kRec||'<p class="text-muted">Vide</p>'}</div>
-              <div class='kanban-col'><div class='kanban-header' style='color:var(--accent-purple)'>✂️ MONTAGE / EDIT</div>\${kEdit||'<p class="text-muted">Vide</p>'}</div>
-              <div class='kanban-col'><div class='kanban-header' style='color:var(--accent-green)'>✅ TERMINÉ</div>\${kDone||'<p class="text-muted">Vide</p>'}</div>
+              <div class='kanban-col'><div class='kanban-header' style='color:var(--accent-blue)'>📬 NEW REQUESTS</div>\${kPending||'<p class="text-muted">Empty</p>'}</div>
+              <div class='kanban-col'><div class='kanban-header' style='color:var(--accent-orange)'>🎥 RECORDING</div>\${kRec||'<p class="text-muted">Empty</p>'}</div>
+              <div class='kanban-col'><div class='kanban-header' style='color:var(--accent-purple)'>✂️ EDITING</div>\${kEdit||'<p class="text-muted">Empty</p>'}</div>
+              <div class='kanban-col'><div class='kanban-header' style='color:var(--accent-green)'>✅ COMPLETED</div>\${kDone||'<p class="text-muted">Empty</p>'}</div>
           \`;
         }
             
@@ -5207,7 +5225,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             const prod = document.getElementById('manTxProd').value;
             const price = parseFloat(document.getElementById('manTxPrice').value);
             const dateInput = document.getElementById('manTxDate').value;
-            if(!user || !prod || isNaN(price)) return showToast('Veuillez remplir tous les champs', 'error');
+            if(!user || !prod || isNaN(price)) return showToast('Please fill in all fields', 'error');
             
             let displayDate = ''; let dateKey = ''; let dInput = '';
             if (dateInput) {
@@ -5763,7 +5781,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                 inner.style.transform = 'translateY(0)';
             }, 10);
 
-            content.innerHTML = '<div style="text-align:center; padding:60px 20px; color:var(--text-muted);"><div class="loader" style="margin:0 auto 20px auto; width:40px; height:40px; border:3px solid rgba(255,255,255,0.05); border-top-color:var(--accent-purple); border-radius:50%; animation:spin 1s linear infinite; box-shadow:0 0 15px rgba(139,92,246,0.3);"></div><div style="font-size:1.2em; color:#fff; font-weight:600; margin-bottom:10px;">Interrogating Neural Net...</div><span style="font-size:0.9em; opacity:0.8;">Running Deep Financial Analysis via Gemini 3.1 Pro</span><br><br><span style="font-size:0.8em; padding:6px 12px; background:rgba(255,255,255,0.05); border-radius:20px; border:1px solid rgba(255,255,255,0.1); margin-top:10px; display:inline-block;">Estimated time: 3-8 seconds</span></div>';
+            content.innerHTML = '<div style="text-align:center; padding:60px 20px; color:var(--text-muted);"><div class="loader" style="margin:0 auto 20px auto; width:40px; height:40px; border:3px solid rgba(255,255,255,0.05); border-top-color:var(--accent-purple); border-radius:50%; animation:spin 1s linear infinite; box-shadow:0 0 15px rgba(139,92,246,0.3);"></div><div style="font-size:1.2em; color:#fff; font-weight:600; margin-bottom:10px;">Interrogating Neural Net...</div><span style="font-size:0.9em; opacity:0.8;">Running Deep Financial Analysis via Gemini 1.5 Pro</span><br><br><span style="font-size:0.8em; padding:6px 12px; background:rgba(255,255,255,0.05); border-radius:20px; border:1px solid rgba(255,255,255,0.1); margin-top:10px; display:inline-block;">Estimated time: 3-8 seconds</span></div>';
             
             try {
                 const res = await fetch('/api/action', {
@@ -5795,7 +5813,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                 inner.style.transform = 'translateY(0)';
             }, 10);
 
-            content.innerHTML = '<div style="text-align:center; padding:60px 20px; color:var(--text-muted);"><div class="loader" style="margin:0 auto 20px auto; width:40px; height:40px; border:3px solid rgba(255,255,255,0.05); border-top-color:var(--accent-blue); border-radius:50%; animation:spin 1s linear infinite; box-shadow:0 0 15px rgba(59,130,246,0.3);"></div><div style="font-size:1.2em; color:#fff; font-weight:600; margin-bottom:10px;">Scanning Live Market...</div><span style="font-size:0.9em; opacity:0.8;">Analyzing competitors for <strong style="color:var(--accent-blue)">' + escapeHTML(productName) + '</strong> via Gemini 3.5 Flash</span></div>';
+            content.innerHTML = '<div style="text-align:center; padding:60px 20px; color:var(--text-muted);"><div class="loader" style="margin:0 auto 20px auto; width:40px; height:40px; border:3px solid rgba(255,255,255,0.05); border-top-color:var(--accent-blue); border-radius:50%; animation:spin 1s linear infinite; box-shadow:0 0 15px rgba(59,130,246,0.3);"></div><div style="font-size:1.2em; color:#fff; font-weight:600; margin-bottom:10px;">Scanning Live Market...</div><span style="font-size:0.9em; opacity:0.8;">Analyzing competitors for <strong style="color:var(--accent-blue)">' + escapeHTML(productName) + '</strong> via Gemini 1.5 Flash</span></div>';
             
             try {
                 const res = await fetch('/api/action', {
@@ -5993,9 +6011,9 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         };
         // 🚀 [UI_ACTION: updateSalesChart] - Action d'interface Dashboard
         window.updateSalesChart = function(days) { 
-            if(document.getElementById('btn-chart-7')) document.getElementById('btn-chart-7').className = days === 7 ? 'admin-btn btn-green' : 'admin-btn';
-            if(document.getElementById('btn-chart-30')) document.getElementById('btn-chart-30').className = days === 30 ? 'admin-btn btn-green' : 'admin-btn';
-            if(document.getElementById('btn-chart-all')) document.getElementById('btn-chart-all').className = days === 0 ? 'admin-btn btn-green' : 'admin-btn';
+            if(document.getElementById('btn-chart-7')) document.getElementById('btn-chart-7').className = days === 7 ? 'admin-btn btn-pill active' : 'admin-btn btn-pill';
+            if(document.getElementById('btn-chart-30')) document.getElementById('btn-chart-30').className = days === 30 ? 'admin-btn btn-pill active' : 'admin-btn btn-pill';
+            if(document.getElementById('btn-chart-all')) document.getElementById('btn-chart-all').className = days === 0 ? 'admin-btn btn-pill active' : 'admin-btn btn-pill';
             window.renderSalesChart(days); 
         };
     // 🚀 [FUNCTION: renderAnalyticsCharts] - Déclaration de fonction
