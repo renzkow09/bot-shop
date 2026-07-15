@@ -438,6 +438,12 @@ function ensureMemoryInitialized() {
                 syncCloud();
             }
 
+            
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Premium Analytics UI & Animations"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🎨 Premium Analytics UI & Animations\n\n- Refonte visuelle de l'onglet Analytics : ajout de lueurs ambiantes, bordures douces et animations de fondu 'slide-up' à l'ouverture de la page.\n- Amélioration de la bibliothèque Chart.js (courbes lissées, dégradés subtils, tooltips stylisés avec ombres portées) pour une lecture de données premium.\n- Renforcement de l'expérience générale des composants graphiques." });
+                syncCloud();
+            }
+
             if (!memoryStats.overrides) memoryStats.overrides = {};
             if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } };
             if (!memoryStats.settings.maintenance) memoryStats.settings.maintenance = { active: false, endsAt: 0, channelId: "" };
@@ -1875,7 +1881,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
             const startUpstash = Date.now();
             try {
                 const cleanUrl = process.env.UPSTASH_REDIS_REST_URL.endsWith('/') ? process.env.UPSTASH_REDIS_REST_URL.slice(0, -1) : process.env.UPSTASH_REDIS_REST_URL;
-                await axios.get(`${cleanUrl}/get/ping_check`, { headers: { Authorization: `Bearer ${process.env.UPSTASH_REDIS_REST_TOKEN}` }, timeout: 5000 });
+                await axios.get(`${cleanUrl}/get/ping_check`, { headers: { Authorization: `Bearer ${process.env.UPSTASH_REDIS_REST_TOKEN}` }, timeout: 10000 });
                 upstashStatus = 'online';
                 upstashLatency = Date.now() - startUpstash;
             } catch (e) {
@@ -2671,6 +2677,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
         body { font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: var(--bg-main); color: var(--text-main); margin: 0; min-height: 100dvh; overflow-x: hidden; -webkit-font-smoothing: antialiased; }
         ::-webkit-scrollbar { width: 6px; height: 6px; } ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 10px; } ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.3); }
         @keyframes fadeInSmooth { from { opacity: 0; transform: translateY(10px); filter: blur(5px); } to { opacity: 1; transform: translateY(0); filter: blur(0); } }
+        @keyframes slideUpFade { from { opacity: 0; transform: translateY(40px); filter: blur(10px); } to { opacity: 1; transform: translateY(0); filter: blur(0); } }
         @keyframes pulseGlow { 0% { box-shadow: 0 0 5px rgba(var(--accent-green-rgb), 0.2); } 100% { box-shadow: 0 0 15px rgba(var(--accent-green-rgb), 0.5); } }
         .status-dot { width: 8px; height: 8px; background-color: var(--accent-green); border-radius: 50%; display: inline-block; animation: pulseGlow 2s infinite alternate; margin-right: 8px; box-shadow: 0 0 8px var(--accent-green); }
         .bot-status { display: flex; align-items: center; background: rgba(var(--accent-green-rgb), 0.1); border: 1px solid rgba(var(--accent-green-rgb), 0.2); padding: 6px 14px; border-radius: 20px; font-weight: 500; color: var(--accent-green); font-size: 0.85em; letter-spacing: 0.5px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
@@ -3661,12 +3668,13 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
            </div>
 
            <div id='analytics' class='tab-content'>
-               <div class='box'><h2>🕒 Peak Execution Hours</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Observe the time of day with the highest transaction volume.</p><div style='height:280px; position:relative;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='hourlyChart' style='position:relative; z-index:10;'></canvas></div></div>
+               <div class='box' style='margin-bottom:25px; animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: 0.1s;'>
+                   <h2>🕒 Peak Execution Hours</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Observe the time of day with the highest transaction volume.</p><div style='height:280px; position:relative;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='hourlyChart' style='position:relative; z-index:10;'></canvas></div></div>
                <div style='display:grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap:25px;'>
-                   <div class='box'><h2>🏆 Top Performing Assets</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Which products generate the most sales quantity.</p><div style='height:260px; position:relative;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='topProductsBarChart' style='position:relative; z-index:10;'></canvas></div></div>
-                   <div class='box'><h2>🏷️ Sector Revenue</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Revenue grouped by product category.</p><div style='height:260px; position:relative;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='categoryRevenueChart' style='position:relative; z-index:10;'></canvas></div></div>
-                   <div class='box'><h2>📅 Sales by Day of Week</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Identify your most profitable days to plan promotions.</p><div style='height:260px; position:relative;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='dowChart' style='position:relative; z-index:10;'></canvas></div></div>
-                   <div class='box'><h2>📊 Conversion Funnel</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Ratio of total tickets opened versus successful transactions.</p><div style='height:260px; position:relative;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='funnelChart' style='position:relative; z-index:10;'></canvas></div></div>
+                   <div class='box' style='animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: 0.2s; position: relative; overflow: hidden;'><div class='ambient-glow' style='--glow-color: rgba(var(--accent-green-rgb), 0.5); top: -20px; left: -20px;'></div><h2>🏆 Top Performing Assets</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Which products generate the most sales quantity.</p><div style='height:260px; position:relative;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='topProductsBarChart' style='position:relative; z-index:10;'></canvas></div></div>
+                   <div class='box' style='animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: 0.3s; position: relative; overflow: hidden;'><div class='ambient-glow' style='--glow-color: rgba(var(--accent-green-rgb), 0.5); top: -20px; left: -20px;'></div><h2>🏷️ Sector Revenue</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Revenue grouped by product category.</p><div style='height:260px; position:relative;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='categoryRevenueChart' style='position:relative; z-index:10;'></canvas></div></div>
+                   <div class='box' style='animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: 0.4s; position: relative; overflow: hidden;'><div class='ambient-glow' style='--glow-color: rgba(var(--accent-green-rgb), 0.5); top: -20px; left: -20px;'></div><h2>📅 Sales by Day of Week</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Identify your most profitable days to plan promotions.</p><div style='height:260px; position:relative;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='dowChart' style='position:relative; z-index:10;'></canvas></div></div>
+                   <div class='box' style='animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: 0.5s; position: relative; overflow: hidden;'><div class='ambient-glow' style='--glow-color: rgba(var(--accent-green-rgb), 0.5); top: -20px; left: -20px;'></div><h2>📊 Conversion Funnel</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Ratio of total tickets opened versus successful transactions.</p><div style='height:260px; position:relative;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='funnelChart' style='position:relative; z-index:10;'></canvas></div></div>
                </div>
            </div>
 
@@ -6017,78 +6025,271 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             window.renderSalesChart(days); 
         };
     // 🚀 [FUNCTION: renderAnalyticsCharts] - Déclaration de fonction
-        function renderAnalyticsCharts() { 
-           document.querySelectorAll('.skeleton-chart-overlay').forEach(el => el.remove());
-
+        function renderAnalyticsCharts() {
+            document.querySelectorAll('.skeleton-chart-overlay').forEach(el => el.remove());
            if(typeof Chart === 'undefined') return;
+           
+           // Common font configuration
+           Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, Inter, sans-serif';
+           Chart.defaults.color = '#8e8e93';
+
+           const createGradient = (ctx, colorStart, colorEnd) => {
+               const gradient = ctx.createLinearGradient(0, 0, 0, 300);
+               gradient.addColorStop(0, colorStart);
+               gradient.addColorStop(1, colorEnd);
+               return gradient;
+           };
+
            withErrorBoundary('hourlyChart', 'Hourly Sales Chart', () => {
                const canvas = document.getElementById('hourlyChart'); 
-               if(canvas) { 
-                   const ctxHourly = canvas.getContext('2d'); 
-                   if(!ctxHourly) return; 
-                   if(window.hourlyChart instanceof Chart) window.hourlyChart.destroy(); 
-                   window.hourlyChart = new Chart(ctxHourly, { type: 'bar', data: { labels: Array.from({length: 24}, (_, i) => i+'h'), datasets: [{ label: 'Sales', data: rawStats.analytics.hourly_sales || Array(24).fill(0), backgroundColor: getThemeVal('hex'), hoverBackgroundColor: '#fff', borderRadius: 6 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false } }, scales: { y: { grid: { color: 'rgba(255,255,255,0.05)' }, border: {display: false}, beginAtZero: true }, x: { grid: { display: false }, border: {display: false} } } } }); 
-               } 
-           });
+               if(canvas) {
+                    const ctxHourly = canvas.getContext('2d');
+                    if(!ctxHourly) return;
+                    if(window.hourlyChart instanceof Chart) window.hourlyChart.destroy();
+                    
+                    const gradient = createGradient(ctxHourly, 'rgba(' + getThemeVal('rgb') + ', 0.9)', 'rgba(' + getThemeVal('rgb') + ', 0.2)');
+
+                    window.hourlyChart = new Chart(ctxHourly, { 
+                        type: 'bar', 
+                        data: { 
+                            labels: Array.from({length: 24}, (_, i) => i+'h'), 
+                            datasets: [{ 
+                                label: 'Sales', 
+                                data: rawStats.analytics.hourly_sales || Array(24).fill(0), 
+                                backgroundColor: gradient, 
+                                hoverBackgroundColor: getThemeVal('hex'), 
+                                borderRadius: {topLeft: 8, topRight: 8, bottomLeft: 0, bottomRight: 0},
+                                borderSkipped: false
+                            }] 
+                        }, 
+                        options: { 
+                            responsive: true, 
+                            maintainAspectRatio: false, 
+                            animation: { duration: 1500, easing: 'easeOutQuart' }, 
+                            interaction: { mode: 'index', intersect: false }, 
+                            plugins: { 
+                                legend: { display: false },
+                                tooltip: {
+                                    backgroundColor: 'rgba(0,0,0,0.8)',
+                                    titleFont: { size: 14, family: 'Inter' },
+                                    bodyFont: { size: 14, family: 'monospace' },
+                                    padding: 12,
+                                    cornerRadius: 8,
+                                    borderColor: 'rgba(255,255,255,0.1)',
+                                    borderWidth: 1
+                                }
+                            }, 
+                            scales: { 
+                                y: { grid: { color: 'rgba(255,255,255,0.03)', drawBorder: false }, border: {display: false}, beginAtZero: true, ticks: { padding: 10 } }, 
+                                x: { grid: { display: false }, border: {display: false}, ticks: { padding: 10 } } 
+                            } 
+                        } 
+                    });
+                }
+            });
+
            withErrorBoundary('topProductsBarChart', 'Top Products Chart', () => {
                const canvas = document.getElementById('topProductsBarChart'); 
-               if(canvas) { 
-                   const prodIds = Object.keys(rawStats.product_sales || {}); 
-                   const prodLabels = prodIds.map(id => rawStats.products[id] ? rawStats.products[id].name : 'Unknown'); 
-                   const prodData = Object.values(rawStats.product_sales || {}); 
-                   const ctxTopProd = canvas.getContext('2d'); 
-                   if(!ctxTopProd) return; 
-                   if(window.topProdChart instanceof Chart) window.topProdChart.destroy(); 
-                   window.topProdChart = new Chart(ctxTopProd, { type: 'bar', data: { labels: prodLabels.length?prodLabels:['No Data'], datasets: [{ label: 'Sales', data: prodData.length?prodData:[0], backgroundColor: getThemeVal('hex'), hoverBackgroundColor: '#fff', borderRadius: 6 }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' }, border: {display: false}, beginAtZero: true }, y: { grid: { display: false }, border: {display: false} } } } }); 
-               } 
-           });
+               if(canvas) {
+                    const prodIds = Object.keys(rawStats.product_sales || {});
+                    const prodLabels = prodIds.map(id => rawStats.products[id] ? rawStats.products[id].name : 'Unknown');
+                    const prodData = Object.values(rawStats.product_sales || {});
+                    const ctxTopProd = canvas.getContext('2d');
+                    if(!ctxTopProd) return;
+                    if(window.topProdChart instanceof Chart) window.topProdChart.destroy();
+                    
+                    const gradient = createGradient(ctxTopProd, 'rgba(' + getThemeVal('rgb') + ', 0.9)', 'rgba(' + getThemeVal('rgb') + ', 0.2)');
+
+                    window.topProdChart = new Chart(ctxTopProd, { 
+                        type: 'bar', 
+                        data: { 
+                            labels: prodLabels.length?prodLabels:['No Data'], 
+                            datasets: [{ 
+                                label: 'Sales', 
+                                data: prodData.length?prodData:[0], 
+                                backgroundColor: gradient, 
+                                hoverBackgroundColor: getThemeVal('hex'), 
+                                borderRadius: {topRight: 8, bottomRight: 8, topLeft: 0, bottomLeft: 0},
+                                borderSkipped: false
+                            }] 
+                        }, 
+                        options: { 
+                            indexAxis: 'y', 
+                            responsive: true, 
+                            maintainAspectRatio: false, 
+                            animation: { duration: 1500, easing: 'easeOutQuart' }, 
+                            interaction: { mode: 'index', intersect: false }, 
+                            plugins: { 
+                                legend: { display: false },
+                                tooltip: {
+                                    backgroundColor: 'rgba(0,0,0,0.8)',
+                                    titleFont: { size: 14, family: 'Inter' },
+                                    bodyFont: { size: 14, family: 'monospace' },
+                                    padding: 12,
+                                    cornerRadius: 8,
+                                    borderColor: 'rgba(255,255,255,0.1)',
+                                    borderWidth: 1
+                                }
+                            }, 
+                            scales: { 
+                                x: { grid: { color: 'rgba(255,255,255,0.03)', drawBorder: false }, border: {display: false}, beginAtZero: true }, 
+                                y: { grid: { display: false }, border: {display: false}, ticks: { padding: 10 } } 
+                            } 
+                        } 
+                    });
+                }
+            });
+
            withErrorBoundary('categoryRevenueChart', 'Category Revenue Chart', () => {
                const canvas = document.getElementById('categoryRevenueChart'); 
-               if(canvas) { 
-                   const catRevs = {}; 
-                   Object.entries(rawStats.product_sales || {}).forEach(([id, count]) => { 
-                       const p = rawStats.products[id]; 
-                       if(p && p.price !== 'Custom'){ 
-                           const cat = p.category || 'Other'; 
-                           if(!catRevs[cat]) catRevs[cat] = 0; 
-                           catRevs[cat] += (parseInt(p.price) * count); 
-                       } 
-                   }); 
-                   const ctxCat = canvas.getContext('2d'); 
-                   if(!ctxCat) return; 
-                   if(window.catChart instanceof Chart) window.catChart.destroy(); 
-                   window.catChart = new Chart(ctxCat, { type: 'polarArea', data: { labels: Object.keys(catRevs).length?Object.keys(catRevs):['No Data'], datasets: [{ data: Object.values(catRevs).length?Object.values(catRevs):[0], backgroundColor: [getThemeVal('hex'), getThemeVal('hover'), '#059669', '#f59e0b', '#ef4444'], hoverBackgroundColor: ['#fff', '#fff', '#fff', '#fff', '#fff'], borderWidth: 0, hoverOffset: 15 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, plugins: { legend: { position: 'right', labels: {color: '#8e8e93', font: { family: '-apple-system' }} } } } }); 
-               } 
-           });
+               if(canvas) {
+                    const catRevs = {};
+                    Object.entries(rawStats.product_sales || {}).forEach(([id, count]) => {
+                        const p = rawStats.products[id];
+                        if(p && p.price !== 'Custom'){
+                            const cat = p.category || 'Other';
+                            if(!catRevs[cat]) catRevs[cat] = 0;
+                            catRevs[cat] += (parseInt(p.price) * count);
+                        }
+                    });
+                    const ctxCat = canvas.getContext('2d');
+                    if(!ctxCat) return;
+                    if(window.catChart instanceof Chart) window.catChart.destroy();
+                    window.catChart = new Chart(ctxCat, { 
+                        type: 'doughnut', 
+                        data: { 
+                            labels: Object.keys(catRevs).length?Object.keys(catRevs):['No Data'], 
+                            datasets: [{ 
+                                data: Object.values(catRevs).length?Object.values(catRevs):[0], 
+                                backgroundColor: [getThemeVal('hex'), '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'], 
+                                hoverBackgroundColor: ['#fff', '#60a5fa', '#34d399', '#fbbf24', '#f87171', '#a78bfa'], 
+                                borderWidth: 2, 
+                                borderColor: 'rgba(20,20,22,1)',
+                                hoverOffset: 15 
+                            }] 
+                        }, 
+                        options: { 
+                            responsive: true, 
+                            maintainAspectRatio: false, 
+                            animation: { duration: 1500, easing: 'easeOutQuart' }, 
+                            cutout: '70%',
+                            plugins: { 
+                                legend: { position: 'right', labels: {color: '#8e8e93', font: { family: 'Inter', size: 12 }, padding: 20} },
+                                tooltip: {
+                                    backgroundColor: 'rgba(0,0,0,0.8)',
+                                    titleFont: { size: 14, family: 'Inter' },
+                                    bodyFont: { size: 14, family: 'monospace' },
+                                    padding: 12,
+                                    cornerRadius: 8,
+                                    borderColor: 'rgba(255,255,255,0.1)',
+                                    borderWidth: 1
+                                }
+                            } 
+                        } 
+                    });
+                }
+            });
+
            withErrorBoundary('dowChart', 'Sales by Day Chart', () => {
                const canvas = document.getElementById('dowChart'); 
-               if(canvas) { 
-                   const dowSales = { 'Sun':0, 'Mon':0, 'Tue':0, 'Wed':0, 'Thu':0, 'Fri':0, 'Sat':0 }; 
-                   const daysArr = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']; 
-                   Object.entries(rawStats.revenue || {}).forEach(([dateStr, val]) => { 
-                       const d = new Date(dateStr); 
-                       if(!isNaN(d)) { 
-                           dowSales[daysArr[d.getDay()]] += parseFloat(val); 
-                       } 
-                   }); 
-                   const ctxDow = canvas.getContext('2d'); 
-                   if(!ctxDow) return; 
-                   if(window.dowChartInst instanceof Chart) window.dowChartInst.destroy(); 
-                   window.dowChartInst = new Chart(ctxDow, { type: 'bar', data: { labels: daysArr, datasets: [{ label: 'Revenue (£)', data: daysArr.map(d=>dowSales[d]), backgroundColor: getThemeVal('hex'), hoverBackgroundColor: '#fff', borderRadius: 8 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false } }, scales: { y: { grid: { color: 'rgba(255,255,255,0.05)' }, border: {display: false}, beginAtZero: true }, x: { grid: { display: false }, border: {display: false} } } } }); 
-               } 
-           });
+               if(canvas) {
+                    const dowSales = { 'Sun':0, 'Mon':0, 'Tue':0, 'Wed':0, 'Thu':0, 'Fri':0, 'Sat':0 };
+                    const daysArr = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+                    Object.entries(rawStats.revenue || {}).forEach(([dateStr, val]) => {
+                        const d = new Date(dateStr);
+                        if(!isNaN(d)) {
+                            dowSales[daysArr[d.getDay()]] += parseFloat(val);
+                        }
+                    });
+                    const ctxDow = canvas.getContext('2d');
+                    if(!ctxDow) return;
+                    if(window.dowChartInst instanceof Chart) window.dowChartInst.destroy();
+                    
+                    const gradient = createGradient(ctxDow, 'rgba(59, 130, 246, 0.9)', 'rgba(59, 130, 246, 0.2)');
+
+                    window.dowChartInst = new Chart(ctxDow, { 
+                        type: 'bar', 
+                        data: { 
+                            labels: daysArr, 
+                            datasets: [{ 
+                                label: 'Revenue (£)', 
+                                data: daysArr.map(d=>dowSales[d]), 
+                                backgroundColor: gradient, 
+                                hoverBackgroundColor: '#60a5fa', 
+                                borderRadius: {topLeft: 8, topRight: 8, bottomLeft: 0, bottomRight: 0},
+                                borderSkipped: false
+                            }] 
+                        }, 
+                        options: { 
+                            responsive: true, 
+                            maintainAspectRatio: false, 
+                            animation: { duration: 1500, easing: 'easeOutQuart' }, 
+                            interaction: { mode: 'index', intersect: false }, 
+                            plugins: { 
+                                legend: { display: false },
+                                tooltip: {
+                                    backgroundColor: 'rgba(0,0,0,0.8)',
+                                    titleFont: { size: 14, family: 'Inter' },
+                                    bodyFont: { size: 14, family: 'monospace' },
+                                    padding: 12,
+                                    cornerRadius: 8,
+                                    borderColor: 'rgba(255,255,255,0.1)',
+                                    borderWidth: 1
+                                }
+                            }, 
+                            scales: { 
+                                y: { grid: { color: 'rgba(255,255,255,0.03)', drawBorder: false }, border: {display: false}, beginAtZero: true, ticks: { padding: 10 } }, 
+                                x: { grid: { display: false }, border: {display: false}, ticks: { padding: 10 } } 
+                            } 
+                        } 
+                    });
+                }
+            });
+
            withErrorBoundary('funnelChart', 'Conversion Funnel Chart', () => {
                const canvas = document.getElementById('funnelChart'); 
-               if(canvas) { 
-                   const ticketsOpened = rawStats.analytics?.tickets_opened || 0; 
-                   const salesClosed = rawStats.total_transactions || 0; 
-                   const ctxFunnel = canvas.getContext('2d'); 
-                   if(!ctxFunnel) return; 
-                   if(window.funnelChartInst instanceof Chart) window.funnelChartInst.destroy(); 
-                   window.funnelChartInst = new Chart(ctxFunnel, { type: 'doughnut', data: { labels: ['Tickets Opened (No Purchase)', 'Successful Sales'], datasets: [{ data: [Math.max(0, ticketsOpened - salesClosed), salesClosed], backgroundColor: ['rgba(239, 68, 68, 0.8)', 'rgba(' + getThemeVal('rgb') + ', 0.8)'], hoverOffset: 15, borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, cutout: '75%', plugins: { legend: { position: 'bottom', labels: { color: '#8e8e93' } } } } }); 
-               } 
-           });
+               if(canvas) {
+                    const ticketsOpened = rawStats.analytics?.tickets_opened || 0;
+                    const salesClosed = rawStats.total_transactions || 0;
+                    const ctxFunnel = canvas.getContext('2d');
+                    if(!ctxFunnel) return;
+                    if(window.funnelChartInst instanceof Chart) window.funnelChartInst.destroy();
+                    window.funnelChartInst = new Chart(ctxFunnel, { 
+                        type: 'doughnut', 
+                        data: { 
+                            labels: ['Tickets Opened (No Purchase)', 'Successful Sales'], 
+                            datasets: [{ 
+                                data: [Math.max(0, ticketsOpened - salesClosed), salesClosed], 
+                                backgroundColor: ['rgba(239, 68, 68, 0.8)', 'rgba(' + getThemeVal('rgb') + ', 0.8)'], 
+                                hoverBackgroundColor: ['#f87171', getThemeVal('hover')],
+                                hoverOffset: 15, 
+                                borderWidth: 2,
+                                borderColor: 'rgba(20,20,22,1)'
+                            }] 
+                        }, 
+                        options: { 
+                            responsive: true, 
+                            maintainAspectRatio: false, 
+                            animation: { duration: 1500, easing: 'easeOutQuart' }, 
+                            cutout: '75%', 
+                            plugins: { 
+                                legend: { position: 'bottom', labels: { color: '#8e8e93', font: { family: 'Inter', size: 12 }, padding: 20 } },
+                                tooltip: {
+                                    backgroundColor: 'rgba(0,0,0,0.8)',
+                                    titleFont: { size: 14, family: 'Inter' },
+                                    bodyFont: { size: 14, family: 'monospace' },
+                                    padding: 12,
+                                    cornerRadius: 8,
+                                    borderColor: 'rgba(255,255,255,0.1)',
+                                    borderWidth: 1
+                                }
+                            } 
+                        } 
+                    });
+                }
+            });
         }
+
         // 🚀 [UI_ACTION_ASYNC: loadBackups] - Action asynchrone d'interface Dashboard
         
         
