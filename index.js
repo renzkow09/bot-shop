@@ -366,6 +366,12 @@ function ensureMemoryInitialized() {
                 syncCloud();
             }
 
+            
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Animation Fix & Overview UI Polish"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "✨ Animation Fix & Overview UI Polish\n\n- Correction du bug visuel sur les cartes du Dashboard: le chiffre ne disparait plus (reset) lors du passage de la souris.\n- Amélioration globale de la fluidité des micro-interactions au survol.\n- Remplacement du keyframe de pulse par une transition CSS optimisée pour éviter les conflits d'animations CSS." });
+                syncCloud();
+            }
+
             if (!memoryStats.overrides) memoryStats.overrides = {};
             if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } };
             if (!memoryStats.settings.maintenance) memoryStats.settings.maintenance = { active: false, endsAt: 0, channelId: "" };
@@ -2696,6 +2702,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
             background: rgba(255, 255, 255, 0.03);
             border: 1px solid rgba(255, 255, 255, 0.05);
             box-shadow: inset 0 2px 10px rgba(255,255,255,0.02);
+            transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
         .ambient-glow {
             position: absolute;
@@ -2706,6 +2713,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
             pointer-events: none;
             filter: blur(40px);
             z-index: 0;
+            transition: opacity 0.5s ease;
         }
         /* End Ultra Premium Glassmorphism */
 
@@ -2843,15 +2851,19 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
             animation: breatheGlow 2s infinite alternate cubic-bezier(0.4, 0, 0.2, 1);
         }
         .glass-panel:hover .glass-icon-wrapper {
-            animation: floatEffect 3s infinite ease-in-out;
-            box-shadow: 0 10px 25px rgba(255,255,255,0.1);
+            transform: translateY(-8px) scale(1.05);
+            box-shadow: 0 15px 30px rgba(255,255,255,0.15);
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.15);
         }
         .glass-stat-value {
             animation: popIn 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
             animation-delay: 0.4s;
+            transition: text-shadow 0.5s ease, transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
         .glass-panel:hover .glass-stat-value {
-            animation: numberPulse 1.5s infinite alternate;
+            text-shadow: 0 0 20px rgba(255,255,255,0.5);
+            transform: scale(1.05);
         }
         .feed-item {
             animation: slideInRight 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
