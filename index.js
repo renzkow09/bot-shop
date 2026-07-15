@@ -450,6 +450,12 @@ function ensureMemoryInitialized() {
                 syncCloud();
             }
 
+            
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Client Directory Filter Animations"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "✨ Client Directory Filter Animations & UI Premium\n\n- Correction et refonte des filtres et boutons dans l'onglet modération.\n- Ajout d'animations fluides (rotation au survol, lueur ambiante, fondus d'apparition).\n- Remplacement des listes déroulantes par défaut par des sélecteurs premiums personnalisés.\n- Intégration d'un champ de recherche stylisé avec icône animée et feedback visuel." });
+                syncCloud();
+            }
+
             if (!memoryStats.overrides) memoryStats.overrides = {};
             if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } };
             if (!memoryStats.settings.maintenance) memoryStats.settings.maintenance = { active: false, endsAt: 0, channelId: "" };
@@ -3934,7 +3940,8 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                 <style>
                 .moderation-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 24px; margin-top: 30px; }
                 .mod-card {
-                    background: rgba(28, 28, 30, 0.4);
+                    background: rgba(25, 25, 28, 0.6);
+                    backdrop-filter: blur(10px);
                     border: 1px solid rgba(255, 255, 255, 0.05);
                     border-radius: 20px;
                     padding: 24px;
@@ -3942,11 +3949,12 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                     overflow: hidden;
                     transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
                     animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+                    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
                 }
                 .mod-card:hover {
-                    transform: translateY(-5px);
+                    transform: translateY(-4px);
                     box-shadow: 0 15px 35px rgba(0,0,0,0.4), inset 0 0 0 1px rgba(255,255,255,0.1);
-                    background: rgba(35, 35, 38, 0.6);
+                    background: rgba(35, 35, 38, 0.7);
                 }
                 .mod-card::before {
                     content: '';
@@ -3966,7 +3974,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                     border: 1px solid rgba(255,255,255,0.1);
                     transition: transform 0.3s ease;
                 }
-                .mod-card:hover .mod-avatar { transform: scale(1.05); }
+                .mod-card:hover .mod-avatar { transform: scale(1.05) rotate(-2deg); }
                 .mod-info { flex: 1; min-width: 0; }
                 .mod-name { font-size: 1.25rem; font-weight: 700; color: #fff; margin: 0 0 4px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 8px; }
                 .mod-id { font-family: monospace; font-size: 0.8rem; color: var(--text-muted); opacity: 0.7; }
@@ -4001,10 +4009,11 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                     transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
                     display: flex; justify-content: center; align-items: center; gap: 6px;
                 }
-                .mod-btn:hover { background: rgba(255,255,255,0.1); transform: translateY(-2px); }
-                .mod-btn.danger:hover { background: rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.3); color: #ef4444; }
-                .mod-btn.warning:hover { background: rgba(245,158,11,0.15); border-color: rgba(245,158,11,0.3); color: #f59e0b; }
-                .mod-btn.success:hover { background: rgba(16,185,129,0.15); border-color: rgba(16,185,129,0.3); color: #10b981; }
+                .mod-btn:hover { background: rgba(255,255,255,0.1); transform: translateY(-2px); box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+                .mod-btn:active { transform: translateY(0); }
+                .mod-btn.danger:hover { background: rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.3); color: #ef4444; box-shadow: 0 4px 15px rgba(239,68,68,0.2); }
+                .mod-btn.warning:hover { background: rgba(245,158,11,0.15); border-color: rgba(245,158,11,0.3); color: #f59e0b; box-shadow: 0 4px 15px rgba(245,158,11,0.2); }
+                .mod-btn.success:hover { background: rgba(16,185,129,0.15); border-color: rgba(16,185,129,0.3); color: #10b981; box-shadow: 0 4px 15px rgba(16,185,129,0.2); }
                 .mod-details-scroll {
                     max-height: 120px;
                     overflow-y: auto;
@@ -4019,43 +4028,97 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                 .mod-details-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
                 
                 .mod-top-bar {
-                    display: flex; flex-wrap: wrap; gap: 15px; margin-top: 20px; align-items: center;
-                    background: rgba(255,255,255,0.02); padding: 15px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.05);
+                    display: flex; flex-wrap: wrap; gap: 16px; margin-top: 20px; align-items: center;
+                    background: linear-gradient(145deg, rgba(30,30,35,0.4), rgba(20,20,25,0.4));
+                    padding: 20px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.05);
+                    box-shadow: 0 8px 32px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.05);
                     animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards;
                 }
+                
+                .mod-input-wrapper { position: relative; flex: 1; min-width: 250px; }
+                .mod-input-wrapper::before { content: "🔍"; position: absolute; left: 16px; top: 50%; transform: translateY(-50%); font-size: 1rem; opacity: 0.5; transition: opacity 0.3s; pointer-events: none; }
+                .mod-input-wrapper:focus-within::before { opacity: 1; }
+                
+                .mod-select-wrapper { position: relative; }
+                .mod-select-wrapper::after { content: "▼"; font-size: 0.65rem; color: var(--text-muted); position: absolute; right: 16px; top: 50%; transform: translateY(-50%); pointer-events: none; transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), color 0.3s ease; }
+                .mod-select-wrapper:hover::after { color: var(--text-main); }
+                .mod-select-wrapper:focus-within::after { transform: translateY(-50%) rotate(180deg); color: var(--accent-green); }
+                
                 .mod-input, .mod-select {
-                    background: rgba(0,0,0,0.3);
-                    border: 1px solid rgba(255,255,255,0.1);
-                    color: #fff; padding: 10px 16px; border-radius: 10px;
-                    font-size: 0.9rem; transition: all 0.2s; outline: none;
+                    background: rgba(15, 15, 18, 0.6);
+                    border: 1px solid rgba(255, 255, 255, 0.08);
+                    color: #f5f5f7; padding: 14px 18px; border-radius: 12px;
+                    font-size: 0.95rem; transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); outline: none;
+                    box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+                    width: 100%;
+                    appearance: none; -webkit-appearance: none;
                 }
-                .mod-input:focus, .mod-select:focus { border-color: var(--accent-green); box-shadow: 0 0 0 3px rgba(16,185,129,0.15); }
+                .mod-input { padding-left: 44px; }
+                .mod-select { padding-right: 40px; cursor: pointer; min-width: 180px; }
+                
+                .mod-input:hover, .mod-select:hover { background: rgba(25, 25, 30, 0.8); border-color: rgba(255, 255, 255, 0.15); }
+                
+                .mod-input:focus, .mod-select:focus {
+                    border-color: var(--accent-green);
+                    background: rgba(20, 20, 24, 0.9);
+                    box-shadow: 0 0 0 4px rgba(16,185,129,0.15), inset 0 2px 4px rgba(0,0,0,0.1);
+                }
+                
+                .mod-sync-btn {
+                    background: linear-gradient(135deg, rgba(16,185,129,0.2), rgba(16,185,129,0.05));
+                    border: 1px solid rgba(16,185,129,0.3);
+                    color: var(--accent-green);
+                    padding: 14px 24px;
+                    border-radius: 12px;
+                    font-weight: 600; font-size: 0.95rem; cursor: pointer;
+                    transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+                    display: flex; align-items: center; gap: 8px;
+                    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+                    margin: 0;
+                }
+                .mod-sync-btn:hover {
+                    background: linear-gradient(135deg, rgba(16,185,129,0.3), rgba(16,185,129,0.1));
+                    border-color: rgba(16,185,129,0.5);
+                    transform: translateY(-2px);
+                    box-shadow: 0 8px 25px rgba(16,185,129,0.2);
+                }
+                .mod-sync-btn:active { transform: translateY(1px); box-shadow: 0 2px 10px rgba(16,185,129,0.1); }
+                .mod-sync-btn svg { transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1); }
+                .mod-sync-btn:hover svg { transform: rotate(180deg); }
                 </style>
                 <div class='box' style='background:transparent; border:none; padding:0;'>
                     <h2 style='font-size:2rem; margin-bottom:5px;'><span style='font-size:1.2em; vertical-align:-3px;'>🔎</span> Client Directory</h2>
                     <p class='text-muted'>Global surveillance and access control matrix.</p>
+                    
                     <div class='mod-top-bar'>
-                        <input type='text' id='memberSearchInput' class='mod-input' placeholder='Query ID or designation...' style='flex:1; min-width:250px;' oninput='window.sortMembersLocally()'>
-                        <select id='memberStatusSelect' class='mod-select' style='width:180px;' onchange='window.sortMembersLocally()'>
-                            <option value='all'>🌍 Global View</option>
-                            <option value='online'>🟢 Active Only</option>
-                        </select>
-                        <select id='memberSortSelect' class='mod-select' style='width:180px;' onchange='window.sortMembersLocally()'>
-                            <option value='recent'>🔽 Newest Nodes</option>
-                            <option value='oldest'>🔼 Oldest Nodes</option>
-                            <option value='spent_desc'>💰 High Value</option>
-                            <option value='spent_asc'>💸 Low Value</option>
-                            <option value='warns'>⚠️ High Risk</option>
-                        </select>
-                        <button class='admin-btn btn-green' style='margin:0; padding:10px 20px; font-weight:600;' onclick='window.loadAllMembers()'>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.92-10.27l-3.27-3.27"/></svg>
+                        <div class="mod-input-wrapper">
+                            <input type='text' id='memberSearchInput' class='mod-input' placeholder='Query ID or designation...' oninput='window.sortMembersLocally()'>
+                        </div>
+                        <div class="mod-select-wrapper">
+                            <select id='memberStatusSelect' class='mod-select' onchange='window.sortMembersLocally()'>
+                                <option value='all'>🌍 Global View</option>
+                                <option value='online'>🟢 Active Only</option>
+                            </select>
+                        </div>
+                        <div class="mod-select-wrapper">
+                            <select id='memberSortSelect' class='mod-select' onchange='window.sortMembersLocally()'>
+                                <option value='recent'>🔽 Newest Nodes</option>
+                                <option value='oldest'>🔼 Oldest Nodes</option>
+                                <option value='spent_desc'>💰 High Value</option>
+                                <option value='spent_asc'>💸 Low Value</option>
+                                <option value='warns'>⚠️ High Risk</option>
+                            </select>
+                        </div>
+                        <button class='mod-sync-btn' onclick='window.loadAllMembers()'>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.92-10.27l-3.27-3.27"/></svg>
                             Sync Database
                         </button>
                     </div>
+                    
                     <div id='memberResults' class='moderation-grid'></div>
                 </div>
             </div>
-
+            
             <div id='monitoring' class='tab-content'>
                 <div class='box' style='background:#050505; position:relative; overflow:hidden;'>
                     <!-- Background ambient glow -->
@@ -5696,66 +5759,78 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         window.filterMembersLocally = window.sortMembersLocally;
     // 🚀 [FUNCTION: renderMembers] - Déclaration de fonction
         function renderMembers(members) { 
-            if (members.length === 0) { if(document.getElementById('memberResults')) document.getElementById('memberResults').innerHTML = '<p class="text-pink" style="font-family:monospace;">0 Nodes Discovered.</p>'; return; } 
+            if (members.length === 0) { if(document.getElementById('memberResults')) document.getElementById('memberResults').innerHTML = '<div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: var(--text-muted);"><div style="font-size: 3rem; margin-bottom: 10px; animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1);">👻</div><p style="font-family:monospace; font-size: 1.1em;">0 Nodes Discovered.</p></div>'; return; } 
             let html = ''; 
-            members.forEach(function(m) { 
+            members.forEach(function(m, idx) { 
                 let trustColor = m.isBlacklisted ? 'var(--accent-red)' : (m.totalSpent > 0 ? getThemeVal('hex') : 'var(--accent-orange)'); 
                 let trustLabel = m.isBlacklisted ? 'Blacklisted' : (m.totalSpent > 0 ? 'Verified' : 'Unverified'); 
                 let safeUsername = escapeHTML(m.username); 
                 let safeNote = escapeHTML(m.note); 
-                let statusIndicator = (m.status === 'online' || m.status === 'dnd' || m.status === 'idle') ? '<span style="color:var(--accent-green); font-size:0.75em; margin-left:10px; font-weight:600;">● ACTIVE</span>' : '<span style="color:var(--text-muted); font-size:0.75em; margin-left:10px; font-weight:600;">● DORMANT</span>'; 
+                let statusIndicator = (m.status === 'online' || m.status === 'dnd' || m.status === 'idle') ? '<div class="status-pulse" style="background:var(--accent-green); width:10px; height:10px; border-radius:50%; box-shadow: 0 0 10px var(--accent-green);"></div>' : '<div style="background:rgba(255,255,255,0.2); width:10px; height:10px; border-radius:50%;"></div>'; 
+                
                 let ticketsHtml = ''; 
                 if (m.activeTickets && m.activeTickets.length > 0) { 
                     m.activeTickets.forEach(function(t) { 
-                        ticketsHtml += '<div style="display:flex; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.4); padding:10px 15px; margin-top:5px; border-radius:12px; border:0.5px solid rgba(255,255,255,0.05);"><span style="font-family:monospace; font-size:0.9em;">#' + escapeHTML(t.name) + '</span><button class="admin-btn" style="margin:0; padding:6px 12px; color:var(--accent-red);" onclick="window.modAction(\\'close_channel\\', \\'' + escapeInlineJS(m.id) + '\\', {channelId: \\'' + escapeInlineJS(t.id) + '\\'})">Close</button></div>'; 
+                        ticketsHtml += '<div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.05); padding:8px 12px; margin-bottom:6px; border-radius:8px; border: 1px solid rgba(255,255,255,0.02);"><span style="font-family:monospace; font-size:0.85em;">#' + escapeHTML(t.name) + '</span><button class="mod-btn danger" style="padding:4px 8px; font-size:0.75rem; flex:none; min-width:auto;" onclick="window.modAction(\'close_channel\', \'' + escapeInlineJS(m.id) + '\', {channelId: \'' + escapeInlineJS(t.id) + '\'})">Close</button></div>'; 
                     }); 
-                } else ticketsHtml = '<span class="text-muted" style="font-family:monospace;">No active links</span>'; 
+                } else ticketsHtml = '<div style="text-align:center; padding: 10px; color: var(--text-muted); opacity: 0.5;">No active links</div>'; 
+                
                 let warnsHtml = ''; 
                 if (m.warns && m.warns.length > 0) { 
                     m.warns.forEach(function(w, i) { 
-                        warnsHtml += '<div style="font-size:0.9em; color:var(--accent-orange); margin-bottom:8px; background:rgba(255,159,10,0.1); padding:8px 12px; border-radius:10px;">⚠️ Log ' + (i+1) + ': ' + escapeHTML(w.reason) + ' <span style="opacity:0.5; float:right;">' + w.date + '</span></div>'; 
+                        warnsHtml += '<div style="font-size:0.85em; color:var(--accent-orange); margin-bottom:6px; background:rgba(245,158,11,0.1); padding:6px 10px; border-radius:8px; display:flex; justify-content:space-between;"><span>⚠️ ' + escapeHTML(w.reason) + '</span><span style="opacity:0.5;">' + w.date + '</span></div>'; 
                     }); 
-                } else warnsHtml = '<span class="text-muted" style="font-family:monospace;">Clean record</span>'; 
+                } else warnsHtml = '<div style="text-align:center; padding: 10px; color: var(--text-muted); opacity: 0.5;">Clean record</div>'; 
+                
                 let historyHtml = ''; 
                 if (m.history && m.history.length > 0) { 
                     m.history.forEach(function(h) { 
-                        historyHtml += '<div style="font-size:0.9em; margin-bottom:8px; border-bottom:0.5px solid rgba(255,255,255,0.05); padding-bottom:8px; display:flex; justify-content:space-between;"><span style="color:var(--text-main); font-weight:500;">🛒 ' + escapeHTML(h.product) + '</span> <span><span style="color:var(--accent-green);">£' + h.price + '</span> <span style="opacity:0.5; font-size:0.8em; margin-left:10px;">' + h.date + '</span></span></div>'; 
+                        historyHtml += '<div style="font-size:0.85em; margin-bottom:6px; border-bottom:0.5px solid rgba(255,255,255,0.05); padding-bottom:6px; display:flex; justify-content:space-between;"><span style="color:var(--text-main); font-weight:500;">🛒 ' + escapeHTML(h.product) + '</span> <span><span style="color:var(--accent-green);">£' + h.price + '</span> <span style="opacity:0.5; font-size:0.8em; margin-left:10px;">' + h.date + '</span></span></div>'; 
                     }); 
-                } else historyHtml = '<span class="text-muted" style="font-family:monospace;">No purchases</span>'; 
-                html += '<div class="card" style="margin-bottom: 25px; border-left: 4px solid ' + trustColor + ';">' +
-                            '<div style="display:flex; gap:20px; align-items:center; margin-bottom:25px; flex-wrap:wrap;">' +
-                                '<img src="' + m.avatar + '" style="width:70px; height:70px; border-radius:20px; box-shadow:0 10px 20px rgba(0,0,0,0.3); border:0.5px solid rgba(255,255,255,0.1);">' +
-                                '<div><h3 style="color:#fff; font-size:1.4em; font-weight:700; margin:0; display:flex; align-items:center;">' + safeUsername + ' ' + statusIndicator + '</h3><span class="text-muted" style="font-size:0.85em; font-family:monospace; margin-top:5px; display:block;">UID: ' + m.id + '</span></div>' +
-                                '<div style="margin-left:auto; text-align:right;"><div style="color:' + trustColor + '; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:5px; font-size:0.85em;">' + trustLabel + '</div><div class="money text-green font-bold" style="font-size:1.5em;">Yield: £' + m.totalSpent + '</div></div>' +
+                } else historyHtml = '<div style="text-align:center; padding: 10px; color: var(--text-muted); opacity: 0.5;">No purchases</div>'; 
+                
+                let delay = (idx * 0.05).toFixed(2);
+
+                html += '<div class="mod-card" style="--card-accent: ' + trustColor + '; animation-delay: ' + delay + 's;">' +
+                            '<div class="mod-header">' +
+                                '<img src="' + m.avatar + '" class="mod-avatar">' +
+                                '<div class="mod-info">' +
+                                    '<h3 class="mod-name">' + safeUsername + ' ' + statusIndicator + '</h3>' +
+                                    '<div class="mod-id">' + m.id + '</div>' +
+                                '</div>' +
                             '</div>' +
-                            '<div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:20px; margin-bottom:20px; font-size:0.95em;">' +
-                                '<div style="background:rgba(0,0,0,0.2); padding:20px; border-radius:16px; border:0.5px solid rgba(255,255,255,0.05);"><strong>Creation Node:</strong><br><span class="text-muted" style="font-family:monospace; display:block; margin-top:5px;">' + m.createdAt + '</span><br><strong>Link Established:</strong><br><span class="text-muted" style="font-family:monospace; display:block; margin-top:5px;">' + m.joinedAt + '</span></div>' +
-                                '<div style="background:rgba(0,0,0,0.2); padding:20px; border-radius:16px; border:0.5px solid rgba(255,255,255,0.05);"><strong>Active Links:</strong><br><div style="margin-top:10px;">' + ticketsHtml + '</div></div>' +
+                            
+                            '<div class="mod-stats">' +
+                                '<div class="mod-stat-box"><div class="mod-stat-value" style="color:' + trustColor + ';">' + trustLabel + '</div><div class="mod-stat-label">Status</div></div>' +
+                                '<div class="mod-stat-box"><div class="mod-stat-value" style="color:var(--accent-green);">£' + m.totalSpent + '</div><div class="mod-stat-label">Yield</div></div>' +
                             '</div>' +
-                            '<div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:20px; margin-bottom:20px;">' +
-                                '<div style="background:rgba(0,0,0,0.2); padding:20px; border-radius:16px; max-height:220px; overflow-y:auto; border:0.5px solid rgba(255,255,255,0.05);"><strong>Ledger:</strong><br><div style="margin-top:15px;">' + historyHtml + '</div></div>' +
-                                '<div style="background:rgba(0,0,0,0.2); padding:20px; border-radius:16px; max-height:220px; overflow-y:auto; border:0.5px solid rgba(255,255,255,0.05);"><strong>Risk Logs:</strong><br><div style="margin-top:15px;">' + warnsHtml + '</div></div>' +
+                            
+                            '<div style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); margin-bottom: 8px;">Active Links</div>' +
+                            '<div class="mod-details-scroll" style="max-height:100px;">' + ticketsHtml + '</div>' +
+                            
+                            '<div style="display:flex; gap: 10px;">' +
+                                '<div style="flex: 1;">' +
+                                    '<div style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); margin-bottom: 8px;">Ledger</div>' +
+                                    '<div class="mod-details-scroll">' + historyHtml + '</div>' +
+                                '</div>' +
+                                '<div style="flex: 1;">' +
+                                    '<div style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); margin-bottom: 8px;">Risk Logs</div>' +
+                                    '<div class="mod-details-scroll">' + warnsHtml + '</div>' +
+                                '</div>' +
                             '</div>' +
-                            '<div style="margin-bottom:20px; padding-top:20px; border-top:0.5px solid rgba(255,255,255,0.05);">' +
-                                '<label style="font-size:0.85rem; font-weight:600; text-transform:uppercase; color:var(--accent-green); display:block; margin-bottom:12px;">📝 Admin Directives:</label>' +
-                                '<textarea id="note-' + m.id + '" placeholder="Inject private parameters..." style="min-height:80px;" onblur="window.saveUserNote(\\'' + escapeInlineJS(m.id) + '\\')">' + safeNote + '</textarea>' +
+                            
+                            '<div style="margin-top:10px;">' +
+                                '<textarea id="note-' + m.id + '" class="mod-input" style="width:100%; min-height:60px; font-size:0.85rem;" placeholder="Inject private directives..." onblur="window.saveUserNote(\'' + escapeInlineJS(m.id) + '\')">' + safeNote + '</textarea>' +
                             '</div>' +
-                            '<div style="border-top:0.5px solid rgba(255,255,255,0.05); padding-top:20px;">' +
-                                '<span style="font-size:0.85rem; font-weight:600; text-transform:uppercase; color:var(--text-muted); display:block; margin-bottom:15px;">⚡ Execute Command:</span>' +
-                                '<div style="display:flex; gap:10px; flex-wrap:wrap;">'; 
-                let currentRefs = rawStats.referrals && rawStats.referrals[m.id] ? rawStats.referrals[m.id].count : 0; 
-                html += '<button class="admin-btn" style="margin:0;" onclick="window.editReferralCount(\\'' + escapeInlineJS(m.id) + '\\', ' + currentRefs + ')">🔗 Nodes (' + currentRefs + ')</button>' +
-                        '<button class="admin-btn" style="margin:0;" onclick="window.openDirectContact(\\'' + escapeInlineJS(m.id) + '\\')">💬 Inject DM</button>' +
-                        '<button class="admin-btn" style="margin:0;" onclick="window.modAction(\\'mute\\', \\'' + escapeInlineJS(m.id) + '\\', {duration: 15})">🔇 15m</button>' +
-                        '<button class="admin-btn" style="margin:0;" onclick="window.modAction(\\'mute\\', \\'' + escapeInlineJS(m.id) + '\\', {duration: 60})">🔇 1h</button>' +
-                        '<button class="admin-btn" style="margin:0; color:var(--accent-red);" onclick="window.modAction(\\'mute\\', \\'' + escapeInlineJS(m.id) + '\\', {duration: 1440})">🔇 1d</button>' +
-                        '<button class="admin-btn" style="margin:0; color:var(--accent-red);" onclick="window.modAction(\\'mute\\', \\'' + escapeInlineJS(m.id) + '\\', {duration: 10080})">🔇 1w</button>' +
-                        '<button class="admin-btn" style="margin:0; color:var(--accent-orange);" onclick="window.modAction(\\'warn\\', \\'' + escapeInlineJS(m.id) + '\\')">⚠️ Warn</button>' +
-                        '<button class="admin-btn" style="margin:0;" onclick="window.modAction(\\'clear_warns\\', \\'' + escapeInlineJS(m.id) + '\\')">🧹 Clear Log</button>' +
-                        '<button class="admin-btn" style="margin:0; background:rgba(239,68,68,0.2); color:#fff; border-color:transparent;" onclick="window.modAction(\\'kick\\', \\'' + escapeInlineJS(m.id) + '\\')">👢 Kick</button>' +
-                        '<button class="admin-btn" style="margin:0; background:var(--accent-red); color:#fff; border-color:transparent;" onclick="window.modAction(\\'ban\\', \\'' + escapeInlineJS(m.id) + '\\')">🔨 Ban</button>' +
-                        '<button class="admin-btn" style="width:auto; margin:0; background:rgba(0,0,0,0.5); color:' + (m.isBlacklisted ? getThemeVal('hex') : 'var(--accent-red)') + ';" onclick="window.modAction(\\'toggle_blacklist\\', \\'' + escapeInlineJS(m.id) + '\\')">' + (m.isBlacklisted ? '✅ Restore Access' : '🚫 Sever Access') + '</button>' +
-                        '</div></div></div>'; 
+                            
+                            '<div class="mod-actions">' +
+                                '<button class="mod-btn warning" onclick="window.modAction(\'mute\', \'' + escapeInlineJS(m.id) + '\', {duration: 1440})">🔇 24H</button>' +
+                                '<button class="mod-btn warning" onclick="window.modAction(\'mute\', \'' + escapeInlineJS(m.id) + '\', {duration: 10080})">🔇 7D</button>' +
+                                '<button class="mod-btn warning" onclick="window.modAction(\'warn\', \'' + escapeInlineJS(m.id) + '\')">⚠️ Warn</button>' +
+                                '<button class="mod-btn danger" onclick="window.modAction(\'ban\', \'' + escapeInlineJS(m.id) + '\')">🔨 Ban</button>' +
+                                '<button class="mod-btn ' + (m.isBlacklisted ? 'success' : 'danger') + '" style="flex-basis:100%;" onclick="window.modAction(\'toggle_blacklist\', \'' + escapeInlineJS(m.id) + '\')">' + (m.isBlacklisted ? '✅ Restore Access' : '🚫 Sever Access') + '</button>' +
+                            '</div>' +
+                        '</div>';
             }); 
             if(document.getElementById('memberResults')) document.getElementById('memberResults').innerHTML = html; 
         }
@@ -6613,3 +6688,4 @@ if (DISCORD_BOT_TOKEN) {
 } else {
     systemLog('WARN', 'SYSTEM', 'Skipping Discord login because DISCORD_BOT_TOKEN is missing.');
 }
+
