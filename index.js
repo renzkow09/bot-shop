@@ -372,6 +372,12 @@ function ensureMemoryInitialized() {
                 syncCloud();
             }
 
+            
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Premium Chart Animations & Precision"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "📈 Premium Chart Animations & Precision\n\n- Amélioration visuelle majeure du 'Revenue Trajectory': Le graphique utilise désormais un gradient multi-stop, des courbes de tension optimisées et des bordures dynamiques.\n- Nouvelles animations séquentielles progressives au chargement du graphique (courbe élastique des revenus).\n- Les tooltips sont plus lisibles, adoptent le glassmorphism, et affichent les valeurs avec une précision au centime près (£X.XX).\n- L'axe X intègre de subtils repères temporels pour une lecture facilitée." });
+                syncCloud();
+            }
+
             if (!memoryStats.overrides) memoryStats.overrides = {};
             if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } };
             if (!memoryStats.settings.maintenance) memoryStats.settings.maintenance = { active: false, endsAt: 0, channelId: "" };
@@ -5738,39 +5744,99 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                 if(!canvas) return;
                 const ctxSales = canvas.getContext('2d');
                 if (!ctxSales) return;
+                
                 let grad = ctxSales.createLinearGradient(0,0,0,400); 
-                grad.addColorStop(0, 'rgba(' + getThemeVal('rgb') + ', 0.5)'); 
+                grad.addColorStop(0, 'rgba(' + getThemeVal('rgb') + ', 0.6)'); 
+                grad.addColorStop(0.5, 'rgba(' + getThemeVal('rgb') + ', 0.15)'); 
                 grad.addColorStop(1, 'transparent'); 
+                
                 if(window.salesChart instanceof Chart) {
                     window.salesChart.destroy(); 
                 }
+                
                 window.salesChart = new Chart(ctxSales, { 
                     type: 'line', 
                     data: { 
                         labels: dates.length ? dates : ['No Data'], 
                         datasets: [{ 
+                            label: 'Revenue',
                             data: values.length ? values : [0], 
                             borderColor: getThemeVal('hex'), 
-                            borderWidth: 3, 
+                            borderWidth: 4, 
                             backgroundColor: grad, 
                             fill: true, 
-                            tension: 0.4, 
-                            pointHoverBackgroundColor: '#fff', 
-                            pointHoverBorderColor: getThemeVal('hex'), 
-                            pointHoverBorderWidth: 4, 
+                            tension: 0.45, 
+                            pointHoverBackgroundColor: getThemeVal('hex'), 
+                            pointHoverBorderColor: '#fff', 
+                            pointHoverBorderWidth: 3, 
+                            pointHoverRadius: 6,
                             pointRadius: 0, 
-                            pointHitRadius: 20 
+                            pointHitRadius: 30 
                         }] 
                     }, 
                     options: { 
                         responsive: true, 
                         maintainAspectRatio: false, 
-                        animation: { duration: 1500, easing: 'easeOutQuart' },
-                        plugins: { legend: { display: false } }, 
+                        animation: {
+                            x: {
+                                type: 'number',
+                                easing: 'linear',
+                                duration: 800,
+                                from: NaN, // the point is initially skipped
+                                delay(ctx) {
+                                  if (ctx.type !== 'data' || ctx.xStarted) {
+                                    return 0;
+                                  }
+                                  ctx.xStarted = true;
+                                  return ctx.index * 50;
+                                }
+                            },
+                            y: {
+                                type: 'number',
+                                easing: 'easeOutQuart',
+                                duration: 1500,
+                                from: (ctx) => { return ctx.chart.scales.y.getPixelForValue(0); }
+                            }
+                        },
                         interaction: { mode: 'index', intersect: false },
+                        plugins: { 
+                            legend: { display: false },
+                            tooltip: {
+                                backgroundColor: 'rgba(18, 18, 22, 0.9)',
+                                titleColor: '#a1a1aa',
+                                bodyColor: '#fff',
+                                titleFont: { size: 13, family: '-apple-system' },
+                                bodyFont: { weight: 'bold', size: 15, family: '-apple-system' },
+                                padding: 14,
+                                boxPadding: 8,
+                                usePointStyle: true,
+                                borderColor: 'rgba(255,255,255,0.1)',
+                                borderWidth: 1,
+                                cornerRadius: 16,
+                                displayColors: false,
+                                callbacks: {
+                                    label: function(context) {
+                                        return '£' + parseFloat(context.parsed.y).toFixed(2);
+                                    }
+                                }
+                            }
+                        }, 
                         scales: { 
-                            x: { display: false }, 
-                            y: { grid: { color: 'rgba(255,255,255,0.05)'}, border: { dash: [4, 4], display: false }, beginAtZero: true } 
+                            x: { 
+                                display: true,
+                                grid: { display: false, drawBorder: false },
+                                ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 7, color: 'rgba(255,255,255,0.4)' },
+                                border: { display: false }
+                            }, 
+                            y: { 
+                                grid: { color: 'rgba(255,255,255,0.05)', drawBorder: false }, 
+                                border: { display: false }, 
+                                beginAtZero: true,
+                                ticks: {
+                                    color: 'rgba(255,255,255,0.4)',
+                                    callback: function(value) { return '£' + value; }
+                                }
+                            } 
                         }
                     } 
                 }); 
