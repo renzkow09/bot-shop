@@ -378,6 +378,12 @@ function ensureMemoryInitialized() {
                 syncCloud();
             }
 
+            
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Interface Mobile 100% Native & Fluide"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "📱 Interface Mobile 100% Native & Fluide\n\n- Le Dashboard est désormais parfaitement optimisé pour une vue mobile (type iPhone 17).\n- Implémentation d'un menu latéral (Sidebar) coulissant avec un overlay de flou (Glassmorphism).\n- Plus aucun 'scroll dans le vide' : Les hauteurs utilisent l'unité dynamique 'dvh' pour s'adapter parfaitement sans déborder sous la barre Safari.\n- Tous les tableaux complexes (Kanban, Logs, Transactions) ont été englobés dans des blocs '.table-responsive' permettant un défilement horizontal fluide au doigt sans casser la mise en page de l'application.\n- Adaptation des boutons et inputs (font-size: 16px) pour empêcher les zooms forcés sur iOS." });
+                syncCloud();
+            }
+
             if (!memoryStats.overrides) memoryStats.overrides = {};
             if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } };
             if (!memoryStats.settings.maintenance) memoryStats.settings.maintenance = { active: false, endsAt: 0, channelId: "" };
@@ -568,7 +574,45 @@ async function generateTranscript(channel) {
         messages.reverse();
         
         let html = `<html><head><meta charset="utf-8"><title>Transcript ${channel.name}</title>
-        <style>body{font-family:sans-serif; background:#36393f; color:#dcddde;} .msg{margin-bottom:10px; padding:10px; border-bottom:1px solid #444;} .author{font-weight:bold; color:#fff;} .time{font-size:0.8em; color:#72767d;} img{max-width:400px;}</style>
+        <style>body{font-family:sans-serif; background:#36393f; color:#dcddde;} .msg{margin-bottom:10px; padding:10px; border-bottom:1px solid #444;} .author{font-weight:bold; color:#fff;} .time{font-size:0.8em; color:#72767d;} img{max-width:400px;}
+        /* Desktop/Mobile Burger Fix */
+        @media screen and (min-width: 901px) {
+            .burger-btn { display: none !important; }
+        }
+        @media screen and (max-width: 900px) {
+            .burger-btn { display: inline-block !important; margin-right: 15px; }
+            .sidebar { 
+                position: fixed !important; 
+                height: 100dvh; 
+                left: 0; 
+                top: 0; 
+                width: 280px !important; 
+                z-index: 3000 !important; 
+                transform: translateX(-100%); 
+                background: rgba(18, 18, 22, 0.98) !important;
+                box-shadow: 5px 0 30px rgba(0,0,0,0.8);
+                transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+            }
+            .sidebar.mobile-open { transform: translateX(0) !important; }
+            .sidebar.closed { transform: translateX(-100%) !important; } /* override desktop closed */
+            
+            #mobile-overlay {
+                display: none;
+                position: fixed;
+                inset: 0;
+                background: rgba(0,0,0,0.6);
+                backdrop-filter: blur(5px);
+                z-index: 2999;
+            }
+            #mobile-overlay.active { display: block; }
+            
+            .main-content {
+                padding: 15px !important;
+                height: calc(100dvh - 60px) !important;
+            }
+        }
+
+    </style>
         </head><body><h2>Transcript of ${channel.name}</h2>`;
         
         messages.forEach(m => {
@@ -1601,73 +1645,13 @@ const server = http.createServer(async (req, res) => {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         return res.end(`<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no'><title>Nexus Core</title><style>:root { --accent: #10b981; --accent-rgb: 16, 185, 129; }body{font-family:-apple-system,BlinkMacSystemFont,'Inter',sans-serif;background:#050505;color:#f5f5f7;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;overflow:hidden;}.login-box{background:rgba(20,20,22,0.6);backdrop-filter:blur(40px);-webkit-backdrop-filter:blur(40px);padding:60px 50px;border-radius:30px;border:1px solid rgba(255,255,255,0.05);text-align:center;box-shadow:0 30px 60px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.1);width:90%;max-width:440px;box-sizing:border-box; animation: slideUpFade 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity:0; transform:translateY(40px); position:relative; overflow:hidden;} .login-box::before { content:''; position:absolute; top:0; left:-100%; width:50%; height:100%; background:linear-gradient(90deg, transparent, rgba(255,255,255,0.03), transparent); transform:skewX(-20deg); animation: shine 6s infinite; } @keyframes shine { 0% { left: -100%; } 20% { left: 200%; } 100% { left: 200%; } }@keyframes slideUpFade { to { opacity:1; transform:translateY(0); } }@keyframes pulseLogo { 0%, 100% { text-shadow: 0 0 15px rgba(var(--accent-rgb), 0.3); transform: scale(1); } 50% { text-shadow: 0 0 35px rgba(var(--accent-rgb), 0.8); transform: scale(1.02); } }h2{font-weight:800;letter-spacing:4px;color:#fff; margin-bottom:12px; font-size:2.2em; animation: pulseLogo 4s infinite cubic-bezier(0.4, 0, 0.2, 1);}.subtitle { color: rgba(255,255,255,0.4); font-size: 0.8em; letter-spacing: 2px; margin-bottom: 40px; text-transform: uppercase; font-weight:600; }input{background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.08);color:white;padding:20px;border-radius:18px;font-size:24px!important;text-align:center;letter-spacing:18px;text-indent:18px;width:100%;max-width:260px;margin:10px auto 40px auto;outline:none;transition:all 0.4s cubic-bezier(0.16, 1, 0.3, 1);display:block; box-shadow: inset 0 2px 10px rgba(0,0,0,0.5);}input:focus{border-color:var(--accent);box-shadow:0 0 25px rgba(var(--accent-rgb),0.2), inset 0 2px 10px rgba(0,0,0,0.5); background:rgba(var(--accent-rgb),0.02); transform:scale(1.02);}button{background:linear-gradient(135deg, var(--accent), rgba(var(--accent-rgb), 0.8));color:#000;border:none;padding:18px 40px;font-size:1em;border-radius:18px;cursor:pointer;font-weight:700;width:100%;transition:all 0.4s cubic-bezier(0.16, 1, 0.3, 1);text-transform:uppercase;letter-spacing:2px; box-shadow:0 10px 30px rgba(var(--accent-rgb),0.3);}button:hover{transform:translateY(-3px) scale(1.01);box-shadow:0 15px 35px rgba(var(--accent-rgb),0.5); filter:brightness(1.1);}button:active { transform:translateY(1px) scale(0.98); box-shadow:0 5px 15px rgba(var(--accent-rgb),0.3); }.bg-anim { position:absolute; top:50%; left:50%; width: 150vw; height: 150vw; background: radial-gradient(circle, rgba(var(--accent-rgb), 0.05) 0%, transparent 50%); transform: translate(-50%, -50%); z-index: -1; pointer-events: none; animation: bgPulse 8s infinite alternate ease-in-out; } .bg-mesh { position:absolute; inset:0; z-index:-2; background-image: radial-gradient(rgba(255,255,255,0.03) 1px, transparent 1px); background-size: 40px 40px; opacity:0.5; animation: meshMove 20s linear infinite; } @keyframes bgPulse { 0% { transform: translate(-50%, -50%) scale(0.95); opacity: 0.8; } 100% { transform: translate(-50%, -50%) scale(1.05); opacity: 1.2; } } @keyframes meshMove { 0% { background-position: 0 0; } 100% { background-position: 40px 40px; } } 
          /* Mobile Responsive & UI Enhancements */
-         @media (max-width: 768px) {
-             .login-box { padding: 40px 20px; width: 90%; max-width: 340px; margin: 0 auto; }
-             .login-box input { letter-spacing: 12px; text-indent: 12px; font-size: 20px !important; padding: 15px; }
-             .top-navbar { padding: 12px 15px; flex-wrap: wrap; }
-             .nav-menu { flex-direction: column; position: fixed; top: 60px; left: -100%; width: 260px; height: calc(100vh - 60px); background: rgba(0,0,0,0.95); transition: left 0.3s cubic-bezier(0.25, 1, 0.5, 1); z-index: 2000; overflow-y: auto; padding: 20px; box-shadow: 2px 0 15px rgba(0,0,0,0.5); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
-             .nav-menu.open { left: 0; }
-             .burger-btn { display: flex; flex-direction: column; gap: 5px; cursor: pointer; background: transparent; border: none; padding: 5px; margin-right: 15px; }
-             .burger-btn span { width: 24px; height: 2px; background: white; border-radius: 2px; transition: 0.3s; }
-             .burger-btn.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
-             .burger-btn.open span:nth-child(2) { opacity: 0; }
-             .burger-btn.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
-             .main-content { padding: 15px; height: auto; overflow: visible; }
-             .stats-grid { grid-template-columns: 1fr; gap: 15px; }
-             .chat-container { flex-direction: column; height: auto; min-height: 800px; }
-             .box { padding: 15px; }
-             .kanban-board { flex-direction: column; min-height: auto; }
-             .kanban-col { min-width: 100%; }
-             input[type='text'], input[type='number'], textarea, select { font-size: 16px; /* Prevents iOS zoom */ }
-             .nav-brand { font-size: 1.2em; }
-             .bot-status {  } /* Hide on mobile to save space */
-             table, thead, tbody, th, td, tr { display: block; }
-             thead tr { position: absolute; top: -9999px; left: -9999px; }
-             tr { margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.1); }
-             td { border: none; border-bottom: 1px solid rgba(255,255,255,0.05); position: relative; padding-left: 40%; text-align: right; }
-             td:before { position: absolute; top: 15px; left: 15px; width: 35%; padding-right: 10px; white-space: nowrap; font-weight: bold; text-align: left; content: attr(data-label); color: var(--text-muted); text-transform: uppercase; font-size: 0.8em; }
-         }
-         @media (min-width: 769px) {
-             .burger-btn {  }
-             .nav-group { font-size: 0.75em; text-transform: uppercase; color: var(--text-muted); margin: 0 10px; font-weight: bold; align-self: center; letter-spacing: 1px; }
-         }
-         .nav-group { margin-top: 15px; margin-bottom: 5px; font-size: 0.75em; text-transform: uppercase; color: var(--accent-green); font-weight: bold; letter-spacing: 1px; }
-         @media (min-width: 769px) { .nav-group { color: var(--text-muted); margin-top: 0; margin-bottom: 0; margin-left: 10px; margin-right: 10px; } }
+          }
          .shortcut-btn { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text-muted); padding: 5px 10px; border-radius: 8px; font-size: 0.8em; cursor: pointer; transition: 0.3s; white-space: nowrap; }
          .shortcut-btn:hover { background: rgba(255,255,255,0.1); color: white; }
 
 
          /* Mobile Responsive & UI Enhancements */
-         @media (max-width: 768px) {
-             .top-navbar { padding: 12px 15px; flex-wrap: wrap; }
-             .nav-menu { flex-direction: column; position: fixed; top: 60px; left: -100%; width: 260px; height: calc(100vh - 60px); background: rgba(0,0,0,0.95); transition: left 0.3s cubic-bezier(0.25, 1, 0.5, 1); z-index: 2000; overflow-y: auto; padding: 20px; box-shadow: 2px 0 15px rgba(0,0,0,0.5); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
-             .nav-menu.open { left: 0; }
-             .burger-btn { display: flex; flex-direction: column; gap: 5px; cursor: pointer; background: transparent; border: none; padding: 5px; margin-right: 15px; }
-             .burger-btn span { width: 24px; height: 2px; background: white; border-radius: 2px; transition: 0.3s; }
-             .burger-btn.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
-             .burger-btn.open span:nth-child(2) { opacity: 0; }
-             .burger-btn.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
-             .main-content { padding: 15px; height: auto; overflow: visible; }
-             .stats-grid { grid-template-columns: 1fr; gap: 15px; }
-             .chat-container { flex-direction: column; height: auto; min-height: 800px; }
-             .box { padding: 15px; }
-             .kanban-board { flex-direction: column; min-height: auto; }
-             .kanban-col { min-width: 100%; }
-             input[type='text'], input[type='number'], textarea, select { font-size: 16px; /* Prevents iOS zoom */ }
-             .nav-brand { font-size: 1.2em; }
-             .bot-status {  } /* Hide on mobile to save space */
-             table, thead, tbody, th, td, tr { display: block; }
-             thead tr { position: absolute; top: -9999px; left: -9999px; }
-             tr { margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.1); }
-             td { border: none; border-bottom: 1px solid rgba(255,255,255,0.05); position: relative; padding-left: 40%; text-align: right; }
-             td:before { position: absolute; top: 15px; left: 15px; width: 35%; padding-right: 10px; white-space: nowrap; font-weight: bold; text-align: left; content: attr(data-label); color: var(--text-muted); text-transform: uppercase; font-size: 0.8em; }
-         }
-         @media (min-width: 769px) {
-             .burger-btn {  }
-             .nav-group { font-size: 0.75em; text-transform: uppercase; color: var(--text-muted); margin: 0 10px; font-weight: bold; align-self: center; letter-spacing: 1px; }
-         }
-         .nav-group { margin-top: 15px; margin-bottom: 5px; font-size: 0.75em; text-transform: uppercase; color: var(--accent-green); font-weight: bold; letter-spacing: 1px; }
-         @media (min-width: 769px) { .nav-group { color: var(--text-muted); margin-top: 0; margin-bottom: 0; margin-left: 10px; margin-right: 10px; } }
+          }
          .shortcut-btn { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text-muted); padding: 5px 10px; border-radius: 8px; font-size: 0.8em; cursor: pointer; transition: 0.3s; white-space: nowrap; }
          .shortcut-btn:hover { background: rgba(255,255,255,0.1); color: white; }
 
@@ -2630,7 +2614,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
            --accent-red: #ff453a; 
         }
         * { box-sizing: border-box; } 
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: var(--bg-main); color: var(--text-main); margin: 0; min-height: 100vh; overflow-x: hidden; -webkit-font-smoothing: antialiased; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: var(--bg-main); color: var(--text-main); margin: 0; min-height: 100dvh; overflow-x: hidden; -webkit-font-smoothing: antialiased; }
         ::-webkit-scrollbar { width: 6px; height: 6px; } ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 10px; } ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.3); }
         @keyframes fadeInSmooth { from { opacity: 0; transform: translateY(10px); filter: blur(5px); } to { opacity: 1; transform: translateY(0); filter: blur(0); } }
         @keyframes pulseGlow { 0% { box-shadow: 0 0 5px rgba(var(--accent-green-rgb), 0.2); } 100% { box-shadow: 0 0 15px rgba(var(--accent-green-rgb), 0.5); } }
@@ -3123,6 +3107,65 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
         
         
         
+        
+        /* Mobile Enhancements */
+        @media screen and (max-width: 900px) {
+          .overview-grid { grid-template-columns: 1fr !important; gap: 15px; }
+          .chat-container { flex-direction: column; height: auto !important; min-height: 70vh; }
+          .ticket-list { height: 250px; border-right: none; border-bottom: 1px solid rgba(255,255,255,0.05); }
+          
+          .sidebar { 
+              position: fixed !important; 
+              height: 100dvh; 
+              left: 0; 
+              top: 0; 
+              width: 280px !important; 
+              z-index: 3000 !important; 
+              transform: translateX(-100%); 
+              background: rgba(18, 18, 22, 0.98) !important;
+              box-shadow: 5px 0 30px rgba(0,0,0,0.8);
+          }
+          .sidebar.mobile-open { transform: translateX(0) !important; }
+          
+          #mobile-overlay {
+              display: none;
+              position: fixed;
+              inset: 0;
+              background: rgba(0,0,0,0.6);
+              backdrop-filter: blur(5px);
+              z-index: 2999;
+          }
+          #mobile-overlay.active { display: block; }
+          
+          .top-navbar { padding: 12px 15px; }
+          .nav-brand { font-size: 1em !important; }
+          .burger-btn { font-size: 1.8em !important; }
+          .stats-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+          .box { padding: 15px; }
+          
+          
+          /* Missing Mobile Fixes */
+          .login-box { padding: 40px 20px !important; width: 90% !important; max-width: 340px !important; margin: 0 auto !important; }
+          .login-box input { letter-spacing: 10px !important; text-indent: 10px !important; font-size: 18px !important; padding: 15px !important; }
+          
+          .kanban-board { flex-direction: column !important; min-height: auto !important; }
+          .kanban-col { min-width: 100% !important; }
+          
+          .bot-status { display: none !important; } /* Hide on mobile to save space */
+
+          /* Make tables scrollable horizontally */
+          .table-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+          table { width: 100%; min-width: 500px; }
+          
+          /* Inputs and buttons */
+          input, select, button { font-size: 16px !important; } /* Prevents iOS zoom */
+          .admin-btn { padding: 12px; margin-top: 10px; width: 100%; }
+        }
+        
+        @media screen and (max-width: 480px) {
+          .stats-grid { grid-template-columns: 1fr; }
+        }
+
         /* SIDEBAR STYLES */
         
         
@@ -3184,17 +3227,13 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
         .modal-content { background:rgba(28, 28, 30, 0.9); padding:35px; border-radius:24px; border:0.5px solid rgba(255,255,255,0.1); text-align:center; max-width:400px; box-shadow: 0 20px 50px rgba(0,0,0,0.5); animation: zoomIn 0.3s cubic-bezier(0.25, 1, 0.5, 1) forwards; }
         @keyframes zoomIn { from { transform: scale(0.95); opacity:0; } to { transform: scale(1); opacity:1; } }
         
-        @media screen and (max-width: 900px) {
-          .overview-grid, .chat-container { grid-template-columns: 1fr !important; flex-direction: column; height: auto; }
-          .ticket-list { height: 200px; }
-          .sidebar { position: absolute; height: 100vh; left: 0; top: 0; }
-        }
+        
     
         /* SIDEBAR STYLES */
-        .app-layout { display: flex; height: 100vh; overflow: hidden; width: 100%; }
+        .app-layout { display: flex; height: 100dvh; overflow: hidden; width: 100%; }
         .sidebar { width: 260px; background: rgba(0,0,0,0.8); backdrop-filter: saturate(180%) blur(20px); border-right: 0.5px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1), width 0.3s; z-index: 1001; }
         .sidebar.closed { width: 0; transform: translateX(-100%); overflow: hidden; }
-        .main-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; height: 100vh; position: relative; }
+        .main-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; height: 100dvh; position: relative; }
         .sidebar-header { padding: 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 0.5px solid rgba(255,255,255,0.05); }
         .nav-menu { display: flex; flex-direction: column; gap: 8px; padding: 20px; overflow-y: auto; flex: 1; }
         .nav-group { font-size: 0.7em; color: var(--text-muted); font-weight: 700; margin-top: 15px; margin-bottom: 5px; letter-spacing: 1px; }
@@ -3208,11 +3247,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
         .patchnote-text { color: #e5e5ea; font-size: 1.05em; line-height: 1.6; white-space: pre-wrap; }
         .patchnote-text strong { color: #fff; font-weight: 600; }
         
-        @media screen and (max-width: 900px) {
-          .overview-grid, .chat-container { grid-template-columns: 1fr !important; flex-direction: column; height: auto; }
-          .ticket-list { height: 200px; }
-          .sidebar { position: absolute; height: 100vh; left: 0; top: 0; }
-        }
+        
 
     </style>
 </head>
@@ -3242,6 +3277,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
     </div>
 
     <div class='app-layout'>
+        <div id='mobile-overlay' onclick='window.toggleSidebar()'></div>
         <aside class='sidebar' id='sidebar'>
             <div class='sidebar-header'>
                 <div class='nav-brand'>Nexus <span style='font-weight:400; color:var(--text-muted); font-size:0.8em;'>Admin</span></div>
@@ -5234,32 +5270,22 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         // 🚀 [UI_ACTION: toggleSidebar] - Action d'interface Dashboard
         window.toggleSidebar = function() {
             const sidebar = document.getElementById('sidebar');
-            sidebar.classList.toggle('closed');
+            const overlay = document.getElementById('mobile-overlay');
+            if (window.innerWidth <= 900) {
+                if(sidebar) sidebar.classList.toggle('mobile-open');
+                if(overlay) overlay.classList.toggle('active');
+            } else {
+                if(sidebar) sidebar.classList.toggle('closed');
+            }
         };
         
-        // 🚀 [UI_ACTION: saveNotes] - Action d'interface Dashboard
-        window.saveNotes = function() {
-            clearTimeout(window.notesTimeout);
-            window.notesTimeout = setTimeout(() => {
-                const notes = document.getElementById('personal-notes').value;
-                fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'save_notes', notes }) });
-            }, 1000);
-        };
-        
-        // 🚀 [UI_ACTION: insertShortcut] - Action d'interface Dashboard
-        window.insertShortcut = function(inputId, val) {
-            const el = document.getElementById(inputId);
-            if(el) { el.value = val; }
-        };
-
-        // 🚀 [UI_ACTION: toggleSidebar] - Action d'interface Dashboard
-        window.toggleSidebar = function() {
-            const sidebar = document.getElementById('sidebar');
-            if (sidebar) sidebar.classList.toggle('closed');
-        };
-        
-        // 🚀 [UI_ACTION: switchTab] - Action d'interface Dashboard
         window.switchTab = function(tabId, btn) {
+            if (window.innerWidth <= 900) {
+                const sidebar = document.getElementById('sidebar');
+                const overlay = document.getElementById('mobile-overlay');
+                if(sidebar) sidebar.classList.remove('mobile-open');
+                if(overlay) overlay.classList.remove('active');
+            }
             try {
                 if(window.innerWidth <= 900) {
                     const sidebar = document.getElementById('sidebar');
