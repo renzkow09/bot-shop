@@ -444,6 +444,12 @@ function ensureMemoryInitialized() {
                 syncCloud();
             }
 
+            
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Client Directory Overhaul"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ Client Directory Overhaul\n\n- Refonte totale du module de modération (Client Directory).\n- Intégration d'une grille réactive premium avec animations en cascade (slideUpFade) et effets de survol.\n- Nouveau design des fiches membres : avatars avec ombre portée, affichage clair des statuts et indicateurs actifs.\n- Optimisation de l'ergonomie des actions modératrices (Bannissement, Mute, Warn) avec des boutons interactifs colorés et qualitatifs." });
+                syncCloud();
+            }
+
             if (!memoryStats.overrides) memoryStats.overrides = {};
             if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } };
             if (!memoryStats.settings.maintenance) memoryStats.settings.maintenance = { active: false, endsAt: 0, channelId: "" };
@@ -3925,25 +3931,128 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
             </div>
 
             <div id='moderation' class='tab-content'>
-                <div class='box'>
-                    <h2>🔎 Client Directory</h2>
+                <style>
+                .moderation-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 24px; margin-top: 30px; }
+                .mod-card {
+                    background: rgba(28, 28, 30, 0.4);
+                    border: 1px solid rgba(255, 255, 255, 0.05);
+                    border-radius: 20px;
+                    padding: 24px;
+                    position: relative;
+                    overflow: hidden;
+                    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+                    animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+                }
+                .mod-card:hover {
+                    transform: translateY(-5px);
+                    box-shadow: 0 15px 35px rgba(0,0,0,0.4), inset 0 0 0 1px rgba(255,255,255,0.1);
+                    background: rgba(35, 35, 38, 0.6);
+                }
+                .mod-card::before {
+                    content: '';
+                    position: absolute;
+                    top: 0; left: 0; width: 4px; height: 100%;
+                    background: var(--card-accent, var(--accent-green));
+                    opacity: 0.8;
+                    transition: opacity 0.3s;
+                }
+                .mod-card:hover::before { opacity: 1; box-shadow: 0 0 15px var(--card-accent, var(--accent-green)); }
+                .mod-header { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
+                .mod-avatar {
+                    width: 64px; height: 64px;
+                    border-radius: 16px;
+                    object-fit: cover;
+                    box-shadow: 0 8px 16px rgba(0,0,0,0.3);
+                    border: 1px solid rgba(255,255,255,0.1);
+                    transition: transform 0.3s ease;
+                }
+                .mod-card:hover .mod-avatar { transform: scale(1.05); }
+                .mod-info { flex: 1; min-width: 0; }
+                .mod-name { font-size: 1.25rem; font-weight: 700; color: #fff; margin: 0 0 4px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 8px; }
+                .mod-id { font-family: monospace; font-size: 0.8rem; color: var(--text-muted); opacity: 0.7; }
+                .mod-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+                .mod-stat-box {
+                    background: rgba(0,0,0,0.3);
+                    border: 1px solid rgba(255,255,255,0.03);
+                    border-radius: 12px;
+                    padding: 12px;
+                    text-align: center;
+                    transition: background 0.3s ease;
+                }
+                .mod-card:hover .mod-stat-box { background: rgba(0,0,0,0.5); border-color: rgba(255,255,255,0.06); }
+                .mod-stat-value { font-size: 1.2rem; font-weight: 700; margin-bottom: 4px; }
+                .mod-stat-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+                .mod-actions {
+                    display: flex; gap: 10px; flex-wrap: wrap;
+                    border-top: 1px solid rgba(255,255,255,0.05);
+                    padding-top: 20px;
+                    margin-top: 20px;
+                }
+                .mod-btn {
+                    flex: 1; min-width: 100px;
+                    background: rgba(255,255,255,0.03);
+                    border: 1px solid rgba(255,255,255,0.1);
+                    color: #fff;
+                    padding: 10px;
+                    border-radius: 10px;
+                    font-size: 0.85rem;
+                    font-weight: 600;
+                    cursor: pointer;
+                    transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+                    display: flex; justify-content: center; align-items: center; gap: 6px;
+                }
+                .mod-btn:hover { background: rgba(255,255,255,0.1); transform: translateY(-2px); }
+                .mod-btn.danger:hover { background: rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.3); color: #ef4444; }
+                .mod-btn.warning:hover { background: rgba(245,158,11,0.15); border-color: rgba(245,158,11,0.3); color: #f59e0b; }
+                .mod-btn.success:hover { background: rgba(16,185,129,0.15); border-color: rgba(16,185,129,0.3); color: #10b981; }
+                .mod-details-scroll {
+                    max-height: 120px;
+                    overflow-y: auto;
+                    font-size: 0.85rem;
+                    background: rgba(0,0,0,0.2);
+                    border-radius: 12px;
+                    padding: 12px;
+                    margin-bottom: 16px;
+                    border: 1px solid rgba(255,255,255,0.02);
+                }
+                .mod-details-scroll::-webkit-scrollbar { width: 4px; }
+                .mod-details-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+                
+                .mod-top-bar {
+                    display: flex; flex-wrap: wrap; gap: 15px; margin-top: 20px; align-items: center;
+                    background: rgba(255,255,255,0.02); padding: 15px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.05);
+                    animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+                }
+                .mod-input, .mod-select {
+                    background: rgba(0,0,0,0.3);
+                    border: 1px solid rgba(255,255,255,0.1);
+                    color: #fff; padding: 10px 16px; border-radius: 10px;
+                    font-size: 0.9rem; transition: all 0.2s; outline: none;
+                }
+                .mod-input:focus, .mod-select:focus { border-color: var(--accent-green); box-shadow: 0 0 0 3px rgba(16,185,129,0.15); }
+                </style>
+                <div class='box' style='background:transparent; border:none; padding:0;'>
+                    <h2 style='font-size:2rem; margin-bottom:5px;'><span style='font-size:1.2em; vertical-align:-3px;'>🔎</span> Client Directory</h2>
                     <p class='text-muted'>Global surveillance and access control matrix.</p>
-                    <div style='display:flex; flex-wrap:wrap; gap:15px; margin-top:20px; align-items:center;'>
-                        <input type='text' id='memberSearchInput' placeholder='Query ID or designation...' style='margin-top:0; flex:1; min-width:250px;' oninput='window.sortMembersLocally()'>
-                        <select id='memberStatusSelect' style='margin-top:0; width:180px;' onchange='window.sortMembersLocally()'>
+                    <div class='mod-top-bar'>
+                        <input type='text' id='memberSearchInput' class='mod-input' placeholder='Query ID or designation...' style='flex:1; min-width:250px;' oninput='window.sortMembersLocally()'>
+                        <select id='memberStatusSelect' class='mod-select' style='width:180px;' onchange='window.sortMembersLocally()'>
                             <option value='all'>🌍 Global View</option>
                             <option value='online'>🟢 Active Only</option>
                         </select>
-                        <select id='memberSortSelect' style='margin-top:0; width:180px;' onchange='window.sortMembersLocally()'>
+                        <select id='memberSortSelect' class='mod-select' style='width:180px;' onchange='window.sortMembersLocally()'>
                             <option value='recent'>🔽 Newest Nodes</option>
                             <option value='oldest'>🔼 Oldest Nodes</option>
                             <option value='spent_desc'>💰 High Value</option>
                             <option value='spent_asc'>💸 Low Value</option>
                             <option value='warns'>⚠️ High Risk</option>
                         </select>
-                        <button class='admin-btn' style='margin-top:0; height:50px;' onclick='window.loadAllMembers()'>Sync Database</button>
+                        <button class='admin-btn btn-green' style='margin:0; padding:10px 20px; font-weight:600;' onclick='window.loadAllMembers()'>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.92-10.27l-3.27-3.27"/></svg>
+                            Sync Database
+                        </button>
                     </div>
-                    <div id='memberResults' style='margin-top:30px;'></div>
+                    <div id='memberResults' class='moderation-grid'></div>
                 </div>
             </div>
 
