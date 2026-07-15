@@ -396,6 +396,12 @@ function ensureMemoryInitialized() {
                 syncCloud();
             }
 
+            
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Skeleton Loaders"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔄 Skeleton Loaders & UI Feedback\n\n- Implémentation d'un système de skeleton loading CSS performant (sans JS overhead).\n- Tous les widgets du Dashboard (stats, tableaux de données, graphiques, logs système) affichent désormais des structures grisées clignotantes pendant le fetch API initial.\n- Amélioration de la perception des performances et suppression des valeurs '£0' ou '--' parasites au chargement de l'app." });
+                syncCloud();
+            }
+
             if (!memoryStats.overrides) memoryStats.overrides = {};
             if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } };
             if (!memoryStats.settings.maintenance) memoryStats.settings.maintenance = { active: false, endsAt: 0, channelId: "" };
@@ -2647,6 +2653,30 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
 
         /* Premium CSS Updates */
         .premium-stats-grid { gap: 24px; }
+        /* Skeleton Loading UI */
+        @keyframes skeleton-loading {
+            0% { background-color: rgba(255, 255, 255, 0.05); }
+            100% { background-color: rgba(255, 255, 255, 0.15); }
+        }
+        .skeleton {
+            animation: skeleton-loading 1.2s linear infinite alternate;
+            border-radius: 8px;
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+        }
+        .skeleton-text {
+            height: 1.2em;
+            margin-bottom: 0;
+            border-radius: 6px;
+        }
+        .skeleton-table-row {
+            height: 45px;
+            width: 100%;
+            margin-bottom: 8px;
+            border-radius: 12px;
+        }
+
 
         /* Ultra Premium Glassmorphism Design System */
         .glass-panel {
@@ -3360,7 +3390,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
                        </div>
                        <h3 class='glass-title'>Today's Revenue</h3>
-                       <div class='glass-stat-value text-green' id='ui-today-rev'>£0</div>
+                       <div class='glass-stat-value text-green' id='ui-today-rev'><div class="skeleton skeleton-text" style="width: 70px;"></div></div>
                        <div class='trend positive' style='font-weight: 600; font-size: 0.9em;'>+14% <span style='color:var(--text-muted); font-weight:normal;'>vs yesterday</span></div>
                    </div>
                    <div class='glass-panel' onclick='window.editStat("total_rev")' style='cursor:pointer; padding: 28px;' title='Click to edit'>
@@ -3369,7 +3399,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 8h20M6 16h.01"/></svg>
                        </div>
                        <h3 class='glass-title'>Total Yield</h3>
-                       <div class='glass-stat-value' id='ui-total-rev'>£0</div>
+                       <div class='glass-stat-value' id='ui-total-rev'><div class="skeleton skeleton-text" style="width: 70px;"></div></div>
                        <div class='trend' style='color:var(--text-muted); font-weight: 500; font-size: 0.9em;'>Lifetime Revenue</div>
                    </div>
                    <div class='glass-panel' onclick='window.editStat("conv_rate")' style='cursor:pointer; padding: 28px;' title='Click to edit'>
@@ -3378,7 +3408,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h4l3-9 5 18 3-9h5"/></svg>
                        </div>
                        <h3 class='glass-title'>Conversion</h3>
-                       <div class='glass-stat-value' id='ui-conv-rate'>0%</div>
+                       <div class='glass-stat-value' id='ui-conv-rate'><div class="skeleton skeleton-text" style="width: 70px;"></div></div>
                        <div class='trend positive' style='font-weight: 600; font-size: 0.9em;'>High Engagement</div>
                    </div>
                    <div class='glass-panel' onclick='window.editStat("online_total")' style='cursor:pointer; padding: 28px;' title='Click to edit'>
@@ -3387,7 +3417,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                        </div>
                        <h3 class='glass-title'>Network Activity</h3>
-                       <div class='glass-stat-value' id='ui-online-total'>0</div>
+                       <div class='glass-stat-value' id='ui-online-total'><div class="skeleton skeleton-text" style="width: 70px;"></div></div>
                        <div class='trend' style='color:var(--text-muted); font-weight: 500; font-size: 0.9em;'>Active Members</div>
                    </div>
                    <div class='glass-panel' onclick='window.editStat("active_subs")' style='cursor:pointer; padding: 28px;' title='Click to edit'>
@@ -3396,7 +3426,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
                        </div>
                        <h3 class='glass-title'>Active Subs</h3>
-                       <div class='glass-stat-value' id='ui-active-subs'>0</div>
+                       <div class='glass-stat-value' id='ui-active-subs'><div class="skeleton skeleton-text" style="width: 70px;"></div></div>
                        <div class='trend positive' style='font-weight: 600; font-size: 0.9em;'>Recurring Yield</div>
                    </div>
                    <div class='glass-panel' onclick='window.editStat("pending_orders")' style='cursor:pointer; padding: 28px;' title='Click to edit'>
@@ -3405,7 +3435,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                        </div>
                        <h3 class='glass-title'>Pending Orders</h3>
-                       <div class='glass-stat-value' id='ui-pending-orders'>0</div>
+                       <div class='glass-stat-value' id='ui-pending-orders'><div class="skeleton skeleton-text" style="width: 70px;"></div></div>
                        <div class='trend negative' style='font-weight: 600; font-size: 0.9em;'>Awaiting processing</div>
                    </div>
                </div>
@@ -3425,7 +3455,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                                <button class='admin-btn btn-pill' id='btn-chart-all' style='margin:0; font-size: 0.8em; padding: 6px 16px;' onclick='window.updateSalesChart(0)'>ALL</button>
                            </div>
                        </div>
-                       <div style='flex:1; min-height:300px; position:relative; z-index:1; margin-top: 10px;'><canvas id='salesChart'></canvas></div>
+                       <div style='flex:1; min-height:300px; position:relative; z-index:1; margin-top: 10px;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='salesChart' style='position:relative; z-index:10;'></canvas></div>
                    </div>
                    
                    <div class='glass-panel' style='padding: 30px; display:flex; flex-direction:column;'>
@@ -3448,7 +3478,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
                        </div>
                        <h3 class='glass-title'>Tickets Opened</h3>
-                       <div class='glass-stat-value text-red' id='ui-tickets-opened'>0</div>
+                       <div class='glass-stat-value text-red' id='ui-tickets-opened'><div class="skeleton skeleton-text" style="width: 70px;"></div></div>
                        <div class='trend' style='color:var(--text-muted); font-weight: 500; font-size: 0.9em;'>Support Requests</div>
                    </div>
                    <div class='glass-panel' onclick='window.editStat("dropoff")' style='cursor:pointer; padding: 28px;' title='Click to edit'>
@@ -3457,7 +3487,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
                        </div>
                        <h3 class='glass-title'>Drop-off Rate</h3>
-                       <div class='glass-stat-value' id='ui-dropoff'>0%</div>
+                       <div class='glass-stat-value' id='ui-dropoff'><div class="skeleton skeleton-text" style="width: 70px;"></div></div>
                        <div class='trend negative' style='font-weight: 600; font-size: 0.9em;'>Funnel Loss</div>
                    </div>
                    <div class='glass-panel' onclick='window.editStat("peak")' style='cursor:pointer; padding: 28px;' title='Click to edit'>
@@ -3466,7 +3496,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                        </div>
                        <h3 class='glass-title'>Peak Sales Hour</h3>
-                       <div class='glass-stat-value' id='ui-peak-hour'>N/A</div>
+                       <div class='glass-stat-value' id='ui-peak-hour'><div class="skeleton skeleton-text" style="width: 70px;"></div></div>
                        <div class='trend positive' style='font-weight: 600; font-size: 0.9em;'>Highest Traffic</div>
                    </div>
                </div>
@@ -3587,12 +3617,12 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
            </div>
 
            <div id='analytics' class='tab-content'>
-               <div class='box'><h2>🕒 Peak Execution Hours</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Observe the time of day with the highest transaction volume.</p><div style='height:280px;'><canvas id='hourlyChart'></canvas></div></div>
+               <div class='box'><h2>🕒 Peak Execution Hours</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Observe the time of day with the highest transaction volume.</p><div style='height:280px; position:relative;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='hourlyChart' style='position:relative; z-index:10;'></canvas></div></div>
                <div style='display:grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap:25px;'>
-                   <div class='box'><h2>🏆 Top Performing Assets</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Which products generate the most sales quantity.</p><div style='height:260px;'><canvas id='topProductsBarChart'></canvas></div></div>
-                   <div class='box'><h2>🏷️ Sector Revenue</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Revenue grouped by product category.</p><div style='height:260px;'><canvas id='categoryRevenueChart'></canvas></div></div>
-                   <div class='box'><h2>📅 Sales by Day of Week</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Identify your most profitable days to plan promotions.</p><div style='height:260px;'><canvas id='dowChart'></canvas></div></div>
-                   <div class='box'><h2>📊 Conversion Funnel</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Ratio of total tickets opened versus successful transactions.</p><div style='height:260px;'><canvas id='funnelChart'></canvas></div></div>
+                   <div class='box'><h2>🏆 Top Performing Assets</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Which products generate the most sales quantity.</p><div style='height:260px; position:relative;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='topProductsBarChart' style='position:relative; z-index:10;'></canvas></div></div>
+                   <div class='box'><h2>🏷️ Sector Revenue</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Revenue grouped by product category.</p><div style='height:260px; position:relative;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='categoryRevenueChart' style='position:relative; z-index:10;'></canvas></div></div>
+                   <div class='box'><h2>📅 Sales by Day of Week</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Identify your most profitable days to plan promotions.</p><div style='height:260px; position:relative;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='dowChart' style='position:relative; z-index:10;'></canvas></div></div>
+                   <div class='box'><h2>📊 Conversion Funnel</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Ratio of total tickets opened versus successful transactions.</p><div style='height:260px; position:relative;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='funnelChart' style='position:relative; z-index:10;'></canvas></div></div>
                </div>
            </div>
 
@@ -3813,7 +3843,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                        <button class='admin-btn btn-green' style='margin:0;' onclick='window.saveBuyLink()' id='saveLinkBtn'>Save Link</button>
                        <button class='admin-btn' style='margin:0; color:var(--accent-red); display:none;' onclick='window.cancelEditLink()' id='cancelEditLinkBtn'>Cancel</button>
                    </div>
-                   <div class='table-responsive' style='margin-top:20px;'><table><thead><tr><th>Label</th><th>Endpoint URL</th><th>Actions</th></tr></thead><tbody id='target-buy-links'></tbody></table></div>
+                   <div class='table-responsive' style='margin-top:20px;'><table><thead><tr><th>Label</th><th>Endpoint URL</th><th>Actions</th></tr></thead><tbody id='target-buy-links'><tr><td colspan="3"><div class="skeleton skeleton-table-row"></div><div class="skeleton skeleton-table-row"></div><div class="skeleton skeleton-table-row"></div></td></tr></tbody></table></div>
                 </div>
             </div>
                 
@@ -3884,10 +3914,10 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                     
                     <div class='stats-grid' style='position:relative; z-index:1;'>
                         <div class='card' style='border:none; background:rgba(255,255,255,0.02); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.05); border-radius:16px;'>
-                            <h3 style='display:flex; align-items:center; justify-content:space-between;'>🖥️ Core Compute <span style='font-size:0.65em; padding:3px 8px; border-radius:8px; background:rgba(255,255,255,0.1); font-family:monospace;' id='ui-os-plat'>--</span></h3>
+                            <h3 style='display:flex; align-items:center; justify-content:space-between;'>🖥️ Core Compute <span style='font-size:0.65em; padding:3px 8px; border-radius:8px; background:rgba(255,255,255,0.1); font-family:monospace;' id='ui-os-plat'><div class="skeleton skeleton-text" style="width: 60px; display: inline-block;"></div></span></h3>
                             <div style='margin-top:25px;'>
                                 <div style='display:flex; justify-content:space-between; font-size:0.8em; text-transform:uppercase; font-weight:bold; color:var(--text-muted);'>
-                                    <span>CPU Load</span> <span id='ui-cpu-txt'>--%</span>
+                                    <span>CPU Load</span> <span id='ui-cpu-txt'><div class="skeleton skeleton-text" style="width: 40px; display: inline-block;"></div></span>
                                 </div>
                                 <div class='metric-bar-bg'>
                                     <div class='metric-bar-fill' id='ui-cpu-bar' style='background:var(--accent-green); width:0%;'></div>
@@ -3895,7 +3925,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                             </div>
                             <div style='margin-top:20px;'>
                                 <div style='display:flex; justify-content:space-between; font-size:0.8em; text-transform:uppercase; font-weight:bold; color:var(--text-muted);'>
-                                    <span>RAM Memory</span> <span id='ui-ram-txt'>--%</span>
+                                    <span>RAM Memory</span> <span id='ui-ram-txt'><div class="skeleton skeleton-text" style="width: 40px; display: inline-block;"></div></span>
                                 </div>
                                 <div class='metric-bar-bg'>
                                     <div class='metric-bar-fill' id='ui-ram-bar' style='background:var(--accent-blue); width:0%;'></div>
@@ -3903,43 +3933,43 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                                 <div style='text-align:right; font-size:0.7em; color:var(--text-muted); margin-top:5px; font-family:monospace;' id='ui-os-ram'>-- GB / -- GB</div>
                             </div>
                             <div style='margin-top:20px; font-size:0.85em; display:flex; justify-content:space-between; border-top:1px solid rgba(255,255,255,0.05); padding-top:15px;'>
-                                <span class='text-muted'>Node Uptime:</span> <strong id='ui-os-up' style='font-family:monospace;'>--</strong>
+                                <span class='text-muted'>Node Uptime:</span> <strong id='ui-os-up' style='font-family:monospace;'><div class="skeleton skeleton-text" style="width: 40px; display: inline-block;"></div></strong>
                             </div>
                         </div>
                         
                         <div class='card' style='border:none; background:rgba(255,255,255,0.02); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.05); border-radius:16px;'>
-                            <h3 style='display:flex; align-items:center; justify-content:space-between;'>⚙️ V8 Runtime <span style='font-size:0.65em; padding:3px 8px; border-radius:8px; background:rgba(168,85,247,0.1); color:#a855f7; font-family:monospace;' id='ui-proc-up'>--</span></h3>
+                            <h3 style='display:flex; align-items:center; justify-content:space-between;'>⚙️ V8 Runtime <span style='font-size:0.65em; padding:3px 8px; border-radius:8px; background:rgba(168,85,247,0.1); color:#a855f7; font-family:monospace;' id='ui-proc-up'><div class="skeleton skeleton-text" style="width: 60px; display: inline-block;"></div></span></h3>
                             <div style='margin-top:20px; font-size:0.9em; line-height:2.2;'>
                                 <div style='display:flex; justify-content:space-between; align-items:center;'>
                                     <span class='text-muted' style='display:flex; align-items:center; gap:8px;'><div class='status-pulse' style='background:var(--accent-purple); width:6px; height:6px;'></div> Memory (RSS)</span> 
-                                    <strong id='ui-proc-rss' style='color:var(--accent-purple); font-family:monospace;'>-- MB</strong>
+                                    <strong id='ui-proc-rss' style='color:var(--accent-purple); font-family:monospace;'><div class="skeleton skeleton-text" style="width: 40px; display: inline-block;"></div></strong>
                                 </div>
                                 <div style='display:flex; justify-content:space-between; align-items:center;'>
                                     <span class='text-muted' style='display:flex; align-items:center; gap:8px;'><div class='status-pulse' style='background:var(--accent-orange); width:6px; height:6px;'></div> Memory (Heap)</span> 
-                                    <strong id='ui-proc-heap' style='font-family:monospace;'>-- MB</strong>
+                                    <strong id='ui-proc-heap' style='font-family:monospace;'><div class="skeleton skeleton-text" style="width: 40px; display: inline-block;"></div></strong>
                                 </div>
                                 <div style='display:flex; justify-content:space-between; align-items:center;'>
                                     <span class='text-muted' style='display:flex; align-items:center; gap:8px;'><div class='status-pulse' style='background:#f43f5e; width:6px; height:6px;'></div> Event Loop Lag</span> 
-                                    <strong id='ui-proc-lag' style='font-family:monospace;'>-- ms</strong>
+                                    <strong id='ui-proc-lag' style='font-family:monospace;'><div class="skeleton skeleton-text" style="width: 40px; display: inline-block;"></div></strong>
                                 </div>
                             </div>
                         </div>
 
                         <div class='card' style='border:none; background:rgba(255,255,255,0.02); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.05); border-radius:16px;'>
-                            <h3 style='display:flex; align-items:center; justify-content:space-between;'>🛡️ Defense Matrix <span style='font-size:0.65em; padding:3px 8px; border-radius:8px; background:rgba(16,185,129,0.1); color:var(--accent-green); font-family:monospace;' id='ui-fw-status'>ACTIVE</span></h3>
+                            <h3 style='display:flex; align-items:center; justify-content:space-between;'>🛡️ Defense Matrix <span style='font-size:0.65em; padding:3px 8px; border-radius:8px; background:rgba(16,185,129,0.1); color:var(--accent-green); font-family:monospace;' id='ui-fw-status'><div class="skeleton skeleton-text" style="width: 60px; display: inline-block;"></div></span></h3>
                             <div style='margin-top:20px; font-size:0.9em; line-height:2.2;'>
                                 <div style='display:flex; justify-content:space-between; align-items:center;'>
                                     <span class='text-muted'>IPs Rate-Limited</span> 
                                     <div style='display:flex; align-items:center; gap:10px;'>
                                         <div style='width:60px; height:4px; background:rgba(255,255,255,0.1); border-radius:2px;'><div id='ui-sec-rates-bar' style='width:0%; height:100%; background:var(--accent-orange); border-radius:2px; transition:0.5s;'></div></div>
-                                        <strong id='ui-sec-rates' style='color:var(--accent-orange); font-family:monospace; min-width:30px; text-align:right;'>--</strong>
+                                        <strong id='ui-sec-rates' style='color:var(--accent-orange); font-family:monospace; min-width:30px; text-align:right;'><div class="skeleton skeleton-text" style="width: 40px; display: inline-block;"></div></strong>
                                     </div>
                                 </div>
                                 <div style='display:flex; justify-content:space-between; align-items:center;'>
                                     <span class='text-muted'>Brute-Force Locks</span> 
                                     <div style='display:flex; align-items:center; gap:10px;'>
                                         <div style='width:60px; height:4px; background:rgba(255,255,255,0.1); border-radius:2px;'><div id='ui-sec-locks-bar' style='width:0%; height:100%; background:var(--accent-red); border-radius:2px; transition:0.5s;'></div></div>
-                                        <strong id='ui-sec-locks' style='color:var(--accent-red); font-family:monospace; min-width:30px; text-align:right;'>--</strong>
+                                        <strong id='ui-sec-locks' style='color:var(--accent-red); font-family:monospace; min-width:30px; text-align:right;'><div class="skeleton skeleton-text" style="width: 40px; display: inline-block;"></div></strong>
                                     </div>
                                 </div>
                             </div>
@@ -3951,26 +3981,26 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                         <div class='card' id='card-discord' style='border:none; background:rgba(255,255,255,0.02); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.05); border-radius:16px; position:relative; overflow:hidden;'>
                             <div id='glow-discord' style='position:absolute; top:0; left:0; width:100%; height:4px; background:var(--text-muted); transition:1s;'></div>
                             <h3 style='margin-top:5px;'>🔵 Discord WS</h3>
-                            <div class='value' id='ui-discord-ws' style='font-size:1.8em; margin: 15px 0; font-family:monospace;'>-- ms</div>
+                            <div class='value' id='ui-discord-ws' style='font-size:1.8em; margin: 15px 0; font-family:monospace;'><div class="skeleton skeleton-text" style="width: 80px;"></div></div>
                             <div style='font-size:0.85em; line-height:2;'>
-                                <div style='display:flex; justify-content:space-between;'><span class='text-muted'>Status:</span> <strong id='ui-discord-status'>--</strong></div>
-                                <div style='display:flex; justify-content:space-between;'><span class='text-muted'>Guilds:</span> <strong id='ui-discord-guilds' style='font-family:monospace;'>--</strong></div>
-                                <div style='display:flex; justify-content:space-between;'><span class='text-muted'>Cached Users:</span> <strong id='ui-discord-users' style='font-family:monospace;'>--</strong></div>
+                                <div style='display:flex; justify-content:space-between;'><span class='text-muted'>Status:</span> <strong id='ui-discord-status'><div class="skeleton skeleton-text" style="width: 40px; display: inline-block;"></div></strong></div>
+                                <div style='display:flex; justify-content:space-between;'><span class='text-muted'>Guilds:</span> <strong id='ui-discord-guilds' style='font-family:monospace;'><div class="skeleton skeleton-text" style="width: 40px; display: inline-block;"></div></strong></div>
+                                <div style='display:flex; justify-content:space-between;'><span class='text-muted'>Cached Users:</span> <strong id='ui-discord-users' style='font-family:monospace;'><div class="skeleton skeleton-text" style="width: 40px; display: inline-block;"></div></strong></div>
                             </div>
                         </div>
 
                         <div class='card' id='card-upstash' style='border:none; background:rgba(255,255,255,0.02); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.05); border-radius:16px; position:relative; overflow:hidden;'>
                             <div id='glow-upstash' style='position:absolute; top:0; left:0; width:100%; height:4px; background:var(--text-muted); transition:1s;'></div>
                             <h3 style='margin-top:5px;'>🔴 Upstash DB</h3>
-                            <div class='value' id='ui-upstash-status' style='font-size:1.5em; margin: 15px 0;'>⚪ Standby</div>
-                            <p class='text-muted' style='margin:0; font-size:0.85em; display:flex; justify-content:space-between;'><span>Response Latency:</span> <strong id='ui-upstash-ping' style='font-family:monospace;'>-- ms</strong></p>
+                            <div class='value' id='ui-upstash-status' style='font-size:1.5em; margin: 15px 0;'><div class="skeleton skeleton-text" style="width: 100px;"></div></div>
+                            <p class='text-muted' style='margin:0; font-size:0.85em; display:flex; justify-content:space-between;'><span>Response Latency:</span> <strong id='ui-upstash-ping' style='font-family:monospace;'><div class="skeleton skeleton-text" style="width: 40px; display: inline-block;"></div></strong></p>
                         </div>
                         
                         <div class='card' id='card-rewarble' style='border:none; background:rgba(255,255,255,0.02); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.05); border-radius:16px; position:relative; overflow:hidden;'>
                             <div id='glow-rewarble' style='position:absolute; top:0; left:0; width:100%; height:4px; background:var(--text-muted); transition:1s;'></div>
                             <h3 style='margin-top:5px;'>🟢 Rewarble API</h3>
-                            <div class='value' id='ui-rewarble-status' style='font-size:1.5em; margin: 15px 0;'>⚪ Standby</div>
-                            <p class='text-muted' style='margin:0; font-size:0.85em; display:flex; justify-content:space-between;'><span>Response Latency:</span> <strong id='ui-rewarble-ping' style='font-family:monospace;'>-- ms</strong></p>
+                            <div class='value' id='ui-rewarble-status' style='font-size:1.5em; margin: 15px 0;'><div class="skeleton skeleton-text" style="width: 100px;"></div></div>
+                            <p class='text-muted' style='margin:0; font-size:0.85em; display:flex; justify-content:space-between;'><span>Response Latency:</span> <strong id='ui-rewarble-ping' style='font-family:monospace;'><div class="skeleton skeleton-text" style="width: 40px; display: inline-block;"></div></strong></p>
                         </div>
                     </div>
                 </div>
@@ -4360,7 +4390,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                     <h2>⏳ Review Queue</h2>
                     <p class='text-muted'>Client feedback awaiting validation before public broadcast.</p>
                     <div class='table-responsive' style='margin-top:20px;'>
-                        <table><thead><tr><th>Timestamp</th><th>Client ID</th><th>Asset</th><th>Score</th><th>Data</th><th>Execute</th></tr></thead><tbody id='target-pending-reviews'></tbody></table>
+                        <table><thead><tr><th>Timestamp</th><th>Client ID</th><th>Asset</th><th>Score</th><th>Data</th><th>Execute</th></tr></thead><tbody id='target-pending-reviews'><tr><td colspan="6"><div class="skeleton skeleton-table-row"></div><div class="skeleton skeleton-table-row"></div><div class="skeleton skeleton-table-row"></div></td></tr></tbody></table>
                     </div>
                 </div>
                 
@@ -5767,6 +5797,8 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         }
         // 🚀 [UI_ACTION: renderSalesChart] - Action d'interface Dashboard
         window.renderSalesChart = function(days) { 
+           document.querySelectorAll('.skeleton-chart-overlay').forEach(el => el.remove());
+
             try {
                 if(typeof Chart === 'undefined') return; 
                 if(!window.currentChartDays) window.currentChartDays = 7;
@@ -5889,6 +5921,8 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         };
     // 🚀 [FUNCTION: renderAnalyticsCharts] - Déclaration de fonction
         function renderAnalyticsCharts() { 
+           document.querySelectorAll('.skeleton-chart-overlay').forEach(el => el.remove());
+
            if(typeof Chart === 'undefined') return;
            try { const canvas = document.getElementById('hourlyChart'); if(canvas) { const ctxHourly = canvas.getContext('2d'); if(!ctxHourly) return; if(window.hourlyChart instanceof Chart) window.hourlyChart.destroy(); window.hourlyChart = new Chart(ctxHourly, { type: 'bar', data: { labels: Array.from({length: 24}, (_, i) => i+'h'), datasets: [{ label: 'Sales', data: rawStats.analytics.hourly_sales || Array(24).fill(0), backgroundColor: getThemeVal('hex'), hoverBackgroundColor: '#fff', borderRadius: 6 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false } }, scales: { y: { grid: { color: 'rgba(255,255,255,0.05)' }, border: {display: false}, beginAtZero: true }, x: { grid: { display: false }, border: {display: false} } } } }); } } catch(e) { console.error("Hourly Chart Error", e); }
            try { const canvas = document.getElementById('topProductsBarChart'); if(canvas) { const prodIds = Object.keys(rawStats.product_sales || {}); const prodLabels = prodIds.map(id => rawStats.products[id] ? rawStats.products[id].name : 'Unknown'); const prodData = Object.values(rawStats.product_sales || {}); const ctxTopProd = canvas.getContext('2d'); if(!ctxTopProd) return; if(window.topProdChart instanceof Chart) window.topProdChart.destroy(); window.topProdChart = new Chart(ctxTopProd, { type: 'bar', data: { labels: prodLabels.length?prodLabels:['No Data'], datasets: [{ label: 'Sales', data: prodData.length?prodData:[0], backgroundColor: getThemeVal('hex'), hoverBackgroundColor: '#fff', borderRadius: 6 }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: { duration: 1500, easing: 'easeOutQuart' }, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' }, border: {display: false}, beginAtZero: true }, y: { grid: { display: false }, border: {display: false} } } } }); } } catch(e) { console.error("Top Prod Chart Error", e); }
