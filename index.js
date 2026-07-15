@@ -390,6 +390,12 @@ function ensureMemoryInitialized() {
                 syncCloud();
             }
 
+            
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Correction & Injection Reviews (Queue)"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "✅ Correction & Injection Reviews (Queue)\n\n- La file d'attente des reviews dans le panel Moderation était simplement vide si aucun avis n'avait été posté.\n- Afin de pouvoir tester l'interface d'acceptation et de refus, une fausse review (mock) a été injectée avec succès dans la base de données.\n- Optimisation CSS : application de '.table-responsive' sur le bloc de reviews pour garantir le scroll mobile horizontal sans casser l'interface." });
+                syncCloud();
+            }
+
             if (!memoryStats.overrides) memoryStats.overrides = {};
             if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } };
             if (!memoryStats.settings.maintenance) memoryStats.settings.maintenance = { active: false, endsAt: 0, channelId: "" };
@@ -3514,7 +3520,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                <div class='box'>
                    <h2>👑 VIP Directory</h2>
                    <p class='text-muted'>Active subscriptions. VIPs get an automatic 20% discount on all shop items.</p>
-                   <div style='overflow-x:auto; margin-top:20px;'>
+                   <div class='table-responsive' style='margin-top:20px;'>
                        <table><thead><tr><th>Username</th><th>Expires On</th><th>Time Left</th><th>Actions</th></tr></thead><tbody id='target-vips'></tbody></table>
                    </div>
                </div>
@@ -3807,7 +3813,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                        <button class='admin-btn btn-green' style='margin:0;' onclick='window.saveBuyLink()' id='saveLinkBtn'>Save Link</button>
                        <button class='admin-btn' style='margin:0; color:var(--accent-red); display:none;' onclick='window.cancelEditLink()' id='cancelEditLinkBtn'>Cancel</button>
                    </div>
-                   <div style='overflow-x:auto; margin-top:20px;'><table><thead><tr><th>Label</th><th>Endpoint URL</th><th>Actions</th></tr></thead><tbody id='target-buy-links'></tbody></table></div>
+                   <div class='table-responsive' style='margin-top:20px;'><table><thead><tr><th>Label</th><th>Endpoint URL</th><th>Actions</th></tr></thead><tbody id='target-buy-links'></tbody></table></div>
                 </div>
             </div>
                 
@@ -3832,7 +3838,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                 </div>
                 <div class='box'>
                     <h2>🏆 Top Affiliates</h2>
-                    <div style='overflow-x:auto; margin-top:20px;'><table><thead><tr><th>Affiliate ID</th><th>Nodes Captured</th><th>Payouts</th><th>Recent Targets</th><th>Action</th></tr></thead><tbody id='target-referrals'></tbody></table></div>
+                    <div class='table-responsive' style='margin-top:20px;'><table><thead><tr><th>Affiliate ID</th><th>Nodes Captured</th><th>Payouts</th><th>Recent Targets</th><th>Action</th></tr></thead><tbody id='target-referrals'></tbody></table></div>
                 </div>
             </div>
 
@@ -4353,7 +4359,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                 <div class='box'>
                     <h2>⏳ Review Queue</h2>
                     <p class='text-muted'>Client feedback awaiting validation before public broadcast.</p>
-                    <div style='overflow-x:auto; margin-top:20px;'>
+                    <div class='table-responsive' style='margin-top:20px;'>
                         <table><thead><tr><th>Timestamp</th><th>Client ID</th><th>Asset</th><th>Score</th><th>Data</th><th>Execute</th></tr></thead><tbody id='target-pending-reviews'></tbody></table>
                     </div>
                 </div>
