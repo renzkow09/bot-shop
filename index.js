@@ -472,6 +472,10 @@ function ensureMemoryInitialized() {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔥 FIX: Widget Modal Syntax Error\n\n- Résolution d'une `SyntaxError: Invalid regular expression flags` critique qui causait le crash du bot au démarrage.\n- L'erreur était liée à une corruption du template literal lors de la précédente extraction de code depuis le générateur de transcription.\n- Le bouton '➕ Add Widget' est désormais 100% fonctionnel sur le dashboard, avec un affichage fluide de la modale en surcouche complète (z-index)." });
                 syncCloud();
             }
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Revenue Chart Fluid Animation"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "✨ Revenue Chart Fluid Animation\n\n- Refonte complète de l'animation d'ouverture du graphique 'Revenue Trajectory'.\n- Intégration de courbes de bézier élastiques (easeOutElastic) sur l'axe Y et la tension de ligne pour un effet de rebond organique.\n- L'apparition des points est désormais séquencée avec un décalage exponentiel sur l'axe X, créant une onde fluide ('wave effect') extraordinairement satisfaisante au chargement du composant." });
+                syncCloud();
+            }
 
             if (!memoryStats.overrides) memoryStats.overrides = {};
             if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } };
@@ -6387,24 +6391,33 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                         responsive: true, 
                         maintainAspectRatio: false, 
                         animation: {
-                            x: {
-                                type: 'number',
-                                easing: 'linear',
-                                duration: 800,
-                                from: NaN, // the point is initially skipped
-                                delay(ctx) {
-                                  if (ctx.type !== 'data' || ctx.xStarted) {
-                                    return 0;
-                                  }
-                                  ctx.xStarted = true;
-                                  return ctx.index * 50;
-                                }
+                            tension: {
+                                duration: 2500,
+                                easing: 'easeOutElastic',
+                                from: 0.9,
+                                to: 0.45
                             },
                             y: {
                                 type: 'number',
-                                easing: 'easeOutQuart',
-                                duration: 1500,
-                                from: (ctx) => { return ctx.chart.scales.y.getPixelForValue(0); }
+                                easing: 'easeOutElastic',
+                                duration: 2500,
+                                from: (ctx) => { return ctx.chart?.scales?.y?.getPixelForValue(0) || 0; },
+                                delay(ctx) {
+                                    if (ctx.type !== 'data' || ctx.yStarted) { return 0; }
+                                    ctx.yStarted = true;
+                                    return ctx.index * 50;
+                                }
+                            },
+                            x: {
+                                type: 'number',
+                                easing: 'easeOutExpo',
+                                duration: 2000,
+                                from: NaN,
+                                delay(ctx) {
+                                  if (ctx.type !== 'data' || ctx.xStarted) { return 0; }
+                                  ctx.xStarted = true;
+                                  return ctx.index * 50;
+                                }
                             }
                         },
                         interaction: { mode: 'index', intersect: false },
