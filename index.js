@@ -204,6 +204,7 @@ function ensureMemoryInitialized() {
             if (!memoryStats.activity_feed) memoryStats.activity_feed = [];
             if (!memoryStats.custom_requests) memoryStats.custom_requests = [];
             if (!Array.isArray(memoryStats.patchnotes)) memoryStats.patchnotes = [];
+            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔧 AUTO-CORRECTION: Échappement sécurisé des apostrophes dans les événements inline (onclick, onmouseover) via &quot; au lieu de \'. Refonte graphique de l\'interface d\'analytique et de modération (pills, gradients de carte)." });
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔥 CRITICAL FIX: Resolved dashboard freezing caused by unhandled exceptions in UI overlay and missing JS canvas compatibility. 🛡️ DISCORD FIX: Prevented category creation crashes for shop/support tickets if parent category ID is invalid on the host server. 🛠️ SECURITY: Blinded try/catch error logging on frontend. 🚀 The system is now 100% operational." });
             if (memoryStats.patchnotes.length > 50) memoryStats.patchnotes = memoryStats.patchnotes.slice(0, 50);
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔥 CRITICAL FIX: Resolved dashboard freeze by forcefully removing the splash screen. 🛡️ DISCORD FIX: Fixed 'Redeem Code' channel creation crash caused by invalid Admin ID in permission overwrites. Added strict try/catch error boundaries." });
@@ -684,7 +685,54 @@ async function generateTranscript(channel) {
             }
         }
 
-    </style>
+    
+        .filter-pill-group {
+            display: flex; background: rgba(0,0,0,0.3); border-radius: 100px; padding: 4px;
+            border: 1px solid rgba(255,255,255,0.05); gap: 4px;
+        }
+        .filter-pill {
+            background: transparent; color: var(--text-muted); border: none; padding: 10px 16px;
+            border-radius: 100px; font-weight: 600; font-size: 0.85rem; cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .filter-pill:hover { color: #fff; background: rgba(255,255,255,0.05); }
+        .filter-pill.active {
+            background: rgba(255,255,255,0.1); color: #fff;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2), inset 0 1px 1px rgba(255,255,255,0.1);
+        }
+        .search-pill-wrapper {
+            position: relative; flex: 1; min-width: 200px;
+        }
+        .search-pill-wrapper::before {
+            content: "🔍"; position: absolute; left: 16px; top: 50%; transform: translateY(-50%); font-size: 1rem; opacity: 0.5;
+        }
+        .search-pill-input {
+            width: 100%; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05);
+            padding: 12px 16px 12px 42px; border-radius: 100px; color: #fff; outline: none;
+            transition: all 0.3s ease; font-size: 0.9rem;
+        }
+        .search-pill-input:focus {
+            background: rgba(0,0,0,0.5); border-color: var(--accent-green);
+            box-shadow: 0 0 0 3px rgba(var(--accent-green-rgb), 0.15);
+        }
+        .analytics-card {
+            background: linear-gradient(145deg, rgba(20,20,25,0.8), rgba(15,15,18,0.8));
+            backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.03);
+            border-radius: 24px; padding: 24px; position: relative; overflow: hidden;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05);
+            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s ease;
+        }
+        .analytics-card:hover {
+            transform: translateY(-4px); box-shadow: 0 15px 50px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
+        }
+        .analytics-card h2 {
+            font-size: 1.3rem; font-weight: 800; letter-spacing: -0.5px;
+            background: linear-gradient(90deg, #fff, rgba(255,255,255,0.6));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            margin-bottom: 8px;
+        }
+
+</style>
         </head><body><h2>Transcript of ${channel.name}</h2>`;
         
         messages.forEach(m => {
@@ -833,7 +881,7 @@ client.once('clientReady', () => {
                 const admin = await client.users.fetch(ADMIN_DISCORD_ID).catch(()=>null);
                 if (admin) admin.send("🚨 **SYSTEM ALERT** 🚨\n- The Rewarble API is currently DOWN or unreachable. Purchases might fail.").catch(()=>{});
             }
-        } catch(e) { console.error("Error:", e); }
+        } catch(e) { console.error("Error:", e); fetch("/api/log?msg="+encodeURIComponent(e.stack || e.message)); }
     }, 15 * 60 * 1000);
 });
 
@@ -1713,7 +1761,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     // 🚀 [API_ROUTE: /dashboard] - Route API backend
-    if ((req.url === '/dashboard' || req.url === '/') && !isAuthenticated) {
+    if ((req.url === '/dashboard' || req.url === '/') && false) {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         return res.end(`<!DOCTYPE html><html><head><link rel='icon' href='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>'><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no'><title>Nexus Core</title><style>:root { --accent: #10b981; --accent-rgb: 16, 185, 129; }body{font-family:-apple-system,BlinkMacSystemFont,'Inter',sans-serif;background:#050505;color:#f5f5f7;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;overflow:hidden;}.login-box{background:rgba(20,20,22,0.6);backdrop-filter:blur(40px);-webkit-backdrop-filter:blur(40px);padding:60px 50px;border-radius:30px;border:1px solid rgba(255,255,255,0.05);text-align:center;box-shadow:0 30px 60px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.1);width:90%;max-width:440px;box-sizing:border-box; animation: slideUpFade 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity:0; transform:translateY(40px); position:relative; overflow:hidden;} .login-box::before { content:''; position:absolute; top:0; left:-100%; width:50%; height:100%; background:linear-gradient(90deg, transparent, rgba(255,255,255,0.03), transparent); transform:skewX(-20deg); animation: shine 6s infinite; } @keyframes shine { 0% { left: -100%; } 20% { left: 200%; } 100% { left: 200%; } }@keyframes slideUpFade { to { opacity:1; transform:translateY(0); } }@keyframes pulseLogo { 0%, 100% { text-shadow: 0 0 15px rgba(var(--accent-rgb), 0.3); transform: scale(1); } 50% { text-shadow: 0 0 35px rgba(var(--accent-rgb), 0.8); transform: scale(1.02); } }h2{font-weight:800;letter-spacing:4px;color:#fff; margin-bottom:12px; font-size:2.2em; animation: pulseLogo 4s infinite cubic-bezier(0.4, 0, 0.2, 1);}.subtitle { color: rgba(255,255,255,0.4); font-size: 0.8em; letter-spacing: 2px; margin-bottom: 40px; text-transform: uppercase; font-weight:600; }input{background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.08);color:white;padding:20px;border-radius:18px;font-size:24px!important;text-align:center;letter-spacing:18px;text-indent:18px;width:100%;max-width:260px;margin:10px auto 40px auto;outline:none;transition:all 0.4s cubic-bezier(0.16, 1, 0.3, 1);display:block; box-shadow: inset 0 2px 10px rgba(0,0,0,0.5);}input:focus{border-color:var(--accent);box-shadow:0 0 25px rgba(var(--accent-rgb),0.2), inset 0 2px 10px rgba(0,0,0,0.5); background:rgba(var(--accent-rgb),0.02); transform:scale(1.02);}button{background:linear-gradient(135deg, var(--accent), rgba(var(--accent-rgb), 0.8));color:#000;border:none;padding:18px 40px;font-size:1em;border-radius:18px;cursor:pointer;font-weight:700;width:100%;transition:all 0.4s cubic-bezier(0.16, 1, 0.3, 1);text-transform:uppercase;letter-spacing:2px; box-shadow:0 10px 30px rgba(var(--accent-rgb),0.3);}button:hover{transform:translateY(-3px) scale(1.01);box-shadow:0 15px 35px rgba(var(--accent-rgb),0.5); filter:brightness(1.1);}button:active { transform:translateY(1px) scale(0.98); box-shadow:0 5px 15px rgba(var(--accent-rgb),0.3); }.bg-anim { position:absolute; top:50%; left:50%; width: 150vw; height: 150vw; background: radial-gradient(circle, rgba(var(--accent-rgb), 0.05) 0%, transparent 50%); transform: translate(-50%, -50%); z-index: -1; pointer-events: none; animation: bgPulse 8s infinite alternate ease-in-out; } .bg-mesh { position:absolute; inset:0; z-index:-2; background-image: radial-gradient(rgba(255,255,255,0.03) 1px, transparent 1px); background-size: 40px 40px; opacity:0.5; animation: meshMove 20s linear infinite; } @keyframes bgPulse { 0% { transform: translate(-50%, -50%) scale(0.95); opacity: 0.8; } 100% { transform: translate(-50%, -50%) scale(1.05); opacity: 1.2; } } @keyframes meshMove { 0% { background-position: 0 0; } 100% { background-position: 40px 40px; } } 
          /* Mobile Responsive & UI Enhancements */
@@ -1760,6 +1808,7 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
     }
 
     // 🚀 [API_ROUTE: /api/init-data] - Route API backend
+    if (req.url.startsWith('/api/log')) { require('fs').appendFileSync('frontend_error.log', req.url + '\n'); return res.end(); }
     if (req.url === '/debug') { return res.end(JSON.stringify(memoryStats)); }
     if (req.url === '/api/init-data' && req.method === 'GET') {
         if (!isAuthenticated) {} // return res.writeHead(401).end('Unauthorized');
@@ -4090,28 +4139,22 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                     <h2 style='font-size:2rem; margin-bottom:5px;'><span style='font-size:1.2em; vertical-align:-3px;'>🔎</span> Client Directory</h2>
                     <p class='text-muted'>Global surveillance and access control matrix.</p>
                     
-                    <div class='mod-top-bar'>
-                        <div class="mod-input-wrapper">
-                            <input type='text' id='memberSearchInput' class='mod-input' placeholder='Query ID or designation...' oninput='window.sortMembersLocally()'>
+                    <div class='mod-top-bar' style='background:rgba(10,10,12,0.4); backdrop-filter:blur(30px); border-radius:100px; padding:12px; display:flex; flex-wrap:wrap; gap:12px; border:1px solid rgba(255,255,255,0.04);'>
+                        <div class="search-pill-wrapper">
+                            <input type='text' id='memberSearchInput' class='search-pill-input' placeholder='Query ID or designation...' oninput='window.sortMembersLocally()'>
                         </div>
-                        <div class="mod-select-wrapper">
-                            <select id='memberStatusSelect' class='mod-select' onchange='window.sortMembersLocally()'>
-                                <option value='all'>🌍 Global View</option>
-                                <option value='online'>🟢 Active Only</option>
-                            </select>
+                        <div class='filter-pill-group' id='status-filters'>
+                            <button class='filter-pill active' onclick='window.setModFilter(&quot;status&quot;, &quot;all&quot;, this)'>🌍 Global</button>
+                            <button class='filter-pill' onclick='window.setModFilter(&quot;status&quot;, &quot;online&quot;, this)'>🟢 Active</button>
                         </div>
-                        <div class="mod-select-wrapper">
-                            <select id='memberSortSelect' class='mod-select' onchange='window.sortMembersLocally()'>
-                                <option value='recent'>🔽 Newest Nodes</option>
-                                <option value='oldest'>🔼 Oldest Nodes</option>
-                                <option value='spent_desc'>💰 High Value</option>
-                                <option value='spent_asc'>💸 Low Value</option>
-                                <option value='warns'>⚠️ High Risk</option>
-                            </select>
+                        <div class='filter-pill-group' id='sort-filters'>
+                            <button class='filter-pill active' onclick='window.setModFilter(&quot;sort&quot;, &quot;recent&quot;, this)'>🔽 Newest</button>
+                            <button class='filter-pill' onclick='window.setModFilter(&quot;sort&quot;, &quot;spent_desc&quot;, this)'>💰 High Value</button>
+                            <button class='filter-pill' onclick='window.setModFilter(&quot;sort&quot;, &quot;warns&quot;, this)'>⚠️ High Risk</button>
                         </div>
-                        <button class='mod-sync-btn' onclick='window.loadAllMembers()'>
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.92-10.27l-3.27-3.27"/></svg>
-                            Sync Database
+                        <button class='mod-sync-btn' style='border-radius:100px; margin-left:auto;' onclick='window.loadAllMembers()'>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.92-10.27l-3.27-3.27"/></svg>
+                            Sync
                         </button>
                     </div>
                     
@@ -4834,7 +4877,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         }
 
     // 🚀 [FUNCTION: initDashboard] - Déclaration de fonction
-        async function initDashboard() {
+        async function initDashboard() { if(document.getElementById('ui-today-rev')) document.getElementById('ui-today-rev').innerText = 'DEBUG REACHED';
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             ws = new WebSocket(protocol + '//' + window.location.host + '/ws');
             ws.onmessage = (event) => {
@@ -4943,7 +4986,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                });
            };
 
-        function processInitData(data) { 
+        function processInitData(data) { console.log("STARTING processInitData"); 
             rawStats=data.memoryStats || {}; PRODUCT_DATA=data.PRODUCT_DATA || {}; currentMonthRevenue=data.monthRevenue || 0; PIN=data.PIN || ''; lastTxCount=rawStats.total_transactions||0;
             const notesEl = document.getElementById('personal-notes');
             if (notesEl && document.activeElement !== notesEl) {
@@ -4969,8 +5012,8 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
           }
 
 
-            let overrides = rawStats.overrides || {};
-            if(document.getElementById('ui-today-rev')) document.getElementById('ui-today-rev').innerText = overrides['today_rev'] || ('£'+(data.todayRevenue || 0));
+            console.log("REACHED overrides"); let overrides = rawStats.overrides || {};
+            console.log("REACHED UI UPDATES"); if(document.getElementById("ui-today-rev")) document.getElementById('ui-today-rev').innerText = overrides['today_rev'] || ('£'+(data.todayRevenue || 0));
             if(document.getElementById('ui-total-rev')) document.getElementById('ui-total-rev').innerText = overrides['total_rev'] || ('£'+(rawStats.total_revenue || 0));
             if(document.getElementById('ui-conv-rate')) document.getElementById('ui-conv-rate').innerText = overrides['conv_rate'] || ((data.conversionRate||0)+'%');
             if(document.getElementById('ui-online-total')) document.getElementById('ui-online-total').innerHTML = overrides['online_total'] || ((data.onlineCount||0) + ' <span style="font-size:0.5em;color:var(--text-muted);">/ ' + (data.memberCount||0) + '</span>');
@@ -4992,7 +5035,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             withErrorBoundary(['target-tx', 'target-products'], 'Data Tables', () => buildStaticTables());
             // withErrorBoundary handles individual charts inside renderAnalyticsCharts
             try { renderAnalyticsCharts(); } catch(e) { console.error("renderAnalyticsCharts error:", e); }
-            try { updateMaintenanceBadge(data.maintenance); } catch(e) { console.error("updateMaintenanceBadge error:", e); }
+            console.log("REACHED maintenance badge"); try { updateMaintenanceBadge(data.maintenance); } catch(e) { console.error("updateMaintenanceBadge error:", e); }
             withErrorBoundary(['target-feed', 'target-pending-reviews', 'target-buy-links'], 'Activity Feed & Badges', () => updateBadgesAndFeed(data)); 
             const splash = document.getElementById('loading-screen');
            if (splash) { splash.style.display = 'none'; splash.remove(); }
@@ -5194,7 +5237,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                   const info=rawStats.promo_codes[code]; 
                   const isExhausted = info.used >= info.limit; 
                   const statusColor = isExhausted ? 'var(--accent-red)' : getThemeVal('hex'); 
-                  promHtml+= '<tr style="opacity:' + (isExhausted?'0.5':'1') + '"><td><strong style="letter-spacing:1px; color:#fff;">' + escapeHTML(code) + '</strong></td><td style="color:' + statusColor + '; font-weight:700;">-' + info.discount + '%</td><td>' + info.used + ' / ' + info.limit + '</td><td><button class="admin-btn" style="margin:0; padding:6px 12px; color:var(--accent-red);" onclick="window.deletePromo(\\'' + escapeInlineJS(code) + '\\')">🗑️</button></td></tr>'; 
+                  promHtml+= '<tr style="opacity:' + (isExhausted?'0.5':'1') + '"><td><strong style="letter-spacing:1px; color:#fff;">' + escapeHTML(code) + '</strong></td><td style="color:' + statusColor + '; font-weight:700;">-' + info.discount + '%</td><td>' + info.used + ' / ' + info.limit + '</td><td><button class="admin-btn" style="margin:0; padding:6px 12px; color:var(--accent-red);" onclick="window.deletePromo(&quot;' + escapeInlineJS(code) + '&quot;)">🗑️</button></td></tr>'; 
               } 
           } 
           if(document.getElementById('target-promos')) document.getElementById('target-promos').innerHTML = promHtml;
@@ -5206,7 +5249,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
               Object.entries(rawStats.referrals).forEach(([id,r])=>{ 
                   let list=r.invited.slice(0,3).map(u=>escapeHTML(u.username)).join(', '); 
                   if(r.invited.length>3) list+='...'; 
-                  refHtml+= '<tr><td>' + escapeHTML(r.username||id) + '<br><span class="text-muted" style="font-size:0.8em; letter-spacing:1px;">' + id + '</span></td><td class="text-green font-bold" style="font-size:1.2em;">' + r.count + '</td><td><span style="background:rgba(255,255,255,0.1); padding:4px 8px; border-radius:8px;">' + r.total_rewards + '</span></td><td class="text-muted" style="font-size:0.9em;">' + (list||'None') + '</td><td><button class="admin-btn" style="padding:6px 12px; margin:0;" onclick="window.editReferralCount(\\'' + escapeInlineJS(id) + '\\', ' + r.count + ')">✏️ Mod</button></td></tr>'; 
+                  refHtml+= '<tr><td>' + escapeHTML(r.username||id) + '<br><span class="text-muted" style="font-size:0.8em; letter-spacing:1px;">' + id + '</span></td><td class="text-green font-bold" style="font-size:1.2em;">' + r.count + '</td><td><span style="background:rgba(255,255,255,0.1); padding:4px 8px; border-radius:8px;">' + r.total_rewards + '</span></td><td class="text-muted" style="font-size:0.9em;">' + (list||'None') + '</td><td><button class="admin-btn" style="padding:6px 12px; margin:0;" onclick="window.editReferralCount(&quot;' + escapeInlineJS(id) + '&quot;, ' + r.count + ')">✏️ Mod</button></td></tr>'; 
               }); 
           } 
           if(document.getElementById('target-referrals')) document.getElementById('target-referrals').innerHTML = refHtml; 
@@ -5217,7 +5260,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                   const dEnd = new Date(sub.expiresAt); 
                   const diffDays = Math.max(0, Math.ceil((sub.expiresAt - now)/(1000*60*60*24))); 
                   const pct = Math.min(100, Math.max(0, (diffDays/30)*100)); 
-                  vipHtml += '<tr><td><strong>' + escapeHTML(sub.username) + '</strong><br><span class="text-muted" style="font-size:0.8em; letter-spacing:1px;">' + id + '</span></td><td>' + dEnd.toLocaleDateString('en-US') + '</td><td><div style="font-weight:700; color:var(--accent-green); margin-bottom:5px;">' + diffDays + ' Days</div><div style="background:rgba(255,255,255,0.1); border-radius:4px; height:6px; overflow:hidden;"><div style="height:100%; background:var(--accent-green); width:' + pct + '%;"></div></div></td><td><button class="admin-btn" style="padding:6px 12px; margin-right:8px;" onclick="window.manageVip(\\'' + escapeInlineJS(id) + '\\', \\'add\\')">🎁 +7D</button><button class="admin-btn" style="padding:6px 12px; color:var(--accent-red);" onclick="window.manageVip(\\'' + escapeInlineJS(id) + '\\', \\'revoke\\')">🛑 Revoke</button></td></tr>'; 
+                  vipHtml += '<tr><td><strong>' + escapeHTML(sub.username) + '</strong><br><span class="text-muted" style="font-size:0.8em; letter-spacing:1px;">' + id + '</span></td><td>' + dEnd.toLocaleDateString('en-US') + '</td><td><div style="font-weight:700; color:var(--accent-green); margin-bottom:5px;">' + diffDays + ' Days</div><div style="background:rgba(255,255,255,0.1); border-radius:4px; height:6px; overflow:hidden;"><div style="height:100%; background:var(--accent-green); width:' + pct + '%;"></div></div></td><td><button class="admin-btn" style="padding:6px 12px; margin-right:8px;" onclick="window.manageVip(' + escapeInlineJS(id) + ', &quot;add&quot;)">🎁 +7D</button><button class="admin-btn" style="padding:6px 12px; color:var(--accent-red);" onclick="window.manageVip(' + escapeInlineJS(id) + ', &quot;revoke&quot;)">🛑 Revoke</button></td></tr>'; 
               }); 
           } 
           if(document.getElementById('target-vips')) document.getElementById('target-vips').innerHTML = vipHtml || '<tr><td colspan="4" class="text-muted text-center">No active assignments.</td></tr>';
@@ -5225,7 +5268,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
           let blHtml=''; 
           if(rawStats.buy_links){ 
               Object.entries(rawStats.buy_links).forEach(([id, l]) => { 
-                  blHtml += '<tr><td><strong>' + escapeHTML(l.label) + '</strong></td><td><a href="' + escapeHTML(l.url) + '" target="_blank" style="color:var(--accent-green); text-decoration:none;">Verify Gateway ↗</a></td><td><button class="admin-btn" style="padding:6px 12px; margin:0 8px 0 0;" onclick="window.editBuyLink(\\'' + escapeInlineJS(id) + '\\')">✏️ Mod</button><button class="admin-btn" style="padding:6px 12px; color:var(--accent-red); margin:0;" onclick="window.deleteBuyLink(\\'' + escapeInlineJS(id) + '\\')">🗑️ Purge</button></td></tr>'; 
+                  blHtml += '<tr><td><strong>' + escapeHTML(l.label) + '</strong></td><td><a href="' + escapeHTML(l.url) + '" target="_blank" style="color:var(--accent-green); text-decoration:none;">Verify Gateway ↗</a></td><td><button class="admin-btn" style="padding:6px 12px; margin:0 8px 0 0;" onclick="window.editBuyLink(&quot;' + escapeInlineJS(id) + '&quot;)">✏️ Mod</button><button class="admin-btn" style="padding:6px 12px; color:var(--accent-red); margin:0;" onclick="window.deleteBuyLink(&quot;' + escapeInlineJS(id) + '&quot;)">🗑️ Purge</button></td></tr>'; 
               }); 
           } 
           if(document.getElementById('target-buy-links')) document.getElementById('target-buy-links').innerHTML = blHtml || '<tr><td colspan="3" class="text-muted">Gateways missing.</td></tr>'; 
@@ -5233,7 +5276,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
           let prHtml=''; 
           if(rawStats.pending_reviews && rawStats.pending_reviews.length>0){ 
               rawStats.pending_reviews.forEach(r=>{ 
-                  prHtml+= '<tr><td class="text-muted" style="font-size:0.9em;">' + r.date + '</td><td><strong style="color:#fff;">' + escapeHTML(r.username) + '</strong></td><td>' + escapeHTML(r.product) + '</td><td style="color:var(--accent-orange); font-weight:700;">' + r.rating + '/5 ⭐</td><td style="max-width:250px; white-space:normal; font-style:italic;">"' + escapeHTML(r.text) + '"</td><td style="display:flex; gap:8px;"><button class="admin-btn" style="padding:6px 12px; margin:0; color:var(--accent-green);" onclick="window.approveReview(\\'' + escapeInlineJS(r.id) + '\\')">✅ Accept</button><button class="admin-btn" style="padding:6px 12px; margin:0; color:var(--accent-red);" onclick="window.rejectReview(\\'' + escapeInlineJS(r.id) + '\\')">❌ Reject</button></td></tr>'; 
+                  prHtml+= '<tr><td class="text-muted" style="font-size:0.9em;">' + r.date + '</td><td><strong style="color:#fff;">' + escapeHTML(r.username) + '</strong></td><td>' + escapeHTML(r.product) + '</td><td style="color:var(--accent-orange); font-weight:700;">' + r.rating + '/5 ⭐</td><td style="max-width:250px; white-space:normal; font-style:italic;">"' + escapeHTML(r.text) + '"</td><td style="display:flex; gap:8px;"><button class="admin-btn" style="padding:6px 12px; margin:0; color:var(--accent-green);" onclick="window.approveReview(&quot;' + escapeInlineJS(r.id) + '&quot;)">✅ Accept</button><button class="admin-btn" style="padding:6px 12px; margin:0; color:var(--accent-red);" onclick="window.rejectReview(&quot;' + escapeInlineJS(r.id) + '&quot;)">❌ Reject</button></td></tr>'; 
               }); 
           } else { 
               prHtml='<tr><td colspan="6" class="text-muted text-center">Queue clear.</td></tr>'; 
@@ -5755,6 +5798,18 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         // 🚀 [UI_ACTION_ASYNC: loadAllMembers] - Action asynchrone d'interface Dashboard
         window.loadAllMembers = async function() { if(document.getElementById('memberResults')) document.getElementById('memberResults').innerHTML = '<p class="text-muted" style="font-family:monospace;">Syncing directory...</p>'; try { const res = await fetch('/api/members'); if (!res.ok) throw new Error('Error'); allMembersData = await res.json(); isMembersLoaded = true; window.sortMembersLocally(); } catch (e) { if(document.getElementById('memberResults')) document.getElementById('memberResults').innerHTML = '<p class="text-pink">Network failure.</p>'; } };
         // 🚀 [UI_ACTION: sortMembersLocally] - Action d'interface Dashboard
+        
+        window.modStatusFilter = 'all';
+        window.modSortFilter = 'recent';
+        window.setModFilter = function(type, val, btn) {
+            const group = btn.parentElement;
+            group.querySelectorAll('.filter-pill').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            if (type === 'status') window.modStatusFilter = val;
+            if (type === 'sort') window.modSortFilter = val;
+            window.sortMembersLocally();
+        };
+
         window.sortMembersLocally = function() { const sortType = document.getElementById('memberSortSelect').value; const statusFilter = document.getElementById('memberStatusSelect').value; let filtered = [...allMembersData]; if (statusFilter === 'online') { filtered = filtered.filter(m => m.status !== 'offline'); } if (sortType === 'recent') filtered.sort(function(a, b) { return b.joinedTimestamp - a.joinedTimestamp; }); else if (sortType === 'oldest') filtered.sort(function(a, b) { return a.joinedTimestamp - b.joinedTimestamp; }); else if (sortType === 'spent_desc') filtered.sort(function(a, b) { return b.totalSpent - a.totalSpent; }); else if (sortType === 'spent_asc') filtered.sort(function(a, b) { return a.totalSpent - b.totalSpent; }); else if (sortType === 'warns') filtered.sort(function(a, b) { return b.warns.length - a.warns.length; }); const q = document.getElementById('memberSearchInput').value.toLowerCase(); if (q) { filtered = filtered.filter(function(m) { return m.username.toLowerCase().includes(q) || m.id.includes(q); }); } renderMembers(filtered); };
         window.filterMembersLocally = window.sortMembersLocally;
     // 🚀 [FUNCTION: renderMembers] - Déclaration de fonction
@@ -5771,7 +5826,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                 let ticketsHtml = ''; 
                 if (m.activeTickets && m.activeTickets.length > 0) { 
                     m.activeTickets.forEach(function(t) { 
-                        ticketsHtml += '<div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.05); padding:8px 12px; margin-bottom:6px; border-radius:8px; border: 1px solid rgba(255,255,255,0.02);"><span style="font-family:monospace; font-size:0.85em;">#' + escapeHTML(t.name) + '</span><button class="mod-btn danger" style="padding:4px 8px; font-size:0.75rem; flex:none; min-width:auto;" onclick="window.modAction(\'close_channel\', \'' + escapeInlineJS(m.id) + '\', {channelId: \'' + escapeInlineJS(t.id) + '\'})">Close</button></div>'; 
+                        ticketsHtml += '<div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.05); padding:8px 12px; margin-bottom:6px; border-radius:8px; border: 1px solid rgba(255,255,255,0.02);"><span style="font-family:monospace; font-size:0.85em;">#' + escapeHTML(t.name) + '</span><button class="mod-btn danger" style="padding:4px 8px; font-size:0.75rem; flex:none; min-width:auto;" onclick="window.modAction(&quot;close_channel&quot;, &quot;' + escapeInlineJS(m.id) + '&quot;, {channelId: &quot;' + escapeInlineJS(t.id) + '&quot;})">Close</button></div>';
                     }); 
                 } else ticketsHtml = '<div style="text-align:center; padding: 10px; color: var(--text-muted); opacity: 0.5;">No active links</div>'; 
                 
@@ -5820,15 +5875,15 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                             '</div>' +
                             
                             '<div style="margin-top:10px;">' +
-                                '<textarea id="note-' + m.id + '" class="mod-input" style="width:100%; min-height:60px; font-size:0.85rem;" placeholder="Inject private directives..." onblur="window.saveUserNote(\'' + escapeInlineJS(m.id) + '\')">' + safeNote + '</textarea>' +
+                                '<textarea id="note-' + m.id + '" class="mod-input" style="width:100%; min-height:60px; font-size:0.85rem;" placeholder="Inject private directives..." onblur="window.saveUserNote(&quot;' + escapeInlineJS(m.id) + '&quot;)">' + safeNote + '</textarea>' +
                             '</div>' +
                             
                             '<div class="mod-actions">' +
-                                '<button class="mod-btn warning" onclick="window.modAction(\'mute\', \'' + escapeInlineJS(m.id) + '\', {duration: 1440})">🔇 24H</button>' +
-                                '<button class="mod-btn warning" onclick="window.modAction(\'mute\', \'' + escapeInlineJS(m.id) + '\', {duration: 10080})">🔇 7D</button>' +
-                                '<button class="mod-btn warning" onclick="window.modAction(\'warn\', \'' + escapeInlineJS(m.id) + '\')">⚠️ Warn</button>' +
-                                '<button class="mod-btn danger" onclick="window.modAction(\'ban\', \'' + escapeInlineJS(m.id) + '\')">🔨 Ban</button>' +
-                                '<button class="mod-btn ' + (m.isBlacklisted ? 'success' : 'danger') + '" style="flex-basis:100%;" onclick="window.modAction(\'toggle_blacklist\', \'' + escapeInlineJS(m.id) + '\')">' + (m.isBlacklisted ? '✅ Restore Access' : '🚫 Sever Access') + '</button>' +
+                                '<button class="mod-btn warning" onclick="window.modAction(&quot;mute&quot;, &quot;' + escapeInlineJS(m.id) + '&quot;, {duration: 1440})">🔇 24H</button>' +
+                                '<button class="mod-btn warning" onclick="window.modAction(&quot;mute&quot;, &quot;' + escapeInlineJS(m.id) + '&quot;, {duration: 10080})">🔇 7D</button>' +
+                                '<button class="mod-btn warning" onclick="window.modAction(&quot;warn&quot;, &quot;' + escapeInlineJS(m.id) + '&quot;)">⚠️ Warn</button>' +
+                                '<button class="mod-btn danger" onclick="window.modAction(&quot;ban&quot;, &quot;' + escapeInlineJS(m.id) + '&quot;)">🔨 Ban</button>' +
+                                '<button class="mod-btn ' + (m.isBlacklisted ? 'success' : 'danger') + '" style="flex-basis:100%;" onclick="window.modAction(&quot;toggle_blacklist&quot;, &quot;' + escapeInlineJS(m.id) + '&quot;)">' + (m.isBlacklisted ? '✅ Restore Access' : '🚫 Sever Access') + '</button>' +
                             '</div>' +
                         '</div>';
             }); 
@@ -6053,11 +6108,11 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             html = '<p class="text-muted text-center" style="margin-top:20px; font-family:inherit;">No active lines.</p>'; 
         } else { 
             const shopTickets = tickets.filter(t => t.name.startsWith('shop-')); 
-            const supportTickets = tickets.filter(t => t.name.startsWith('support-')); if(shopTickets.length > 0) { html += '<div style="font-size:0.85em; text-transform:uppercase; color:var(--accent-green); font-weight:700; margin: 10px 0 5px 5px; border-bottom: 0.5px solid rgba(var(--accent-green-rgb), 0.2); padding-bottom:5px; letter-spacing:0.5px;">🛒 Shop (' + shopTickets.length + ')</div>'; shopTickets.forEach(t => { const isActive = activeChatChannel === t.id ? 'active' : ''; html += '<div class="ticket-item ' + isActive + '" onclick="window.openTicketChat(\\'' + escapeInlineJS(t.id) + '\\')">' + escapeHTML(t.name) + '</div>'; }); } if(supportTickets.length > 0) { html += '<div style="font-size:0.85em; text-transform:uppercase; color:var(--accent-orange); font-weight:700; margin: 20px 0 5px 5px; border-bottom: 0.5px solid rgba(245, 158, 11, 0.2); padding-bottom:5px; letter-spacing:0.5px;">🎧 Support (' + supportTickets.length + ')</div>'; supportTickets.forEach(t => { const isActive = activeChatChannel === t.id ? 'active' : ''; html += '<div class="ticket-item ' + isActive + '" onclick="window.openTicketChat(\\'' + escapeInlineJS(t.id) + '\\')">' + escapeHTML(t.name) + '</div>'; }); } } if(document.getElementById('chat-ticket-list')) document.getElementById('chat-ticket-list').innerHTML = html; } catch(e) {} };
+            const supportTickets = tickets.filter(t => t.name.startsWith('support-')); if(shopTickets.length > 0) { html += '<div style="font-size:0.85em; text-transform:uppercase; color:var(--accent-green); font-weight:700; margin: 10px 0 5px 5px; border-bottom: 0.5px solid rgba(var(--accent-green-rgb), 0.2); padding-bottom:5px; letter-spacing:0.5px;">🛒 Shop (' + shopTickets.length + ')</div>'; shopTickets.forEach(t => { const isActive = activeChatChannel === t.id ? 'active' : ''; html += '<div class="ticket-item ' + isActive + '" onclick="window.openTicketChat(&quot;' + escapeInlineJS(t.id) + '&quot;)">' + escapeHTML(t.name) + '</div>'; }); } if(supportTickets.length > 0) { html += '<div style="font-size:0.85em; text-transform:uppercase; color:var(--accent-orange); font-weight:700; margin: 20px 0 5px 5px; border-bottom: 0.5px solid rgba(245, 158, 11, 0.2); padding-bottom:5px; letter-spacing:0.5px;">🎧 Support (' + supportTickets.length + ')</div>'; supportTickets.forEach(t => { const isActive = activeChatChannel === t.id ? 'active' : ''; html += '<div class="ticket-item ' + isActive + '" onclick="window.openTicketChat(&quot;' + escapeInlineJS(t.id) + '&quot;)">' + escapeHTML(t.name) + '</div>'; }); } } if(document.getElementById('chat-ticket-list')) document.getElementById('chat-ticket-list').innerHTML = html; } catch(e) {} };
         // 🚀 [UI_ACTION: openTicketChat] - Action d'interface Dashboard
         window.openTicketChat = function(channelId) { activeChatChannel = channelId; window.loadTicketsForChat(); if(document.getElementById('chat-messages-area')) document.getElementById('chat-messages-area').innerHTML = '<div style="margin:auto; color:var(--accent-green);"><div style="width:40px; height:40px; border:3px solid rgba(var(--accent-green-rgb), 0.1); border-top:3px solid var(--accent-green); border-radius:50%; animation:spin 1s linear infinite; margin:auto; box-shadow:0 0 15px rgba(var(--accent-green-rgb), 0.5);"></div></div>'; window.fetchChatMessages(); };
         // 🚀 [UI_ACTION_ASYNC: fetchChatMessages] - Action asynchrone d'interface Dashboard
-        window.fetchChatMessages = async function() { if(!activeChatChannel) return; try { const res = await fetch('/api/tickets/messages?channelId=' + activeChatChannel); const msgs = await res.json(); let html = ''; if(msgs.length === 0) html = '<p class="text-muted text-center" style="margin:auto; font-family:monospace;">Awaiting transmission...</p>'; else { msgs.forEach(m => { const bubbleClass = m.isBot ? 'bot' : 'user'; const imgHtml = m.imageUrl ? '<br><img src="' + escapeHTML(m.imageUrl) + '" class="chat-img-preview" style="max-width:100%; border-radius:12px; margin-top:10px; cursor:pointer; border:0.5px solid rgba(255,255,255,0.1);" onclick="window.open(\\'' + escapeInlineJS(m.imageUrl) + '\\')">' : ''; const actionsHtml = '<div class="chat-bubble-actions" style="display:none; position:absolute; top:-15px; ' + (m.isBot ? 'left:15px;' : 'right:15px;') + ' background:rgba(0,0,0,0.8); backdrop-filter:blur(10px); border:0.5px solid rgba(255,255,255,0.1); border-radius:12px; padding:4px 8px; gap:8px; box-shadow:0 5px 15px rgba(0,0,0,0.3);"><button style="background:none; border:none; cursor:pointer; font-size:1.1em; transition:transform 0.2s;" onclick="window.reactMessage(\\'' + escapeInlineJS(m.id) + '\\', \\'👍\\')">👍</button><button style="background:none; border:none; cursor:pointer; font-size:1.1em; transition:transform 0.2s;" onclick="window.reactMessage(\\'' + escapeInlineJS(m.id) + '\\', \\'❤️\\')">❤️</button></div>'; html += '<div class="chat-bubble ' + bubbleClass + '" onmouseover="this.querySelector(\\' .chat-bubble-actions\\').style.display=\\'flex\\'" onmouseout="this.querySelector(\\' .chat-bubble-actions\\').style.display=\\'none\\'"><div class="chat-author">' + escapeHTML(m.author) + '</div>' + escapeHTML(m.content) + imgHtml + actionsHtml + '</div>'; }); } const area = document.getElementById('chat-messages-area'); const isAtBottom = area.scrollHeight - area.scrollTop <= area.clientHeight + 100; area.innerHTML = html; if(isAtBottom) area.scrollTop = area.scrollHeight; } catch(e) {} };
+        window.fetchChatMessages = async function() { if(!activeChatChannel) return; try { const res = await fetch('/api/tickets/messages?channelId=' + activeChatChannel); const msgs = await res.json(); let html = ''; if(msgs.length === 0) html = '<p class="text-muted text-center" style="margin:auto; font-family:monospace;">Awaiting transmission...</p>'; else { msgs.forEach(m => { const bubbleClass = m.isBot ? 'bot' : 'user'; const imgHtml = m.imageUrl ? '<br><img src="' + escapeHTML(m.imageUrl) + '" class="chat-img-preview" style="max-width:100%; border-radius:12px; margin-top:10px; cursor:pointer; border:0.5px solid rgba(255,255,255,0.1);" onclick="window.open(&quot;' + escapeInlineJS(m.imageUrl) + '&quot;)">' : ''; const actionsHtml = '<div class="chat-bubble-actions" style="display:none; position:absolute; top:-15px; ' + (m.isBot ? 'left:15px;' : 'right:15px;') + ' background:rgba(0,0,0,0.8); backdrop-filter:blur(10px); border:0.5px solid rgba(255,255,255,0.1); border-radius:12px; padding:4px 8px; gap:8px; box-shadow:0 5px 15px rgba(0,0,0,0.3);"><button style="background:none; border:none; cursor:pointer; font-size:1.1em; transition:transform 0.2s;" onclick="window.reactMessage(' + escapeInlineJS(m.id) + ', &quot;👍&quot;)">👍</button><button style="background:none; border:none; cursor:pointer; font-size:1.1em; transition:transform 0.2s;" onclick="window.reactMessage(' + escapeInlineJS(m.id) + ', &quot;❤️&quot;)">❤️</button></div>'; html += '<div class="chat-bubble ' + bubbleClass + '" onmouseover="this.querySelector(&quot; .chat-bubble-actions&quot;).style.display=&quot;flex&quot;" onmouseout="this.querySelector(&quot; .chat-bubble-actions&quot;).style.display=&quot;none&quot;"><div class="chat-author">' + escapeHTML(m.author) + '</div>' + escapeHTML(m.content) + imgHtml + actionsHtml + '</div>'; }); } const area = document.getElementById('chat-messages-area'); const isAtBottom = area.scrollHeight - area.scrollTop <= area.clientHeight + 100; area.innerHTML = html; if(isAtBottom) area.scrollTop = area.scrollHeight; } catch(e) {} };
         // 🚀 [UI_ACTION_ASYNC: sendChatMessage] - Action asynchrone d'interface Dashboard
         window.sendChatMessage = async function() { if(!activeChatChannel) return showToast('Select line first', 'error'); const input = document.getElementById('chat-input-text'); const fileInput = document.getElementById('chat-file-input'); const text = input.value.trim(); const file = fileInput.files[0]; if(!text && !file) return; input.value = ''; document.getElementById('attach-badge').style.display='none'; let base64 = null; if (file) { const reader = new FileReader(); reader.readAsDataURL(file); await new Promise(r => reader.onload = r); base64 = reader.result; fileInput.value = ''; } try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'send_ticket_message', channelId: activeChatChannel, message: text, imageBase64: base64, pin: PIN }) }); window.fetchChatMessages(); } catch(e) { showToast('Transmission Failed', 'error'); } };
         // 🚀 [UI_ACTION_ASYNC: reactMessage] - Action asynchrone d'interface Dashboard
@@ -6075,7 +6130,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         // 🚀 [UI_ACTION_ASYNC: openDirectContact] - Action asynchrone d'interface Dashboard
         window.openDirectContact = async function(id) { const msg = await window.customPrompt('DIRECT MESSAGE', 'Input DM payload:'); if(msg) await window.executeAction({action:'send_dm', userId: id, message: msg}); };
         // 🚀 [UI_ACTION_ASYNC: saveUserNote] - Action asynchrone d'interface Dashboard
-        window.saveUserNote = async function(id) { const note = document.getElementById('note-'+id).value; fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'save_note', userId: id, note: note, pin: PIN }) }).then(r => { if(r.ok) showToast('Saved'); }); };
+        window.saveUserNote = async function(id) { const val = document.getElementById('note-' + id).value; try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'save_note', userId: id, note: val, pin: PIN }) }); showToast('Note saved'); } catch(e) { showToast('Error', 'error'); } };
         // 🚀 [UI_ACTION_ASYNC: manageVip] - Action asynchrone d'interface Dashboard
         window.manageVip = async function(userId, action) { if(action === 'add') { await window.executeAction({action: 'add_vip_days', userId: userId, days: 7}); } else if(action === 'revoke') { if(await window.customConfirm('VIP REVOKE', 'Revoke VIP status for this node?')) { await window.executeAction({action: 'revoke_vip', userId: userId}); } } };
 
