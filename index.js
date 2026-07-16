@@ -468,6 +468,10 @@ function ensureMemoryInitialized() {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 FIX: Widget Modal & UI Interaction\n\n- Correction majeure de l'injecteur HTML du Modal Widget : le modal d'ajout de widgets ('➕ Add Widget') avait été accidentellement injecté dans le générateur de transcriptions de chat.\n- Réintégration sécurisée de l'interface modale dans la boucle principale du dashboard.\n- Amélioration de la résilience du rendu des boutons d'ajout/suppression grâce à une refonte de l'échappement des chaînes d'évènements JavaScript côté serveur." });
                 syncCloud();
             }
+            if (!memoryStats.patchnotes.some(p => p.text.includes("FIX: Widget Modal Syntax Error"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔥 FIX: Widget Modal Syntax Error\n\n- Résolution d'une `SyntaxError: Invalid regular expression flags` critique qui causait le crash du bot au démarrage.\n- L'erreur était liée à une corruption du template literal lors de la précédente extraction de code depuis le générateur de transcription.\n- Le bouton '➕ Add Widget' est désormais 100% fonctionnel sur le dashboard, avec un affichage fluide de la modale en surcouche complète (z-index)." });
+                syncCloud();
+            }
 
             if (!memoryStats.overrides) memoryStats.overrides = {};
             if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } };
@@ -756,7 +760,6 @@ async function generateTranscript(channel) {
             }
             html += `</div>`;
         });
-        html += `
         html += `</body></html>`;
         fs.writeFileSync(`./transcript-${channel.id}.html`, html);
         if (!memoryStats.transcripts) memoryStats.transcripts = [];
