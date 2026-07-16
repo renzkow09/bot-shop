@@ -6249,12 +6249,12 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                 div.className = 'glass-panel';
                 div.id = id;
                 div.style = 'padding: 28px; position:relative;';
-                div.innerHTML = `<button onclick="window.toggleWidget('${id}')" style="position:absolute; top:10px; right:10px; background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:1.2rem; opacity:0.5; transition:opacity 0.2s;">&times;</button>
-                               <div class='ambient-glow' style='--glow-color: ${w.glow}; top: -100px; right: -100px;'></div>
-                               <div class='glass-icon-wrapper' style='color: ${w.color}; font-size:1.5rem; display:flex; align-items:center; justify-content:center; background:none; border:none; box-shadow:none; padding:0; margin-bottom:15px;'>${w.icon}</div>
-                               <h3 class='glass-title'>${w.title}</h3>
-                               <div class='glass-stat-value' style='color:${w.color}'>${w.defaultVal}</div>
-                               <div class='${trendClass}' style='font-weight: 600; font-size: 0.9em;'>${w.trend} <span style='color:var(--text-muted); font-weight:normal;'>vs last period</span></div>`;
+                div.innerHTML = "<button onclick=\"window.toggleWidget('" + id + "')\" style=\"position:absolute; top:10px; right:10px; background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:1.2rem; opacity:0.5; transition:opacity 0.2s;\">&times;</button>" +
+                               "<div class='ambient-glow' style='--glow-color: " + w.glow + "; top: -100px; right: -100px;'></div>" +
+                               "<div class='glass-icon-wrapper' style='color: " + w.color + "; font-size:1.5rem; display:flex; align-items:center; justify-content:center; background:none; border:none; box-shadow:none; padding:0; margin-bottom:15px;'>" + w.icon + "</div>" +
+                               "<h3 class='glass-title'>" + w.title + "</h3>" +
+                               "<div class='glass-stat-value' style='color:" + w.color + "'>" + w.defaultVal + "</div>" +
+                               "<div class='" + trendClass + "' style='font-weight: 600; font-size: 0.9em;'>" + w.trend + " <span style='color:var(--text-muted); font-weight:normal;'>vs last period</span></div>";
                 container.appendChild(div);
             });
         };
