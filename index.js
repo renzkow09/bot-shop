@@ -464,6 +464,11 @@ function ensureMemoryInitialized() {
                 syncCloud();
             }
 
+            if (!memoryStats.patchnotes.some(p => p.text.includes("FIX: Widget Modal & UI Interaction"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 FIX: Widget Modal & UI Interaction\n\n- Correction majeure de l'injecteur HTML du Modal Widget : le modal d'ajout de widgets ('➕ Add Widget') avait été accidentellement injecté dans le générateur de transcriptions de chat.\n- Réintégration sécurisée de l'interface modale dans la boucle principale du dashboard.\n- Amélioration de la résilience du rendu des boutons d'ajout/suppression grâce à une refonte de l'échappement des chaînes d'évènements JavaScript côté serveur." });
+                syncCloud();
+            }
+
             if (!memoryStats.overrides) memoryStats.overrides = {};
             if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } };
             if (!memoryStats.settings.maintenance) memoryStats.settings.maintenance = { active: false, endsAt: 0, channelId: "" };
@@ -752,26 +757,7 @@ async function generateTranscript(channel) {
             html += `</div>`;
         });
         html += `
-<div id="widgetModal" class="modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); backdrop-filter:blur(15px); z-index:9999; align-items:center; justify-content:center;">
-    <div class="modal-content" style="background: linear-gradient(145deg, rgba(30,30,35,0.9), rgba(20,20,25,0.9)); border: 1px solid rgba(255,255,255,0.05); border-radius: 24px; width: 90%; max-width: 800px; max-height: 85vh; display:flex; flex-direction:column; box-shadow: 0 20px 60px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1); animation: slideUpFade 0.4s cubic-bezier(0.16, 1, 0.3, 1);">
-        <div style="padding: 24px; border-bottom: 1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between; align-items:center;">
-            <div>
-                <h2 style="margin:0; font-size:1.5rem; font-weight:800; display:flex; align-items:center; gap:10px;"><span style="color:var(--accent-green)">➕</span> Widget Library</h2>
-                <p class="text-muted" style="margin:5px 0 0 0; font-size:0.9rem;">Select telemetry modules to pin to your dashboard.</p>
-            </div>
-            <button class="btn-icon" onclick="document.getElementById('widgetModal').style.display='none'" style="font-size:1.5rem; color:#fff;">&times;</button>
-        </div>
-        <div style="padding: 20px;">
-            <input type="text" id="widgetSearch" placeholder="Search 50+ available widgets..." style="width:100%; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.05); padding:14px 20px; border-radius:12px; color:#fff; font-size:1rem; outline:none;" oninput="window.filterWidgets()">
-        </div>
-        <div id="widgetGrid" style="padding: 0 24px 24px 24px; overflow-y:auto; display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap:16px;">
-            <!-- Generated via JS -->
-        </div>
-    </div>
-</div>
-
-</body></html>`;
-        
+        html += `</body></html>`;
         fs.writeFileSync(`./transcript-${channel.id}.html`, html);
         if (!memoryStats.transcripts) memoryStats.transcripts = [];
         memoryStats.transcripts.unshift({
@@ -4760,12 +4746,24 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
             </main>
         </div>
     </div>
-
-    
-    <script>
-        
-        
-        // 🚀 [FUNCTION: withErrorBoundary] - Centralized Error Boundary
+<div id="widgetModal" class="modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); backdrop-filter:blur(15px); z-index:9999; align-items:center; justify-content:center;">
+    <div class="modal-content" style="background: linear-gradient(145deg, rgba(30,30,35,0.9), rgba(20,20,25,0.9)); border: 1px solid rgba(255,255,255,0.05); border-radius: 24px; width: 90%; max-width: 800px; max-height: 85vh; display:flex; flex-direction:column; box-shadow: 0 20px 60px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1); animation: slideUpFade 0.4s cubic-bezier(0.16, 1, 0.3, 1);">
+        <div style="padding: 24px; border-bottom: 1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between; align-items:center;">
+            <div>
+                <h2 style="margin:0; font-size:1.5rem; font-weight:800; display:flex; align-items:center; gap:10px;"><span style="color:var(--accent-green)">➕</span> Widget Library</h2>
+                <p class="text-muted" style="margin:5px 0 0 0; font-size:0.9rem;">Select telemetry modules to pin to your dashboard.</p>
+            </div>
+            <button class="btn-icon" onclick="document.getElementById('widgetModal').style.display='none'" style="font-size:1.5rem; color:#fff;">&times;</button>
+        </div>
+        <div style="padding: 20px;">
+            <input type="text" id="widgetSearch" placeholder="Search 50+ available widgets..." style="width:100%; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.05); padding:14px 20px; border-radius:12px; color:#fff; font-size:1rem; outline:none;" oninput="window.filterWidgets()">
+        </div>
+        <div id="widgetGrid" style="padding: 0 24px 24px 24px; overflow-y:auto; display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap:16px;">
+        </div>
+    </div>
+</div>
+        <script>
+                        // 🚀 [FUNCTION: withErrorBoundary] - Centralized Error Boundary
         function withErrorBoundary(elementIds, widgetName, renderFn) {
             try {
                 renderFn();
@@ -6254,7 +6252,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                 div.className = 'glass-panel';
                 div.id = id;
                 div.style = 'padding: 28px; position:relative;';
-                div.innerHTML = '<button onclick="window.toggleWidget(\\\'' + id + '\\\')" style="position:absolute; top:10px; right:10px; background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:1.2rem; opacity:0.5; transition:opacity 0.2s;">&times;</button>' +
+                div.innerHTML = '<button onclick="window.toggleWidget(\\'' + id + '\\')" style="position:absolute; top:10px; right:10px; background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:1.2rem; opacity:0.5; transition:opacity 0.2s;">&times;</button>' +
                                "<div class='ambient-glow' style='--glow-color: " + w.glow + "; top: -100px; right: -100px;'></div>" +
                                "<div class='glass-icon-wrapper' style='color: " + w.color + "; font-size:1.5rem; display:flex; align-items:center; justify-content:center; background:none; border:none; box-shadow:none; padding:0; margin-bottom:15px;'>" + w.icon + "</div>" +
                                "<h3 class='glass-title'>" + w.title + "</h3>" +
