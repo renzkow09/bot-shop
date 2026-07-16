@@ -204,6 +204,7 @@ function ensureMemoryInitialized() {
             if (!memoryStats.activity_feed) memoryStats.activity_feed = [];
             if (!memoryStats.custom_requests) memoryStats.custom_requests = [];
             if (!Array.isArray(memoryStats.patchnotes)) memoryStats.patchnotes = [];
+            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "📈 FEATURE UPDATE: Ajout d\'une carte stat sur la vue Overview affichant les nouveaux membres Discord rejoignant aujourd\'hui, avec calcul de progression en pourcentage par rapport à hier." });
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔧 AUTO-CORRECTION: Échappement sécurisé des apostrophes dans les événements inline (onclick, onmouseover) via &quot; au lieu de \'. Refonte graphique de l\'interface d\'analytique et de modération (pills, gradients de carte)." });
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔥 CRITICAL FIX: Resolved dashboard freezing caused by unhandled exceptions in UI overlay and missing JS canvas compatibility. 🛡️ DISCORD FIX: Prevented category creation crashes for shop/support tickets if parent category ID is invalid on the host server. 🛠️ SECURITY: Blinded try/catch error logging on frontend. 🚀 The system is now 100% operational." });
             if (memoryStats.patchnotes.length > 50) memoryStats.patchnotes = memoryStats.patchnotes.slice(0, 50);
@@ -1822,9 +1823,14 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
             activeTickets = guild.channels.cache.filter(c => c.name.startsWith('shop-') || c.name.startsWith('support-')).size;
         }
         const todayStr = new Date().toISOString().split('T')[0];
-        try { let monthRevenue = 0; if(memoryStats.revenue) Object.keys(memoryStats.revenue).forEach(date => { if(date.startsWith(todayStr.substring(0, 7))) monthRevenue += parseFloat(memoryStats.revenue[date]) || 0; });
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify({ uptime: process.uptime(), memoryStats, maintenance: memoryStats.settings?.maintenance, pendingReviewsCount: memoryStats.pending_reviews?.length || 0, activeTickets: activeTickets, todayRevenue: (memoryStats.revenue && memoryStats.revenue[todayStr]) || 0, monthRevenue, ticketsOpened: memoryStats.analytics?.tickets_opened || 0, dropOffRate: memoryStats.analytics?.tickets_opened > 0 ? (100 - (memoryStats.total_transactions / memoryStats.analytics.tickets_opened) * 100).toFixed(1) : 0, peakHourStr: "N/A", conversionRate: ((memoryStats.total_transactions / (memoryStats.total_joins || 1)) * 100).toFixed(1), retentionRate: memberCount !== "N/A" ? ((memberCount / (memberCount + (memoryStats.total_leaves || 0))) * 100).toFixed(1) : "N/A", onlineCount, memberCount, MONTHLY_GOAL, /* PIN removed */ }));
+        const yesterdayStr = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+        try { 
+            let monthRevenue = 0; 
+            if(memoryStats.revenue) Object.keys(memoryStats.revenue).forEach(date => { if(date.startsWith(todayStr.substring(0, 7))) monthRevenue += parseFloat(memoryStats.revenue[date]) || 0; });
+            const todayJoins = (memoryStats.joins && memoryStats.joins[todayStr]) || 0;
+            const yesterdayJoins = (memoryStats.joins && memoryStats.joins[yesterdayStr]) || 0;
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({ uptime: process.uptime(), memoryStats, maintenance: memoryStats.settings?.maintenance, pendingReviewsCount: memoryStats.pending_reviews?.length || 0, activeTickets: activeTickets, todayRevenue: (memoryStats.revenue && memoryStats.revenue[todayStr]) || 0, monthRevenue, ticketsOpened: memoryStats.analytics?.tickets_opened || 0, dropOffRate: memoryStats.analytics?.tickets_opened > 0 ? (100 - (memoryStats.total_transactions / memoryStats.analytics.tickets_opened) * 100).toFixed(1) : 0, peakHourStr: "N/A", conversionRate: ((memoryStats.total_transactions / (memoryStats.total_joins || 1)) * 100).toFixed(1), retentionRate: memberCount !== "N/A" ? ((memberCount / (memberCount + (memoryStats.total_leaves || 0))) * 100).toFixed(1) : "N/A", onlineCount, memberCount, MONTHLY_GOAL, todayJoins, yesterdayJoins }));
     } catch (apiErr) { console.error('API /init-data Error:', apiErr); res.writeHead(500); return res.end(JSON.stringify({error: 'Internal Server Error'})); } }
 
     
@@ -3550,6 +3556,15 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
                        <div class='glass-stat-value' id='ui-pending-orders'><div class="skeleton" style="width: 100px; height: 38px; border-radius: 8px; display: inline-block; margin-top: 8px; margin-bottom: 4px;"></div></div>
                        <div class='trend negative' style='font-weight: 600; font-size: 0.9em;'>Awaiting processing</div>
                    </div>
+                   <div class='glass-panel' style='padding: 28px;'>
+                       <div class='ambient-glow' style='--glow-color: rgba(6,182,212,1); top: -100px; right: -100px;'></div>
+                       <div class='glass-icon-wrapper' style='color: #06b6d4;'>
+                           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+                       </div>
+                       <h3 class='glass-title'>Today's Joins</h3>
+                       <div class='glass-stat-value' id='ui-today-joins'><div class="skeleton" style="width: 100px; height: 38px; border-radius: 8px; display: inline-block; margin-top: 8px; margin-bottom: 4px;"></div></div>
+                       <div class='trend' id='ui-joins-trend' style='font-weight: 600; font-size: 0.9em;'>Calcul <span style='color:var(--text-muted); font-weight:normal;'>vs yesterday</span></div>
+                   </div>
                </div>
 
                <div style='display:grid; grid-template-columns: 2fr 1fr; gap:25px; align-items:stretch; margin-top:35px; position:relative; z-index:10;' class='overview-grid'>
@@ -5019,6 +5034,23 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             if(document.getElementById('ui-online-total')) document.getElementById('ui-online-total').innerHTML = overrides['online_total'] || ((data.onlineCount||0) + ' <span style="font-size:0.5em;color:var(--text-muted);">/ ' + (data.memberCount||0) + '</span>');
             if(document.getElementById('ui-retention')) document.getElementById('ui-retention').innerText = overrides['retention'] || ((data.retentionRate||0)+'%');
             if(document.getElementById('ui-tickets-opened')) document.getElementById('ui-tickets-opened').innerText = overrides['tickets'] || (data.ticketsOpened||0);
+            if(document.getElementById('ui-today-joins')) {
+                const todayJoins = data.todayJoins || 0;
+                const yesterdayJoins = data.yesterdayJoins || 0;
+                let pct = 0;
+                if (yesterdayJoins > 0) pct = Math.round(((todayJoins - yesterdayJoins) / yesterdayJoins) * 100);
+                else if (todayJoins > 0) pct = 100;
+                
+                document.getElementById('ui-today-joins').innerText = todayJoins;
+                const trendEl = document.getElementById('ui-joins-trend');
+                if (pct >= 0) {
+                    trendEl.className = 'trend positive';
+                    trendEl.innerHTML = '+' + pct + '% <span style="color:var(--text-muted); font-weight:normal;">vs yesterday</span>';
+                } else {
+                    trendEl.className = 'trend negative';
+                    trendEl.innerHTML = pct + '% <span style="color:var(--text-muted); font-weight:normal;">vs yesterday</span>';
+                }
+            }
             if(document.getElementById('ui-dropoff')) document.getElementById('ui-dropoff').innerText = overrides['dropoff'] || ((data.dropOffRate||0)+'%');
             if(document.getElementById('ui-peak-hour')) document.getElementById('ui-peak-hour').innerText = overrides['peak'] || (data.peakHourStr||'N/A');
             
