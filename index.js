@@ -171,16 +171,13 @@ function addActivity(type, message) {
 
     // 🚀 [FUNCTION: loadCloudStats] - Déclaration de fonction
 async function loadCloudStats() {
+    global.upstashDisabled = true; // FORCE LOCAL MODE - Upstash quota exceeded
     if (fs.existsSync(STATS_FILE)) {
         try { memoryStats = { ...memoryStats, ...JSON.parse(fs.readFileSync(STATS_FILE, 'utf8')) }; } catch (e) {}
     }
-    const url = process.env.UPSTASH_REDIS_REST_URL;
-    const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-    if (!url || !token || global.upstashDisabled) {
-        if (!global.upstashDisabled) systemLog('WARN', 'UPSTASH', 'Upstash variables missing. Running local-only mode.');
-        ensureMemoryInitialized();
-        return;
-    }
+    ensureMemoryInitialized();
+    return;
+
     try {
         const cleanUrl = url.endsWith('/') ? url.slice(0, -1) : url;
         const res = await axios.get(`${cleanUrl}/get/bot_stats`, { headers: { Authorization: `Bearer ${token}` }, timeout: 10000 });
@@ -477,6 +474,11 @@ function ensureMemoryInitialized() {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔥 FIX: Widget Modal Syntax Error\n\n- Résolution d'une `SyntaxError: Invalid regular expression flags` critique qui causait le crash du bot au démarrage.\n- L'erreur était liée à une corruption du template literal lors de la précédente extraction de code depuis le générateur de transcription.\n- Le bouton '➕ Add Widget' est désormais 100% fonctionnel sur le dashboard, avec un affichage fluide de la modale en surcouche complète (z-index)." });
                 syncCloud();
             }
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Upstash Quota Fallback System"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ Upstash Quota Fallback System\n\n- Désactivation complète et permanente de la synchronisation Upstash (Limite de 500k requêtes atteinte par le quota gratuit).\n- Le système bascule automatiquement sur une architecture 100% locale (JSON File Storage) avec des I/O asynchrones pour garantir la persistance des données sans latence.\n- Toutes vos données statistiques, historiques de transactions et configurations restent sécurisées localement." });
+                syncCloud();
+            }
+
             if (!memoryStats.patchnotes.some(p => p.text.includes("Upstash Rate-Limit Resilience"))) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ Upstash Rate-Limit Resilience\n\n- Fixation de l'erreur fatale 400 (Quota Exceeded) liée à la limite de 500k requêtes Upstash.\n- Mise en place d'un 'Circuit Breaker' (disjoncteur) : si l'API Cloud renvoie une erreur HTTP 400, 403, ou 429, la synchronisation Cloud est silencieusement coupée (mode local-only).\n- L'application reste ainsi stable, 100% fonctionnelle et fluide même avec un forfait de base saturé." });
             }
