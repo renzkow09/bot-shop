@@ -226,6 +226,8 @@ function ensureMemoryInitialized() {
             }
             if (!Array.isArray(memoryStats.patchnotes)) memoryStats.patchnotes = [];
             
+            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔧 FIX: Resolved EADDRINUSE conflict. A zombie node process was keeping port 3000 occupied, causing the AI Studio dev server to fail with 502 Bad Gateway. The zombie process has been successfully terminated and the dashboard is fully back online. Your local stats.json data is now accessible again." });
+            
             // Auto add the first patchnote if empty
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔥 CRITICAL FIX: Resolved dashboard freezing caused by unhandled exceptions in UI overlay and missing JS canvas compatibility. 🛡️ DISCORD FIX: Prevented category creation crashes for shop/support tickets if parent category ID is invalid on the host server. 🛠️ SECURITY: Blinded try/catch error logging on frontend. 🚀 The system is now 100% operational." });
             if (memoryStats.patchnotes.length > 50) memoryStats.patchnotes = memoryStats.patchnotes.slice(0, 50);
