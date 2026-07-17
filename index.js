@@ -520,7 +520,9 @@ function ensureMemoryInitialized() {
                 for (const val of Object.values(memoryStats.revenue)) {
                     total += parseFloat(val) || 0;
                 }
-                memoryStats.total_revenue = total;
+                if (total > (memoryStats.total_revenue || 0)) {
+                    memoryStats.total_revenue = total;
+                }
             }
 }
 
@@ -639,7 +641,7 @@ function logStat(type, value = 1, extraData = null) {
             memoryStats.user_history[extraData.username].unshift({ product: extraData.productName, price: value, date: new Date().toLocaleString('en-US') });
             if (memoryStats.user_history[extraData.username].length > 20) memoryStats.user_history[extraData.username].pop();
             memoryStats.recent_transactions.unshift({ username: extraData.username, product: extraData.productName, price: value, date: new Date().toLocaleString('en-US') });
-            if (memoryStats.recent_transactions.length > 50) memoryStats.recent_transactions.pop();
+            if (memoryStats.recent_transactions.length > 1000) memoryStats.recent_transactions.pop();
             
             addActivity('sale', `💰 £${value} Sale: ${extraData.username} bought ${extraData.productName}`);
             notifyAdminPhone('NOUVELLE VENTE', `💰 +£${value}\n👤 Client: ${extraData.username}\n📦 Produit: ${extraData.productName}`);
@@ -2770,7 +2772,7 @@ const server = http.createServer(async (req, res) => {
                         price: price,
                         date: dateStrDisplay
                     });
-                    if (memoryStats.recent_transactions.length > 50) memoryStats.recent_transactions.pop();
+                    if (memoryStats.recent_transactions.length > 1000) memoryStats.recent_transactions.pop();
 
                     if (username !== "Manual Entry") {
                         if(!memoryStats.user_spending) memoryStats.user_spending = {};
@@ -5574,7 +5576,9 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             if(rawStats.revenue) {
                 Object.values(rawStats.revenue).forEach(val => calcTotalRev += parseFloat(val));
             }
-            rawStats.total_revenue = calcTotalRev;
+            if (calcTotalRev > (rawStats.total_revenue || 0)) {
+                rawStats.total_revenue = calcTotalRev;
+            }
 
           if(rawStats.settings && rawStats.settings.ai_enabled === false) {
               if(document.getElementById('btn-ai-enable')) {
