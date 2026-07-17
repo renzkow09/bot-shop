@@ -476,6 +476,14 @@ function ensureMemoryInitialized() {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "✨ Revenue Chart Fluid Animation\n\n- Refonte complète de l'animation d'ouverture du graphique 'Revenue Trajectory'.\n- Intégration de courbes de bézier élastiques (easeOutElastic) sur l'axe Y et la tension de ligne pour un effet de rebond organique.\n- L'apparition des points est désormais séquencée avec un décalage exponentiel sur l'axe X, créant une onde fluide ('wave effect') extraordinairement satisfaisante au chargement du composant." });
                 syncCloud();
             }
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Nexus Core Authentication Redesign"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ Nexus Core Authentication Redesign\n\n- Refonte visuelle complète et premium de l'écran d'authentification (login).\n- Intégration d'un arrière-plan 'glassmorphism' 3D en mouvement lent et d'une grille spatiale (grid mesh) élégante.\n- Animations 3D avancées (rotation spatiale, micro-interactions magnétiques sur les boutons).\n- Ajout d'effets de secousse (shake effect) lors d'un code PIN incorrect et transitions douces au succès." });
+                syncCloud();
+            }
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Live Support Console UI Overhaul"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "💬 Live Support Console UI Overhaul\n\n- Amélioration esthétique majeure de la page Chat.\n- Remplacement complet des anciens emojis par des icônes SVG minimalistes et professionnelles.\n- Intégration d'animations fluides ('slideUpFade', 'pulseLogo') et d'effets de survol avancés sur l'ensemble des boutons et menus contextuels.\n- Amélioration de la lisibilité des messages avec de subtiles ombres portées ('box-shadow') et des contours translucides." });
+                syncCloud();
+            }
 
             if (!memoryStats.overrides) memoryStats.overrides = {};
             if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } };
@@ -1784,40 +1792,463 @@ const server = http.createServer(async (req, res) => {
     // 🚀 [API_ROUTE: /dashboard] - Route API backend
     if ((req.url === '/dashboard' || req.url === '/') && !isAuthenticated) {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        return res.end(`<!DOCTYPE html><html><head><link rel='icon' href='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>'><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no'><title>Nexus Core</title><style>:root { --accent: #10b981; --accent-rgb: 16, 185, 129; }body{font-family:-apple-system,BlinkMacSystemFont,'Inter',sans-serif;background:#050505;color:#f5f5f7;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;overflow:hidden;}.login-box{background:rgba(20,20,22,0.6);backdrop-filter:blur(40px);-webkit-backdrop-filter:blur(40px);padding:60px 50px;border-radius:30px;border:1px solid rgba(255,255,255,0.05);text-align:center;box-shadow:0 30px 60px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.1);width:90%;max-width:440px;box-sizing:border-box; animation: slideUpFade 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity:0; transform:translateY(40px); position:relative; overflow:hidden;} .login-box::before { content:''; position:absolute; top:0; left:-100%; width:50%; height:100%; background:linear-gradient(90deg, transparent, rgba(255,255,255,0.03), transparent); transform:skewX(-20deg); animation: shine 6s infinite; } @keyframes shine { 0% { left: -100%; } 20% { left: 200%; } 100% { left: 200%; } }@keyframes slideUpFade { to { opacity:1; transform:translateY(0); } }@keyframes pulseLogo { 0%, 100% { text-shadow: 0 0 15px rgba(var(--accent-rgb), 0.3); transform: scale(1); } 50% { text-shadow: 0 0 35px rgba(var(--accent-rgb), 0.8); transform: scale(1.02); } }h2{font-weight:800;letter-spacing:4px;color:#fff; margin-bottom:12px; font-size:2.2em; animation: pulseLogo 4s infinite cubic-bezier(0.4, 0, 0.2, 1);}.subtitle { color: rgba(255,255,255,0.4); font-size: 0.8em; letter-spacing: 2px; margin-bottom: 40px; text-transform: uppercase; font-weight:600; }input{background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.08);color:white;padding:20px;border-radius:18px;font-size:24px!important;text-align:center;letter-spacing:18px;text-indent:18px;width:100%;max-width:260px;margin:10px auto 40px auto;outline:none;transition:all 0.4s cubic-bezier(0.16, 1, 0.3, 1);display:block; box-shadow: inset 0 2px 10px rgba(0,0,0,0.5);}input:focus{border-color:var(--accent);box-shadow:0 0 25px rgba(var(--accent-rgb),0.2), inset 0 2px 10px rgba(0,0,0,0.5); background:rgba(var(--accent-rgb),0.02); transform:scale(1.02);}button{background:linear-gradient(135deg, var(--accent), rgba(var(--accent-rgb), 0.8));color:#000;border:none;padding:18px 40px;font-size:1em;border-radius:18px;cursor:pointer;font-weight:700;width:100%;transition:all 0.4s cubic-bezier(0.16, 1, 0.3, 1);text-transform:uppercase;letter-spacing:2px; box-shadow:0 10px 30px rgba(var(--accent-rgb),0.3);}button:hover{transform:translateY(-3px) scale(1.01);box-shadow:0 15px 35px rgba(var(--accent-rgb),0.5); filter:brightness(1.1);}button:active { transform:translateY(1px) scale(0.98); box-shadow:0 5px 15px rgba(var(--accent-rgb),0.3); }.bg-anim { position:absolute; top:50%; left:50%; width: 150vw; height: 150vw; background: radial-gradient(circle, rgba(var(--accent-rgb), 0.05) 0%, transparent 50%); transform: translate(-50%, -50%); z-index: -1; pointer-events: none; animation: bgPulse 8s infinite alternate ease-in-out; } .bg-mesh { position:absolute; inset:0; z-index:-2; background-image: radial-gradient(rgba(255,255,255,0.03) 1px, transparent 1px); background-size: 40px 40px; opacity:0.5; animation: meshMove 20s linear infinite; } @keyframes bgPulse { 0% { transform: translate(-50%, -50%) scale(0.95); opacity: 0.8; } 100% { transform: translate(-50%, -50%) scale(1.05); opacity: 1.2; } } @keyframes meshMove { 0% { background-position: 0 0; } 100% { background-position: 40px 40px; } } 
-         /* Mobile Responsive & UI Enhancements */
-          }
-         .shortcut-btn { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text-muted); padding: 5px 10px; border-radius: 8px; font-size: 0.8em; cursor: pointer; transition: 0.3s; white-space: nowrap; }
-         .shortcut-btn:hover { background: rgba(255,255,255,0.1); color: white; }
+        return res.end(`<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Nexus Core Authentication</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
+    <style>
+        :root {
+            --accent: #10b981;
+            --accent-rgb: 16, 185, 129;
+            --bg-base: #050505;
+            --text-main: #f5f5f7;
+            --text-muted: rgba(255, 255, 255, 0.4);
+            --surface: rgba(18, 18, 22, 0.65);
+            --surface-border: rgba(255, 255, 255, 0.08);
+        }
+        
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', sans-serif;
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            perspective: 1000px;
+        }
 
+        /* --- Ambient Background --- */
+        .ambient-background {
+            position: fixed;
+            inset: -50%;
+            width: 200%;
+            height: 200%;
+            background: 
+                radial-gradient(circle at 50% 50%, rgba(var(--accent-rgb), 0.08) 0%, transparent 40%),
+                radial-gradient(circle at 80% 20%, rgba(var(--accent-rgb), 0.05) 0%, transparent 30%);
+            animation: slowDrift 20s ease-in-out infinite alternate;
+            z-index: -2;
+            pointer-events: none;
+        }
+        
+        .grid-mesh {
+            position: fixed;
+            inset: 0;
+            background-image: 
+                linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+            background-size: 40px 40px;
+            z-index: -1;
+            mask-image: radial-gradient(circle at center, black 40%, transparent 80%);
+            -webkit-mask-image: radial-gradient(circle at center, black 40%, transparent 80%);
+            transform: perspective(500px) rotateX(60deg) translateY(-100px) translateZ(-200px);
+            animation: gridMove 15s linear infinite;
+        }
 
-         /* Mobile Responsive & UI Enhancements */
-          }
-         .shortcut-btn { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text-muted); padding: 5px 10px; border-radius: 8px; font-size: 0.8em; cursor: pointer; transition: 0.3s; white-space: nowrap; }
-         .shortcut-btn:hover { background: rgba(255,255,255,0.1); color: white; }
+        @keyframes slowDrift {
+            0% { transform: rotate(0deg) scale(1); }
+            100% { transform: rotate(5deg) scale(1.1); }
+        }
 
-        .metric-bar-bg { background: rgba(255,255,255,0.05); border-radius: 4px; height: 10px; overflow: hidden; width: 100%; margin-top: 6px; box-shadow: inset 0 1px 3px rgba(0,0,0,0.5); }
-        .metric-bar-fill { height: 100%; border-radius: 4px; transition: width 1.5s cubic-bezier(0.2, 0.8, 0.2, 1), background-color 0.8s; width: 0%; box-shadow: 0 0 10px currentColor; }
-        .status-pulse { display: inline-block; border-radius: 50%; box-shadow: 0 0 8px currentColor; animation: statusPulse 2s infinite ease-in-out; }
-        @keyframes statusPulse { 0% { opacity: 1; transform: scale(1); box-shadow: 0 0 8px currentColor; } 50% { opacity: 0.5; transform: scale(1.3); box-shadow: 0 0 15px currentColor; } 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 8px currentColor; } }
-    </style><script>(function() {const themes = {green: { hex: '#10b981', rgb: '16, 185, 129', hover: '#34d399' },blue: { hex: '#0a84ff', rgb: '10, 132, 255', hover: '#47a3ff' },red: { hex: '#ff453a', rgb: '255, 69, 58', hover: '#ff6b63' },orange: { hex: '#ff9f0a', rgb: '255, 159, 10', hover: '#ffb340' }};const savedTheme = localStorage.getItem('nexus_theme');if (savedTheme && themes[savedTheme]) {const t = themes[savedTheme];document.documentElement.style.setProperty('--accent-green', t.hex);document.documentElement.style.setProperty('--accent-green-rgb', t.rgb);document.documentElement.style.setProperty('--accent-green-hover', t.hover);}})();</script></head><body><div class='bg-mesh'></div><div class='bg-anim'></div><div class='login-box'>  <h2>NEXUS</h2>  <div class='subtitle'>System Authentication</div>  <div style="position:relative; width:100%; max-width:260px; margin: 10px auto 40px auto;">
-  <input type='password' id='pin' maxlength='4' placeholder='••••' style='margin:0; width:100%; box-sizing:border-box; padding-right:50px;'>
-  <span id='toggleVisibility' onclick='togglePin()' style='position:absolute; right:15px; top:50%; transform:translateY(-50%); color:rgba(255,255,255,0.4); cursor:pointer; display:flex; align-items:center; justify-content:center; transition:0.3s; z-index:10;' onmouseover='this.style.color="rgba(255,255,255,0.8)"' onmouseout='this.style.color="rgba(255,255,255,0.4)"'>
-    <svg id='eyeIcon' xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-  </span>
-</div>  <button onclick='login()' id='btn'>Authenticate</button>  <p id='err' style='color:#ff453a;display:none;margin-top:20px;font-weight:500; font-size:0.9em; animation:slideUpFade 0.3s ease forwards;'>Access Denied</p></div><script>const themes = {    green: { hex: '#10b981', rgb: '16, 185, 129' },    blue: { hex: '#0a84ff', rgb: '10, 132, 255' },    red: { hex: '#ff453a', rgb: '255, 69, 58' },    orange: { hex: '#ff9f0a', rgb: '255, 159, 10' }};const savedTheme = localStorage.getItem('nexus_theme') || 'green';const t = themes[savedTheme] || themes.green;document.documentElement.style.setProperty('--accent', t.hex);document.documentElement.style.setProperty('--accent-rgb', t.rgb);function togglePin(){
-  const pinInput = document.getElementById('pin');
-  const eyeIcon = document.getElementById('eyeIcon');
-  if(pinInput.type === 'password') {
-    pinInput.type = 'text';
-    eyeIcon.innerHTML = '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line>';
-  } else {
-    pinInput.type = 'password';
-    eyeIcon.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>';
-  }
-}
-    // 🚀 [FUNCTION: login] - Déclaration de fonction
-async function login(){  const btn = document.getElementById('btn');  btn.style.opacity = '0.7';  btn.style.transform = 'scale(0.98)';  if (!document.getElementById('spin-keyframes')) { const style = document.createElement('style'); style.id = 'spin-keyframes'; style.innerHTML = '@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }'; document.head.appendChild(style); } btn.innerHTML = '<svg style="animation: spin 1s linear infinite; width: 20px; height: 20px; vertical-align: middle; margin-right: 10px;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" style="opacity: 0.25;"></circle><path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" style="opacity: 0.75;"></path></svg> Verifying...';  const res=await fetch('/api/login',{method:'POST',body:JSON.stringify({pin:document.getElementById('pin').value, totp:''})});  if(res.ok) {    btn.style.background = '#fff';    btn.innerHTML = '<svg style="width: 20px; height: 20px; vertical-align: middle; margin-right: 10px;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Granted';    btn.style.transform = 'scale(1.05)';    setTimeout(() => location.reload(), 500);  } else {     btn.style.opacity = '1';    btn.style.transform = 'scale(1)';    btn.innerText = 'Authenticate';    const err = document.getElementById('err'); err.style.display='block';    err.style.animation = 'none'; void err.offsetWidth; err.style.animation = 'slideUpFade 0.3s ease forwards';    setTimeout(() => err.style.display='none', 3000);  }} document.getElementById('pin').addEventListener('keypress', e=>{if(e.key==='Enter')login();});</script></body></html>`);
+        @keyframes gridMove {
+            0% { background-position: 0 0; }
+            100% { background-position: 0 40px; }
+        }
+
+        /* --- Login Box --- */
+        .login-wrapper {
+            position: relative;
+            z-index: 10;
+            animation: floatUp 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            opacity: 0;
+            transform: translateY(40px) scale(0.95) rotateX(10deg);
+            transform-style: preserve-3d;
+        }
+
+        @keyframes floatUp {
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1) rotateX(0deg);
+            }
+        }
+
+        .login-box {
+            background: var(--surface);
+            backdrop-filter: blur(40px) saturate(150%);
+            -webkit-backdrop-filter: blur(40px) saturate(150%);
+            padding: 50px 40px;
+            border-radius: 32px;
+            border: 1px solid var(--surface-border);
+            text-align: center;
+            box-shadow: 
+                0 30px 60px rgba(0,0,0,0.8), 
+                inset 0 1px 0 rgba(255,255,255,0.1),
+                inset 0 0 40px rgba(var(--accent-rgb), 0.05);
+            width: 90vw;
+            max-width: 420px;
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        
+        .login-box:hover {
+            transform: translateY(-5px);
+            box-shadow: 
+                0 40px 80px rgba(0,0,0,0.9), 
+                inset 0 1px 0 rgba(255,255,255,0.1),
+                inset 0 0 60px rgba(var(--accent-rgb), 0.1);
+        }
+
+        .glow-line {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--accent), transparent);
+            opacity: 0.5;
+        }
+
+        /* --- Typography --- */
+        .brand-container {
+            margin-bottom: 40px;
+            position: relative;
+        }
+
+        .logo-icon {
+            width: 48px;
+            height: 48px;
+            margin-bottom: 15px;
+            filter: drop-shadow(0 0 15px rgba(var(--accent-rgb), 0.5));
+            animation: pulseIcon 3s infinite ease-in-out;
+        }
+        
+        @keyframes pulseIcon {
+            0%, 100% { transform: scale(1); filter: drop-shadow(0 0 15px rgba(var(--accent-rgb), 0.5)); }
+            50% { transform: scale(1.1); filter: drop-shadow(0 0 25px rgba(var(--accent-rgb), 0.8)); }
+        }
+
+        h2 {
+            font-weight: 900;
+            letter-spacing: 6px;
+            font-size: 2rem;
+            margin: 0;
+            background: linear-gradient(135deg, #fff 0%, #a1a1aa 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+
+        .subtitle {
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            letter-spacing: 3px;
+            margin-top: 8px;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+
+        /* --- Input --- */
+        .input-group {
+            position: relative;
+            margin: 0 auto 30px auto;
+            width: 100%;
+            max-width: 280px;
+            perspective: 1000px;
+        }
+
+        .input-wrapper {
+            position: relative;
+            transform-style: preserve-3d;
+            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .input-group:focus-within .input-wrapper {
+            transform: translateZ(20px);
+        }
+
+        input {
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            padding: 22px 50px 22px 22px;
+            border-radius: 20px;
+            font-size: 28px;
+            text-align: center;
+            letter-spacing: 12px;
+            text-indent: 12px;
+            width: 100%;
+            outline: none;
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            box-shadow: inset 0 2px 15px rgba(0,0,0,0.8);
+            font-family: monospace;
+        }
+
+        input::placeholder {
+            color: rgba(255,255,255,0.1);
+            letter-spacing: 12px;
+        }
+
+        input:focus {
+            border-color: var(--accent);
+            background: rgba(var(--accent-rgb), 0.03);
+            box-shadow: 
+                0 0 30px rgba(var(--accent-rgb), 0.15), 
+                inset 0 2px 15px rgba(0,0,0,0.5);
+        }
+
+        .eye-btn {
+            position: absolute;
+            right: 18px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: rgba(255,255,255,0.3);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            z-index: 10;
+            padding: 5px;
+            border-radius: 50%;
+        }
+
+        .eye-btn:hover {
+            color: white;
+            background: rgba(255,255,255,0.1);
+        }
+
+        /* --- Button --- */
+        .auth-btn {
+            background: linear-gradient(135deg, var(--accent) 0%, rgba(var(--accent-rgb), 0.7) 100%);
+            color: #000;
+            border: none;
+            padding: 18px;
+            font-size: 0.9rem;
+            border-radius: 20px;
+            cursor: pointer;
+            font-weight: 800;
+            width: 100%;
+            max-width: 280px;
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            box-shadow: 0 10px 30px rgba(var(--accent-rgb), 0.3);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin: 0 auto;
+        }
+        
+        .auth-btn::before {
+            content: '';
+            position: absolute;
+            top: 0; left: -100%; width: 100%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+            transition: 0.5s;
+        }
+
+        .auth-btn:hover {
+            transform: translateY(-3px) scale(1.02);
+            box-shadow: 0 15px 40px rgba(var(--accent-rgb), 0.5);
+            filter: brightness(1.1);
+        }
+
+        .auth-btn:hover::before {
+            left: 100%;
+            transition: 0.7s;
+        }
+
+        .auth-btn:active {
+            transform: translateY(1px) scale(0.98);
+            box-shadow: 0 5px 15px rgba(var(--accent-rgb), 0.3);
+        }
+
+        /* --- Error Message --- */
+        .error-msg {
+            color: #ff453a;
+            margin-top: 25px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            letter-spacing: 1px;
+            opacity: 0;
+            transform: translateY(10px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            text-transform: uppercase;
+        }
+        
+        .error-msg.show {
+            animation: errorPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+
+        @keyframes errorPop {
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Loader */
+        .spinner {
+            animation: spin 1s linear infinite;
+            width: 20px;
+            height: 20px;
+        }
+        
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        
+        /* Mobile adjustments */
+        @media (max-width: 480px) {
+            .login-box { padding: 40px 25px; width: 85vw; }
+            input { font-size: 24px; padding: 18px 45px 18px 18px; letter-spacing: 8px; }
+            h2 { font-size: 1.7rem; }
+        }
+    </style>
+    <script>
+        (function() {
+            const themes = {
+                green: { hex: '#10b981', rgb: '16, 185, 129' },
+                blue: { hex: '#0a84ff', rgb: '10, 132, 255' },
+                red: { hex: '#ff453a', rgb: '255, 69, 58' },
+                orange: { hex: '#ff9f0a', rgb: '255, 159, 10' }
+            };
+            const savedTheme = localStorage.getItem('nexus_theme');
+            if (savedTheme && themes[savedTheme]) {
+                const t = themes[savedTheme];
+                document.documentElement.style.setProperty('--accent', t.hex);
+                document.documentElement.style.setProperty('--accent-rgb', t.rgb);
+            }
+        })();
+    </script>
+</head>
+<body>
+
+    <div class="ambient-background"></div>
+    <div class="grid-mesh"></div>
+
+    <div class="login-wrapper">
+        <div class="login-box" id="loginBox">
+            <div class="glow-line"></div>
+            
+            <div class="brand-container">
+                <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+                    <path d="M2 17l10 5 10-5"></path>
+                    <path d="M2 12l10 5 10-5"></path>
+                </svg>
+                <h2>NEXUS</h2>
+                <div class="subtitle">System Authentication</div>
+            </div>
+
+            <div class="input-group">
+                <div class="input-wrapper">
+                    <input type="password" id="pin" maxlength="4" placeholder="••••" autocomplete="off" autofocus>
+                    <div class="eye-btn" onclick="togglePin()" id="toggleVisibility">
+                        <svg id="eyeIcon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <button class="auth-btn" onclick="login()" id="btn">
+                <span>Authenticate</span>
+            </button>
+            
+            <div id="err" class="error-msg">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                Access Denied
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function togglePin() {
+            const pinInput = document.getElementById('pin');
+            const eyeIcon = document.getElementById('eyeIcon');
+            if (pinInput.type === 'password') {
+                pinInput.type = 'text';
+                eyeIcon.innerHTML = '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line>';
+            } else {
+                pinInput.type = 'password';
+                eyeIcon.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>';
+            }
+        }
+
+        async function login() {
+            const btn = document.getElementById('btn');
+            const pinVal = document.getElementById('pin').value;
+            const err = document.getElementById('err');
+            const box = document.getElementById('loginBox');
+            
+            // Loading state
+            btn.style.pointerEvents = 'none';
+            btn.innerHTML = '<svg class="spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10" stroke-opacity="0.25"></circle><path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"></path></svg> <span>Verifying...</span>';
+            err.classList.remove('show');
+            err.style.display = 'none'; // reset
+            
+            try {
+                const res = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({ pin: pinVal, totp: '' })
+                });
+                
+                if (res.ok) {
+                    btn.style.background = '#fff';
+                    btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg> <span style="color:#000">Granted</span>';
+                    btn.style.color = '#000';
+                    box.style.transform = 'scale(1.05)';
+                    box.style.opacity = '0';
+                    box.style.transition = 'all 0.6s cubic-bezier(0.16, 1, 0.3, 1)';
+                    setTimeout(() => location.reload(), 600);
+                } else {
+                    throw new Error('Denied');
+                }
+            } catch(e) {
+                // Error state
+                btn.style.pointerEvents = 'auto';
+                btn.innerHTML = '<span>Authenticate</span>';
+                
+                // Shake effect
+                box.style.animation = 'none';
+                void box.offsetWidth;
+                box.style.animation = 'shake 0.5s cubic-bezier(.36,.07,.19,.97) both';
+                
+                err.style.display = 'flex';
+                void err.offsetWidth;
+                err.classList.add('show');
+                
+                document.getElementById('pin').value = '';
+                document.getElementById('pin').focus();
+            }
+        }
+        
+        // Dynamic shake animation injection
+        if (!document.getElementById('shake-keyframes')) {
+            const style = document.createElement('style');
+            style.id = 'shake-keyframes';
+            style.innerHTML = '@keyframes shake { 10%, 90% { transform: translate3d(-1px, 0, 0); } 20%, 80% { transform: translate3d(2px, 0, 0); } 30%, 50%, 70% { transform: translate3d(-4px, 0, 0); } 40%, 60% { transform: translate3d(4px, 0, 0); } }';
+            document.head.appendChild(style);
+        }
+
+        document.getElementById('pin').addEventListener('keypress', e => {
+            if (e.key === 'Enter') login();
+        });
+    </script>
+</body>
+</html>`);
     }
 
     // === [ANCHOR: API_ROUTES_GET] ===
@@ -3705,66 +4136,105 @@ async function login(){  const btn = document.getElementById('btn');  btn.style.
            </div>
 
            <div id='livechat' class='tab-content'>
-               <div class='box'>
-                   <div style='display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;'>
-                       <div style='display:flex; align-items:center; gap: 15px;'>
-                           <h2 style='margin:0;'>💬 Live Support Console</h2>
-                           <select id='chat-sort-select' style='margin:0; width:auto; padding: 8px;' onchange='window.loadTicketsForChat()'>
-                               <option value='asc'>⏱️ Chronological (Oldest → Newest)</option>
-                               <option value='desc'>⏱️ Chronological (Newest → Oldest)</option>
-                               <option value='importance'>⭐ Importance (Support First)</option>
-                           </select>
-                       </div>
-                       <button class='admin-btn btn-green' style='margin:0;' onclick='window.loadTicketsForChat()'>🔄 Synchronise</button>
-                   </div>
-                   <div class='box' style='margin-top:25px;'>
-    <div style='display:flex; justify-content:space-between; align-items:center;'>
-        <h2>📜 Automated HTML Transcripts</h2>
-    </div>
-    <p class='text-muted' style='font-size:0.9em; margin-bottom:15px;'>View and download transcripts of closed tickets.</p>
-    <div style='overflow-x:auto;'>
-        <table>
-            <thead><tr><th>Ticket Name</th><th>Closed Date</th><th>Actions</th></tr></thead>
-            <tbody id='target-transcripts'></tbody>
-        </table>
+    <div class='box' style='position: relative; overflow: hidden; animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards;'>
+        <div class='ambient-glow' style='--glow-color: rgba(var(--accent-green-rgb), 0.4); top: -30px; left: -30px;'></div>
+        <div style='display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; position:relative; z-index:10;'>
+            <div style='display:flex; align-items:center; gap: 15px;'>
+                <div style='background: rgba(var(--accent-green-rgb), 0.1); padding: 10px; border-radius: 14px; border: 1px solid rgba(var(--accent-green-rgb), 0.2); display: flex; align-items: center; justify-content: center; box-shadow: 0 0 20px rgba(var(--accent-green-rgb), 0.1); animation: pulseLogo 4s infinite cubic-bezier(0.4, 0, 0.2, 1);'>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent-green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
+                </div>
+                <h2 style='margin:0; font-weight:800; letter-spacing:1px;'>Live Support Console</h2>
+                <div style="position:relative; margin-left:10px;">
+                    <select id='chat-sort-select' style='margin:0; width:auto; padding: 10px 35px 10px 15px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; appearance:none; font-weight:600; font-size:0.85em; transition: all 0.3s ease; color: white;' onchange='window.loadTicketsForChat()' onmouseover='this.style.borderColor="var(--accent-green)"' onmouseout='this.style.borderColor="rgba(255,255,255,0.1)"'>
+                        <option value='asc'>⏱️ Chronological (Oldest → Newest)</option>
+                        <option value='desc'>⏱️ Chronological (Newest → Oldest)</option>
+                        <option value='importance'>⭐ Importance (Support First)</option>
+                    </select>
+                    <svg style='position:absolute; right:10px; top:50%; transform:translateY(-50%); pointer-events:none; opacity:0.5;' width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </div>
+            </div>
+            <button class='admin-btn btn-green' style='margin:0; padding:10px 20px; display:flex; align-items:center; gap:8px; border-radius:14px; box-shadow:0 5px 15px rgba(var(--accent-green-rgb), 0.2); transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);' onmouseover='this.style.transform="translateY(-2px)"; this.style.boxShadow="0 8px 25px rgba(var(--accent-green-rgb), 0.4)"' onmouseout='this.style.transform="none"; this.style.boxShadow="0 5px 15px rgba(var(--accent-green-rgb), 0.2)"' onclick='window.loadTicketsForChat()'>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-9.21l-5.69-5.69"></path></svg>
+                Synchronise
+            </button>
+        </div>
+        
+        <div class='box' style='margin-top:25px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.03); border-radius: 20px; animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: 0.1s;'>
+            <div style='display:flex; justify-content:space-between; align-items:center;'>
+                <div style='display:flex; align-items:center; gap:10px;'>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16c0 1.1.9 2 2 2h12a2 2 0 0 0 2-2V8l-6-6z"></path><path d="M14 3v5h5M16 13H8M16 17H8M10 9H8"></path></svg>
+                    <h2 style='margin:0; font-size:1.2em;'>Automated HTML Transcripts</h2>
+                </div>
+            </div>
+            <p class='text-muted' style='font-size:0.9em; margin: 10px 0 15px 0; padding-left: 30px;'>View and download transcripts of closed tickets.</p>
+            <div style='overflow-x:auto;'>
+                <table>
+                    <thead><tr><th>Ticket Name</th><th>Closed Date</th><th>Actions</th></tr></thead>
+                    <tbody id='target-transcripts'></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class='chat-container' style='margin-top:25px; border-radius:24px; box-shadow: 0 10px 40px rgba(0,0,0,0.4); animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: 0.2s;'>
+            <div class='ticket-list' id='chat-ticket-list' style='border-right: 1px solid rgba(255,255,255,0.05); border-bottom: none;'>
+                <p class='text-muted text-center' style='margin-top:20px; display:flex; flex-direction:column; align-items:center; gap:10px;'>
+                    <svg style='animation:spin 2s linear infinite; opacity:0.5;' width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg>
+                    Syncing channels...
+                </p>
+            </div>
+            <div class='chat-window'>
+                <div class='chat-messages' id='chat-messages-area' style='background: rgba(0,0,0,0.1);'>
+                    <div style='margin:auto; text-align:center; opacity:0.3; display:flex; flex-direction:column; align-items:center; gap:15px;'>
+                        <div style='width: 80px; height: 80px; border-radius: 50%; background: rgba(255,255,255,0.05); display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 20px rgba(0,0,0,0.5);'>
+                            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
+                        </div>
+                        <div style='font-weight:600; letter-spacing:1px; font-size:1.1em;'>Select a conversation</div>
+                    </div>
+                </div>
+                <div style='display:flex; gap:10px; padding: 12px 20px; background: rgba(20,20,25,0.8); border-top: 1px solid rgba(255,255,255,0.05); flex-wrap: wrap; align-items:center;'>
+                    <div style='position:relative; display:inline-block;' id='shortcuts-container'>
+                        <button class='admin-btn' style='margin:0; padding:8px 16px; display:flex; align-items:center; gap:8px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; transition:all 0.2s;' onmouseover='this.style.background="rgba(255,255,255,0.1)"' onmouseout='this.style.background="rgba(255,255,255,0.05)"' onclick='const m = document.getElementById("shortcuts-menu"); m.style.display = m.style.display === "flex" ? "none" : "flex";'>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent-orange)"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+                            <span style='font-weight:600;'>Quick Actions</span>
+                        </button>
+                        <div id='shortcuts-menu' style='position:absolute; bottom:calc(100% + 10px); left:0; background:rgba(30,30,35,0.95); border:1px solid rgba(255,255,255,0.1); border-radius:16px; padding:8px; display:none; flex-direction:column; gap:4px; box-shadow:0 15px 40px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.1); z-index:100; min-width:180px; backdrop-filter:blur(20px); transform-origin: bottom left;'>
+                            <button class='shortcut-item' onclick='window.sendQuickResponse("welcome"); this.parentElement.style.display="none";'>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg> Welcome
+                            </button>
+                            <button class='shortcut-item' onclick='window.sendQuickResponse("wait"); this.parentElement.style.display="none";'>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg> Wait
+                            </button>
+                            <button class='shortcut-item' onclick='window.sendQuickResponse("resolved"); this.parentElement.style.display="none";'>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--accent-green)"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg> Resolved?
+                            </button>
+                            <button class='shortcut-item' onclick='window.sendQuickResponse("review"); this.parentElement.style.display="none";'>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--accent-orange)"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg> Review
+                            </button>
+                            <div style='height:1px; background:rgba(255,255,255,0.1); margin:4px 0;'></div>
+                            <button class='shortcut-item' style='color:var(--accent-red);' onclick='window.sendQuickResponse("close"); this.parentElement.style.display="none";'>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg> Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class='chat-input-area' style='background: rgba(15,15,20,0.9); padding: 15px 20px; border-top: 1px solid rgba(255,255,255,0.02);'>
+                    <div class='chat-attachment-wrapper' style='position:relative;'>
+                        <input type='file' id='chat-file-input' style='display:none' accept='image/*' onchange='document.getElementById("attach-badge").style.display="block"'>
+                        <button class='btn-icon' style='margin:0; width:45px; height:45px; border-radius:14px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); transition:all 0.3s; display:flex; align-items:center; justify-content:center;' onclick='document.getElementById("chat-file-input").click()' onmouseover='this.style.background="rgba(255,255,255,0.08)"' onmouseout='this.style.background="rgba(255,255,255,0.03)"' title='Attach Image'>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
+                        </button>
+                        <div id='attach-badge' class='nav-badge' style='position:absolute; top:-3px; right:-3px; width:12px; height:12px; padding:0; display:none; background:var(--accent-green); border:2px solid #1a1a1f;'></div>
+                    </div>
+                    <input type='text' id='chat-input-text' placeholder='Type your message...' style='background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); font-size:1em; padding:12px 20px; box-shadow:inset 0 2px 5px rgba(0,0,0,0.2); transition:all 0.3s;' onfocus='this.style.borderColor="var(--accent-green)"; this.style.boxShadow="0 0 15px rgba(var(--accent-green-rgb), 0.1), inset 0 2px 5px rgba(0,0,0,0.2)"' onblur='this.style.borderColor="rgba(255,255,255,0.08)"; this.style.boxShadow="inset 0 2px 5px rgba(0,0,0,0.2)"' onkeypress='if(event.key==="Enter") window.sendChatMessage()'>
+                    <button class='admin-btn btn-green' style='margin:0; width:45px; height:45px; padding:0; border-radius:14px; display:flex; align-items:center; justify-content:center; box-shadow: 0 5px 15px rgba(var(--accent-green-rgb), 0.2); transition:all 0.3s cubic-bezier(0.16, 1, 0.3, 1);' onclick='window.sendChatMessage()' onmouseover='this.style.transform="scale(1.05) translateY(-2px)"; this.style.boxShadow="0 8px 25px rgba(var(--accent-green-rgb), 0.4)"' onmouseout='this.style.transform="none"; this.style.boxShadow="0 5px 15px rgba(var(--accent-green-rgb), 0.2)"' title='Send Message'>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-left:-2px;"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
-<div class='chat-container' style='margin-top:20px;'>
-                       <div class='ticket-list' id='chat-ticket-list'><p class='text-muted text-center' style='margin-top:20px;'>Syncing channels...</p></div>
-                       <div class='chat-window'>
-                           <div class='chat-messages' id='chat-messages-area'>
-                               <div style='margin:auto; text-align:center; opacity:0.3;'>
-                                   <div style='font-size:3em; margin-bottom:10px;'>💬</div>
-                                   <div style='font-weight:500;'>Select a conversation</div>
-                               </div>
-                           </div>
-                           <div style='display:flex; gap:10px; padding: 15px; background: rgba(0,0,0,0.2); border-top: 0.5px solid rgba(255,255,255,0.05); flex-wrap: wrap;'>
-                               <div style='position:relative; display:inline-block;' id='shortcuts-container'>
-                                   <button class='admin-btn' style='margin:0; padding:6px 12px; display:flex; align-items:center; gap:5px;' onclick='const m = document.getElementById("shortcuts-menu"); m.style.display = m.style.display === "flex" ? "none" : "flex";'>⚡ Shortcuts</button>
-                                   <div id='shortcuts-menu' style='position:absolute; bottom:calc(100% + 5px); left:0; background:var(--bg-card); border:0.5px solid rgba(255,255,255,0.1); border-radius:12px; padding:10px; display:none; flex-direction:column; gap:5px; box-shadow:0 10px 30px rgba(0,0,0,0.5); z-index:100; min-width:150px; backdrop-filter:blur(10px); animation: popupMenu 0.2s ease-out forwards;'>
-                                       <button class='admin-btn' style='margin:0; padding:6px 12px; width:100%; text-align:left;' onclick='window.sendQuickResponse("welcome"); this.parentElement.style.display="none";'>👋 Welcome</button>
-                                       <button class='admin-btn' style='margin:0; padding:6px 12px; width:100%; text-align:left;' onclick='window.sendQuickResponse("wait"); this.parentElement.style.display="none";'>⏳ Wait</button>
-                                       <button class='admin-btn' style='margin:0; padding:6px 12px; width:100%; text-align:left;' onclick='window.sendQuickResponse("resolved"); this.parentElement.style.display="none";'>✅ Resolved?</button>
-                                       <button class='admin-btn' style='margin:0; padding:6px 12px; width:100%; text-align:left;' onclick='window.sendQuickResponse("review"); this.parentElement.style.display="none";'>⭐ Review</button>
-                                       <button class='admin-btn' style='margin:0; padding:6px 12px; color:var(--accent-red); width:100%; text-align:left;' onclick='window.sendQuickResponse("close"); this.parentElement.style.display="none";'>🔒 Close</button>
-                                   </div>
-                               </div>
-                           </div>
-                           <div class='chat-input-area'>
-                               <div class='chat-attachment-wrapper'>
-                                   <input type='file' id='chat-file-input' style='display:none' accept='image/*' onchange='document.getElementById("attach-badge").style.display="block"'>
-                                   <button class='btn-icon' style='margin:0;' onclick='document.getElementById("chat-file-input").click()' title='Attach Image'>📎</button>
-                                   <div id='attach-badge' class='nav-badge' style='position:absolute; top:-5px; right:-5px; width:10px; height:10px; padding:0; display:none;'></div>
-                               </div>
-                               <input type='text' id='chat-input-text' placeholder='Message...' onkeypress='if(event.key==="Enter") window.sendChatMessage()'>
-                               <button class='admin-btn btn-green' style='margin:0;' onclick='window.sendChatMessage()'>Send</button>
-                           </div>
-                       </div>
-                   </div>
-               </div>
-           </div>
-
-           <div id='analytics' class='tab-content'>
+<div id='analytics' class='tab-content'>
                <div class='box' style='margin-bottom:25px; animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: 0.1s;'>
                    <h2>🕒 Peak Execution Hours</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Observe the time of day with the highest transaction volume.</p><div style='height:280px; position:relative;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='hourlyChart' style='position:relative; z-index:10;'></canvas></div></div>
                <div style='display:grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap:25px;'>
@@ -6307,18 +6777,36 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             html = '<p class="text-muted text-center" style="margin-top:20px; font-family:inherit;">No active lines.</p>'; 
         } else { 
             const shopTickets = tickets.filter(t => t.name.startsWith('shop-')); 
-            const supportTickets = tickets.filter(t => t.name.startsWith('support-')); if(shopTickets.length > 0) { html += '<div style="font-size:0.85em; text-transform:uppercase; color:var(--accent-green); font-weight:700; margin: 10px 0 5px 5px; border-bottom: 0.5px solid rgba(var(--accent-green-rgb), 0.2); padding-bottom:5px; letter-spacing:0.5px;">🛒 Shop (' + shopTickets.length + ')</div>'; shopTickets.forEach(t => { const isActive = activeChatChannel === t.id ? 'active' : ''; html += '<div class="ticket-item ' + isActive + '" onclick="window.openTicketChat(&quot;' + escapeInlineJS(t.id) + '&quot;)">' + escapeHTML(t.name) + '</div>'; }); } if(supportTickets.length > 0) { html += '<div style="font-size:0.85em; text-transform:uppercase; color:var(--accent-orange); font-weight:700; margin: 20px 0 5px 5px; border-bottom: 0.5px solid rgba(245, 158, 11, 0.2); padding-bottom:5px; letter-spacing:0.5px;">🎧 Support (' + supportTickets.length + ')</div>'; supportTickets.forEach(t => { const isActive = activeChatChannel === t.id ? 'active' : ''; html += '<div class="ticket-item ' + isActive + '" onclick="window.openTicketChat(&quot;' + escapeInlineJS(t.id) + '&quot;)">' + escapeHTML(t.name) + '</div>'; }); } } if(document.getElementById('chat-ticket-list')) document.getElementById('chat-ticket-list').innerHTML = html; } catch(e) {} };
+            const supportTickets = tickets.filter(t => t.name.startsWith('support-')); 
+            if(shopTickets.length > 0) { 
+                html += '<div style="display:flex; align-items:center; gap:8px; font-size:0.85em; text-transform:uppercase; color:var(--accent-green); font-weight:700; margin: 10px 0 5px 5px; border-bottom: 0.5px solid rgba(var(--accent-green-rgb), 0.2); padding-bottom:5px; letter-spacing:0.5px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg> Shop (' + shopTickets.length + ')</div>'; 
+                shopTickets.forEach(t => { 
+                    const isActive = activeChatChannel === t.id ? 'active' : ''; 
+                    html += '<div class="ticket-item ' + isActive + '" style="transition: all 0.3s;" onclick="window.openTicketChat(&quot;' + escapeInlineJS(t.id) + '&quot;)">' + escapeHTML(t.name) + '</div>'; 
+                }); 
+            } 
+            if(supportTickets.length > 0) { 
+                html += '<div style="display:flex; align-items:center; gap:8px; font-size:0.85em; text-transform:uppercase; color:var(--accent-orange); font-weight:700; margin: 20px 0 5px 5px; border-bottom: 0.5px solid rgba(245, 158, 11, 0.2); padding-bottom:5px; letter-spacing:0.5px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 18v-6a9 9 0 0 1 18 0v6"></path><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"></path></svg> Support (' + supportTickets.length + ')</div>'; 
+                supportTickets.forEach(t => { 
+                    const isActive = activeChatChannel === t.id ? 'active' : ''; 
+                    html += '<div class="ticket-item ' + isActive + '" style="transition: all 0.3s;" onclick="window.openTicketChat(&quot;' + escapeInlineJS(t.id) + '&quot;)">' + escapeHTML(t.name) + '</div>'; 
+                }); 
+            } 
+        } 
+        if(document.getElementById('chat-ticket-list')) document.getElementById('chat-ticket-list').innerHTML = html; 
+    } catch(e) {} 
+};
         // 🚀 [UI_ACTION: openTicketChat] - Action d'interface Dashboard
-        window.openTicketChat = function(channelId) { activeChatChannel = channelId; window.loadTicketsForChat(); if(document.getElementById('chat-messages-area')) document.getElementById('chat-messages-area').innerHTML = '<div style="margin:auto; color:var(--accent-green);"><div style="width:40px; height:40px; border:3px solid rgba(var(--accent-green-rgb), 0.1); border-top:3px solid var(--accent-green); border-radius:50%; animation:spin 1s linear infinite; margin:auto; box-shadow:0 0 15px rgba(var(--accent-green-rgb), 0.5);"></div></div>'; window.fetchChatMessages(); };
+        window.openTicketChat = function(channelId) { activeChatChannel = channelId; window.loadTicketsForChat(); if(document.getElementById('chat-messages-area')) document.getElementById('chat-messages-area').innerHTML = '<div style="margin:auto; display:flex; flex-direction:column; align-items:center; gap:15px; color:var(--accent-green);"><div style="width:40px; height:40px; border:3px solid rgba(var(--accent-green-rgb), 0.1); border-top:3px solid var(--accent-green); border-radius:50%; animation:spin 1s cubic-bezier(0.68, -0.55, 0.265, 1.55) infinite; margin:auto; box-shadow:0 0 15px rgba(var(--accent-green-rgb), 0.5);"></div></div>'; window.fetchChatMessages(); };
         // 🚀 [UI_ACTION_ASYNC: fetchChatMessages] - Action asynchrone d'interface Dashboard
-        window.fetchChatMessages = async function() { if(!activeChatChannel) return; try { const res = await fetch('/api/tickets/messages?channelId=' + activeChatChannel); const msgs = await res.json(); let html = ''; if(msgs.length === 0) html = '<p class="text-muted text-center" style="margin:auto; font-family:monospace;">Awaiting transmission...</p>'; else { msgs.forEach(m => { const bubbleClass = m.isBot ? 'bot' : 'user'; const imgHtml = m.imageUrl ? '<br><img src="' + escapeHTML(m.imageUrl) + '" class="chat-img-preview" style="max-width:100%; border-radius:12px; margin-top:10px; cursor:pointer; border:0.5px solid rgba(255,255,255,0.1);" onclick="window.open(&quot;' + escapeInlineJS(m.imageUrl) + '&quot;)">' : ''; const actionsHtml = '<div class="chat-bubble-actions" style="display:none; position:absolute; top:-15px; ' + (m.isBot ? 'left:15px;' : 'right:15px;') + ' background:rgba(0,0,0,0.8); backdrop-filter:blur(10px); border:0.5px solid rgba(255,255,255,0.1); border-radius:12px; padding:4px 8px; gap:8px; box-shadow:0 5px 15px rgba(0,0,0,0.3);"><button style="background:none; border:none; cursor:pointer; font-size:1.1em; transition:transform 0.2s;" onclick="window.reactMessage(' + escapeInlineJS(m.id) + ', &quot;👍&quot;)">👍</button><button style="background:none; border:none; cursor:pointer; font-size:1.1em; transition:transform 0.2s;" onclick="window.reactMessage(' + escapeInlineJS(m.id) + ', &quot;❤️&quot;)">❤️</button></div>'; html += '<div class="chat-bubble ' + bubbleClass + '" onmouseover="this.querySelector(&quot; .chat-bubble-actions&quot;).style.display=&quot;flex&quot;" onmouseout="this.querySelector(&quot; .chat-bubble-actions&quot;).style.display=&quot;none&quot;"><div class="chat-author">' + escapeHTML(m.author) + '</div>' + escapeHTML(m.content) + imgHtml + actionsHtml + '</div>'; }); } const area = document.getElementById('chat-messages-area'); const isAtBottom = area.scrollHeight - area.scrollTop <= area.clientHeight + 100; area.innerHTML = html; if(isAtBottom) area.scrollTop = area.scrollHeight; } catch(e) {} };
+        window.fetchChatMessages = async function() { if(!activeChatChannel) return; try { const res = await fetch('/api/tickets/messages?channelId=' + activeChatChannel); const msgs = await res.json(); let html = ''; if(msgs.length === 0) html = '<div style="margin:auto; display:flex; flex-direction:column; align-items:center; opacity:0.5;"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-bottom:10px;"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg><p class="text-muted text-center" style="font-family:inherit;">Awaiting transmission...</p></div>'; else { msgs.forEach(m => { const bubbleClass = m.isBot ? 'bot' : 'user'; const imgHtml = m.imageUrl ? '<br><img src="' + escapeHTML(m.imageUrl) + '" class="chat-img-preview" style="max-width:100%; border-radius:12px; margin-top:10px; cursor:pointer; border:0.5px solid rgba(255,255,255,0.1); box-shadow: 0 4px 15px rgba(0,0,0,0.3); transition: transform 0.3s;" onmouseover="this.style.transform=\'scale(1.02)\';" onmouseout="this.style.transform=\'scale(1)\';" onclick="window.open(&quot;' + escapeInlineJS(m.imageUrl) + '&quot;)">' : ''; const actionsHtml = '<div class="chat-bubble-actions" style="display:none; position:absolute; top:-15px; ' + (m.isBot ? 'left:15px;' : 'right:15px;') + ' background:rgba(30,30,35,0.95); backdrop-filter:blur(10px); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:4px 8px; gap:8px; box-shadow:0 5px 15px rgba(0,0,0,0.5);"><button style="background:none; border:none; cursor:pointer; color:var(--accent-green); transition:transform 0.2s;" onmouseover="this.style.transform=\'scale(1.2)\';" onmouseout="this.style.transform=\'scale(1)\';" onclick="window.reactMessage(' + escapeInlineJS(m.id) + ', &quot;👍&quot;)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg></button><button style="background:none; border:none; cursor:pointer; color:var(--accent-red); transition:transform 0.2s;" onmouseover="this.style.transform=\'scale(1.2)\';" onmouseout="this.style.transform=\'scale(1)\';" onclick="window.reactMessage(' + escapeInlineJS(m.id) + ', &quot;❤️&quot;)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg></button></div>'; html += '<div class="chat-bubble ' + bubbleClass + '" style="box-shadow: 0 4px 15px rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.05);" onmouseover="this.querySelector(&quot; .chat-bubble-actions&quot;).style.display=&quot;flex&quot;" onmouseout="this.querySelector(&quot; .chat-bubble-actions&quot;).style.display=&quot;none&quot;"><div class="chat-author" style="opacity:0.7; font-size:0.85em; font-weight:600; margin-bottom:5px; letter-spacing:0.5px;">' + escapeHTML(m.author) + '</div><div style="line-height:1.6;">' + escapeHTML(m.content) + '</div>' + imgHtml + actionsHtml + '</div>'; }); } const area = document.getElementById('chat-messages-area'); const isAtBottom = area.scrollHeight - area.scrollTop <= area.clientHeight + 100; area.innerHTML = html; if(isAtBottom) area.scrollTop = area.scrollHeight; } catch(e) {} };
         // 🚀 [UI_ACTION_ASYNC: sendChatMessage] - Action asynchrone d'interface Dashboard
         window.sendChatMessage = async function() { if(!activeChatChannel) return showToast('Select line first', 'error'); const input = document.getElementById('chat-input-text'); const fileInput = document.getElementById('chat-file-input'); const text = input.value.trim(); const file = fileInput.files[0]; if(!text && !file) return; input.value = ''; document.getElementById('attach-badge').style.display='none'; let base64 = null; if (file) { const reader = new FileReader(); reader.readAsDataURL(file); await new Promise(r => reader.onload = r); base64 = reader.result; fileInput.value = ''; } try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'send_ticket_message', channelId: activeChatChannel, message: text, imageBase64: base64, pin: PIN }) }); window.fetchChatMessages(); } catch(e) { showToast('Transmission Failed', 'error'); } };
         // 🚀 [UI_ACTION_ASYNC: reactMessage] - Action asynchrone d'interface Dashboard
         window.reactMessage = async function(msgId, emoji) { if(!activeChatChannel) return; try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'react_ticket_message', channelId: activeChatChannel, messageId: msgId, emoji: emoji, pin: PIN }) }); showToast('Reaction sent'); } catch (e) { showToast('Failure', 'error'); } };
         // 🚀 [UI_ACTION_ASYNC: sendQuickResponse] - Action asynchrone d'interface Dashboard
         window.sendQuickResponse = async function(type) { if(!activeChatChannel) return showToast('Select line first', 'error'); let msg = ''; if(type === 'welcome') msg = '👋 Hello! How can I help you today?'; else if(type === 'wait') { const mins = await window.customPrompt('TRANSMISSION DELAY', 'Delay in minutes?', '5', '5'); if(!mins) return; msg = '⏳ Please wait for about ' + mins + ' minutes, an admin is looking into it.'; } else if(type === 'resolved') msg = '✅ Did this resolve your issue, or do you have any other questions?';
-        else if(type === 'review') msg = '⭐ If you are happy with the service, please consider leaving a review! It helps us a lot.'; else if(type === 'close') { if(!(await window.customConfirm('SEVER COMMS', 'Sever this communication line?'))) return; msg = '🔒 Closing this ticket. Have a great day!'; await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'send_ticket_message', channelId: activeChatChannel, message: msg, pin: PIN }) }); window.fetchChatMessages(); setTimeout(async () => { await window.executeAction({ action: 'close_channel', channelId: activeChatChannel }, false); activeChatChannel = null; window.loadTicketsForChat(); if(document.getElementById('chat-messages-area')) document.getElementById('chat-messages-area').innerHTML = '<div style="margin:auto; text-align:center; opacity:0.3;"><div style="font-size:3em; margin-bottom:10px;">💬</div><div style="font-weight:500;">Select a conversation</div></div>'; }, 2000); return; } if(msg) { try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'send_ticket_message', channelId: activeChatChannel, message: msg, pin: PIN }) }); window.fetchChatMessages(); } catch(e) { showToast('Transmission Failed', 'error'); } } };
+        else if(type === 'review') msg = '⭐ If you are happy with the service, please consider leaving a review! It helps us a lot.'; else if(type === 'close') { if(!(await window.customConfirm('SEVER COMMS', 'Sever this communication line?'))) return; msg = '🔒 Closing this ticket. Have a great day!'; await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'send_ticket_message', channelId: activeChatChannel, message: msg, pin: PIN }) }); window.fetchChatMessages(); setTimeout(async () => { await window.executeAction({ action: 'close_channel', channelId: activeChatChannel }, false); activeChatChannel = null; window.loadTicketsForChat(); if(document.getElementById('chat-messages-area')) document.getElementById('chat-messages-area').innerHTML = '<div style="margin:auto; text-align:center; opacity:0.3; display:flex; flex-direction:column; align-items:center; gap:15px;"><div style="width: 80px; height: 80px; border-radius: 50%; background: rgba(255,255,255,0.05); display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 20px rgba(0,0,0,0.5);"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg></div><div style="font-weight:600; letter-spacing:1px; font-size:1.1em;">Select a conversation</div></div>'; }, 2000); return; } if(msg) { try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'send_ticket_message', channelId: activeChatChannel, message: msg, pin: PIN }) }); window.fetchChatMessages(); } catch(e) { showToast('Transmission Failed', 'error'); } } };
 
         // 🚀 [UI_ACTION_ASYNC: createPromo] - Action asynchrone d'interface Dashboard
         window.createPromo = async function() { const name = document.getElementById('promoName').value.trim().toUpperCase(); const discount = parseInt(document.getElementById('promoDiscount').value); const limit = parseInt(document.getElementById('promoLimit').value); if(!name || isNaN(discount) || isNaN(limit)) { return showToast('Invalid parameters', 'error'); } if(discount < 1 || discount > 100) return showToast('Discount 1-100', 'error'); await window.executeAction({ action: 'create_promo', name: name, discount: discount, limit: limit }); };
