@@ -354,6 +354,11 @@ function ensureMemoryInitialized() {
                 syncCloud();
             }
 
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Ultimate Metric Synchronization (Live Pulse)"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ Ultimate Metric Synchronization (Live Pulse, Yield, Earning)\n\n- Restauration et ancrage définitif des modules critiques réclamés : **Live Pulse**, **Total Yield**, et **Total Earning**.\n- Correction du mécanisme d'Overrides (Javascript `innerText`) qui causait le blocage des Skeleton Loaders (écrans gris de chargement) sur certains navigateurs mobiles et desktop, donnant l'impression de valeurs vides (£0).\n- Les cartes sont repositionnées stratégiquement au sommet du Dashboard pour un contrôle absolu." });
+                syncCloud();
+            }
+
             
             if (!memoryStats.patchnotes.some(p => p.text.includes("SDK Google GenAI"))) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Migration: SDK Google GenAI\n\n- Remplacement des appels `fetch` bruts par le SDK officiel `@google/genai` pour une meilleure stabilité et gestion des erreurs.\n- Le problème de limite de quota (Service Busy / You exceed) est lié à l'utilisation du modèle `gemini-3.1-pro-preview` qui nécessite une clé API facturée sur Google Cloud. Si le message persiste sur Render, il faut upgrader le compte Google Cloud de la clé API, ou passer sur `gemini-3.5-flash`." });
@@ -3997,8 +4002,8 @@ const server = http.createServer(async (req, res) => {
                        <div class='glass-icon-wrapper' style='color: #10b981;'>
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
                        </div>
-                       <h3 class='glass-title'>Today's Revenue</h3>
-                       <div class='glass-stat-value text-green' id='ui-today-rev'><div class="skeleton" style="width: 100px; height: 38px; border-radius: 8px; display: inline-block; margin-top: 8px; margin-bottom: 4px;"></div></div>
+                       <h3 class='glass-title'>Total Earning</h3>
+                       <div class='glass-stat-value text-green' id='ui-today-rev'></div>
                        <div class='trend positive' style='font-weight: 600; font-size: 0.9em;'>+14% <span style='color:var(--text-muted); font-weight:normal;'>vs yesterday</span></div>
                    </div>
                    <div class='glass-panel' onclick='window.editStat("total_rev")' style='cursor:pointer; padding: 28px;' title='Click to edit'>
@@ -4007,7 +4012,7 @@ const server = http.createServer(async (req, res) => {
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 8h20M6 16h.01"/></svg>
                        </div>
                        <h3 class='glass-title'>Total Yield</h3>
-                       <div class='glass-stat-value' id='ui-total-rev'><div class="skeleton" style="width: 100px; height: 38px; border-radius: 8px; display: inline-block; margin-top: 8px; margin-bottom: 4px;"></div></div>
+                       <div class='glass-stat-value' id='ui-total-rev'></div>
                        <div class='trend' style='color:var(--text-muted); font-weight: 500; font-size: 0.9em;'>Lifetime Revenue</div>
                    </div>
                    <div class='glass-panel' onclick='window.editStat("conv_rate")' style='cursor:pointer; padding: 28px;' title='Click to edit'>
@@ -4016,7 +4021,7 @@ const server = http.createServer(async (req, res) => {
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h4l3-9 5 18 3-9h5"/></svg>
                        </div>
                        <h3 class='glass-title'>Conversion</h3>
-                       <div class='glass-stat-value' id='ui-conv-rate'><div class="skeleton" style="width: 100px; height: 38px; border-radius: 8px; display: inline-block; margin-top: 8px; margin-bottom: 4px;"></div></div>
+                       <div class='glass-stat-value' id='ui-conv-rate'></div>
                        <div class='trend positive' style='font-weight: 600; font-size: 0.9em;'>High Engagement</div>
                    </div>
                    <div class='glass-panel' onclick='window.editStat("online_total")' style='cursor:pointer; padding: 28px;' title='Click to edit'>
@@ -4024,8 +4029,8 @@ const server = http.createServer(async (req, res) => {
                        <div class='glass-icon-wrapper' style='color: #f59e0b;'>
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                        </div>
-                       <h3 class='glass-title'>Network Activity</h3>
-                       <div class='glass-stat-value' id='ui-online-total'><div class="skeleton" style="width: 100px; height: 38px; border-radius: 8px; display: inline-block; margin-top: 8px; margin-bottom: 4px;"></div></div>
+                       <h3 class='glass-title'>Live Pulse</h3>
+                       <div class='glass-stat-value' id='ui-online-total'></div>
                        <div class='trend' style='color:var(--text-muted); font-weight: 500; font-size: 0.9em;'>Active Members</div>
                    </div>
                    <div class='glass-panel' onclick='window.editStat("active_subs")' style='cursor:pointer; padding: 28px;' title='Click to edit'>
@@ -4034,7 +4039,7 @@ const server = http.createServer(async (req, res) => {
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
                        </div>
                        <h3 class='glass-title'>Active Subs</h3>
-                       <div class='glass-stat-value' id='ui-active-subs'><div class="skeleton" style="width: 100px; height: 38px; border-radius: 8px; display: inline-block; margin-top: 8px; margin-bottom: 4px;"></div></div>
+                       <div class='glass-stat-value' id='ui-active-subs'></div>
                        <div class='trend positive' style='font-weight: 600; font-size: 0.9em;'>Recurring Yield</div>
                    </div>
                    <div class='glass-panel' onclick='window.editStat("pending_orders")' style='cursor:pointer; padding: 28px;' title='Click to edit'>
@@ -4043,7 +4048,7 @@ const server = http.createServer(async (req, res) => {
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                        </div>
                        <h3 class='glass-title'>Pending Orders</h3>
-                       <div class='glass-stat-value' id='ui-pending-orders'><div class="skeleton" style="width: 100px; height: 38px; border-radius: 8px; display: inline-block; margin-top: 8px; margin-bottom: 4px;"></div></div>
+                       <div class='glass-stat-value' id='ui-pending-orders'></div>
                        <div class='trend negative' style='font-weight: 600; font-size: 0.9em;'>Awaiting processing</div>
                    </div>
                    <div class='glass-panel' style='padding: 28px;'>
@@ -4052,7 +4057,7 @@ const server = http.createServer(async (req, res) => {
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
                        </div>
                        <h3 class='glass-title'>Today's Joins</h3>
-                       <div class='glass-stat-value' id='ui-today-joins'><div class="skeleton" style="width: 100px; height: 38px; border-radius: 8px; display: inline-block; margin-top: 8px; margin-bottom: 4px;"></div></div>
+                       <div class='glass-stat-value' id='ui-today-joins'></div>
                        <div class='trend' id='ui-joins-trend' style='font-weight: 600; font-size: 0.9em;'>Calcul <span style='color:var(--text-muted); font-weight:normal;'>vs yesterday</span></div>
                    </div>
                </div>
@@ -4095,7 +4100,7 @@ const server = http.createServer(async (req, res) => {
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
                        </div>
                        <h3 class='glass-title'>Tickets Opened</h3>
-                       <div class='glass-stat-value text-red' id='ui-tickets-opened'><div class="skeleton" style="width: 100px; height: 38px; border-radius: 8px; display: inline-block; margin-top: 8px; margin-bottom: 4px;"></div></div>
+                       <div class='glass-stat-value text-red' id='ui-tickets-opened'></div>
                        <div class='trend' style='color:var(--text-muted); font-weight: 500; font-size: 0.9em;'>Support Requests</div>
                    </div>
                    <div class='glass-panel' onclick='window.editStat("dropoff")' style='cursor:pointer; padding: 28px;' title='Click to edit'>
@@ -4104,7 +4109,7 @@ const server = http.createServer(async (req, res) => {
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
                        </div>
                        <h3 class='glass-title'>Drop-off Rate</h3>
-                       <div class='glass-stat-value' id='ui-dropoff'><div class="skeleton" style="width: 100px; height: 38px; border-radius: 8px; display: inline-block; margin-top: 8px; margin-bottom: 4px;"></div></div>
+                       <div class='glass-stat-value' id='ui-dropoff'></div>
                        <div class='trend negative' style='font-weight: 600; font-size: 0.9em;'>Funnel Loss</div>
                    </div>
                    <div class='glass-panel' onclick='window.editStat("peak")' style='cursor:pointer; padding: 28px;' title='Click to edit'>
@@ -4113,7 +4118,7 @@ const server = http.createServer(async (req, res) => {
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                        </div>
                        <h3 class='glass-title'>Peak Sales Hour</h3>
-                       <div class='glass-stat-value' id='ui-peak-hour'><div class="skeleton" style="width: 100px; height: 38px; border-radius: 8px; display: inline-block; margin-top: 8px; margin-bottom: 4px;"></div></div>
+                       <div class='glass-stat-value' id='ui-peak-hour'></div>
                        <div class='trend positive' style='font-weight: 600; font-size: 0.9em;'>Highest Traffic</div>
                    </div>
                </div>
@@ -5575,6 +5580,8 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             if(document.getElementById('ui-total-rev')) document.getElementById('ui-total-rev').innerText = overrides['total_rev'] || ('£'+(rawStats.total_revenue || 0));
             if(document.getElementById('ui-conv-rate')) document.getElementById('ui-conv-rate').innerText = overrides['conv_rate'] || ((data.conversionRate||0)+'%');
             if(document.getElementById('ui-online-total')) document.getElementById('ui-online-total').innerHTML = overrides['online_total'] || ((data.onlineCount||0) + ' <span style="font-size:0.5em;color:var(--text-muted);">/ ' + (data.memberCount||0) + '</span>');
+            if(document.getElementById('ui-active-subs')) document.getElementById('ui-active-subs').innerText = overrides['active_subs'] || 0;
+            if(document.getElementById('ui-pending-orders')) document.getElementById('ui-pending-orders').innerText = overrides['pending_orders'] || (data.pendingReviewsCount||0);
             if(document.getElementById('ui-retention')) document.getElementById('ui-retention').innerText = overrides['retention'] || ((data.retentionRate||0)+'%');
             if(document.getElementById('ui-tickets-opened')) document.getElementById('ui-tickets-opened').innerText = overrides['tickets'] || (data.ticketsOpened||0);
             if(document.getElementById('ui-today-joins')) {
