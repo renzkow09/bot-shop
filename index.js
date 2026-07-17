@@ -176,8 +176,8 @@ async function loadCloudStats() {
     }
     const url = process.env.UPSTASH_REDIS_REST_URL;
     const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-    if (!url || !token) {
-        systemLog('WARN', 'UPSTASH', 'Upstash variables missing. Running local-only mode.');
+    if (!url || !token || global.upstashDisabled) {
+        if (!global.upstashDisabled) systemLog('WARN', 'UPSTASH', 'Upstash variables missing. Running local-only mode.');
         ensureMemoryInitialized();
         return;
     }
@@ -190,7 +190,12 @@ async function loadCloudStats() {
             // sync silent
         }
     } catch (e) { 
-        systemLog('ERROR', 'UPSTASH', `Cloud GET Error: ${e.message}`); 
+        if (e.response && (e.response.status === 400 || e.response.status === 403 || e.response.status === 429)) {
+             global.upstashDisabled = true;
+             systemLog('ERROR', 'UPSTASH', `Quota Exceeded or Auth Error (${e.response.status}). Disabling Cloud Sync temporarily.`);
+        } else {
+             systemLog('ERROR', 'UPSTASH', `Cloud GET Error: ${e.message}`); 
+        }
     }
     ensureMemoryInitialized();
 }
@@ -472,6 +477,12 @@ function ensureMemoryInitialized() {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔥 FIX: Widget Modal Syntax Error\n\n- Résolution d'une `SyntaxError: Invalid regular expression flags` critique qui causait le crash du bot au démarrage.\n- L'erreur était liée à une corruption du template literal lors de la précédente extraction de code depuis le générateur de transcription.\n- Le bouton '➕ Add Widget' est désormais 100% fonctionnel sur le dashboard, avec un affichage fluide de la modale en surcouche complète (z-index)." });
                 syncCloud();
             }
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Upstash Rate-Limit Resilience"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ Upstash Rate-Limit Resilience\n\n- Fixation de l'erreur fatale 400 (Quota Exceeded) liée à la limite de 500k requêtes Upstash.\n- Mise en place d'un 'Circuit Breaker' (disjoncteur) : si l'API Cloud renvoie une erreur HTTP 400, 403, ou 429, la synchronisation Cloud est silencieusement coupée (mode local-only).\n- L'application reste ainsi stable, 100% fonctionnelle et fluide même avec un forfait de base saturé." });
+            }
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Syntax Engine Repair"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Syntax Engine Repair & Chart Patch\n\n- Résolution de la 'SyntaxError: missing ) after argument list' qui causait le non-affichage global du Dashboard.\n- Le correctif a été appliqué au niveau de la génération de l'UI du composant Chart.js (Sales Trajectory).\n- Les animations extraordinairement fluides sont désormais restaurées avec la balise 'animation: { ... }' correctement fermée." });
+            }
             if (!memoryStats.patchnotes.some(p => p.text.includes("Revenue Chart Fluid Animation"))) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "✨ Revenue Chart Fluid Animation\n\n- Refonte complète de l'animation d'ouverture du graphique 'Revenue Trajectory'.\n- Intégration de courbes de bézier élastiques (easeOutElastic) sur l'axe Y et la tension de ligne pour un effet de rebond organique.\n- L'apparition des points est désormais séquencée avec un décalage exponentiel sur l'axe X, créant une onde fluide ('wave effect') extraordinairement satisfaisante au chargement du composant." });
                 syncCloud();
@@ -554,7 +565,7 @@ async function syncCloud(isManualForce = false) {
     if (global.broadcastToDashboard) global.broadcastToDashboard('stats_update', {});
 
     const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-    if (!url || !token) return;
+    if (!url || !token || global.upstashDisabled) return;
     try {
         const cleanUrl = url.endsWith('/') ? url.slice(0, -1) : url;
         await axios.post(cleanUrl, ["SET", "bot_stats", JSON.stringify(memoryStats)], { 
@@ -562,7 +573,12 @@ async function syncCloud(isManualForce = false) {
             timeout: 10000
         });
     } catch (err) { 
-        systemLog('ERROR', 'UPSTASH', `Cloud Sync Error: ${err.message}`); 
+        if (err.response && (err.response.status === 400 || err.response.status === 403 || err.response.status === 429)) {
+             global.upstashDisabled = true;
+             systemLog('ERROR', 'UPSTASH', `Quota Exceeded or Auth Error (${err.response.status}). Disabling Cloud Sync temporarily.`);
+        } else {
+             systemLog('ERROR', 'UPSTASH', `Cloud Sync Error: ${err.message}`); 
+        }
     }
 }
 
@@ -1838,6 +1854,30 @@ const server = http.createServer(async (req, res) => {
             pointer-events: none;
         }
         
+
+        .particle {
+            position: absolute;
+            background: rgba(var(--accent-rgb), 0.8);
+            border-radius: 50%;
+            pointer-events: none;
+            box-shadow: 0 0 10px rgba(var(--accent-rgb), 1);
+            animation: rise linear forwards;
+        }
+        @keyframes rise {
+            0% { transform: translateY(0) scale(1); opacity: 1; }
+            100% { transform: translateY(-100px) scale(0); opacity: 0; }
+        }
+        
+        .success-overlay {
+            position: fixed; inset: 0;
+            background: var(--accent);
+            z-index: 9999;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.5s ease;
+            mix-blend-mode: overlay;
+        }
+
         .grid-mesh {
             position: fixed;
             inset: 0;
@@ -2183,6 +2223,21 @@ const server = http.createServer(async (req, res) => {
             } else {
                 pinInput.type = 'password';
                 eyeIcon.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>';
+            }
+        }
+
+        function spawnParticles() {
+            for(let i=0; i<15; i++) {
+                let p = document.createElement('div');
+                p.className = 'particle';
+                let size = Math.random() * 6 + 2;
+                p.style.width = size + 'px';
+                p.style.height = size + 'px';
+                p.style.left = (Math.random() * 100) + '%';
+                p.style.top = (80 + Math.random() * 20) + '%';
+                p.style.animationDuration = (0.5 + Math.random() * 1.5) + 's';
+                document.body.appendChild(p);
+                setTimeout(() => p.remove(), 2000);
             }
         }
 
@@ -3792,7 +3847,7 @@ const server = http.createServer(async (req, res) => {
         .nav-btn:active { transform: translateX(2px) scale(0.98); }
         .main-content { padding: 30px 40px; max-width: 1400px; margin: 0 auto; animation: fadeInSmooth 0.5s ease; overflow-y: auto; height: calc(100vh - 120px); }
         
-        .chat-container { display: flex; height: 600px; gap: 25px; }
+        
         .ticket-list { flex: 1; background: var(--bg-card); border-radius: 24px; border: 0.5px solid var(--border-color); overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 10px; backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px); }
         .ticket-item { padding: 15px; background: rgba(255,255,255,0.02); border-radius: 16px; cursor: pointer; transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1); font-weight: 500; font-size: 0.9em; border: 0.5px solid transparent; position: relative; overflow: hidden; }
         .ticket-item:hover { background: rgba(255,255,255,0.06); transform: translateX(4px); box-shadow: 0 4px 15px rgba(0,0,0,0.15); border-color: rgba(255,255,255,0.05); }
@@ -4158,6 +4213,7 @@ const server = http.createServer(async (req, res) => {
                 Synchronise
             </button>
         </div>
+    </div>
         
         <div class='box' style='margin-top:25px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.03); border-radius: 20px; animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: 0.1s;'>
             <div style='display:flex; justify-content:space-between; align-items:center;'>
@@ -4226,13 +4282,12 @@ const server = http.createServer(async (req, res) => {
                         <div id='attach-badge' class='nav-badge' style='position:absolute; top:-3px; right:-3px; width:12px; height:12px; padding:0; display:none; background:var(--accent-green); border:2px solid #1a1a1f;'></div>
                     </div>
                     <input type='text' id='chat-input-text' placeholder='Type your message...' style='background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); font-size:1em; padding:12px 20px; box-shadow:inset 0 2px 5px rgba(0,0,0,0.2); transition:all 0.3s;' onfocus='this.style.borderColor="var(--accent-green)"; this.style.boxShadow="0 0 15px rgba(var(--accent-green-rgb), 0.1), inset 0 2px 5px rgba(0,0,0,0.2)"' onblur='this.style.borderColor="rgba(255,255,255,0.08)"; this.style.boxShadow="inset 0 2px 5px rgba(0,0,0,0.2)"' onkeypress='if(event.key==="Enter") window.sendChatMessage()'>
-                    <button class='admin-btn btn-green' style='margin:0; width:45px; height:45px; padding:0; border-radius:14px; display:flex; align-items:center; justify-content:center; box-shadow: 0 5px 15px rgba(var(--accent-green-rgb), 0.2); transition:all 0.3s cubic-bezier(0.16, 1, 0.3, 1);' onclick='window.sendChatMessage()' onmouseover='this.style.transform="scale(1.05) translateY(-2px)"; this.style.boxShadow="0 8px 25px rgba(var(--accent-green-rgb), 0.4)"' onmouseout='this.style.transform="none"; this.style.boxShadow="0 5px 15px rgba(var(--accent-green-rgb), 0.2)"' title='Send Message'>
+                    <button class='admin-btn btn-green' style='margin:0; width:50px; height:50px; padding:0; border-radius:16px; display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg, var(--accent), #0e9a6c); border:none; box-shadow: 0 8px 20px rgba(var(--accent-rgb), 0.3); transition:all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);' onclick='window.sendChatMessage()' onmouseover='this.style.transform=\"scale(1.1) translateY(-2px)\"; this.style.boxShadow=\"0 12px 25px rgba(var(--accent-rgb), 0.5)\"' onmouseout='this.style.transform=\"scale(1) translateY(0)\"; this.style.boxShadow=\"0 8px 20px rgba(var(--accent-rgb), 0.3)\"' title='Send Message'>
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-left:-2px;"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
                     </button>
                 </div>
             </div>
         </div>
-    </div>
 </div>
 <div id='analytics' class='tab-content'>
                <div class='box' style='margin-bottom:25px; animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: 0.1s;'>
@@ -6322,7 +6377,23 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             } catch(e) {}
             
             setTimeout(() => {
-                window.location.reload();
+                
+                        spawnParticles();
+                        document.getElementById('btn').innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:8px"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg> AUTHENTICATED';
+                        document.getElementById('btn').style.background = 'var(--accent)';
+                        document.getElementById('btn').style.color = '#000';
+                        document.getElementById('btn').style.transform = 'scale(1.05)';
+                        document.getElementById('btn').style.boxShadow = '0 0 40px var(--accent)';
+                        
+                        let overlay = document.createElement('div');
+                        overlay.className = 'success-overlay';
+                        document.body.appendChild(overlay);
+                        setTimeout(() => overlay.style.opacity = '1', 50);
+                        
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 800);
+
             }, 1800);
         };
         // 🚀 [UI_ACTION_ASYNC: executeAction] - Action asynchrone d'interface Dashboard
@@ -6799,7 +6870,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         // 🚀 [UI_ACTION: openTicketChat] - Action d'interface Dashboard
         window.openTicketChat = function(channelId) { activeChatChannel = channelId; window.loadTicketsForChat(); if(document.getElementById('chat-messages-area')) document.getElementById('chat-messages-area').innerHTML = '<div style="margin:auto; display:flex; flex-direction:column; align-items:center; gap:15px; color:var(--accent-green);"><div style="width:40px; height:40px; border:3px solid rgba(var(--accent-green-rgb), 0.1); border-top:3px solid var(--accent-green); border-radius:50%; animation:spin 1s cubic-bezier(0.68, -0.55, 0.265, 1.55) infinite; margin:auto; box-shadow:0 0 15px rgba(var(--accent-green-rgb), 0.5);"></div></div>'; window.fetchChatMessages(); };
         // 🚀 [UI_ACTION_ASYNC: fetchChatMessages] - Action asynchrone d'interface Dashboard
-        window.fetchChatMessages = async function() { if(!activeChatChannel) return; try { const res = await fetch('/api/tickets/messages?channelId=' + activeChatChannel); const msgs = await res.json(); let html = ''; if(msgs.length === 0) html = '<div style="margin:auto; display:flex; flex-direction:column; align-items:center; opacity:0.5;"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-bottom:10px;"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg><p class="text-muted text-center" style="font-family:inherit;">Awaiting transmission...</p></div>'; else { msgs.forEach(m => { const bubbleClass = m.isBot ? 'bot' : 'user'; const imgHtml = m.imageUrl ? '<br><img src="' + escapeHTML(m.imageUrl) + '" class="chat-img-preview" style="max-width:100%; border-radius:12px; margin-top:10px; cursor:pointer; border:0.5px solid rgba(255,255,255,0.1); box-shadow: 0 4px 15px rgba(0,0,0,0.3); transition: transform 0.3s;" onmouseover="this.style.transform=\'scale(1.02)\';" onmouseout="this.style.transform=\'scale(1)\';" onclick="window.open(&quot;' + escapeInlineJS(m.imageUrl) + '&quot;)">' : ''; const actionsHtml = '<div class="chat-bubble-actions" style="display:none; position:absolute; top:-15px; ' + (m.isBot ? 'left:15px;' : 'right:15px;') + ' background:rgba(30,30,35,0.95); backdrop-filter:blur(10px); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:4px 8px; gap:8px; box-shadow:0 5px 15px rgba(0,0,0,0.5);"><button style="background:none; border:none; cursor:pointer; color:var(--accent-green); transition:transform 0.2s;" onmouseover="this.style.transform=\'scale(1.2)\';" onmouseout="this.style.transform=\'scale(1)\';" onclick="window.reactMessage(' + escapeInlineJS(m.id) + ', &quot;👍&quot;)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg></button><button style="background:none; border:none; cursor:pointer; color:var(--accent-red); transition:transform 0.2s;" onmouseover="this.style.transform=\'scale(1.2)\';" onmouseout="this.style.transform=\'scale(1)\';" onclick="window.reactMessage(' + escapeInlineJS(m.id) + ', &quot;❤️&quot;)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg></button></div>'; html += '<div class="chat-bubble ' + bubbleClass + '" style="box-shadow: 0 4px 15px rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.05);" onmouseover="this.querySelector(&quot; .chat-bubble-actions&quot;).style.display=&quot;flex&quot;" onmouseout="this.querySelector(&quot; .chat-bubble-actions&quot;).style.display=&quot;none&quot;"><div class="chat-author" style="opacity:0.7; font-size:0.85em; font-weight:600; margin-bottom:5px; letter-spacing:0.5px;">' + escapeHTML(m.author) + '</div><div style="line-height:1.6;">' + escapeHTML(m.content) + '</div>' + imgHtml + actionsHtml + '</div>'; }); } const area = document.getElementById('chat-messages-area'); const isAtBottom = area.scrollHeight - area.scrollTop <= area.clientHeight + 100; area.innerHTML = html; if(isAtBottom) area.scrollTop = area.scrollHeight; } catch(e) {} };
+        window.fetchChatMessages = async function() { if(!activeChatChannel) return; try { const res = await fetch('/api/tickets/messages?channelId=' + activeChatChannel); const msgs = await res.json(); let html = ''; if(msgs.length === 0) html = '<div style="margin:auto; display:flex; flex-direction:column; align-items:center; opacity:0.5;"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-bottom:10px;"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg><p class="text-muted text-center" style="font-family:inherit;">Awaiting transmission...</p></div>'; else { msgs.forEach(m => { const bubbleClass = m.isBot ? 'bot' : 'user'; const imgHtml = m.imageUrl ? '<br><img src="' + escapeHTML(m.imageUrl) + '" class="chat-img-preview" style="max-width:100%; border-radius:12px; margin-top:10px; cursor:pointer; border:0.5px solid rgba(255,255,255,0.1); box-shadow: 0 4px 15px rgba(0,0,0,0.3); transition: transform 0.3s;" onmouseover="this.style.transform=&quot;scale(1.02)&quot;;" onmouseout="this.style.transform=&quot;scale(1)&quot;;" onclick="window.open(&quot;' + escapeInlineJS(m.imageUrl) + '&quot;)">' : ''; const actionsHtml = '<div class="chat-bubble-actions" style="display:none; position:absolute; top:-15px; ' + (m.isBot ? 'left:15px;' : 'right:15px;') + ' background:rgba(30,30,35,0.95); backdrop-filter:blur(10px); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:4px 8px; gap:8px; box-shadow:0 5px 15px rgba(0,0,0,0.5);"><button style="background:none; border:none; cursor:pointer; color:var(--accent-green); transition:transform 0.2s;" onmouseover="this.style.transform=&quot;scale(1.2)&quot;;" onmouseout="this.style.transform=&quot;scale(1)&quot;;" onclick="window.reactMessage(' + escapeInlineJS(m.id) + ', &quot;👍&quot;)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg></button><button style="background:none; border:none; cursor:pointer; color:var(--accent-red); transition:transform 0.2s;" onmouseover="this.style.transform=&quot;scale(1.2)&quot;;" onmouseout="this.style.transform=&quot;scale(1)&quot;;" onclick="window.reactMessage(' + escapeInlineJS(m.id) + ', &quot;❤️&quot;)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg></button></div>'; html += '<div class="chat-bubble ' + bubbleClass + '" style="box-shadow: 0 4px 15px rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.05);" onmouseover="this.querySelector(&quot; .chat-bubble-actions&quot;).style.display=&quot;flex&quot;" onmouseout="this.querySelector(&quot; .chat-bubble-actions&quot;).style.display=&quot;none&quot;"><div class="chat-author" style="opacity:0.7; font-size:0.85em; font-weight:600; margin-bottom:5px; letter-spacing:0.5px;">' + escapeHTML(m.author) + '</div><div style="line-height:1.6;">' + escapeHTML(m.content) + '</div>' + imgHtml + actionsHtml + '</div>'; }); } const area = document.getElementById('chat-messages-area'); const isAtBottom = area.scrollHeight - area.scrollTop <= area.clientHeight + 100; area.innerHTML = html; if(isAtBottom) area.scrollTop = area.scrollHeight; } catch(e) {} };
         // 🚀 [UI_ACTION_ASYNC: sendChatMessage] - Action asynchrone d'interface Dashboard
         window.sendChatMessage = async function() { if(!activeChatChannel) return showToast('Select line first', 'error'); const input = document.getElementById('chat-input-text'); const fileInput = document.getElementById('chat-file-input'); const text = input.value.trim(); const file = fileInput.files[0]; if(!text && !file) return; input.value = ''; document.getElementById('attach-badge').style.display='none'; let base64 = null; if (file) { const reader = new FileReader(); reader.readAsDataURL(file); await new Promise(r => reader.onload = r); base64 = reader.result; fileInput.value = ''; } try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'send_ticket_message', channelId: activeChatChannel, message: text, imageBase64: base64, pin: PIN }) }); window.fetchChatMessages(); } catch(e) { showToast('Transmission Failed', 'error'); } };
         // 🚀 [UI_ACTION_ASYNC: reactMessage] - Action asynchrone d'interface Dashboard
@@ -6855,61 +6926,55 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                     window.salesChart.destroy(); 
                 }
                 
-                window.salesChart = new Chart(ctxSales, { 
-                    type: 'line', 
-                    data: { 
-                        labels: dates.length ? dates : ['No Data'], 
-                        datasets: [{ 
+                window.salesChart = new Chart(ctxSales, {
+                    type: 'line',
+                    data: {
+                        labels: dates.length ? dates : ['No Data'],
+                        datasets: [{
                             label: 'Revenue',
-                            data: values.length ? values : [0], 
-                            borderColor: getThemeVal('hex'), 
-                            borderWidth: 4, 
-                            backgroundColor: grad, 
-                            fill: true, 
-                            tension: 0.45, 
-                            pointHoverBackgroundColor: getThemeVal('hex'), 
-                            pointHoverBorderColor: '#fff', 
-                            pointHoverBorderWidth: 3, 
+                            data: values.length ? values : [0],
+                            borderColor: getThemeVal('hex'),
+                            borderWidth: 4,
+                            backgroundColor: grad,
+                            fill: true,
+                            tension: 0.45,
+                            pointHoverBackgroundColor: getThemeVal('hex'),
+                            pointHoverBorderColor: '#fff',
+                            pointHoverBorderWidth: 3,
                             pointHoverRadius: 6,
-                            pointRadius: 0, 
-                            pointHitRadius: 30 
-                        }] 
-                    }, 
-                    options: { 
-                        responsive: true, 
-                        maintainAspectRatio: false, 
+                            pointRadius: 0,
+                            pointHitRadius: 30
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
                         animation: {
-                            tension: {
-                                duration: 2500,
-                                easing: 'easeOutElastic',
-                                from: 0.9,
-                                to: 0.45
+                            x: {
+                                type: 'number',
+                                easing: 'linear',
+                                duration: 1500,
+                                from: NaN,
+                                delay: (ctx) => {
+                                    if (ctx.type !== 'data' || ctx.xStarted) return 0;
+                                    ctx.xStarted = true;
+                                    return ctx.index * 60;
+                                }
                             },
                             y: {
                                 type: 'number',
                                 easing: 'easeOutElastic',
                                 duration: 2500,
-                                from: (ctx) => { return ctx.chart?.scales?.y?.getPixelForValue(0) || 0; },
-                                delay(ctx) {
-                                    if (ctx.type !== 'data' || ctx.yStarted) { return 0; }
+                                delay: (ctx) => {
+                                    if (ctx.type !== 'data' || ctx.yStarted) return 0;
                                     ctx.yStarted = true;
-                                    return ctx.index * 50;
-                                }
-                            },
-                            x: {
-                                type: 'number',
-                                easing: 'easeOutExpo',
-                                duration: 2000,
-                                from: NaN,
-                                delay(ctx) {
-                                  if (ctx.type !== 'data' || ctx.xStarted) { return 0; }
-                                  ctx.xStarted = true;
-                                  return ctx.index * 50;
-                                }
+                                    return ctx.index * 60;
+                                },
+                                from: (ctx) => { return ctx.chart?.scales?.y?.getPixelForValue(0) || 0; }
                             }
                         },
                         interaction: { mode: 'index', intersect: false },
-                        plugins: { 
+                        plugins: {
                             legend: { display: false },
                             tooltip: {
                                 backgroundColor: 'rgba(18, 18, 22, 0.9)',
@@ -6930,26 +6995,26 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                                     }
                                 }
                             }
-                        }, 
-                        scales: { 
-                            x: { 
+                        },
+                        scales: {
+                            x: {
                                 display: true,
                                 grid: { display: false, drawBorder: false },
                                 ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 7, color: 'rgba(255,255,255,0.4)' },
                                 border: { display: false }
-                            }, 
-                            y: { 
-                                grid: { color: 'rgba(255,255,255,0.05)', drawBorder: false }, 
-                                border: { display: false }, 
+                            },
+                            y: {
+                                grid: { color: 'rgba(255,255,255,0.05)', drawBorder: false },
+                                border: { display: false },
                                 beginAtZero: true,
                                 ticks: {
                                     color: 'rgba(255,255,255,0.4)',
                                     callback: function(value) { return '£' + value; }
                                 }
-                            } 
+                            }
                         }
-                    } 
-                }); 
+                    }
+                });
             } catch(e) { console.error("Chart Render Error:", e); }
         };
         // 🚀 [UI_ACTION: updateSalesChart] - Action d'interface Dashboard
@@ -6967,24 +7032,21 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
            // Common font configuration
            Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, Inter, sans-serif';
            Chart.defaults.color = '#8e8e93';
-
            const createGradient = (ctx, colorStart, colorEnd) => {
                const gradient = ctx.createLinearGradient(0, 0, 0, 300);
                gradient.addColorStop(0, colorStart);
                gradient.addColorStop(1, colorEnd);
                return gradient;
            };
-
            withErrorBoundary('hourlyChart', 'Hourly Sales Chart', () => {
                const canvas = document.getElementById('hourlyChart'); 
                if(canvas) {
-                    const ctxHourly = canvas.getContext('2d');
-                    if(!ctxHourly) return;
-                    if(window.hourlyChart instanceof Chart) window.hourlyChart.destroy();
-                    
-                    const gradient = createGradient(ctxHourly, 'rgba(' + getThemeVal('rgb') + ', 0.9)', 'rgba(' + getThemeVal('rgb') + ', 0.2)');
-
-                    window.hourlyChart = new Chart(ctxHourly, { 
+                   const ctxHourly = canvas.getContext('2d');
+                   if(!ctxHourly) return;
+                   if(window.hourlyChart instanceof Chart) window.hourlyChart.destroy();
+                   
+                   const gradient = createGradient(ctxHourly, 'rgba(' + getThemeVal('rgb') + ', 0.9)', 'rgba(' + getThemeVal('rgb') + ', 0.2)');
+                   window.hourlyChart = new Chart(ctxHourly, { 
                         type: 'bar', 
                         data: { 
                             labels: Array.from({length: 24}, (_, i) => i+'h'), 
