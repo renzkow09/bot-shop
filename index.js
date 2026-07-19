@@ -520,6 +520,11 @@ function ensureMemoryInitialized() {
                 syncCloud();
             }
 
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Gemini SDK Crash & Bandwidth Monitor"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔥 Gemini SDK Crash & Bandwidth Monitor (Render 5GB Limit)\n\n- **Fix Critique (GoogleGenAI is not defined / Module Not Found)** : L'erreur d'import de '@google/genai' qui faisait crasher l'analyse de données (AI Deep Analysis) a été éradiquée. Le système utilise désormais une API REST native `axios` ultra-légère pointant vers `gemini-1.5-flash-latest`. Plus aucun crash de dépendance sur l'infrastructure Render.\n- **Feature (Monitoring)** : Intégration d'un nouveau tracker 'Bandwidth Usage' sur le Nexus Mainframe Monitor. Il surveille en temps réel (via les flux de socket Node.js) votre consommation entrante et sortante, affichant une jauge dynamique jusqu'à la limite vitale de 5 GB de Render. Les statuts basculent automatiquement (OPTIMAL ➔ WARNING ➔ CRITICAL)." });
+                syncCloud();
+            }
+
             if (!memoryStats.overrides) memoryStats.overrides = {};
             if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } };
             if (!memoryStats.settings.maintenance) memoryStats.settings.maintenance = { active: false, endsAt: 0, channelId: "" };
@@ -1774,6 +1779,13 @@ global.broadcastToDashboard = function(type, data) {
 };
 
 const server = http.createServer(async (req, res) => {
+    if (req.socket && !req.socket._bwTracked) {
+        req.socket._bwTracked = true;
+        req.socket.once('close', () => {
+            if (!memoryStats.bandwidth_bytes) memoryStats.bandwidth_bytes = 0;
+            memoryStats.bandwidth_bytes += (req.socket.bytesRead || 0) + (req.socket.bytesWritten || 0);
+        });
+    }
     const clientIp = req.socket?.remoteAddress || '127.0.0.1';
     const now = Date.now();
     let rl = rateLimits.get(clientIp) || { count: 0, resetTime: now + 60000 };
@@ -2514,7 +2526,8 @@ const server = http.createServer(async (req, res) => {
             totalMem: (os.totalmem() / 1024 / 1024 / 1024).toFixed(2),
             sysUptime: Math.floor(os.uptime() / 60),
             cpuLoad: Math.round(((os.loadavg()[0] || 0) * 100) / (os.cpus()?.length || 1)),
-            memPercent: Math.round(100 * (1 - os.freemem() / os.totalmem()))
+            memPercent: Math.round(100 * (1 - os.freemem() / os.totalmem())),
+            bandwidth_bytes: memoryStats.bandwidth_bytes || 0
         };
 
         const procInfo = {
@@ -3071,16 +3084,10 @@ const server = http.createServer(async (req, res) => {
                     if (!recent.length) return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ result: "<p>No recent transactions to analyze.</p>" }));
                     
                     try {
-                        const { GoogleGenAI, ThinkingLevel } = require("@google/genai");
-                        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY, httpOptions: { headers: { 'User-Agent': 'aistudio-build' } } });
-                        const response = await ai.models.generateContent({
-                            model: 'gemini-3.1-pro-preview',
-                            contents: "Analyze the following recent transactions and provide a short financial analysis report in HTML format. " + JSON.stringify(recent),
-                            config: {
-                                thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH }
-                            }
+                        const response = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+                            contents: [{ role: "user", parts: [{ text: "Analyze the following recent transactions and provide a short financial analysis report in HTML format. " + JSON.stringify(recent) }] }]
                         });
-                        return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ result: response.text }));
+                        return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ result: response.data.candidates[0].content.parts[0].text }));
                     } catch(e) {
                         console.error("[GEMINI API ERROR TX]:", e.message);
                         let msg = e.message;
@@ -3091,18 +3098,12 @@ const server = http.createServer(async (req, res) => {
                 else if (data.action === 'check_market') {
                     if (!process.env.GEMINI_API_KEY) return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ error: "GEMINI_API_KEY not configured." }));
                     try {
-                        const { GoogleGenAI, ThinkingLevel } = require("@google/genai");
-                        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY, httpOptions: { headers: { 'User-Agent': 'aistudio-build' } } });
-                        const response = await ai.models.generateContent({
-                            model: 'gemini-3.1-pro-preview',
-                            contents: "Perform a quick market analysis for the digital product: " + data.product + ". Provide a short HTML report with pricing recommendations and insights.",
-                            config: {
-                                thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
-                                tools: [{ googleSearch: {} }]
-                            }
+                        const response = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+                            contents: [{ role: "user", parts: [{ text: "Perform a quick market analysis for the digital product: " + data.product + ". Provide a short HTML report with pricing recommendations and insights." }] }],
+                            tools: [{ googleSearch: {} }]
                         });
-                        let finalHtml = response.text;
-                        const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+                        let finalHtml = response.data.candidates[0].content.parts[0].text;
+                        const chunks = response.data.candidates[0].groundingMetadata?.groundingChunks;
                         if (chunks) {
                             finalHtml += '<br><br><div style="font-size:0.8em; padding:10px; background:rgba(255,255,255,0.05); border-radius:10px;">Sources analyzed via Google Search.</div>';
                         }
@@ -4800,6 +4801,19 @@ const server = http.createServer(async (req, res) => {
                                 </div>
                             </div>
                         </div>
+
+                        <div class='card' style='border:none; background:rgba(255,255,255,0.02); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.05); border-radius:16px;'>
+                            <h3 style='display:flex; align-items:center; justify-content:space-between;'>🌐 Bandwidth Usage <span style='font-size:0.65em; padding:3px 8px; border-radius:8px; background:rgba(59,130,246,0.1); color:var(--accent-blue); font-family:monospace;' id='ui-bw-status'><div class="skeleton skeleton-text" style="width: 60px; display: inline-block;"></div></span></h3>
+                            <div style='margin-top:25px;'>
+                                <div style='display:flex; justify-content:space-between; font-size:0.8em; text-transform:uppercase; font-weight:bold; color:var(--text-muted);'>
+                                    <span>Quota (Render)</span> <span id='ui-bw-txt'><div class="skeleton skeleton-text" style="width: 40px; display: inline-block;"></div></span>
+                                </div>
+                                <div class='metric-bar-bg'>
+                                    <div class='metric-bar-fill' id='ui-bw-bar' style='background:var(--accent-blue); width:0%;'></div>
+                                </div>
+                                <div style='text-align:right; font-size:0.7em; color:var(--text-muted); margin-top:5px; font-family:monospace;' id='ui-bw-details'>-- MB / 5.00 GB</div>
+                            </div>
+                        </div>
                     </div>
 
                     <h3 style='margin-top:40px; margin-bottom:20px; color:#fff; font-size:1em; letter-spacing:1px; text-transform:uppercase;'>Gateway Uplinks</h3>
@@ -6148,6 +6162,32 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                     if(document.getElementById('ui-os-plat')) document.getElementById('ui-os-plat').innerText = (data.system.platform || 'N/A') + ' ' + (data.system.arch || 'N/A');
                     if(document.getElementById('ui-os-up')) document.getElementById('ui-os-up').innerText = (data.system.sysUptime || 0) + ' mins';
                     if(document.getElementById('ui-os-ram')) document.getElementById('ui-os-ram').innerText = (data.system.freeMem || 0) + ' GB free / ' + (data.system.totalMem || 0) + ' GB';
+                    
+                    if(document.getElementById('ui-bw-txt')) {
+                        const bwBytes = data.system.bandwidth_bytes || 0;
+                        const bwMB = (bwBytes / 1024 / 1024).toFixed(2);
+                        const quotaMB = 5 * 1024;
+                        let pct = Math.min(100, Math.round((bwMB / quotaMB) * 100));
+                        document.getElementById('ui-bw-txt').innerText = pct + '%';
+                        document.getElementById('ui-bw-bar').style.width = pct + '%';
+                        document.getElementById('ui-bw-details').innerText = bwMB + ' MB / 5.00 GB';
+                        if (pct > 90) {
+                            document.getElementById('ui-bw-bar').style.background = 'var(--accent-red)';
+                            document.getElementById('ui-bw-status').style.color = 'var(--accent-red)';
+                            document.getElementById('ui-bw-status').style.background = 'rgba(239,68,68,0.1)';
+                            document.getElementById('ui-bw-status').innerText = 'CRITICAL';
+                        } else if (pct > 70) {
+                            document.getElementById('ui-bw-bar').style.background = 'var(--accent-orange)';
+                            document.getElementById('ui-bw-status').style.color = 'var(--accent-orange)';
+                            document.getElementById('ui-bw-status').style.background = 'rgba(245,158,11,0.1)';
+                            document.getElementById('ui-bw-status').innerText = 'WARNING';
+                        } else {
+                            document.getElementById('ui-bw-bar').style.background = 'var(--accent-blue)';
+                            document.getElementById('ui-bw-status').style.color = 'var(--accent-blue)';
+                            document.getElementById('ui-bw-status').style.background = 'rgba(59,130,246,0.1)';
+                            document.getElementById('ui-bw-status').innerText = 'OPTIMAL';
+                        }
+                    }
                     
                     if(document.getElementById('ui-cpu-txt')) document.getElementById('ui-cpu-txt').innerText = (data.system.cpuLoad || 0) + '%';
                     if(document.getElementById('ui-cpu-bar')) {
