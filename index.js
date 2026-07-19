@@ -643,6 +643,11 @@ function ensureMemoryInitialized() {
                 syncCloud();
             }
 
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Enforcement Strict de la Langue (IA)"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🧠 Enforcement Strict de la Langue (IA)\n\n- **Bug** : L'IA d'analyse Deep Analysis retournait parfois le rapport en anglais même lorsque 'Français' était sélectionné sur le dashboard.\n- **Cause** : La directive de traduction était noyée dans le prompt utilisateur, aux côtés des données de transaction massives qui sont en anglais (clés JSON, noms de produits). L'IA priorisait la langue majoritaire du contexte.\n- **Correction** : Refonte totale de l'appel à Gemini 3.5 Flash via l'API REST pour exploiter le paramètre `system_instruction`. La contrainte linguistique agit désormais comme une directive système suprême (System Prompt) que l'IA ne peut plus outrepasser." });
+                syncCloud();
+            }
+
             if (!memoryStats.overrides) memoryStats.overrides = {};
             if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } };
             if (!memoryStats.settings.maintenance) memoryStats.settings.maintenance = { active: false, endsAt: 0, channelId: "" };
@@ -3222,13 +3227,15 @@ const server = http.createServer(async (req, res) => {
                 }
                 
                                 else if (data.action === 'ai_analyze_tx') {
+                    console.log("AI ANALYZE TRIGGERED. Lang received:", data.lang);
                     if (!process.env.GEMINI_API_KEY) return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ error: "GEMINI_API_KEY not configured." }));
                     const recent = (memoryStats.recent_transactions || []).slice(0, 50);
                     if (!recent.length) return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ result: "<p>No recent transactions to analyze.</p>" }));
                     
                     try {
                         const response = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
-                            contents: [{ role: "user", parts: [{ text: `Analyze the following recent transactions and provide a short financial analysis report in HTML format. You MUST write your report entirely in ${data.lang === 'fr' ? 'FRENCH' : 'ENGLISH'}. IMPORTANT: Do NOT include <html>, <head>, <body>, or global <style> tags. Output ONLY safe HTML fragments suitable to be embedded in a dark-themed UI. ` + JSON.stringify(recent) }] }]
+                            system_instruction: { parts: [{ text: `You are an expert financial analyst. ${data.lang === 'fr' ? 'You MUST write your entire response, including all HTML text, labels, and analysis, strictly in FRENCH.' : 'You MUST write your entire response strictly in ENGLISH.'} IMPORTANT: Output ONLY safe HTML fragments (like <div>, <table>, <h2>). Do NOT output global tags like <html>, <head>, <body>, or <style>.` }] },
+                            contents: [{ role: "user", parts: [{ text: `Analyze these recent transactions and provide a short financial analysis report in HTML format: ` + JSON.stringify(recent) }] }]
                         });
                         let rawHtml = response.data.candidates[0].content.parts[0].text;
                         rawHtml = rawHtml.replace(/```html/g, '').replace(/```/g, '').replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '').replace(/<\/?html[^>]*>/gi, '').replace(/<\/?head[^>]*>/gi, '').replace(/<\/?body[^>]*>/gi, '');
