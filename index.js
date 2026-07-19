@@ -623,6 +623,11 @@ function ensureMemoryInitialized() {
                 syncCloud();
             }
 
+            if (!memoryStats.patchnotes.some(p => p.text.includes("AI Theme Bleed Fix"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🎨 AI UI Theme Bleed Fix\n\n- **Bug** : L'utilisation de *Deep AI Analysis* générait parfois un code HTML contenant les balises `<style>`, `<html>` et `<body>`, ce qui contaminait le DOM et transformait la page en fond blanc ou cassait le thème visuel sombre (UI Theme Bleed).\n- **Correction** : Injection d'un prompt strict dans l'API Gemini pour forcer la production exclusive de fragments HTML sécurisés avec des styles en ligne adaptés au mode sombre." });
+                syncCloud();
+            }
+
             if (!memoryStats.overrides) memoryStats.overrides = {};
             if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } };
             if (!memoryStats.settings.maintenance) memoryStats.settings.maintenance = { active: false, endsAt: 0, channelId: "" };
@@ -3207,7 +3212,7 @@ const server = http.createServer(async (req, res) => {
                     
                     try {
                         const response = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
-                            contents: [{ role: "user", parts: [{ text: "Analyze the following recent transactions and provide a short financial analysis report in HTML format. " + JSON.stringify(recent) }] }]
+                            contents: [{ role: "user", parts: [{ text: "Analyze the following recent transactions and provide a short financial analysis report in HTML format. IMPORTANT: Do NOT include <html>, <head>, <body>, or global <style> tags. Output ONLY safe HTML fragments suitable to be embedded in a dark-themed UI. " + JSON.stringify(recent) }] }]
                         });
                         return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ result: response.data.candidates[0].content.parts[0].text }));
                     } catch(e) {
@@ -3221,7 +3226,7 @@ const server = http.createServer(async (req, res) => {
                     if (!process.env.GEMINI_API_KEY) return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ error: "GEMINI_API_KEY not configured." }));
                     try {
                         const response = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
-                            contents: [{ role: "user", parts: [{ text: "Perform a quick market analysis for the digital product: " + data.product + ". Provide a short HTML report with pricing recommendations and insights." }] }],
+                            contents: [{ role: "user", parts: [{ text: "Perform a quick market analysis for the digital product: " + data.product + ". Provide a short HTML report with pricing recommendations and insights. IMPORTANT: Do NOT include <html>, <head>, <body>, or global <style> tags. Output ONLY safe HTML fragments suitable to be embedded in a dark-themed UI." }] }],
                             tools: [{ googleSearch: {} }]
                         });
                         let finalHtml = response.data.candidates[0].content.parts[0].text;
