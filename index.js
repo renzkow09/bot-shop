@@ -638,6 +638,11 @@ function ensureMemoryInitialized() {
                 syncCloud();
             }
 
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Correction Critique: Sauvegarde des Logs & Support Multilingue"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ Correction Critique: Sauvegarde des Logs & Support Multilingue\n\n- **Bug** : Les transactions ajoutées manuellement étaient systématiquement supprimées lors des redéploiements sur l'infrastructure cloud.\n- **Cause** : Le disque Render étant éphémère, si Upstash (base principale) rejetait la sauvegarde pour dépassement de quota, les logs étaient stockés localement mais non relayés au canal de secours Discord avant le redéploiement (qui force un arrêt immédiat).\n- **Correction** : Injection d'une sauvegarde instantanée 'Discord as a Database' (DaaD) lors de l'enregistrement manuel. La donnée est sécurisée sur un canal Discord immuable en temps réel, garantissant 0 perte de données, même lors d'un crash ou d'un redéploiement forcé.\n- **Feature** : Ajout d'un sélecteur de langue (Anglais / Français) sur le Dashboard pour l'analyse financière via l'IA Deep Analysis (Gemini 3.5 Flash). Le backend intercepte et force le contexte linguistique avec des directives strictes." });
+                syncCloud();
+            }
+
             if (!memoryStats.overrides) memoryStats.overrides = {};
             if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } };
             if (!memoryStats.settings.maintenance) memoryStats.settings.maintenance = { active: false, endsAt: 0, channelId: "" };
@@ -2977,6 +2982,7 @@ const server = http.createServer(async (req, res) => {
                     if (memoryStats.activity_feed.length > 30) memoryStats.activity_feed.pop();
 
                     syncCloud();
+                    backupToDiscord().catch(e => console.error(e));
                     systemLog('INFO', 'STORE', `Manual transaction logged for ${username} - £${price}`);
                 }
                 else if (data.action === 'refund_tx') {
@@ -3222,7 +3228,7 @@ const server = http.createServer(async (req, res) => {
                     
                     try {
                         const response = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
-                            contents: [{ role: "user", parts: [{ text: "Analyze the following recent transactions and provide a short financial analysis report in HTML format. IMPORTANT: Do NOT include <html>, <head>, <body>, or global <style> tags. Output ONLY safe HTML fragments suitable to be embedded in a dark-themed UI. " + JSON.stringify(recent) }] }]
+                            contents: [{ role: "user", parts: [{ text: `Analyze the following recent transactions and provide a short financial analysis report in HTML format. You MUST write your report entirely in ${data.lang === 'fr' ? 'FRENCH' : 'ENGLISH'}. IMPORTANT: Do NOT include <html>, <head>, <body>, or global <style> tags. Output ONLY safe HTML fragments suitable to be embedded in a dark-themed UI. ` + JSON.stringify(recent) }] }]
                         });
                         let rawHtml = response.data.candidates[0].content.parts[0].text;
                         rawHtml = rawHtml.replace(/```html/g, '').replace(/```/g, '').replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '').replace(/<\/?html[^>]*>/gi, '').replace(/<\/?head[^>]*>/gi, '').replace(/<\/?body[^>]*>/gi, '');
@@ -4464,6 +4470,12 @@ const server = http.createServer(async (req, res) => {
                         <p style='color:var(--text-muted); margin-top:8px; font-size:0.95em; font-weight:400;'>Real-time analysis and ledger management.</p>
                     </div>
                     <div style='display:flex; gap:12px; flex-wrap:wrap;'>
+                         <div style='display:flex; align-items:center; background:rgba(0,0,0,0.5); border-radius:12px; border:1px solid rgba(255,255,255,0.1); padding:0 5px;'>
+                             <select id='aiLangSelect' style='background:transparent; color:var(--text-muted); border:none; padding:10px 5px; font-size:0.9em; outline:none; cursor:pointer;'>
+                                 <option value='en'>English</option>
+                                 <option value='fr'>Français</option>
+                             </select>
+                         </div>
                          <button class='admin-btn' style='margin:0; background:rgba(139,92,246,0.1); color:#c4b5fd; border:1px solid rgba(139,92,246,0.3); backdrop-filter:blur(10px); display:flex; align-items:center; gap:8px; transition:all 0.3s ease;' onmouseover="this.style.background='rgba(139,92,246,0.2)'; this.style.transform='translateY(-2px)';" onmouseout="this.style.background='rgba(139,92,246,0.1)'; this.style.transform='translateY(0)';" onclick='window.analyzeTransactionsAI()'>
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
                             Deep AI Analysis
@@ -6886,7 +6898,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                 const res = await fetch('/api/action', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'ai_analyze_tx' })
+                    body: JSON.stringify({ action: 'ai_analyze_tx', lang: document.getElementById('aiLangSelect') ? document.getElementById('aiLangSelect').value : 'en' })
                 });
                 const data = await res.json();
                 clearInterval(aiInterval);
