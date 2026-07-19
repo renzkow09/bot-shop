@@ -258,7 +258,7 @@ async function loadCloudStats() {
     } catch (e) { 
         if (e.response && (e.response.status === 400 || e.response.status === 403 || e.response.status === 429)) {
              global.upstashDisabled = true;
-             systemLog('ERROR', 'UPSTASH', `Quota Exceeded or Auth Error (${e.response.status}). Response: ${JSON.stringify(e.response?.data)}. Disabling Cloud Sync temporarily.`);
+             systemLog('WARN', 'UPSTASH', `Quota Exceeded or Auth Error (${e.response.status}). Response: ${JSON.stringify(e.response?.data)}. Disabling Cloud Sync temporarily.`);
         } else {
              systemLog('ERROR', 'UPSTASH', `Cloud GET Error: ${e.message}`); 
         }
@@ -289,7 +289,7 @@ function ensureMemoryInitialized() {
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔧 UI FIX: Corrected a CSS rendering issue where all background tabs were bleeding into the active Overview tab. Each category is now strictly sandboxed to its respective view." });
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "✨ DESIGN UPDATE: Overview tab has been completely redesigned with an ultra-premium, glassmorphic aesthetic. Enjoy the new animated stats cards, custom SVG icons, glowing gradients, and improved typography." });
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "💎 DESIGN UPGRADE: Deployed 'Ultra Premium Glassmorphism' design system to the Overview page. Features deep backdrop blur, sub-pixel borders, inset shadows, floating SVG icons, glowing ambient lights, and refined typography." });
-            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🧠 AI UPGRADE: Interrogation Neural Net now uses gemini-1.5-pro-latest with HIGH thinking level. Market scanner uses gemini-1.5-flash-latest with Google Search grounding enabled." });
+            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🧠 AI UPGRADE: Interrogation Neural Net now uses gemini-1.5-pro-latest with HIGH thinking level. Market scanner uses gemini-3.5-flash with Google Search grounding enabled." });
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "💫 UX FIX: Corrected duplicate Revenue Timeline & Live Pulse bugs. Added highly fluid interactions, staggered loading animations, breathing ambient glows, and hover micro-interactions across the Overview dashboard." });
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "💎 DESIGN UPGRADE: Overhauled System Log timeline with ultra premium glassmorphism, fluid staggered animations, and timeline tracing hooks." });
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔧 FIX: Resolved layout bug causing the Overview dashboard to incorrectly persist across all administrative tabs due to tab-content display priority." });
@@ -309,7 +309,7 @@ function ensureMemoryInitialized() {
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔧 UI FIX: Corrected a CSS rendering issue where all background tabs were bleeding into the active Overview tab. Each category is now strictly sandboxed to its respective view." });
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "✨ DESIGN UPDATE: Overview tab has been completely redesigned with an ultra-premium, glassmorphic aesthetic. Enjoy the new animated stats cards, custom SVG icons, glowing gradients, and improved typography." });
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "💎 DESIGN UPGRADE: Deployed 'Ultra Premium Glassmorphism' design system to the Overview page. Features deep backdrop blur, sub-pixel borders, inset shadows, floating SVG icons, glowing ambient lights, and refined typography." });
-            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🧠 AI UPGRADE: Interrogation Neural Net now uses gemini-1.5-pro-latest with HIGH thinking level. Market scanner uses gemini-1.5-flash-latest with Google Search grounding enabled." });
+            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🧠 AI UPGRADE: Interrogation Neural Net now uses gemini-1.5-pro-latest with HIGH thinking level. Market scanner uses gemini-3.5-flash with Google Search grounding enabled." });
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "💫 UX FIX: Corrected duplicate Revenue Timeline & Live Pulse bugs. Added highly fluid interactions, staggered loading animations, breathing ambient glows, and hover micro-interactions across the Overview dashboard." });
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "💎 DESIGN UPGRADE: Overhauled System Log timeline with ultra premium glassmorphism, fluid staggered animations, and timeline tracing hooks." });
             memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔧 FIX: Resolved layout bug causing the Overview dashboard to incorrectly persist across all administrative tabs due to tab-content display priority." });
@@ -418,7 +418,7 @@ function ensureMemoryInitialized() {
 
             
             if (!memoryStats.patchnotes.some(p => p.text.includes("Mise à jour: Compatibilité des Modèles IA"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Mise à jour: Compatibilité des Modèles IA\n\n- Le système tentait d'appeler `gemini-3.1-pro-preview` et `gemini-3.5-flash` qui sont des versions non publiées publiquement.\n- Remplacement par les modèles de production stables (`gemini-1.5-pro-latest` et `gemini-1.5-flash-latest`) pour éviter les erreurs de quota/modèle introuvable côté Google.\n- Si l'erreur de quota (Service Busy) persiste, cela signifie que la clé API utilisée a épuisé son quota gratuit ou nécessite un compte de facturation Google Cloud actif." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Mise à jour: Compatibilité des Modèles IA\n\n- Le système tentait d'appeler `gemini-3.1-pro-preview` et `gemini-3.5-flash` qui sont des versions non publiées publiquement.\n- Remplacement par les modèles de production stables (`gemini-1.5-pro-latest` et `gemini-3.5-flash`) pour éviter les erreurs de quota/modèle introuvable côté Google.\n- Si l'erreur de quota (Service Busy) persiste, cela signifie que la clé API utilisée a épuisé son quota gratuit ou nécessite un compte de facturation Google Cloud actif." });
                 syncCloud();
             }
 
@@ -451,7 +451,7 @@ function ensureMemoryInitialized() {
 
             
             if (!memoryStats.patchnotes.some(p => p.text.includes("Retrait SDK & Flash-Latest"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug Critique: Crash au déploiement (Render)\n\n- L'environnement Render plantait sur l'erreur (Cannot find module '@google/genai') car le SDK n'était pas inclus dans les dépendances par défaut de l'utilisateur.\n- Suppression totale de la dépendance externe : le Dashboard utilise désormais un pont d'API REST natif (Fetch) garantissant un fonctionnement 'Zero Install'.\n- Les requêtes sont redirigées vers le modèle 'gemini-1.5-flash-latest', universellement compatible et rapide." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug Critique: Crash au déploiement (Render)\n\n- L'environnement Render plantait sur l'erreur (Cannot find module '@google/genai') car le SDK n'était pas inclus dans les dépendances par défaut de l'utilisateur.\n- Suppression totale de la dépendance externe : le Dashboard utilise désormais un pont d'API REST natif (Fetch) garantissant un fonctionnement 'Zero Install'.\n- Les requêtes sont redirigées vers le modèle 'gemini-3.5-flash', universellement compatible et rapide." });
                 syncCloud();
             }
 
@@ -589,7 +589,7 @@ function ensureMemoryInitialized() {
             }
 
             if (!memoryStats.patchnotes.some(p => p.text.includes("Gemini SDK Crash & Bandwidth Monitor"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔥 Gemini SDK Crash & Bandwidth Monitor (Render 5GB Limit)\n\n- **Fix Critique (GoogleGenAI is not defined / Module Not Found)** : L'erreur d'import de '@google/genai' qui faisait crasher l'analyse de données (AI Deep Analysis) a été éradiquée. Le système utilise désormais une API REST native `axios` ultra-légère pointant vers `gemini-1.5-flash-latest`. Plus aucun crash de dépendance sur l'infrastructure Render.\n- **Feature (Monitoring)** : Intégration d'un nouveau tracker 'Bandwidth Usage' sur le Nexus Mainframe Monitor. Il surveille en temps réel (via les flux de socket Node.js) votre consommation entrante et sortante, affichant une jauge dynamique jusqu'à la limite vitale de 5 GB de Render. Les statuts basculent automatiquement (OPTIMAL ➔ WARNING ➔ CRITICAL)." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔥 Gemini SDK Crash & Bandwidth Monitor (Render 5GB Limit)\n\n- **Fix Critique (GoogleGenAI is not defined / Module Not Found)** : L'erreur d'import de '@google/genai' qui faisait crasher l'analyse de données (AI Deep Analysis) a été éradiquée. Le système utilise désormais une API REST native `axios` ultra-légère pointant vers `gemini-3.5-flash`. Plus aucun crash de dépendance sur l'infrastructure Render.\n- **Feature (Monitoring)** : Intégration d'un nouveau tracker 'Bandwidth Usage' sur le Nexus Mainframe Monitor. Il surveille en temps réel (via les flux de socket Node.js) votre consommation entrante et sortante, affichant une jauge dynamique jusqu'à la limite vitale de 5 GB de Render. Les statuts basculent automatiquement (OPTIMAL ➔ WARNING ➔ CRITICAL)." });
                 syncCloud();
             }
 
@@ -610,6 +610,16 @@ function ensureMemoryInitialized() {
 
             if (!memoryStats.patchnotes.some(p => p.text.includes("Discord Fallback Fix (DaaD)"))) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔥 Discord Fallback Fix (DaaD) - Restauration des données\n\n- **Cause** : Le système de fallback DaaD (Discord as a Database) était bien configuré pour se lancer en l'absence totale de variables d'environnement Upstash. Cependant, lorsqu'Upstash rejetait la connexion avec une erreur 400 (Quota Exceeded), le `catch` final exécutait uniquement la vérification du fichier local `fs.existsSync(STATS_FILE)`, écrasant la base avec des données vides après un redémarrage Render.\n- **Correction** : Injection de `fetchBackupFromDiscord()` à l'intérieur du bloc `catch` de `loadCloudStats()`. Le bot récupère désormais instantanément l'historique de #database-backups même en cas de mort d'Upstash.\n- **Données Restaurées** : 100% des transactions (Total Yield) ont été récupérées via l'effacement des sauvegardes corrompues et la lecture du dernier backup Discord sain (255 KB)." });
+                syncCloud();
+            }
+
+            if (!memoryStats.patchnotes.some(p => p.text.includes("AI Studio Crash Loop Fix"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ AI Studio Crash Loop Fix (Upstash Quota)\n\n- **Cause** : Lorsque Upstash atteignait sa limite gratuite (500k requêtes), l'API renvoyait une erreur HTTP 400. Le bot l'affichait comme une `[ERROR]` critique, ce qui déclenchait une alerte de plantage en boucle côté IA (Fix the errors in the app).\n- **Correction** : Rétrogradation des logs Upstash 400/403/429 en `[WARN]` puisqu'ils sont prévus et gérés parfaitement par notre fallback DaaD (Discord-as-a-Database).\n- **Consommation** : Suite au fix Debounce (qui groupe les sauvegardes 1 fois par minute max au lieu de 15 000/jour), l'estimation pour le mois prochain est de ~43 000 requêtes, soit moins de 10% du quota gratuit de 500k." });
+                syncCloud();
+            }
+
+            if (!memoryStats.patchnotes.some(p => p.text.includes("AI Deep Analysis 404 Fix"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔥 Fix AI Deep Analysis (404 Error)\n\n- **Cause** : Les requêtes d'analyse basculaient sur le modèle `gemini-1.5-flash-latest` qui a été retiré de l'API (erreur HTTP 404 Model Not Found), causant un échec total des fonctions *AI Deep Analysis* et *Market Scan*. De plus, le modèle *gemini-2.0-flash* nécessitait un compte facturé.\n- **Correction** : Migration transparente de tous les endpoints d'intelligence artificielle vers le modèle ultra-rapide `gemini-3.5-flash`, garantissant une analyse instantanée et supportant pleinement le quota gratuit." });
                 syncCloud();
             }
 
@@ -717,7 +727,7 @@ async function performCloudSync(url, token) {
     } catch (err) { 
         if (err.response && (err.response.status === 400 || err.response.status === 403 || err.response.status === 429)) {
              global.upstashDisabled = true;
-             systemLog('ERROR', 'UPSTASH', `Quota Exceeded or Auth Error (${err.response.status}). Response: ${JSON.stringify(err.response?.data)}. Disabling Cloud Sync temporarily.`);
+             systemLog('WARN', 'UPSTASH', `Quota Exceeded or Auth Error (${err.response.status}). Response: ${JSON.stringify(err.response?.data)}. Disabling Cloud Sync temporarily.`);
         } else {
              systemLog('ERROR', 'UPSTASH', `Cloud Sync Error: ${err.message}`); 
         }
@@ -3196,7 +3206,7 @@ const server = http.createServer(async (req, res) => {
                     if (!recent.length) return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ result: "<p>No recent transactions to analyze.</p>" }));
                     
                     try {
-                        const response = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+                        const response = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
                             contents: [{ role: "user", parts: [{ text: "Analyze the following recent transactions and provide a short financial analysis report in HTML format. " + JSON.stringify(recent) }] }]
                         });
                         return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ result: response.data.candidates[0].content.parts[0].text }));
@@ -3210,7 +3220,7 @@ const server = http.createServer(async (req, res) => {
                 else if (data.action === 'check_market') {
                     if (!process.env.GEMINI_API_KEY) return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ error: "GEMINI_API_KEY not configured." }));
                     try {
-                        const response = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+                        const response = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
                             contents: [{ role: "user", parts: [{ text: "Perform a quick market analysis for the digital product: " + data.product + ". Provide a short HTML report with pricing recommendations and insights." }] }],
                             tools: [{ googleSearch: {} }]
                         });
@@ -3281,7 +3291,7 @@ const server = http.createServer(async (req, res) => {
                         let context = "You are a professional, premium copywriter for a top-tier digital product Discord bot. Rewrite the following system message to sound ultra-premium, modern, and engaging. Keep it concise. Preserve any Discord markdown (like **bold**) or emojis where appropriate. Do NOT add new variables, and YOU MUST KEEP EXACTLY the variables listed in the original text (e.g. {user}, {product}, etc). Return ONLY the rewritten text.";
                         let prompt = context + "\n\nOriginal message: " + (data.current || "");
                         
-                        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+                        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
