@@ -623,6 +623,11 @@ function ensureMemoryInitialized() {
                 syncCloud();
             }
 
+            if (!memoryStats.patchnotes.some(p => p.text.includes("AI Loading Screen Overhaul"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "✨ Refonte de l'Écran de Chargement IA\n\n- **Feature** : Remplacement du simple spinner de chargement par une interface dynamique et immersive.\n- **Feature** : Ajout d'une barre de progression fluide en temps réel avec des effets de néon (Gradients Purple/Blue).\n- **Feature** : Intégration d'un module textuel qui affiche en temps réel les étapes de 'réflexion' de l'Intelligence Artificielle (Ingestion, Tokenization, Analyse, etc) avec des animations de transition." });
+                syncCloud();
+            }
+
             if (!memoryStats.patchnotes.some(p => p.text.includes("AI Theme Bleed Fix"))) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🎨 AI UI Theme Bleed Fix\n\n- **Bug** : L'utilisation de *Deep AI Analysis* générait parfois un code HTML contenant les balises `<style>`, `<html>` et `<body>`, ce qui contaminait le DOM et transformait la page en fond blanc ou cassait le thème visuel sombre (UI Theme Bleed).\n- **Correction** : Injection d'un prompt strict dans l'API Gemini pour forcer la production exclusive de fragments HTML sécurisés avec des styles en ligne adaptés au mode sombre." });
                 syncCloud();
@@ -6812,7 +6817,68 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                 inner.style.transform = 'translateY(0)';
             }, 10);
 
-            content.innerHTML = '<div style="text-align:center; padding:60px 20px; color:var(--text-muted);"><div class="loader" style="margin:0 auto 20px auto; width:40px; height:40px; border:3px solid rgba(255,255,255,0.05); border-top-color:var(--accent-purple); border-radius:50%; animation:spin 1s linear infinite; box-shadow:0 0 15px rgba(139,92,246,0.3);"></div><div style="font-size:1.2em; color:#fff; font-weight:600; margin-bottom:10px;">Interrogating Neural Net...</div><span style="font-size:0.9em; opacity:0.8;">Running Deep Financial Analysis via Gemini 1.5 Pro</span><br><br><span style="font-size:0.8em; padding:6px 12px; background:rgba(255,255,255,0.05); border-radius:20px; border:1px solid rgba(255,255,255,0.1); margin-top:10px; display:inline-block;">Estimated time: 3-8 seconds</span></div>';
+            content.innerHTML = `
+                <div style="text-align:center; padding:50px 20px; color:var(--text-muted);">
+                    <div style="font-size:1.4em; color:#fff; font-weight:700; margin-bottom:15px; letter-spacing: 0.5px;">Initializing Deep AI Analysis...</div>
+                    <div style="font-size:0.95em; opacity:0.8; margin-bottom: 30px;">Powering Neural Core via Gemini 3.5 Flash</div>
+                    
+                    <div style="width: 100%; max-width: 400px; margin: 0 auto 15px auto; background: rgba(255,255,255,0.05); border-radius: 12px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1); box-shadow: inset 0 2px 10px rgba(0,0,0,0.5);">
+                        <div id="ai-progress-bar" style="width: 0%; height: 8px; background: linear-gradient(90deg, var(--accent-purple), var(--accent-blue)); border-radius: 12px; transition: width 0.3s ease, box-shadow 0.3s ease; box-shadow: 0 0 10px var(--accent-purple);"></div>
+                    </div>
+                    
+                    <div id="ai-thinking-text" style="font-family: monospace; font-size: 0.85em; color: var(--accent-purple); height: 20px; margin-bottom: 20px; transition: opacity 0.2s ease;">Establishing secure connection...</div>
+                    
+                    <div style="display: flex; justify-content: center; gap: 10px; opacity: 0.6;">
+                        <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent-purple); animation: pulse 1.5s infinite;"></span>
+                        <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent-blue); animation: pulse 1.5s infinite 0.5s;"></span>
+                        <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent-green); animation: pulse 1.5s infinite 1s;"></span>
+                    </div>
+                </div>
+            `;
+
+            const thinkingPhrases = [
+                "Ingesting transaction ledger...",
+                "Tokenizing financial records...",
+                "Cross-referencing historical data...",
+                "Identifying revenue patterns...",
+                "Detecting anomalous spending...",
+                "Calculating order value variance...",
+                "Formulating strategic insights...",
+                "Generating HTML payload...",
+                "Finalizing report compilation..."
+            ];
+
+            let progress = 0;
+            const progressBar = document.getElementById('ai-progress-bar');
+            const thinkingText = document.getElementById('ai-thinking-text');
+            let phraseIndex = 0;
+
+            const aiInterval = setInterval(() => {
+                if (!progressBar || !thinkingText) {
+                    clearInterval(aiInterval);
+                    return;
+                }
+                
+                let increment = Math.random() * 5 + 2;
+                if (progress > 60) increment = Math.random() * 3 + 1;
+                if (progress > 85) increment = Math.random() * 1 + 0.2;
+                
+                progress += increment;
+                if (progress > 95) progress = 95;
+                
+                progressBar.style.width = progress + '%';
+                
+                if (Math.random() > 0.3) {
+                    thinkingText.style.opacity = '0';
+                    setTimeout(() => {
+                        if(thinkingText) {
+                            thinkingText.innerText = thinkingPhrases[phraseIndex];
+                            thinkingText.style.opacity = '1';
+                        }
+                    }, 200);
+                    phraseIndex = (phraseIndex + 1) % thinkingPhrases.length;
+                }
+            }, 600);
             
             try {
                 const res = await fetch('/api/action', {
@@ -6821,9 +6887,23 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                     body: JSON.stringify({ action: 'ai_analyze_tx' })
                 });
                 const data = await res.json();
+                clearInterval(aiInterval);
+                
+                if(progressBar) {
+                    progressBar.style.width = '100%';
+                    progressBar.style.background = 'linear-gradient(90deg, var(--accent-green), #10b981)';
+                    progressBar.style.boxShadow = '0 0 15px var(--accent-green)';
+                }
+                if(thinkingText) thinkingText.innerText = "Analysis Complete.";
+                
                 if(data.error) throw new Error(data.error);
-                content.innerHTML = '<div style="animation:fadeInSmooth 0.5s ease;">' + (data.result || JSON.stringify(data)) + '</div>';
+                
+                setTimeout(() => {
+                    content.innerHTML = '<div style="animation:fadeInSmooth 0.5s ease;">' + (data.result || JSON.stringify(data)) + '</div>';
+                }, 700);
+
             } catch (e) {
+                clearInterval(aiInterval);
                 if (e.message === "RATE_LIMIT_EXCEEDED") {
                     content.innerHTML = '<div style="text-align:center; padding:40px; background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.3); border-radius:16px; color:#f59e0b;"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-bottom:10px;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg><br><h3>Service Busy</h3><p>The AI neural net is currently experiencing high load or has reached its quota limits. Please try again later.</p></div>';
                 } else {
