@@ -43,7 +43,7 @@ const shutdown = async (signal) => {
             client.destroy();
             systemLog('INFO', 'DISCORD', 'Client connection closed securely.');
         }
-        await syncCloud(); // Ensure final state is saved to Upstash/Disk
+        await backupToDiscord(); await syncCloud(); // Ensure final state is saved to Upstash/Disk
         systemLog('INFO', 'SYSTEM', 'Final cloud sync complete. Exiting gracefully.');
     } catch (e) {
         systemLog('CRITICAL', 'SYSTEM', `Error during shutdown: ${e.message}`);
@@ -169,13 +169,80 @@ function addActivity(type, message) {
     syncCloud();
 }
 
-    // 🚀 [FUNCTION: loadCloudStats] - Déclaration de fonction
+    
+async function fetchBackupFromDiscord() {
+    try {
+        if (!client || !client.user) return false;
+        const guild = client.guilds.cache.first();
+        if (!guild) return false;
+        
+        let channel = guild.channels.cache.find(c => c.name === 'database-backups');
+        if (!channel) return false;
+        
+        const messages = await channel.messages.fetch({ limit: 10 });
+        const latest = messages.find(m => m.attachments.size > 0 && m.attachments.first().name === 'stats.json');
+        if (!latest) return false;
+        
+        const attachmentUrl = latest.attachments.first().url;
+        const res = await axios.get(attachmentUrl, { responseType: 'json' });
+        if (res.data && Object.keys(res.data).length > 0) {
+            memoryStats = { ...memoryStats, ...res.data };
+            systemLog('INFO', 'DISCORD_BACKUP', 'Successfully restored database from Discord Backup channel.');
+            return true;
+        }
+    } catch(e) {
+        systemLog('WARN', 'DISCORD_BACKUP', 'Failed to fetch backup from Discord: ' + e.message);
+    }
+    return false;
+}
+
+async function backupToDiscord() {
+    try {
+        if (!client || !client.user) return;
+        const guild = client.guilds.cache.first();
+        if (!guild) return;
+        
+        let channel = guild.channels.cache.find(c => c.name === 'database-backups');
+        if (!channel) {
+            channel = await guild.channels.create({
+                name: 'database-backups',
+                type: 0,
+                permissionOverwrites: [
+                    { id: guild.id, deny: ['ViewChannel'] },
+                    { id: client.user.id, allow: ['ViewChannel', 'SendMessages'] }
+                ]
+            });
+            systemLog('INFO', 'DISCORD_BACKUP', 'Created #database-backups channel.');
+        }
+        
+        const buffer = Buffer.from(JSON.stringify(memoryStats, null, 2), 'utf8');
+        const { AttachmentBuilder } = require('discord.js');
+        const attachment = new AttachmentBuilder(buffer, { name: 'stats.json' });
+        
+        await channel.send({ content: `Auto-Backup: ${new Date().toISOString()}`, files: [attachment] });
+        
+        // Clean up old backups
+        const messages = await channel.messages.fetch({ limit: 50 });
+        if (messages.size > 10) {
+            const oldMessages = Array.from(messages.values()).slice(10);
+            for (const msg of oldMessages) {
+                await msg.delete().catch(()=>null);
+            }
+        }
+    } catch(e) {
+        systemLog('ERROR', 'DISCORD_BACKUP', 'Failed to backup to Discord: ' + e.message);
+    }
+}
+
+// 🚀 [FUNCTION: loadCloudStats]
+
 async function loadCloudStats() {
     const url = process.env.UPSTASH_REDIS_REST_URL;
     const token = process.env.UPSTASH_REDIS_REST_TOKEN;
     
     if (!url || !token) {
-        if (fs.existsSync(STATS_FILE)) {
+        const discordSuccess = await fetchBackupFromDiscord();
+        if (!discordSuccess && fs.existsSync(STATS_FILE)) {
             try { memoryStats = { ...memoryStats, ...JSON.parse(fs.readFileSync(STATS_FILE, 'utf8')) }; } catch (e) {}
         }
         ensureMemoryInitialized();
@@ -191,7 +258,7 @@ async function loadCloudStats() {
     } catch (e) { 
         if (e.response && (e.response.status === 400 || e.response.status === 403 || e.response.status === 429)) {
              global.upstashDisabled = true;
-             systemLog('ERROR', 'UPSTASH', `Quota Exceeded or Auth Error (${e.response.status}). Disabling Cloud Sync temporarily.`);
+             systemLog('ERROR', 'UPSTASH', `Quota Exceeded or Auth Error (${e.response.status}). Response: ${JSON.stringify(e.response?.data)}. Disabling Cloud Sync temporarily.`);
         } else {
              systemLog('ERROR', 'UPSTASH', `Cloud GET Error: ${e.message}`); 
         }
@@ -530,6 +597,16 @@ function ensureMemoryInitialized() {
                 syncCloud();
             }
 
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Circular Bandwidth Indicator"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "✨ Circular Bandwidth Indicator\n\n- Amélioration visuelle : Remplacement de la simple jauge de bande passante par un indicateur de progression circulaire au format SVG.\n- Intégration d'animations fluides pour le remplissage de la jauge (cubic-bezier) et transitions de couleurs (Bleu ➔ Orange ➔ Rouge) en approchant de la limite des 5 GB." });
+                syncCloud();
+            }
+
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Discord as a Database (DaaD)"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🌟 Discord as a Database (DaaD) - Auto Fallback\n\n- **Problème** : Les limites Upstash (ex: 500k requêtes) provoquaient des erreurs 400 (Quota Exceeded). Sur Render, le filesystem local étant éphémère, les données étaient perdues au redémarrage.\n- **Solution** : Création d'un système de backup automatisé vers Discord. Si Upstash est désactivé ou en limite de quota, le bot sauvegarde/restaure automatiquement la base de données via un salon \`#database-backups\` 100% invisible. Aucune donnée ne sera perdue même en cas d'effacement du conteneur Render !" });
+                syncCloud();
+            }
+
             if (!memoryStats.overrides) memoryStats.overrides = {};
             if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } };
             if (!memoryStats.settings.maintenance) memoryStats.settings.maintenance = { active: false, endsAt: 0, channelId: "" };
@@ -634,7 +711,7 @@ async function performCloudSync(url, token) {
     } catch (err) { 
         if (err.response && (err.response.status === 400 || err.response.status === 403 || err.response.status === 429)) {
              global.upstashDisabled = true;
-             systemLog('ERROR', 'UPSTASH', `Quota Exceeded or Auth Error (${err.response.status}). Disabling Cloud Sync temporarily.`);
+             systemLog('ERROR', 'UPSTASH', `Quota Exceeded or Auth Error (${err.response.status}). Response: ${JSON.stringify(err.response?.data)}. Disabling Cloud Sync temporarily.`);
         } else {
              systemLog('ERROR', 'UPSTASH', `Cloud Sync Error: ${err.message}`); 
         }
@@ -940,11 +1017,12 @@ client.on('shardDisconnect', (event, id) => {
     console.log(`❌ Shard ${id} disconnected from Discord. Attempting automatic reconnection...`);
 });
 
-client.once('clientReady', () => {
+client.once('clientReady', async () => {
     systemLog('INFO', 'DISCORD_CORE', `Bot logged in successfully as ${client.user.tag}`);
     console.log(`✅ Bot logged in as ${client.user.tag}`);
-    loadCloudStats();
-    setInterval(loadCloudStats, 15000);
+    await loadCloudStats();
+    setInterval(backupToDiscord, 3600000); // 1 hour
+    setTimeout(backupToDiscord, 10000); // First backup 10s after boot
     client.guilds.cache.forEach(async guild => {
         try {
             const firstInvites = await guild.invites.fetch();
@@ -4830,16 +4908,20 @@ const server = http.createServer(async (req, res) => {
                             </div>
                         </div>
 
-                        <div class='card' style='border:none; background:rgba(255,255,255,0.02); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.05); border-radius:16px;'>
-                            <h3 style='display:flex; align-items:center; justify-content:space-between;'>🌐 Bandwidth Usage <span style='font-size:0.65em; padding:3px 8px; border-radius:8px; background:rgba(59,130,246,0.1); color:var(--accent-blue); font-family:monospace;' id='ui-bw-status'><div class="skeleton skeleton-text" style="width: 60px; display: inline-block;"></div></span></h3>
-                            <div style='margin-top:25px;'>
-                                <div style='display:flex; justify-content:space-between; font-size:0.8em; text-transform:uppercase; font-weight:bold; color:var(--text-muted);'>
-                                    <span>Quota (Render)</span> <span id='ui-bw-txt'><div class="skeleton skeleton-text" style="width: 40px; display: inline-block;"></div></span>
+                        <div class='card' style='border:none; background:rgba(255,255,255,0.02); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.05); border-radius:16px; display:flex; flex-direction:column;'>
+                            <h3 style='display:flex; align-items:center; justify-content:space-between; margin-top:0;'>🌐 Bandwidth <span style='font-size:0.65em; padding:3px 8px; border-radius:8px; background:rgba(59,130,246,0.1); color:var(--accent-blue); font-family:monospace;' id='ui-bw-status'><div class="skeleton skeleton-text" style="width: 60px; display: inline-block;"></div></span></h3>
+                            <div style='display:flex; justify-content:center; align-items:center; flex-direction:column; flex:1; margin-top: 10px;'>
+                                <div style="position:relative; width: 120px; height: 120px;">
+                                    <svg width="120" height="120" viewBox="0 0 120 120" style="transform: rotate(-90deg);">
+                                        <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="10" stroke-linecap="round" />
+                                        <circle id="ui-bw-circle" cx="60" cy="60" r="50" fill="none" stroke="var(--accent-blue)" stroke-width="10" stroke-linecap="round" stroke-dasharray="314.16" stroke-dashoffset="314.16" style="transition: stroke-dashoffset 1.5s cubic-bezier(0.4, 0, 0.2, 1), stroke 0.5s;" />
+                                    </svg>
+                                    <div style="position:absolute; top:0; left:0; width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+                                        <span id="ui-bw-txt" style="font-size:1.6em; font-weight:bold; font-family:monospace; margin-bottom:-5px;">--%</span>
+                                        <span style="font-size:0.55em; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-top:2px;">of 5 GB</span>
+                                    </div>
                                 </div>
-                                <div class='metric-bar-bg'>
-                                    <div class='metric-bar-fill' id='ui-bw-bar' style='background:var(--accent-blue); width:0%;'></div>
-                                </div>
-                                <div style='text-align:right; font-size:0.7em; color:var(--text-muted); margin-top:5px; font-family:monospace;' id='ui-bw-details'>-- MB / 5.00 GB</div>
+                                <div style='text-align:center; font-size:0.75em; color:var(--text-muted); margin-top:15px; font-family:monospace;' id='ui-bw-details'>-- MB / 5.00 GB</div>
                             </div>
                         </div>
                     </div>
@@ -6191,26 +6273,30 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                     if(document.getElementById('ui-os-up')) document.getElementById('ui-os-up').innerText = (data.system.sysUptime || 0) + ' mins';
                     if(document.getElementById('ui-os-ram')) document.getElementById('ui-os-ram').innerText = (data.system.freeMem || 0) + ' GB free / ' + (data.system.totalMem || 0) + ' GB';
                     
-                    if(document.getElementById('ui-bw-txt')) {
+                    if(document.getElementById('ui-bw-circle')) {
                         const bwBytes = data.system.bandwidth_bytes || 0;
                         const bwMB = (bwBytes / 1024 / 1024).toFixed(2);
                         const quotaMB = 5 * 1024;
                         let pct = Math.min(100, Math.round((bwMB / quotaMB) * 100));
                         document.getElementById('ui-bw-txt').innerText = pct + '%';
-                        document.getElementById('ui-bw-bar').style.width = pct + '%';
                         document.getElementById('ui-bw-details').innerText = bwMB + ' MB / 5.00 GB';
+                        
+                        const circumference = 314.16;
+                        const offset = circumference - (pct / 100) * circumference;
+                        document.getElementById('ui-bw-circle').style.strokeDashoffset = offset;
+
                         if (pct > 90) {
-                            document.getElementById('ui-bw-bar').style.background = 'var(--accent-red)';
+                            document.getElementById('ui-bw-circle').style.stroke = 'var(--accent-red)';
                             document.getElementById('ui-bw-status').style.color = 'var(--accent-red)';
                             document.getElementById('ui-bw-status').style.background = 'rgba(239,68,68,0.1)';
                             document.getElementById('ui-bw-status').innerText = 'CRITICAL';
                         } else if (pct > 70) {
-                            document.getElementById('ui-bw-bar').style.background = 'var(--accent-orange)';
+                            document.getElementById('ui-bw-circle').style.stroke = 'var(--accent-orange)';
                             document.getElementById('ui-bw-status').style.color = 'var(--accent-orange)';
                             document.getElementById('ui-bw-status').style.background = 'rgba(245,158,11,0.1)';
                             document.getElementById('ui-bw-status').innerText = 'WARNING';
                         } else {
-                            document.getElementById('ui-bw-bar').style.background = 'var(--accent-blue)';
+                            document.getElementById('ui-bw-circle').style.stroke = 'var(--accent-blue)';
                             document.getElementById('ui-bw-status').style.color = 'var(--accent-blue)';
                             document.getElementById('ui-bw-status').style.background = 'rgba(59,130,246,0.1)';
                             document.getElementById('ui-bw-status').innerText = 'OPTIMAL';
