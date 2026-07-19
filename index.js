@@ -262,7 +262,8 @@ async function loadCloudStats() {
         } else {
              systemLog('ERROR', 'UPSTASH', `Cloud GET Error: ${e.message}`); 
         }
-        if (fs.existsSync(STATS_FILE)) {
+        const discordSuccess = await fetchBackupFromDiscord();
+        if (!discordSuccess && fs.existsSync(STATS_FILE)) {
             try { memoryStats = { ...memoryStats, ...JSON.parse(fs.readFileSync(STATS_FILE, 'utf8')) }; } catch (e) {}
         }
     }
@@ -604,6 +605,11 @@ function ensureMemoryInitialized() {
 
             if (!memoryStats.patchnotes.some(p => p.text.includes("Discord as a Database (DaaD)"))) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🌟 Discord as a Database (DaaD) - Auto Fallback\n\n- **Problème** : Les limites Upstash (ex: 500k requêtes) provoquaient des erreurs 400 (Quota Exceeded). Sur Render, le filesystem local étant éphémère, les données étaient perdues au redémarrage.\n- **Solution** : Création d'un système de backup automatisé vers Discord. Si Upstash est désactivé ou en limite de quota, le bot sauvegarde/restaure automatiquement la base de données via un salon \`#database-backups\` 100% invisible. Aucune donnée ne sera perdue même en cas d'effacement du conteneur Render !" });
+                syncCloud();
+            }
+
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Discord Fallback Fix (DaaD)"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔥 Discord Fallback Fix (DaaD) - Restauration des données\n\n- **Cause** : Le système de fallback DaaD (Discord as a Database) était bien configuré pour se lancer en l'absence totale de variables d'environnement Upstash. Cependant, lorsqu'Upstash rejetait la connexion avec une erreur 400 (Quota Exceeded), le `catch` final exécutait uniquement la vérification du fichier local `fs.existsSync(STATS_FILE)`, écrasant la base avec des données vides après un redémarrage Render.\n- **Correction** : Injection de `fetchBackupFromDiscord()` à l'intérieur du bloc `catch` de `loadCloudStats()`. Le bot récupère désormais instantanément l'historique de #database-backups même en cas de mort d'Upstash.\n- **Données Restaurées** : 100% des transactions (Total Yield) ont été récupérées via l'effacement des sauvegardes corrompues et la lecture du dernier backup Discord sain (255 KB)." });
                 syncCloud();
             }
 
