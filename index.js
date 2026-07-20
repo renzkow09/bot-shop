@@ -28,6 +28,16 @@ const CircuitBreaker = {
 
 const axios = require('axios'); // just to anchor it
 
+
+const crypto = require('crypto');
+const {
+    generateRegistrationOptions,
+    verifyRegistrationResponse,
+    generateAuthenticationOptions,
+    verifyAuthenticationResponse
+} = require('@simplewebauthn/server');
+const authSessions = {};
+
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
@@ -279,44 +289,22 @@ function ensureMemoryInitialized() {
             if (!memoryStats.activity_feed) memoryStats.activity_feed = [];
             if (!memoryStats.custom_requests) memoryStats.custom_requests = [];
             if (!Array.isArray(memoryStats.patchnotes)) memoryStats.patchnotes = [];
-            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🧩 FEATURE UPDATE: Ajout d\'un système modulaire de Widgets permettant d\'ajouter jusqu\'à 50 cartes statistiques pré-configurées (MRR, Churn, NPS, LTV, etc.) depuis un modal ultra-premium dans la vue Overview. Les widgets sélectionnés sont persistés pour chaque utilisateur." });
-            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "📈 FEATURE UPDATE: Ajout d\'une carte stat sur la vue Overview affichant les nouveaux membres Discord rejoignant aujourd\'hui, avec calcul de progression en pourcentage par rapport à hier." });
-            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔧 AUTO-CORRECTION: Échappement sécurisé des apostrophes dans les événements inline (onclick, onmouseover) via &quot; au lieu de \'. Refonte graphique de l\'interface d\'analytique et de modération (pills, gradients de carte)." });
-            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔥 CRITICAL FIX: Resolved dashboard freezing caused by unhandled exceptions in UI overlay and missing JS canvas compatibility. 🛡️ DISCORD FIX: Prevented category creation crashes for shop/support tickets if parent category ID is invalid on the host server. 🛠️ SECURITY: Blinded try/catch error logging on frontend. 🚀 The system is now 100% operational." });
-            if (memoryStats.patchnotes.length > 50) memoryStats.patchnotes = memoryStats.patchnotes.slice(0, 50);
-            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔥 CRITICAL FIX: Resolved dashboard freeze by forcefully removing the splash screen. 🛡️ DISCORD FIX: Fixed 'Redeem Code' channel creation crash caused by invalid Admin ID in permission overwrites. Added strict try/catch error boundaries." });
-            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔥 FIX: Categories now correctly display and group on the Discord shop overview page instead of being overridden by prices. 📊 UI FIX: Dynamic categories are now properly added to the dashboard filter dropdown. 🛡️ PATCH: Hardened Analytics chart renderings." });
-            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔧 UI FIX: Corrected a CSS rendering issue where all background tabs were bleeding into the active Overview tab. Each category is now strictly sandboxed to its respective view." });
-            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "✨ DESIGN UPDATE: Overview tab has been completely redesigned with an ultra-premium, glassmorphic aesthetic. Enjoy the new animated stats cards, custom SVG icons, glowing gradients, and improved typography." });
-            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "💎 DESIGN UPGRADE: Deployed 'Ultra Premium Glassmorphism' design system to the Overview page. Features deep backdrop blur, sub-pixel borders, inset shadows, floating SVG icons, glowing ambient lights, and refined typography." });
-            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🧠 AI UPGRADE: Interrogation Neural Net now uses gemini-1.5-pro-latest with HIGH thinking level. Market scanner uses gemini-3.5-flash with Google Search grounding enabled." });
-            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "💫 UX FIX: Corrected duplicate Revenue Timeline & Live Pulse bugs. Added highly fluid interactions, staggered loading animations, breathing ambient glows, and hover micro-interactions across the Overview dashboard." });
-            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "💎 DESIGN UPGRADE: Overhauled System Log timeline with ultra premium glassmorphism, fluid staggered animations, and timeline tracing hooks." });
-            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔧 FIX: Resolved layout bug causing the Overview dashboard to incorrectly persist across all administrative tabs due to tab-content display priority." });
-            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔧 AUTO-CORRECTION: Résolution d'une erreur de syntaxe JS causée par une coupure de regex incomplète dans la fonction switchTab. Bloc try/catch global ajouté. Les pages se chargent à nouveau correctement." });
-            if (memoryStats.patchnotes.length === 0) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "Ajout de la sidebar et de la catégorie Patchnotes." });
-            }
-            if (!Array.isArray(memoryStats.patchnotes)) memoryStats.patchnotes = [];
             
-            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔧 FIX: Resolved EADDRINUSE conflict. A zombie node process was keeping port 3000 occupied, causing the AI Studio dev server to fail with 502 Bad Gateway. The zombie process has been successfully terminated and the dashboard is fully back online. Your local stats.json data is now accessible again." });
-            
-            // Auto add the first patchnote if empty
-            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔥 CRITICAL FIX: Resolved dashboard freezing caused by unhandled exceptions in UI overlay and missing JS canvas compatibility. 🛡️ DISCORD FIX: Prevented category creation crashes for shop/support tickets if parent category ID is invalid on the host server. 🛠️ SECURITY: Blinded try/catch error logging on frontend. 🚀 The system is now 100% operational." });
-            if (memoryStats.patchnotes.length > 50) memoryStats.patchnotes = memoryStats.patchnotes.slice(0, 50);
-            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔥 CRITICAL FIX: Resolved dashboard freeze by forcefully removing the splash screen. 🛡️ DISCORD FIX: Fixed 'Redeem Code' channel creation crash caused by invalid Admin ID in permission overwrites. Added strict try/catch error boundaries." });
-            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔥 FIX: Categories now correctly display and group on the Discord shop overview page instead of being overridden by prices. 📊 UI FIX: Dynamic categories are now properly added to the dashboard filter dropdown. 🛡️ PATCH: Hardened Analytics chart renderings." });
-            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔧 UI FIX: Corrected a CSS rendering issue where all background tabs were bleeding into the active Overview tab. Each category is now strictly sandboxed to its respective view." });
-            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "✨ DESIGN UPDATE: Overview tab has been completely redesigned with an ultra-premium, glassmorphic aesthetic. Enjoy the new animated stats cards, custom SVG icons, glowing gradients, and improved typography." });
-            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "💎 DESIGN UPGRADE: Deployed 'Ultra Premium Glassmorphism' design system to the Overview page. Features deep backdrop blur, sub-pixel borders, inset shadows, floating SVG icons, glowing ambient lights, and refined typography." });
-            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🧠 AI UPGRADE: Interrogation Neural Net now uses gemini-1.5-pro-latest with HIGH thinking level. Market scanner uses gemini-3.5-flash with Google Search grounding enabled." });
-            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "💫 UX FIX: Corrected duplicate Revenue Timeline & Live Pulse bugs. Added highly fluid interactions, staggered loading animations, breathing ambient glows, and hover micro-interactions across the Overview dashboard." });
-            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "💎 DESIGN UPGRADE: Overhauled System Log timeline with ultra premium glassmorphism, fluid staggered animations, and timeline tracing hooks." });
-            memoryStats.patchnotes.unshift({ date: new Date().toISOString(), text: "🔧 FIX: Resolved layout bug causing the Overview dashboard to incorrectly persist across all administrative tabs due to tab-content display priority." });
-            if (memoryStats.patchnotes.length === 0) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "Ajout de la sidebar et de la catégorie Patchnotes." });
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Intelligence Artificielle: Thinking High"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🧠 Intelligence Artificielle: Thinking High\n\n- Intégration de la nouvelle architecture Gemini 3.1 Pro via le SDK @google/genai.\n- Activation du paramètre 'ThinkingLevel.HIGH' pour l'analyse financière profonde et l'étude de marché afin de débloquer une capacité de réflexion et d'extrapolation optimale des données.\n- Résolution d'un défaut de synchronisation RAM empêchant les données restaurées (stats.json) de s'afficher sur l'interface." });
                 syncCloud();
             }
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Migration: SDK Google GenAI"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Migration: SDK Google GenAI\n\n- Remplacement des appels `fetch` bruts par le SDK officiel `@google/genai` pour une meilleure stabilité et gestion des erreurs.\n- Le problème de limite de quota (Service Busy / You exceed) est lié à l'utilisation du modèle `gemini-3.1-pro-preview` qui nécessite une clé API facturée sur Google Cloud. Si le message persiste sur Render, il faut upgrader le compte Google Cloud de la clé API, ou repasser sur `gemini-3.5-flash`." });
+                syncCloud();
+            }
+
+            
+            if (!memoryStats.patchnotes.some(p => p.text.includes("QR Code & WebAuthn (Passkeys) Integration"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "📱 Sécurité: QR Code & WebAuthn (Passkeys) Integration\n\n- Remplacement complet du système de PIN sur desktop par un système de connexion ultra-premium par QR Code.\n- Intégration de la technologie WebAuthn (Passkeys). En scannant le QR code avec un iPhone, l'authentification se fait via FaceID/TouchID.\n- Interface Mobile-first avec animations subtiles et retours haptiques natifs du navigateur.\n- Le tableau de bord de bureau interroge en temps réel (polling) l'état de la session et se déverrouille automatiquement." });
+                syncCloud();
+            }
+
             if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Crash dotenv"))) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Anticipation et Auto-Correction: Fix Crash dotenv\n\n- Encapsulation de l'import dotenv dans un bloc try/catch pour éviter un plantage (Crash Node.js 'Cannot find module dotenv') lors du déploiement en environnement cloud." });
                 syncCloud();
@@ -1058,7 +1046,7 @@ client.on('shardDisconnect', (event, id) => {
     console.log(`❌ Shard ${id} disconnected from Discord. Attempting automatic reconnection...`);
 });
 
-client.once('clientReady', async () => {
+client.once('ready', async () => {
     systemLog('INFO', 'DISCORD_CORE', `Bot logged in successfully as ${client.user.tag}`);
     console.log(`✅ Bot logged in as ${client.user.tag}`);
     await loadCloudStats();
@@ -1926,6 +1914,271 @@ global.broadcastToDashboard = function(type, data) {
 };
 
 const server = http.createServer(async (req, res) => {
+
+    if (req.url.startsWith('/mobile-auth') && req.method === 'GET') {
+        const hasPasskeys = memoryStats.passkeys && memoryStats.passkeys.length > 0;
+        let html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nexus Mobile Auth</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root { --surface: rgba(15, 15, 20, 0.8); --accent: #60a5fa; }
+        body { margin: 0; background: #000; font-family: 'Inter', sans-serif; color: #fff; display: flex; align-items: center; justify-content: center; min-height: 100vh; overflow: hidden; }
+        .ambient { position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; background: radial-gradient(circle, rgba(96,165,250,0.15) 0%, transparent 60%); z-index: 0; }
+        .container { position: relative; z-index: 1; text-align: center; width: 90%; max-width: 320px; }
+        h1 { font-size: 1.5rem; font-weight: 600; margin-bottom: 10px; }
+        p { color: #a1a1aa; font-size: 0.95rem; line-height: 1.5; margin-bottom: 30px; }
+        input { width: 100%; box-sizing: border-box; padding: 16px; margin-bottom: 20px; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; color: #fff; font-size: 18px; text-align: center; letter-spacing: 5px; outline: none; transition: border-color 0.3s; }
+        input:focus { border-color: var(--accent); }
+        button { width: 100%; padding: 18px; border-radius: 16px; border: none; background: #fff; color: #000; font-size: 1.1rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 10px 20px rgba(255,255,255,0.1); transition: transform 0.2s, box-shadow 0.2s; }
+        button:active { transform: scale(0.96); box-shadow: 0 5px 10px rgba(255,255,255,0.05); }
+        .success-icon { width: 64px; height: 64px; border-radius: 50%; background: rgba(16, 185, 129, 0.1); color: #10b981; margin: 0 auto 20px; display: flex; align-items: center; justify-content: center; }
+        .success-icon svg { width: 32px; height: 32px; }
+        .icon-faceid { width: 24px; height: 24px; }
+    </style>
+    <script src="https://unpkg.com/@simplewebauthn/browser/dist/bundle/index.umd.min.js"></script>
+</head>
+<body>
+    <div class="ambient"></div>
+    <div class="container" id="mainView">
+        <svg class="icon-faceid" style="width:48px;height:48px;margin-bottom:20px;color:var(--accent);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3v4M3 5h4M6 17v4M3 19h4M18 17v4M17 19h4M18 3v4M17 5h4M9 9h.01M15 9h.01M9 15c1.5 1.5 4.5 1.5 6 0"></path></svg>
+        <h1 id="title">Mobile Authentication</h1>
+        <p id="subtitle">Use FaceID or TouchID to unlock the desktop dashboard securely.</p>
+        
+        <input type="password" id="pinInput" placeholder="ADMIN PIN" style="display:none;" />
+        
+        <button id="authBtn" onclick="handleAuth()">
+            <svg class="icon-faceid" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3v4M3 5h4M6 17v4M3 19h4M18 17v4M17 19h4M18 3v4M17 5h4M9 9h.01M15 9h.01M9 15c1.5 1.5 4.5 1.5 6 0"></path></svg>
+            <span id="btnText">Authenticate</span>
+        </button>
+    </div>
+
+    <div class="container" id="successView" style="display:none;">
+        <div class="success-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        </div>
+        <h1 style="color:#10b981;">Unlocked!</h1>
+        <p>The desktop dashboard has been successfully unlocked. You can now close this tab.</p>
+    </div>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const sessionId = urlParams.get('session');
+        const hasPasskeys = {{HAS_PASSKEYS}}; // Injected
+
+        if (!hasPasskeys) {
+            document.getElementById('title').innerText = "Register Passkey";
+            document.getElementById('subtitle').innerText = "First time setup. Enter your Admin PIN to register your iPhone Passkey.";
+            document.getElementById('pinInput').style.display = 'block';
+            document.getElementById('btnText').innerText = "Register Device";
+        }
+
+        async function handleAuth() {
+            const btn = document.getElementById('authBtn');
+            btn.style.opacity = '0.5';
+            btn.style.pointerEvents = 'none';
+
+            try {
+                if (!hasPasskeys) {
+                    const pin = document.getElementById('pinInput').value;
+                    if (!pin) throw new Error("PIN is required for initial setup");
+
+                    const resOpts = await fetch('/api/auth/generate-options', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ sessionId, pin, type: 'register' })
+                    });
+                    if (!resOpts.ok) {
+                        const err = await resOpts.json();
+                        throw new Error(err.error || "Failed to generate options");
+                    }
+                    const { options } = await resOpts.json();
+
+                    const attResp = await SimpleWebAuthnBrowser.startRegistration(options);
+                    const resVerify = await fetch('/api/auth/verify', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ sessionId, response: attResp, type: 'register' })
+                    });
+                    if (!resVerify.ok) throw new Error("Failed to verify registration");
+                    
+                    showSuccess();
+                } else {
+                    const resOpts = await fetch('/api/auth/generate-options', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ sessionId, type: 'authenticate' })
+                    });
+                    if (!resOpts.ok) throw new Error("Failed to generate options");
+                    const { options } = await resOpts.json();
+
+                    const asseResp = await SimpleWebAuthnBrowser.startAuthentication(options);
+                    const resVerify = await fetch('/api/auth/verify', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ sessionId, response: asseResp, type: 'authenticate' })
+                    });
+                    if (!resVerify.ok) throw new Error("Failed to verify authentication");
+                    
+                    showSuccess();
+                }
+            } catch (err) {
+                alert("Error: " + err.message);
+                btn.style.opacity = '1';
+                btn.style.pointerEvents = 'auto';
+            }
+        }
+
+        function showSuccess() {
+            document.getElementById('mainView').style.display = 'none';
+            document.getElementById('successView').style.display = 'block';
+        }
+    </script>
+</body>
+</html>
+`;
+        html = html.replace('{{HAS_PASSKEYS}}', hasPasskeys ? 'true' : 'false');
+        return res.writeHead(200, {'Content-Type': 'text/html'}).end(html);
+    }
+
+
+    // WebAuthn Passkey QR Code System Endpoints
+    if (req.url === '/api/auth/session/create' && req.method === 'GET') {
+        const sessionId = crypto.randomUUID();
+        authSessions[sessionId] = { status: 'pending', challenge: null };
+        return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ sessionId }));
+    }
+
+    if (req.url.startsWith('/api/auth/session/') && req.url.endsWith('/status') && req.method === 'GET') {
+        const sessionId = req.url.split('/')[4];
+        const session = authSessions[sessionId];
+        if (!session) return res.writeHead(404).end(JSON.stringify({ error: 'Not found' }));
+        
+        if (session.status === 'authenticated') {
+            const token = process.env.ADMIN_PIN + "_" + Date.now();
+            res.setHeader('Set-Cookie', `session_token=${token}; HttpOnly; Path=/; Max-Age=${30 * 24 * 60 * 60}; SameSite=Lax`);
+            return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ status: 'authenticated' }));
+        }
+        return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ status: 'pending' }));
+    }
+
+    if (req.url === '/api/auth/generate-options' && req.method === 'POST') {
+        let body = ''; req.on('data', c => body += c);
+        req.on('end', async () => {
+            try {
+                const data = JSON.parse(body);
+                const { sessionId, pin, type } = data;
+                const session = authSessions[sessionId];
+                if (!session) return res.writeHead(404).end('Session expired');
+
+                const rpID = req.headers.host.split(':')[0];
+
+                if (type === 'register') {
+                    if (pin !== process.env.ADMIN_PIN) {
+                        return res.writeHead(401).end(JSON.stringify({ error: 'Invalid Admin PIN' }));
+                    }
+                    const options = await generateRegistrationOptions({
+                        rpName: 'Nexus Core',
+                        rpID,
+                        userID: new Uint8Array(Buffer.from('admin')),
+                        userName: 'admin',
+                        attestationType: 'none',
+                        authenticatorSelection: {
+                            residentKey: 'required',
+                            userVerification: 'required',
+                        }
+                    });
+                    session.challenge = options.challenge;
+                    return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ options }));
+                } else if (type === 'authenticate') {
+                    if (!memoryStats.passkeys || memoryStats.passkeys.length === 0) {
+                        return res.writeHead(400).end('No passkeys registered');
+                    }
+                    const options = await generateAuthenticationOptions({
+                        rpID,
+                        userVerification: 'required',
+                    });
+                    session.challenge = options.challenge;
+                    return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ options }));
+                }
+            } catch (e) {
+                console.error(e);
+                res.writeHead(500).end(e.message);
+            }
+        });
+        return;
+    }
+
+    if (req.url === '/api/auth/verify' && req.method === 'POST') {
+        let body = ''; req.on('data', c => body += c);
+        req.on('end', async () => {
+            try {
+                const data = JSON.parse(body);
+                const { sessionId, response, type } = data;
+                const session = authSessions[sessionId];
+                if (!session) return res.writeHead(404).end('Session expired');
+
+                const expectedChallenge = session.challenge;
+                const rpID = req.headers.host.split(':')[0];
+                const origin = `https://${req.headers.host}`;
+
+                let verification;
+                if (type === 'register') {
+                    verification = await verifyRegistrationResponse({
+                        response,
+                        expectedChallenge,
+                        expectedOrigin: origin,
+                        expectedRPID: rpID,
+                    });
+                    if (verification.verified) {
+                        if (!memoryStats.passkeys) memoryStats.passkeys = [];
+                        memoryStats.passkeys.push({
+                            id: verification.registrationInfo.credential.id,
+                            publicKey: Array.from(verification.registrationInfo.credential.publicKey),
+                            counter: verification.registrationInfo.credential.counter,
+                            transports: verification.registrationInfo.credential.transports
+                        });
+                        syncCloud();
+                    }
+                } else {
+                    const passkey = memoryStats.passkeys.find(p => p.id === response.id);
+                    if (!passkey) return res.writeHead(400).end('Passkey not found');
+                    
+                    verification = await verifyAuthenticationResponse({
+                        response,
+                        expectedChallenge,
+                        expectedOrigin: origin,
+                        expectedRPID: rpID,
+                        authenticator: {
+                            credentialID: passkey.id,
+                            credentialPublicKey: new Uint8Array(passkey.publicKey),
+                            counter: passkey.counter,
+                            transports: passkey.transports
+                        }
+                    });
+                    if (verification.verified) {
+                        passkey.counter = verification.authenticationInfo.newCounter;
+                        syncCloud();
+                    }
+                }
+
+                if (verification.verified) {
+                    session.status = 'authenticated';
+                    return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ verified: true }));
+                } else {
+                    return res.writeHead(400).end(JSON.stringify({ verified: false }));
+                }
+            } catch (e) {
+                console.error(e);
+                return res.writeHead(400).end(JSON.stringify({ error: e.message }));
+            }
+        });
+        return;
+    }
+
     if (req.socket && !req.socket._bwTracked) {
         req.socket._bwTracked = true;
         req.socket.once('close', () => {
@@ -3233,11 +3486,16 @@ const server = http.createServer(async (req, res) => {
                     if (!recent.length) return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ result: "<p>No recent transactions to analyze.</p>" }));
                     
                     try {
-                        const response = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
-                            system_instruction: { parts: [{ text: `You are an expert financial analyst. ${data.lang === 'fr' ? 'You MUST write your entire response, including all HTML text, labels, and analysis, strictly in FRENCH.' : 'You MUST write your entire response strictly in ENGLISH.'} IMPORTANT: Output ONLY safe HTML fragments (like <div>, <table>, <h2>). Do NOT output global tags like <html>, <head>, <body>, or <style>.` }] },
-                            contents: [{ role: "user", parts: [{ text: `Analyze these recent transactions and provide a short financial analysis report in HTML format: ` + JSON.stringify(recent) }] }]
+                        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY, httpOptions: { headers: { 'User-Agent': 'aistudio-build' } } });
+                        const response = await ai.models.generateContent({
+                            model: 'gemini-3.1-pro-preview',
+                            contents: (data.lang === 'fr' ? "Analyse ces transactions récentes et génère un rapport financier complet. TU DOIS IMPÉRATIVEMENT TOUT ÉCRIRE EN FRANÇAIS (y compris les labels, titres et descriptions) au format HTML: " : "Analyze these recent transactions and provide a short financial analysis report in HTML format: ") + JSON.stringify(recent),
+                            config: {
+                                systemInstruction: `You are an expert financial analyst. ${data.lang === 'fr' ? 'You MUST write your entire response, including all HTML text, labels, and analysis, strictly in FRENCH.' : 'You MUST write your entire response strictly in ENGLISH.'} IMPORTANT: Output ONLY safe HTML fragments (like <div>, <table>, <h2>). Do NOT output global tags like <html>, <head>, <body>, or <style>.`,
+                                thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH }
+                            }
                         });
-                        let rawHtml = response.data.candidates[0].content.parts[0].text;
+                        let rawHtml = response.text || "";
                         rawHtml = rawHtml.replace(/```html/g, '').replace(/```/g, '').replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '').replace(/<\/?html[^>]*>/gi, '').replace(/<\/?head[^>]*>/gi, '').replace(/<\/?body[^>]*>/gi, '');
                         return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ result: rawHtml }));
                     } catch(e) {
@@ -3250,13 +3508,18 @@ const server = http.createServer(async (req, res) => {
                 else if (data.action === 'check_market') {
                     if (!process.env.GEMINI_API_KEY) return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ error: "GEMINI_API_KEY not configured." }));
                     try {
-                        const response = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
-                            contents: [{ role: "user", parts: [{ text: "Perform a quick market analysis for the digital product: " + data.product + ". Provide a short HTML report with pricing recommendations and insights. IMPORTANT: Do NOT include <html>, <head>, <body>, or global <style> tags. Output ONLY safe HTML fragments suitable to be embedded in a dark-themed UI." }] }],
-                            tools: [{ googleSearch: {} }]
+                        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY, httpOptions: { headers: { 'User-Agent': 'aistudio-build' } } });
+                        const response = await ai.models.generateContent({
+                            model: 'gemini-3.1-pro-preview',
+                            contents: "Perform a quick market analysis for the digital product: " + data.product + ". Provide a short HTML report with pricing recommendations and insights. IMPORTANT: Do NOT include <html>, <head>, <body>, or global <style> tags. Output ONLY safe HTML fragments suitable to be embedded in a dark-themed UI.",
+                            config: {
+                                tools: [{ googleSearch: {} }],
+                                thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH }
+                            }
                         });
-                        let finalHtml = response.data.candidates[0].content.parts[0].text;
+                        let finalHtml = response.text || "";
                         finalHtml = finalHtml.replace(/```html/g, '').replace(/```/g, '').replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '').replace(/<\/?html[^>]*>/gi, '').replace(/<\/?head[^>]*>/gi, '').replace(/<\/?body[^>]*>/gi, '');
-                        const chunks = response.data.candidates[0].groundingMetadata?.groundingChunks;
+                        const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
                         if (chunks) {
                             finalHtml += '<br><br><div style="font-size:0.8em; padding:10px; background:rgba(255,255,255,0.05); border-radius:10px;">Sources analyzed via Google Search.</div>';
                         }
