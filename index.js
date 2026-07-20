@@ -30,12 +30,27 @@ const axios = require('axios'); // just to anchor it
 
 
 const crypto = require('crypto');
+let webauthnServer;
+try {
+    webauthnServer = require('@simplewebauthn/server');
+} catch (e) {
+    console.warn("⚠️ @simplewebauthn/server not found. Attempting dynamic installation (Render Hotfix)...");
+    try {
+        require('child_process').execSync('npm install @simplewebauthn/server', { stdio: 'inherit' });
+        webauthnServer = require('@simplewebauthn/server');
+        console.log("✅ @simplewebauthn/server installed successfully.");
+    } catch (err) {
+        console.error("❌ Failed to install @simplewebauthn/server:", err.message);
+        process.exit(1);
+    }
+}
+
 const {
     generateRegistrationOptions,
     verifyRegistrationResponse,
     generateAuthenticationOptions,
     verifyAuthenticationResponse
-} = require('@simplewebauthn/server');
+} = webauthnServer;
 const authSessions = {};
 
 const http = require('http');
@@ -302,6 +317,12 @@ function ensureMemoryInitialized() {
             
             if (!memoryStats.patchnotes.some(p => p.text.includes("QR Code & WebAuthn (Passkeys) Integration"))) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "📱 Sécurité: QR Code & WebAuthn (Passkeys) Integration\n\n- Remplacement complet du système de PIN sur desktop par un système de connexion ultra-premium par QR Code.\n- Intégration de la technologie WebAuthn (Passkeys). En scannant le QR code avec un iPhone, l'authentification se fait via FaceID/TouchID.\n- Interface Mobile-first avec animations subtiles et retours haptiques natifs du navigateur.\n- Le tableau de bord de bureau interroge en temps réel (polling) l'état de la session et se déverrouille automatiquement." });
+                syncCloud();
+            }
+
+            
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Fix WebAuthn Render Crash"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug Critique: Crash au déploiement (WebAuthn)\n\n- L'environnement cloud plantait avec l'erreur (Cannot find module '@simplewebauthn/server') car la dépendance manquait sur le serveur.\n- Implémentation d'un système d'auto-installation à la volée (Zero Install). Si le module est absent, le bot l'installe dynamiquement au démarrage, garantissant la résilience du fichier index.js unique." });
                 syncCloud();
             }
 
