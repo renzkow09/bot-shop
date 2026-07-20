@@ -65,11 +65,11 @@ process.on('uncaughtException', (err, origin) => { systemLog('CRITICAL', 'SYSTEM
 const shutdown = async (signal) => {
     systemLog('WARN', 'SYSTEM', `${signal} received. Graceful shutdown initiated (Deploy/Restart)...`);
     try {
+        await backupToDiscord(); await syncCloud(); // Ensure final state is saved to Upstash/Disk
         if (client && client.ws) {
             client.destroy();
             systemLog('INFO', 'DISCORD', 'Client connection closed securely.');
         }
-        await backupToDiscord(); await syncCloud(); // Ensure final state is saved to Upstash/Disk
         systemLog('INFO', 'SYSTEM', 'Final cloud sync complete. Exiting gracefully.');
     } catch (e) {
         systemLog('CRITICAL', 'SYSTEM', `Error during shutdown: ${e.message}`);
@@ -214,7 +214,7 @@ async function fetchBackupFromDiscord() {
                 try {
                     const res = await axios.get(m.attachments.first().url, { responseType: 'json' });
                     // Only accept backups that have some data to avoid empty overwrites
-                    if (res.data && res.data.transactions && Object.keys(res.data.transactions).length > 0) {
+                    if (res.data && ((res.data.transactions && Object.keys(res.data.transactions).length > 0) || (Array.isArray(res.data.recent_transactions) && res.data.recent_transactions.length > 0))) {
                         validBackup = res.data;
                         break;
                     }
@@ -356,6 +356,12 @@ function ensureMemoryInitialized() {
             
             
             
+            
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Shutdown Sequence"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug Critique: Échec de sauvegarde sur Render\n\n- Le bot tentait d'envoyer la sauvegarde DaaD (Discord as a Database) *après* avoir fermé sa connexion (client.destroy()) lors de la réception du signal SIGTERM (redémarrage cloud).\n- L'ordre d'arrêt a été corrigé : le bot effectue désormais toutes ses sauvegardes réseaux avant de couper sa connexion, garantissant 0 perte de données lors des mises à jour." });
+                syncCloud();
+            }
+
             if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Auth & Data Loss"))) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug Critique: Perte de données & Auth WebAuthn figée\n\n- Le module d'authentification par Passkeys (WebAuthn) ne s'affichait pas car une vérification de session était accidentellement bypassée (toujours 'true'). L'authentification biométrique est désormais parfaitement fonctionnelle.\n- Les données de transactions semblaient perdues car un crash serveur a provoqué la sauvegarde d'un état vide vers Discord, écrasant les données saines. L'algorithme de restauration a été considérablement renforcé : il scanne désormais jusqu'à 100 anciennes sauvegardes Discord pour retrouver et restaurer intelligemment la dernière sauvegarde contenant vos transactions réelles. Le système de backup refuse désormais de sauvegarder un état vide." });
                 syncCloud();
@@ -2363,7 +2369,7 @@ const server = http.createServer(async (req, res) => {
             try {
                 const res = await fetch('/api/auth/session/create');
                 const data = await res.json();
-                const sessionUrl = \`https://${window.location.host}/mobile-auth?session=${data.sessionId}\`;
+                const sessionUrl = \`https://\${window.location.host}/mobile-auth?session=\${data.sessionId}\`;
                 
                 const qrContainer = document.getElementById("qrcode");
                 qrContainer.innerHTML = ''; // remove spinner
@@ -2380,7 +2386,7 @@ const server = http.createServer(async (req, res) => {
                 // Start polling
                 setInterval(async () => {
                     try {
-                        const statusRes = await fetch(\`/api/auth/session/${data.sessionId}/status\`);
+                        const statusRes = await fetch(\`/api/auth/session/\${data.sessionId}/status\`);
                         if (statusRes.ok) {
                             const statusData = await statusRes.json();
                             if (statusData.status === 'authenticated') {
