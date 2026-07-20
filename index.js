@@ -37,7 +37,7 @@ try {
     console.warn("⚠️ @simplewebauthn/server not found. Attempting dynamic installation (Render Hotfix)...");
     try {
         require('child_process').execSync('npm install @simplewebauthn/server', { stdio: 'inherit' });
-        const resolvedPath = require('child_process').execSync('node -e "console.log(require.resolve(\"@simplewebauthn/server\"))"').toString().trim();
+        const resolvedPath = require('child_process').execSync("node -e \"console.log(require.resolve('@simplewebauthn/server'))\"").toString().trim();
         webauthnServer = require(resolvedPath);
         console.log("✅ @simplewebauthn/server installed successfully.");
     } catch (err) {
@@ -329,6 +329,12 @@ function ensureMemoryInitialized() {
 
             
             
+            
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Zero Install Syntax Error"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug Critique: Échec d'évaluation Node.js (Zero Install)\n\n- Le module de résolution dynamique de chemin souffrait d'une erreur d'échappement de guillemets lors du spawn du sous-processus Node.\n- L'expression a été corrigée pour être proprement échappée, rétablissant le fonctionnement de l'auto-installation à chaud sur les nouveaux déploiements." });
+                syncCloud();
+            }
+
             if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Dynamic Require Absolute Path Resolution"))) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug Critique: Crash d'auto-installation (WebAuthn)\n\n- Le workaround précédent pour l'auto-installation manquait de précision sur le chemin du module (exports) et échouait sur Render.\n- Remplacement par une résolution dynamique robuste : Node.js spawn un processus enfant pour obtenir le chemin absolu exact (require.resolve) et contourne ainsi de manière infaillible le negative cache du processus principal." });
                 syncCloud();
