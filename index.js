@@ -202,19 +202,40 @@ async function fetchBackupFromDiscord() {
         const guild = client.guilds.cache.first();
         if (!guild) return false;
         
+        await guild.channels.fetch();
         let channel = guild.channels.cache.find(c => c.name === 'database-backups');
         if (!channel) return false;
         
-        const messages = await channel.messages.fetch({ limit: 10 });
-        const latest = messages.find(m => m.attachments.size > 0 && m.attachments.first().name === 'stats.json');
-        if (!latest) return false;
+        const messages = await channel.messages.fetch({ limit: 100 });
+        // Find the most recent backup that actually contains transactions
+        let validBackup = null;
+        for (const m of messages.values()) {
+            if (m.attachments.size > 0 && m.attachments.first().name === 'stats.json') {
+                try {
+                    const res = await axios.get(m.attachments.first().url, { responseType: 'json' });
+                    // Only accept backups that have some data to avoid empty overwrites
+                    if (res.data && res.data.transactions && Object.keys(res.data.transactions).length > 0) {
+                        validBackup = res.data;
+                        break;
+                    }
+                } catch (err) { continue; }
+            }
+        }
         
-        const attachmentUrl = latest.attachments.first().url;
-        const res = await axios.get(attachmentUrl, { responseType: 'json' });
-        if (res.data && Object.keys(res.data).length > 0) {
-            memoryStats = { ...memoryStats, ...res.data };
-            systemLog('INFO', 'DISCORD_BACKUP', 'Successfully restored database from Discord Backup channel.');
+        if (validBackup) {
+            memoryStats = { ...memoryStats, ...validBackup };
+            systemLog('INFO', 'DISCORD_BACKUP', 'Successfully restored robust database from Discord Backup channel.');
             return true;
+        } else {
+            // fallback to any backup if none have transactions
+            const latest = messages.find(m => m.attachments.size > 0 && m.attachments.first().name === 'stats.json');
+            if (latest) {
+                const res = await axios.get(latest.attachments.first().url, { responseType: 'json' });
+                if (res.data) {
+                    memoryStats = { ...memoryStats, ...res.data };
+                    return true;
+                }
+            }
         }
     } catch(e) {
         systemLog('WARN', 'DISCORD_BACKUP', 'Failed to fetch backup from Discord: ' + e.message);
@@ -241,6 +262,10 @@ async function backupToDiscord() {
             systemLog('INFO', 'DISCORD_BACKUP', 'Created #database-backups channel.');
         }
         
+        if (!memoryStats || Object.keys(memoryStats).length === 0 || (!memoryStats.transactions && Object.keys(memoryStats).length < 5)) {
+            systemLog('WARN', 'DISCORD_BACKUP', 'Aborting backup: memoryStats appears empty or uninitialized.');
+            return;
+        }
         const buffer = Buffer.from(JSON.stringify(memoryStats, null, 2), 'utf8');
         const { AttachmentBuilder } = require('discord.js');
         const attachment = new AttachmentBuilder(buffer, { name: 'stats.json' });
@@ -330,6 +355,12 @@ function ensureMemoryInitialized() {
             
             
             
+            
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Auth & Data Loss"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug Critique: Perte de données & Auth WebAuthn figée\n\n- Le module d'authentification par Passkeys (WebAuthn) ne s'affichait pas car une vérification de session était accidentellement bypassée (toujours 'true'). L'authentification biométrique est désormais parfaitement fonctionnelle.\n- Les données de transactions semblaient perdues car un crash serveur a provoqué la sauvegarde d'un état vide vers Discord, écrasant les données saines. L'algorithme de restauration a été considérablement renforcé : il scanne désormais jusqu'à 100 anciennes sauvegardes Discord pour retrouver et restaurer intelligemment la dernière sauvegarde contenant vos transactions réelles. Le système de backup refuse désormais de sauvegarder un état vide." });
+                syncCloud();
+            }
+
             if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Zero Install Syntax Error"))) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug Critique: Échec d'évaluation Node.js (Zero Install)\n\n- Le module de résolution dynamique de chemin souffrait d'une erreur d'échappement de guillemets lors du spawn du sous-processus Node.\n- L'expression a été corrigée pour être proprement échappée, rétablissant le fonctionnement de l'auto-installation à chaud sur les nouveaux déploiements." });
                 syncCloud();
@@ -2236,7 +2267,8 @@ const server = http.createServer(async (req, res) => {
     const cookie = req.headers.cookie || '';
     const isAuthenticated = (() => {
         let match = cookie.match(/auth_session=([a-zA-Z0-9]+)/);
-        return true;
+        if (!match) return false;
+        return global.activeAdminSessions && global.activeAdminSessions.has(match[1]);
     })();
 
     // 🚀 [API_ROUTE: /download-code] - Route API backend
@@ -2290,498 +2322,83 @@ const server = http.createServer(async (req, res) => {
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Nexus Core Authentication</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nexus Core - Secure Access</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        :root {
-            --accent: #10b981;
-            --accent-rgb: 16, 185, 129;
-            --bg-base: #050505;
-            --text-main: #f5f5f7;
-            --text-muted: rgba(255, 255, 255, 0.4);
-            --surface: rgba(18, 18, 22, 0.65);
-            --surface-border: rgba(255, 255, 255, 0.08);
-        }
-        
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', sans-serif;
-            background-color: var(--bg-base);
-            color: var(--text-main);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            overflow: hidden;
-            perspective: 1000px;
-        }
-
-        /* --- Ambient Background --- */
-        .ambient-background {
-            position: fixed;
-            inset: -50%;
-            width: 200%;
-            height: 200%;
-            background: 
-                radial-gradient(circle at 50% 50%, rgba(var(--accent-rgb), 0.08) 0%, transparent 40%),
-                radial-gradient(circle at 80% 20%, rgba(var(--accent-rgb), 0.05) 0%, transparent 30%);
-            animation: slowDrift 20s ease-in-out infinite alternate;
-            z-index: -2;
-            pointer-events: none;
-        }
-        
-
-        .particle {
-            position: absolute;
-            background: rgba(var(--accent-rgb), 0.8);
-            border-radius: 50%;
-            pointer-events: none;
-            box-shadow: 0 0 10px rgba(var(--accent-rgb), 1);
-            animation: rise linear forwards;
-        }
-        @keyframes rise {
-            0% { transform: translateY(0) scale(1); opacity: 1; }
-            100% { transform: translateY(-100px) scale(0); opacity: 0; }
-        }
-        
-        .success-overlay {
-            position: fixed; inset: 0;
-            background: var(--accent);
-            z-index: 9999;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.5s ease;
-            mix-blend-mode: overlay;
-        }
-
-        .grid-mesh {
-            position: fixed;
-            inset: 0;
-            background-image: 
-                linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-            background-size: 40px 40px;
-            z-index: -1;
-            mask-image: radial-gradient(circle at center, black 40%, transparent 80%);
-            -webkit-mask-image: radial-gradient(circle at center, black 40%, transparent 80%);
-            transform: perspective(500px) rotateX(60deg) translateY(-100px) translateZ(-200px);
-            animation: gridMove 15s linear infinite;
-        }
-
-        @keyframes slowDrift {
-            0% { transform: rotate(0deg) scale(1); }
-            100% { transform: rotate(5deg) scale(1.1); }
-        }
-
-        @keyframes gridMove {
-            0% { background-position: 0 0; }
-            100% { background-position: 0 40px; }
-        }
-
-        /* --- Login Box --- */
-        .login-wrapper {
-            position: relative;
-            z-index: 10;
-            animation: floatUp 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-            opacity: 0;
-            transform: translateY(40px) scale(0.95) rotateX(10deg);
-            transform-style: preserve-3d;
-        }
-
-        @keyframes floatUp {
-            to {
-                opacity: 1;
-                transform: translateY(0) scale(1) rotateX(0deg);
-            }
-        }
-
-        .login-box {
-            background: var(--surface);
-            backdrop-filter: blur(40px) saturate(150%);
-            -webkit-backdrop-filter: blur(40px) saturate(150%);
-            padding: 50px 40px;
-            border-radius: 32px;
-            border: 1px solid var(--surface-border);
-            text-align: center;
-            box-shadow: 
-                0 30px 60px rgba(0,0,0,0.8), 
-                inset 0 1px 0 rgba(255,255,255,0.1),
-                inset 0 0 40px rgba(var(--accent-rgb), 0.05);
-            width: 90vw;
-            max-width: 420px;
-            position: relative;
-            overflow: hidden;
-            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        }
-        
-        .login-box:hover {
-            transform: translateY(-5px);
-            box-shadow: 
-                0 40px 80px rgba(0,0,0,0.9), 
-                inset 0 1px 0 rgba(255,255,255,0.1),
-                inset 0 0 60px rgba(var(--accent-rgb), 0.1);
-        }
-
-        .glow-line {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 1px;
-            background: linear-gradient(90deg, transparent, var(--accent), transparent);
-            opacity: 0.5;
-        }
-
-        /* --- Typography --- */
-        .brand-container {
-            margin-bottom: 40px;
-            position: relative;
-        }
-
-        .logo-icon {
-            width: 48px;
-            height: 48px;
-            margin-bottom: 15px;
-            filter: drop-shadow(0 0 15px rgba(var(--accent-rgb), 0.5));
-            animation: pulseIcon 3s infinite ease-in-out;
-        }
-        
-        @keyframes pulseIcon {
-            0%, 100% { transform: scale(1); filter: drop-shadow(0 0 15px rgba(var(--accent-rgb), 0.5)); }
-            50% { transform: scale(1.1); filter: drop-shadow(0 0 25px rgba(var(--accent-rgb), 0.8)); }
-        }
-
-        h2 {
-            font-weight: 900;
-            letter-spacing: 6px;
-            font-size: 2rem;
-            margin: 0;
-            background: linear-gradient(135deg, #fff 0%, #a1a1aa 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            text-shadow: 0 4px 20px rgba(0,0,0,0.5);
-        }
-
-        .subtitle {
-            color: var(--text-muted);
-            font-size: 0.75rem;
-            letter-spacing: 3px;
-            margin-top: 8px;
-            text-transform: uppercase;
-            font-weight: 600;
-        }
-
-        /* --- Input --- */
-        .input-group {
-            position: relative;
-            margin: 0 auto 30px auto;
-            width: 100%;
-            max-width: 280px;
-            perspective: 1000px;
-        }
-
-        .input-wrapper {
-            position: relative;
-            transform-style: preserve-3d;
-            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-
-        .input-group:focus-within .input-wrapper {
-            transform: translateZ(20px);
-        }
-
-        input {
-            background: rgba(0, 0, 0, 0.4);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            color: white;
-            padding: 22px 50px 22px 22px;
-            border-radius: 20px;
-            font-size: 28px;
-            text-align: center;
-            letter-spacing: 12px;
-            text-indent: 12px;
-            width: 100%;
-            outline: none;
-            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-            box-shadow: inset 0 2px 15px rgba(0,0,0,0.8);
-            font-family: monospace;
-        }
-
-        input::placeholder {
-            color: rgba(255,255,255,0.1);
-            letter-spacing: 12px;
-        }
-
-        input:focus {
-            border-color: var(--accent);
-            background: rgba(var(--accent-rgb), 0.03);
-            box-shadow: 
-                0 0 30px rgba(var(--accent-rgb), 0.15), 
-                inset 0 2px 15px rgba(0,0,0,0.5);
-        }
-
-        .eye-btn {
-            position: absolute;
-            right: 18px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: rgba(255,255,255,0.3);
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.3s ease;
-            z-index: 10;
-            padding: 5px;
-            border-radius: 50%;
-        }
-
-        .eye-btn:hover {
-            color: white;
-            background: rgba(255,255,255,0.1);
-        }
-
-        /* --- Button --- */
-        .auth-btn {
-            background: linear-gradient(135deg, var(--accent) 0%, rgba(var(--accent-rgb), 0.7) 100%);
-            color: #000;
-            border: none;
-            padding: 18px;
-            font-size: 0.9rem;
-            border-radius: 20px;
-            cursor: pointer;
-            font-weight: 800;
-            width: 100%;
-            max-width: 280px;
-            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-            text-transform: uppercase;
-            letter-spacing: 3px;
-            box-shadow: 0 10px 30px rgba(var(--accent-rgb), 0.3);
-            position: relative;
-            overflow: hidden;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            margin: 0 auto;
-        }
-        
-        .auth-btn::before {
-            content: '';
-            position: absolute;
-            top: 0; left: -100%; width: 100%; height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
-            transition: 0.5s;
-        }
-
-        .auth-btn:hover {
-            transform: translateY(-3px) scale(1.02);
-            box-shadow: 0 15px 40px rgba(var(--accent-rgb), 0.5);
-            filter: brightness(1.1);
-        }
-
-        .auth-btn:hover::before {
-            left: 100%;
-            transition: 0.7s;
-        }
-
-        .auth-btn:active {
-            transform: translateY(1px) scale(0.98);
-            box-shadow: 0 5px 15px rgba(var(--accent-rgb), 0.3);
-        }
-
-        /* --- Error Message --- */
-        .error-msg {
-            color: #ff453a;
-            margin-top: 25px;
-            font-weight: 600;
-            font-size: 0.85rem;
-            letter-spacing: 1px;
-            opacity: 0;
-            transform: translateY(10px);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            text-transform: uppercase;
-        }
-        
-        .error-msg.show {
-            animation: errorPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
-        }
-
-        @keyframes errorPop {
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        /* Loader */
-        .spinner {
-            animation: spin 1s linear infinite;
-            width: 20px;
-            height: 20px;
-        }
-        
-        @keyframes spin { 100% { transform: rotate(360deg); } }
-        
-        /* Mobile adjustments */
-        @media (max-width: 480px) {
-            .login-box { padding: 40px 25px; width: 85vw; }
-            input { font-size: 24px; padding: 18px 45px 18px 18px; letter-spacing: 8px; }
-            h2 { font-size: 1.7rem; }
-        }
+       :root { --surface: rgba(15, 15, 20, 0.6); --accent: #60a5fa; --accent-rgb: 96, 165, 250; }
+       body { margin: 0; min-height: 100vh; background: #000; font-family: 'Inter', sans-serif; display: flex; align-items: center; justify-content: center; overflow: hidden; color: #fff; }
+       .grid-bg { position: absolute; inset: 0; background-size: 50px 50px; background-image: linear-gradient(to right, rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.03) 1px, transparent 1px); transform: perspective(500px) rotateX(60deg); transform-origin: top; animation: gridMove 20s linear infinite; z-index: 1; }
+       @keyframes gridMove { 0% { background-position: 0 0; } 100% { background-position: 0 50px; } }
+       .ambient-light { position: absolute; width: 60vw; height: 60vw; border-radius: 50%; background: radial-gradient(circle, rgba(var(--accent-rgb),0.15) 0%, transparent 70%); top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 2; filter: blur(60px); animation: pulseLight 4s ease-in-out infinite alternate; }
+       @keyframes pulseLight { 0% { opacity: 0.5; transform: translate(-50%, -50%) scale(0.8); } 100% { opacity: 1; transform: translate(-50%, -50%) scale(1.2); } }
+       .login-box { position: relative; z-index: 10; background: var(--surface); backdrop-filter: blur(40px); -webkit-backdrop-filter: blur(40px); padding: 50px 40px; border-radius: 32px; border: 1px solid rgba(255,255,255,0.1); text-align: center; width: 340px; box-shadow: 0 40px 80px rgba(0,0,0,0.9), inset 0 1px 0 rgba(255,255,255,0.1); animation: floatUp 1s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0; transform: translateY(40px) scale(0.95); }
+       @keyframes floatUp { to { opacity: 1; transform: translateY(0) scale(1); } }
+       .qr-container { background: white; padding: 20px; border-radius: 20px; display: inline-flex; align-items:center; justify-content:center; margin-bottom: 25px; transition: transform 0.3s ease; box-shadow: 0 15px 35px rgba(0,0,0,0.5); min-height: 200px; min-width: 200px; }
+       .qr-container:hover { transform: scale(1.05); }
+       .instruction { color: #a1a1aa; font-size: 0.95rem; margin-bottom: 0; line-height: 1.5; }
+       .instruction strong { color: #fff; }
+       .logo-icon { width: 48px; height: 48px; margin-bottom: 20px; animation: floatLogo 3s ease-in-out infinite; }
+       @keyframes floatLogo { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+       .spinner { animation: spin 1s linear infinite; width: 32px; height: 32px; color: var(--accent); }
+       @keyframes spin { 100% { transform: rotate(360deg); } }
+       .success-msg { color: #10b981; font-weight: 600; font-size: 1.2rem; margin-top: 30px; animation: fadeIn 0.5s; }
+       @keyframes fadeIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
     </style>
-    <script>
-        (function() {
-            const themes = {
-                green: { hex: '#10b981', rgb: '16, 185, 129' },
-                blue: { hex: '#0a84ff', rgb: '10, 132, 255' },
-                red: { hex: '#ff453a', rgb: '255, 69, 58' },
-                orange: { hex: '#ff9f0a', rgb: '255, 159, 10' }
-            };
-            const savedTheme = localStorage.getItem('nexus_theme');
-            if (savedTheme && themes[savedTheme]) {
-                const t = themes[savedTheme];
-                document.documentElement.style.setProperty('--accent', t.hex);
-                document.documentElement.style.setProperty('--accent-rgb', t.rgb);
-            }
-        })();
-    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body>
-
-    <div class="ambient-background"></div>
-    <div class="grid-mesh"></div>
-
-    <div class="login-wrapper">
-        <div class="login-box" id="loginBox">
-            <div class="glow-line"></div>
-            
-            <div class="brand-container">
-                <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
-                    <path d="M2 17l10 5 10-5"></path>
-                    <path d="M2 12l10 5 10-5"></path>
-                </svg>
-                <h2>NEXUS</h2>
-                <div class="subtitle">System Authentication</div>
-            </div>
-
-            <div class="input-group">
-                <div class="input-wrapper">
-                    <input type="password" id="pin" maxlength="4" placeholder="••••" autocomplete="off" autofocus>
-                    <div class="eye-btn" onclick="togglePin()" id="toggleVisibility">
-                        <svg id="eyeIcon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                            <circle cx="12" cy="12" r="3"></circle>
-                        </svg>
-                    </div>
-                </div>
-            </div>
-
-            <button class="auth-btn" onclick="login()" id="btn">
-                <span>Authenticate</span>
-            </button>
-            
-            <div id="err" class="error-msg">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
-                Access Denied
-            </div>
+    <div class="grid-bg"></div>
+    <div class="ambient-light"></div>
+    <div class="login-box" id="loginBox">
+        <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>
+        <h2 style="margin:0 0 30px 0; font-weight:600; font-size:1.5rem; letter-spacing:-0.5px;">Nexus Core</h2>
+        <div id="qrcode" class="qr-container">
+            <svg class="spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10" stroke-opacity="0.25"></circle><path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"></path></svg>
         </div>
+        <p class="instruction">Scan with your iPhone camera<br>to authenticate via <strong>Passkey</strong>.</p>
     </div>
-
     <script>
-        function togglePin() {
-            const pinInput = document.getElementById('pin');
-            const eyeIcon = document.getElementById('eyeIcon');
-            if (pinInput.type === 'password') {
-                pinInput.type = 'text';
-                eyeIcon.innerHTML = '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line>';
-            } else {
-                pinInput.type = 'password';
-                eyeIcon.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>';
-            }
-        }
-
-        function spawnParticles() {
-            for(let i=0; i<15; i++) {
-                let p = document.createElement('div');
-                p.className = 'particle';
-                let size = Math.random() * 6 + 2;
-                p.style.width = size + 'px';
-                p.style.height = size + 'px';
-                p.style.left = (Math.random() * 100) + '%';
-                p.style.top = (80 + Math.random() * 20) + '%';
-                p.style.animationDuration = (0.5 + Math.random() * 1.5) + 's';
-                document.body.appendChild(p);
-                setTimeout(() => p.remove(), 2000);
-            }
-        }
-
-        async function login() {
-            const btn = document.getElementById('btn');
-            const pinVal = document.getElementById('pin').value;
-            const err = document.getElementById('err');
-            const box = document.getElementById('loginBox');
-            
-            // Loading state
-            btn.style.pointerEvents = 'none';
-            btn.innerHTML = '<svg class="spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10" stroke-opacity="0.25"></circle><path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"></path></svg> <span>Verifying...</span>';
-            err.classList.remove('show');
-            err.style.display = 'none'; // reset
-            
+        async function init() {
             try {
-                const res = await fetch('/api/login', {
-                    method: 'POST',
-                    headers: {'Content-Type':'application/json'},
-                    body: JSON.stringify({ pin: pinVal, totp: '' })
+                const res = await fetch('/api/auth/session/create');
+                const data = await res.json();
+                const sessionUrl = \`https://${window.location.host}/mobile-auth?session=${data.sessionId}\`;
+                
+                const qrContainer = document.getElementById("qrcode");
+                qrContainer.innerHTML = ''; // remove spinner
+                
+                new QRCode(qrContainer, {
+                    text: sessionUrl,
+                    width: 200,
+                    height: 200,
+                    colorDark : "#000000",
+                    colorLight : "#ffffff",
+                    correctLevel : QRCode.CorrectLevel.H
                 });
-                
-                if (res.ok) {
-                    btn.style.background = '#fff';
-                    btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg> <span style="color:#000">Granted</span>';
-                    btn.style.color = '#000';
-                    box.style.transform = 'scale(1.05)';
-                    box.style.opacity = '0';
-                    box.style.transition = 'all 0.6s cubic-bezier(0.16, 1, 0.3, 1)';
-                    setTimeout(() => location.reload(), 600);
-                } else {
-                    throw new Error('Denied');
-                }
-            } catch(e) {
-                // Error state
-                btn.style.pointerEvents = 'auto';
-                btn.innerHTML = '<span>Authenticate</span>';
-                
-                // Shake effect
-                box.style.animation = 'none';
-                void box.offsetWidth;
-                box.style.animation = 'shake 0.5s cubic-bezier(.36,.07,.19,.97) both';
-                
-                err.style.display = 'flex';
-                void err.offsetWidth;
-                err.classList.add('show');
-                
-                document.getElementById('pin').value = '';
-                document.getElementById('pin').focus();
+
+                // Start polling
+                setInterval(async () => {
+                    try {
+                        const statusRes = await fetch(\`/api/auth/session/${data.sessionId}/status\`);
+                        if (statusRes.ok) {
+                            const statusData = await statusRes.json();
+                            if (statusData.status === 'authenticated') {
+                                document.getElementById('loginBox').innerHTML = '<svg class="logo-icon" style="color:#10b981;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg><div class="success-msg">Access Granted</div><p style="color:#a1a1aa; margin-top:10px;">Redirecting...</p>';
+                                setTimeout(() => window.location.href = '/', 1000);
+                            }
+                        }
+                    } catch(e) {}
+                }, 2000);
+            } catch (e) {
+                console.error("Failed to init session", e);
             }
         }
-        
-        // Dynamic shake animation injection
-        if (!document.getElementById('shake-keyframes')) {
-            const style = document.createElement('style');
-            style.id = 'shake-keyframes';
-            style.innerHTML = '@keyframes shake { 10%, 90% { transform: translate3d(-1px, 0, 0); } 20%, 80% { transform: translate3d(2px, 0, 0); } 30%, 50%, 70% { transform: translate3d(-4px, 0, 0); } 40%, 60% { transform: translate3d(4px, 0, 0); } }';
-            document.head.appendChild(style);
-        }
-
-        document.getElementById('pin').addEventListener('keypress', e => {
-            if (e.key === 'Enter') login();
-        });
+        init();
     </script>
 </body>
-</html>`);
+</html>
+`);
     }
 
     // === [ANCHOR: API_ROUTES_GET] ===
