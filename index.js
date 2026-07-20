@@ -37,7 +37,8 @@ try {
     console.warn("⚠️ @simplewebauthn/server not found. Attempting dynamic installation (Render Hotfix)...");
     try {
         require('child_process').execSync('npm install @simplewebauthn/server', { stdio: 'inherit' });
-        webauthnServer = require('@simplewebauthn/server');
+        const path = require('path');
+        webauthnServer = require(path.join(process.cwd(), 'node_modules', '@simplewebauthn', 'server'));
         console.log("✅ @simplewebauthn/server installed successfully.");
     } catch (err) {
         console.error("❌ Failed to install @simplewebauthn/server:", err.message);
@@ -323,6 +324,12 @@ function ensureMemoryInitialized() {
             
             if (!memoryStats.patchnotes.some(p => p.text.includes("Fix WebAuthn Render Crash"))) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug Critique: Crash au déploiement (WebAuthn)\n\n- L'environnement cloud plantait avec l'erreur (Cannot find module '@simplewebauthn/server') car la dépendance manquait sur le serveur.\n- Implémentation d'un système d'auto-installation à la volée (Zero Install). Si le module est absent, le bot l'installe dynamiquement au démarrage, garantissant la résilience du fichier index.js unique." });
+                syncCloud();
+            }
+
+            
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Dynamic Require Cache (Render)"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug Critique: Crash d'auto-installation (WebAuthn)\n\n- Le module 'Zero Install' échouait à charger la dépendance fraîchement téléchargée à cause du cache de résolution de modules de Node.js.\n- L'auto-installeur utilise maintenant le chemin absolu (process.cwd() + node_modules) pour contourner le cache et assurer un démarrage fluide sur Render." });
                 syncCloud();
             }
 
