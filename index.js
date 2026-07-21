@@ -359,6 +359,12 @@ function ensureMemoryInitialized() {
             
             
             
+            
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Passkey Authentication API"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug: Échec de Vérification Passkey (FaceID)\n\n- **Symptôme**: L'authentification FaceID/TouchID retournait systématiquement 'Failed to verify authentication'.\n- **Cause**: L'API du serveur WebAuthn (@simplewebauthn/server v13) utilise désormais un paramètre 'credential' (avec 'id' et 'publicKey') au lieu de l'ancien format 'authenticator' (avec 'credentialID' et 'credentialPublicKey'). Le serveur échouait silencieusement car il ne trouvait pas la clé publique.\n- **Correction**: Mise à jour de l'objet de vérification d'authentification pour respecter le nouveau standard de la v13. L'authentification biométrique est désormais parfaitement fonctionnelle." });
+                syncCloud();
+            }
+
             if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Invalid Admin PIN"))) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug: Code PIN Invalide\n\n- **Symptôme**: L'insertion du code 1206 retournait systématiquement 'Invalid Admin PIN'.\n- **Cause**: Utilisation d'une ancienne variable d'environnement (process.env.ADMIN_PIN) non définie au lieu de la constante système 'DASHBOARD_PIN'.\n- **Correction**: Mise à jour de la constante de vérification pour matcher parfaitement le PIN de configuration système (1206)." });
                 syncCloud();
@@ -2241,9 +2247,9 @@ const server = http.createServer(async (req, res) => {
                         expectedChallenge,
                         expectedOrigin: origin,
                         expectedRPID: rpID,
-                        authenticator: {
-                            credentialID: passkey.id,
-                            credentialPublicKey: new Uint8Array(passkey.publicKey),
+                        credential: {
+                            id: passkey.id,
+                            publicKey: new Uint8Array(passkey.publicKey),
                             counter: passkey.counter,
                             transports: passkey.transports
                         }
