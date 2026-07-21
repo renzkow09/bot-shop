@@ -360,6 +360,12 @@ function ensureMemoryInitialized() {
             
             
             
+            
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Dashboard Redirect After Passkey"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug: Redirection Dashboard Post-Passkey\n\n- **Symptôme**: Après une authentification FaceID/TouchID réussie, la page de connexion Desktop restait bloquée sur le QR code et ne redirigeait pas vers le dashboard.\n- **Cause**: L'API de statut de session retournait un cookie obsolète ('session_token') non reconnu par le middleware d'authentification du dashboard qui attend 'auth_session'.\n- **Correction**: Alignement de la création de cookie Post-WebAuthn sur le système standard (global.activeAdminSessions + cookie 'auth_session'). La redirection fonctionne parfaitement." });
+                syncCloud();
+            }
+
             if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Passkey Authentication API"))) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug: Échec de Vérification Passkey (FaceID)\n\n- **Symptôme**: L'authentification FaceID/TouchID retournait systématiquement 'Failed to verify authentication'.\n- **Cause**: L'API du serveur WebAuthn (@simplewebauthn/server v13) utilise désormais un paramètre 'credential' (avec 'id' et 'publicKey') au lieu de l'ancien format 'authenticator' (avec 'credentialID' et 'credentialPublicKey'). Le serveur échouait silencieusement car il ne trouvait pas la clé publique.\n- **Correction**: Mise à jour de l'objet de vérification d'authentification pour respecter le nouveau standard de la v13. L'authentification biométrique est désormais parfaitement fonctionnelle." });
                 syncCloud();
@@ -2153,8 +2159,10 @@ const server = http.createServer(async (req, res) => {
         if (!session) return res.writeHead(404).end(JSON.stringify({ error: 'Not found' }));
         
         if (session.status === 'authenticated') {
-            const token = DASHBOARD_PIN + "_" + Date.now();
-            res.setHeader('Set-Cookie', `session_token=${token}; HttpOnly; Path=/; Max-Age=${30 * 24 * 60 * 60}; SameSite=Lax`);
+            if(!global.activeAdminSessions) global.activeAdminSessions = new Set();
+            const sessionToken = require('crypto').randomBytes(32).toString('hex');
+            global.activeAdminSessions.add(sessionToken);
+            res.setHeader('Set-Cookie', `auth_session=${sessionToken}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=86400`);
             return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ status: 'authenticated' }));
         }
         return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ status: 'pending' }));
