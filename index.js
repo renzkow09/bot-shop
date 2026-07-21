@@ -361,6 +361,12 @@ function ensureMemoryInitialized() {
             
             
             
+            
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Session Persistence Fix"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug: Persistance des Sessions\n\n- **Symptôme**: Les utilisateurs étaient déconnectés du dashboard après un redémarrage du serveur ou une reconnexion, forçant une nouvelle authentification Passkey.\n- **Cause**: Les sessions administrateur étaient stockées dans une variable RAM éphémère (`global.activeAdminSessions`) non synchronisée avec le cloud, provoquant la perte de la session au redémarrage.\n- **Correction**: Migration du système de session vers `memoryStats.activeSessions` avec persistance cloud (Upstash/Discord). Les sessions actives survivent désormais aux redémarrages de l'instance. De plus, la vérification des cookies a été assouplie (SameSite=Lax) pour une meilleure compatibilité des environnements de développement." });
+                syncCloud();
+            }
+
             if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Dashboard Redirect After Passkey"))) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug: Redirection Dashboard Post-Passkey\n\n- **Symptôme**: Après une authentification FaceID/TouchID réussie, la page de connexion Desktop restait bloquée sur le QR code et ne redirigeait pas vers le dashboard.\n- **Cause**: L'API de statut de session retournait un cookie obsolète ('session_token') non reconnu par le middleware d'authentification du dashboard qui attend 'auth_session'.\n- **Correction**: Alignement de la création de cookie Post-WebAuthn sur le système standard (global.activeAdminSessions + cookie 'auth_session'). La redirection fonctionne parfaitement." });
                 syncCloud();
@@ -2159,10 +2165,10 @@ const server = http.createServer(async (req, res) => {
         if (!session) return res.writeHead(404).end(JSON.stringify({ error: 'Not found' }));
         
         if (session.status === 'authenticated') {
-            if(!global.activeAdminSessions) global.activeAdminSessions = new Set();
+            if(!memoryStats.activeSessions) memoryStats.activeSessions = [];
             const sessionToken = require('crypto').randomBytes(32).toString('hex');
-            global.activeAdminSessions.add(sessionToken);
-            res.setHeader('Set-Cookie', `auth_session=${sessionToken}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=86400`);
+            if(!memoryStats.activeSessions) memoryStats.activeSessions = []; memoryStats.activeSessions.push(sessionToken); syncCloud();
+            res.setHeader('Set-Cookie', `auth_session=${sessionToken}; HttpOnly; SameSite=Lax; Path=/; Max-Age=86400`);
             return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ status: 'authenticated' }));
         }
         return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ status: 'pending' }));
@@ -2300,7 +2306,7 @@ const server = http.createServer(async (req, res) => {
     const isAuthenticated = (() => {
         let match = cookie.match(/auth_session=([a-zA-Z0-9]+)/);
         if (!match) return false;
-        return global.activeAdminSessions && global.activeAdminSessions.has(match[1]);
+        return memoryStats.activeSessions && memoryStats.activeSessions.includes(match[1]);
     })();
 
     // 🚀 [API_ROUTE: /download-code] - Route API backend
@@ -2312,9 +2318,9 @@ const server = http.createServer(async (req, res) => {
     if (req.url === '/api/logout' && req.method === 'POST') {
         if (req.headers.cookie && req.headers.cookie.includes('auth_session=')) {
             const token = req.headers.cookie.split('auth_session=')[1].split(';')[0];
-            if (global.activeAdminSessions) global.activeAdminSessions.delete(token);
+            if (memoryStats.activeSessions) { memoryStats.activeSessions = memoryStats.activeSessions.filter(t => t !== token); syncCloud(); }
         }
-        res.writeHead(200, { 'Set-Cookie': 'auth_session=; Max-Age=0; HttpOnly; Secure; SameSite=Strict; Path=/', 'Content-Type': 'application/json' });
+        res.writeHead(200, { 'Set-Cookie': 'auth_session=; Max-Age=0; HttpOnly; SameSite=Lax; Path=/', 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({ success: true }));
     }
     // 🚀 [API_ROUTE: /api/login] - Route API backend
@@ -2331,10 +2337,10 @@ const server = http.createServer(async (req, res) => {
                         if (a.length === b.length && crypto.timingSafeEqual(a, b)) {
                             
                     bruteForceLocks.delete(clientIp);
-                    if(!global.activeAdminSessions) global.activeAdminSessions = new Set();
+                    if(!memoryStats.activeSessions) memoryStats.activeSessions = [];
                     const sessionToken = require('crypto').randomBytes(32).toString('hex');
-                    global.activeAdminSessions.add(sessionToken);
-                    res.writeHead(200, { 'Set-Cookie': `auth_session=${sessionToken}; Max-Age=86400; HttpOnly; Secure; SameSite=Strict; Path=/`, 'Content-Type': 'application/json' });
+                    if(!memoryStats.activeSessions) memoryStats.activeSessions = []; memoryStats.activeSessions.push(sessionToken); syncCloud();
+                    res.writeHead(200, { 'Set-Cookie': `auth_session=${sessionToken}; Max-Age=86400; HttpOnly; SameSite=Lax; Path=/`, 'Content-Type': 'application/json' });
                     systemLog('INFO', 'SECURITY', `Successful admin dashboard login from IP: ${clientIp}`);
                     return res.end(JSON.stringify({ success: true }));
                 } else {
@@ -2410,12 +2416,13 @@ const server = http.createServer(async (req, res) => {
                 });
 
                 // Start polling
-                setInterval(async () => {
+                let pollInterval = setInterval(async () => {
                     try {
                         const statusRes = await fetch(\`/api/auth/session/\${data.sessionId}/status\`);
                         if (statusRes.ok) {
                             const statusData = await statusRes.json();
                             if (statusData.status === 'authenticated') {
+                                clearInterval(pollInterval);
                                 document.getElementById('loginBox').innerHTML = '<svg class="logo-icon" style="color:#10b981;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg><div class="success-msg">Access Granted</div><p style="color:#a1a1aa; margin-top:10px;">Redirecting...</p>';
                                 setTimeout(() => window.location.href = '/', 1000);
                             }
