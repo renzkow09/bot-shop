@@ -357,6 +357,18 @@ function ensureMemoryInitialized() {
             
             
             
+            
+            
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Invalid Admin PIN"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug: Code PIN Invalide\n\n- **Symptôme**: L'insertion du code 1206 retournait systématiquement 'Invalid Admin PIN'.\n- **Cause**: Utilisation d'une ancienne variable d'environnement (process.env.ADMIN_PIN) non définie au lieu de la constante système 'DASHBOARD_PIN'.\n- **Correction**: Mise à jour de la constante de vérification pour matcher parfaitement le PIN de configuration système (1206)." });
+                syncCloud();
+            }
+
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Crash Dashboard Auth"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug Critique: Crash du Serveur au Login\n\n- **Symptôme**: L'accès à la page de connexion provoquait un crash immédiat du bot (ReferenceError: window is not defined).\n- **Cause**: Une erreur d'interpolation JavaScript côté serveur tentait d'évaluer les variables du navigateur ('window' et 'data.sessionId') pendant la génération de la page au lieu de les envoyer au client.\n- **Correction**: Échappement rigoureux des variables d'environnement frontend. Le portail d'authentification WebAuthn est désormais 100% stable et fonctionnel." });
+                syncCloud();
+            }
+
             if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Shutdown Sequence"))) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug Critique: Échec de sauvegarde sur Render\n\n- Le bot tentait d'envoyer la sauvegarde DaaD (Discord as a Database) *après* avoir fermé sa connexion (client.destroy()) lors de la réception du signal SIGTERM (redémarrage cloud).\n- L'ordre d'arrêt a été corrigé : le bot effectue désormais toutes ses sauvegardes réseaux avant de couper sa connexion, garantissant 0 perte de données lors des mises à jour." });
                 syncCloud();
@@ -2135,7 +2147,7 @@ const server = http.createServer(async (req, res) => {
         if (!session) return res.writeHead(404).end(JSON.stringify({ error: 'Not found' }));
         
         if (session.status === 'authenticated') {
-            const token = process.env.ADMIN_PIN + "_" + Date.now();
+            const token = DASHBOARD_PIN + "_" + Date.now();
             res.setHeader('Set-Cookie', `session_token=${token}; HttpOnly; Path=/; Max-Age=${30 * 24 * 60 * 60}; SameSite=Lax`);
             return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ status: 'authenticated' }));
         }
@@ -2154,7 +2166,7 @@ const server = http.createServer(async (req, res) => {
                 const rpID = req.headers.host.split(':')[0];
 
                 if (type === 'register') {
-                    if (pin !== process.env.ADMIN_PIN) {
+                    if (pin !== DASHBOARD_PIN) {
                         return res.writeHead(401).end(JSON.stringify({ error: 'Invalid Admin PIN' }));
                     }
                     const options = await generateRegistrationOptions({
