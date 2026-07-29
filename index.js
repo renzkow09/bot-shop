@@ -362,6 +362,48 @@ function ensureMemoryInitialized() {
             
             
             
+            
+            
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Revamp Design Connexion"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🎨 Amélioration UI/UX: Écran de Connexion\n\n- **Boutons Modernisés**: Refonte esthétique des boutons de l'écran de connexion (effets de survol animés, lueurs dynamiques).\n- **Sélecteur Passkey/PIN**: Remplacement de l'ancien sélecteur par un composant 'segment' fluide et animé (type Apple) pour basculer de manière transparente entre les modes de connexion.\n- **Input PIN**: Stylisation du champ de saisie du PIN avec un espacement amélioré et un focus lumineux." });
+                syncCloud();
+            }
+
+            
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Correction UI: Écran de Connexion"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🎨 Amélioration UI/UX: Écran de Connexion\n\n- **Boutons Modernisés**: Refonte esthétique des boutons de l'écran de connexion avec une lueur dynamique, des effets de survol animés et un fond dégradé élégant.\n- **Sélecteur Passkey/PIN**: Remplacement de l'ancien sélecteur grisâtre par un composant 'segment' fluide avec glissement animé (façon iOS) pour un ressenti ultra-premium.\n- **Input PIN**: Stylisation du champ de saisie du PIN avec un espacement accentué, un tracking plus large et une bordure focus lumineuse bleue." });
+                syncCloud();
+            }
+
+            
+            
+            
+            
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Framer Motion"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "✨ Amélioration UI/UX: Animations avec Framer Motion\n\n- **Animations d'Entrée**: Intégration du moteur d'animation Framer Motion (via Motion One) pour interpoler l'apparition des cartes et des boutons lors du défilement.\n- **Interactions de Survol (Hover)**: Les effets de survol natifs CSS (transformations) ont été remplacés par des délégations d'évènements JavaScript (mouseover/mouseout) propulsées par Framer Motion.\n- **Performances**: L'utilisation du module ESM allège la charge réseau tout en garantissant des courbes de bézier fluides et une fluidité 60fps." });
+                syncCloud();
+            }
+
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Sécurité: Blocage DoS & Reverse Proxy"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ Renforcement Sécurité: Résolution Déni de Service (DoS) et IP\n\n- **Faille OOM (Memory Exhaustion)**: Certaines routes API (telles que `/api/action` et Passkey) acceptaient des payloads HTTP sans aucune limite de taille de body. Un attaquant pouvait saturer la RAM (buffer illimité) et faire crasher le serveur (OOM Kill). Des limites strictes de poids de body (1MB/5MB) couplées à une destruction `req.socket.destroy()` ont été instaurées.\n- **Faille IP / Rate Limit Global**: Derrière l'architecture Cloud Run (reverse proxy), `req.socket.remoteAddress` retournait toujours l'IP du Proxy. Par conséquent, les mécanismes Anti-Bruteforce et de limitation de débit (Rate Limiting) bannissaient TOUS les utilisateurs si un seul déclenchait la sécurité. L'IP est désormais extraite prioritairement via le header HTTP `x-forwarded-for`." });
+                syncCloud();
+            }
+
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Sécurité: Authentification Globale"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ Renforcement Sécurité: Comblement des Failles d'Authentification\n\n- **API Bypassed**: Plusieurs routes critiques backend (telles que `/api/action`, `/api/init-data`, et l'exportation des données) avaient leur vérification d'authentification désactivée, permettant un accès public.\n- **Data Leak WS**: Le point de terminaison WebSocket (`/ws`) pour le rafraîchissement en temps réel acceptait n'importe quelle connexion sans valider le jeton de session, exposant potentiellement les messages du support (tickets).\n- **Résolution**: Restauration de l'instruction stricte `if (!isAuthenticated) return 401` sur TOUTES les routes (y compris `/debug` et `/download-code`). Le flux d'Upgrade WebSocket vérifie désormais rigoureusement le cookie `auth_session` avant de transférer les données." });
+                syncCloud();
+            }
+
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Memory Leak & Garbage Collection"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🧹 Amélioration Système: Memory Leaks & Nettoyage\n\n- **Session Bloat**: Les sessions d'administration (activeSessions) s'accumulaient indéfiniment lors des connexions sans déconnexion explicite, faisant grossir la base de données. Un Garbage Collector limite désormais le nombre de sessions simultanées à 20 maximum.\n- **Ticket States Leak**: La carte mémoire (RAM) des états de salon (`channelStates`) ne se vidait pas si un ticket était supprimé manuellement sur Discord au lieu des boutons de l'interface. Un écouteur `channelDelete` natif intercepte désormais ces suppressions pour purger la mémoire instantanément." });
+                syncCloud();
+            }
+
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Add PIN Login to Dashboard"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "✨ Nouvelle Fonctionnalité: Option de Connexion par PIN\n\n- **Ajout**: Une interface de connexion par code PIN (1206) a été ajoutée sur la page du dashboard pour offrir une alternative au Passkey.\n- **Design**: Intégration d'un système d'onglets (Toggle) élégant permettant de basculer facilement entre la vue 'Passkey' (QR Code) et la vue 'PIN Code' (Champ de saisie).\n- **Résolution**: Répond à la demande d'avoir le choix entre les deux méthodes de connexion, particulièrement utile si le téléphone n'est pas à portée de main." });
+                syncCloud();
+            }
+
             if (!memoryStats.patchnotes.some(p => p.text.includes("Session Persistence Fix"))) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug: Persistance des Sessions\n\n- **Symptôme**: Les utilisateurs étaient déconnectés du dashboard après un redémarrage du serveur ou une reconnexion, forçant une nouvelle authentification Passkey.\n- **Cause**: Les sessions administrateur étaient stockées dans une variable RAM éphémère (`global.activeAdminSessions`) non synchronisée avec le cloud, provoquant la perte de la session au redémarrage.\n- **Correction**: Migration du système de session vers `memoryStats.activeSessions` avec persistance cloud (Upstash/Discord). Les sessions actives survivent désormais aux redémarrages de l'instance. De plus, la vérification des cookies a été assouplie (SameSite=Lax) pour une meilleure compatibilité des environnements de développement." });
                 syncCloud();
@@ -1050,7 +1092,22 @@ async function generateTranscript(channel) {
 
 .widget-list-item:hover { transform: translateY(-3px); background: rgba(255,255,255,0.06) !important; border-color: rgba(255,255,255,0.1) !important; }
              .widget-list-item.added { background: rgba(16,185,129,0.05); border-color: rgba(16,185,129,0.2); }
-</style>
+
+       .auth-toggle { display: flex; position: relative; background: rgba(255, 255, 255, 0.03); border-radius: 16px; padding: 6px; margin-top: 30px; border: 1px solid rgba(255, 255, 255, 0.05); }
+       .auth-toggle button { flex: 1; position: relative; z-index: 2; padding: 12px; border-radius: 12px; border: none; background: transparent; color: #a1a1aa; font-family: inherit; font-size: 0.95rem; font-weight: 600; cursor: pointer; transition: color 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+       .auth-toggle button.active { color: #fff; }
+       .auth-toggle::before { content: ''; position: absolute; top: 6px; bottom: 6px; left: 6px; width: calc(50% - 6px); background: rgba(255, 255, 255, 0.1); border-radius: 12px; z-index: 1; transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); box-shadow: 0 4px 15px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.1); }
+       .auth-toggle.pin-active::before { transform: translateX(100%); }
+       .pin-input { width: 100%; box-sizing: border-box; background: rgba(0,0,0,0.4); border: 2px solid rgba(255,255,255,0.05); padding: 18px; border-radius: 16px; color: #fff; text-align: center; font-size: 1.3rem; letter-spacing: 8px; margin-bottom: 25px; outline: none; transition: all 0.3s ease; font-family: inherit; box-shadow: inset 0 4px 10px rgba(0,0,0,0.5); }
+       .pin-input:focus { border-color: var(--accent); background: rgba(0,0,0,0.6); box-shadow: inset 0 4px 10px rgba(0,0,0,0.5), 0 0 20px rgba(96, 165, 250, 0.2); }
+       .pin-input::placeholder { letter-spacing: 2px; color: #6b7280; font-size: 1rem; font-weight: 500; }
+       .btn-primary { position: relative; width: 100%; padding: 18px; border-radius: 16px; border: none; background: linear-gradient(135deg, var(--accent), #3b82f6); color: #fff; font-weight: 600; font-size: 1.05rem; cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); font-family: inherit; box-shadow: 0 10px 25px rgba(96, 165, 250, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2); overflow: hidden; }
+       .btn-primary::after { content: ''; position: absolute; top: 0; left: -100%; width: 50%; height: 100%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent); transform: skewX(-20deg); transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1); }
+       .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 15px 35px rgba(96, 165, 250, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2); }
+       .btn-primary:hover::after { left: 150%; }
+       .btn-primary:active { transform: translateY(1px); box-shadow: 0 5px 15px rgba(96, 165, 250, 0.3); }
+    </style>
+
         </head><body><h2>Transcript of ${channel.name}</h2>`;
         
         messages.forEach(m => {
@@ -1207,6 +1264,8 @@ client.once('ready', async () => {
 client.on('inviteCreate', invite => { try { guildInvites.get(invite.guild.id)?.set(invite.code, invite.uses); } catch (e) {} });
 // 🚀 [EVENT_LISTENER: inviteDelete] - Écouteur d'événement Discord
 client.on('inviteDelete', invite => { try { guildInvites.get(invite.guild.id)?.delete(invite.code); } catch (e) {} });
+// 🚀 [EVENT_LISTENER: channelDelete] - Nettoyage des maps en cas de suppression
+client.on('channelDelete', channel => { try { if (channelStates.has(channel.id)) channelStates.delete(channel.id); } catch(e){} });
 
 // === [ANCHOR: GLOBAL_PROCESS_HANDLERS] ===
 process.on('uncaughtException', (err) => {
@@ -2165,9 +2224,11 @@ const server = http.createServer(async (req, res) => {
         if (!session) return res.writeHead(404).end(JSON.stringify({ error: 'Not found' }));
         
         if (session.status === 'authenticated') {
-            if(!memoryStats.activeSessions) memoryStats.activeSessions = [];
             const sessionToken = require('crypto').randomBytes(32).toString('hex');
-            if(!memoryStats.activeSessions) memoryStats.activeSessions = []; memoryStats.activeSessions.push(sessionToken); syncCloud();
+            if (!memoryStats.activeSessions) memoryStats.activeSessions = [];
+            memoryStats.activeSessions.push(sessionToken);
+            if (memoryStats.activeSessions.length > 20) memoryStats.activeSessions.shift();
+            syncCloud();
             res.setHeader('Set-Cookie', `auth_session=${sessionToken}; HttpOnly; SameSite=Lax; Path=/; Max-Age=86400`);
             return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ status: 'authenticated' }));
         }
@@ -2175,7 +2236,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.url === '/api/auth/generate-options' && req.method === 'POST') {
-        let body = ''; req.on('data', c => body += c);
+        let body = ''; let bodySize1 = 0; req.on('data', c => { bodySize1 += c.length; if(bodySize1 > 1024*1024) req.socket.destroy(); else body += c; });
         req.on('end', async () => {
             try {
                 const data = JSON.parse(body);
@@ -2222,7 +2283,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.url === '/api/auth/verify' && req.method === 'POST') {
-        let body = ''; req.on('data', c => body += c);
+        let body = ''; let bodySize2 = 0; req.on('data', c => { bodySize2 += c.length; if(bodySize2 > 1024*1024) req.socket.destroy(); else body += c; });
         req.on('end', async () => {
             try {
                 const data = JSON.parse(body);
@@ -2295,7 +2356,7 @@ const server = http.createServer(async (req, res) => {
             memoryStats.bandwidth_bytes += (req.socket.bytesRead || 0) + (req.socket.bytesWritten || 0);
         });
     }
-    const clientIp = req.socket?.remoteAddress || '127.0.0.1';
+    const clientIp = req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : (req.socket?.remoteAddress || '127.0.0.1');
     const now = Date.now();
     let rl = rateLimits.get(clientIp) || { count: 0, resetTime: now + 60000 };
     if (now > rl.resetTime) rl = { count: 0, resetTime: now + 60000 };
@@ -2311,6 +2372,7 @@ const server = http.createServer(async (req, res) => {
 
     // 🚀 [API_ROUTE: /download-code] - Route API backend
     if (req.url === '/download-code') {
+        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         res.writeHead(200, { 'Content-Type': 'application/javascript', 'Content-Disposition': 'attachment; filename="index.js"' });
         return res.end(fs.readFileSync(__filename));
     }
@@ -2337,9 +2399,11 @@ const server = http.createServer(async (req, res) => {
                         if (a.length === b.length && crypto.timingSafeEqual(a, b)) {
                             
                     bruteForceLocks.delete(clientIp);
-                    if(!memoryStats.activeSessions) memoryStats.activeSessions = [];
                     const sessionToken = require('crypto').randomBytes(32).toString('hex');
-                    if(!memoryStats.activeSessions) memoryStats.activeSessions = []; memoryStats.activeSessions.push(sessionToken); syncCloud();
+                    if (!memoryStats.activeSessions) memoryStats.activeSessions = [];
+                    memoryStats.activeSessions.push(sessionToken);
+                    if (memoryStats.activeSessions.length > 20) memoryStats.activeSessions.shift();
+                    syncCloud();
                     res.writeHead(200, { 'Set-Cookie': `auth_session=${sessionToken}; Max-Age=86400; HttpOnly; SameSite=Lax; Path=/`, 'Content-Type': 'application/json' });
                     systemLog('INFO', 'SECURITY', `Successful admin dashboard login from IP: ${clientIp}`);
                     return res.end(JSON.stringify({ success: true }));
@@ -2381,22 +2445,101 @@ const server = http.createServer(async (req, res) => {
        .spinner { animation: spin 1s linear infinite; width: 32px; height: 32px; color: var(--accent); }
        @keyframes spin { 100% { transform: rotate(360deg); } }
        .success-msg { color: #10b981; font-weight: 600; font-size: 1.2rem; margin-top: 30px; animation: fadeIn 0.5s; }
+       
        @keyframes fadeIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+       
+       .auth-toggle { display: flex; position: relative; background: rgba(255, 255, 255, 0.03); border-radius: 16px; padding: 6px; margin-top: 30px; border: 1px solid rgba(255, 255, 255, 0.05); }
+       .auth-toggle button { flex: 1; position: relative; z-index: 2; padding: 12px; border-radius: 12px; border: none; background: transparent; color: #a1a1aa; font-family: inherit; font-size: 0.95rem; font-weight: 600; cursor: pointer; transition: color 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+       .auth-toggle button.active { color: #fff; }
+       .auth-toggle::before { content: ''; position: absolute; top: 6px; bottom: 6px; left: 6px; width: calc(50% - 6px); background: rgba(255, 255, 255, 0.1); border-radius: 12px; z-index: 1; transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); box-shadow: 0 4px 15px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.1); }
+       .auth-toggle.pin-active::before { transform: translateX(100%); }
+       .pin-input { width: 100%; box-sizing: border-box; background: rgba(0,0,0,0.4); border: 2px solid rgba(255,255,255,0.05); padding: 18px; border-radius: 16px; color: #fff; text-align: center; font-size: 1.3rem; letter-spacing: 8px; margin-bottom: 25px; outline: none; transition: all 0.3s ease; font-family: inherit; box-shadow: inset 0 4px 10px rgba(0,0,0,0.5); }
+       .pin-input:focus { border-color: var(--accent); background: rgba(0,0,0,0.6); box-shadow: inset 0 4px 10px rgba(0,0,0,0.5), 0 0 20px rgba(96, 165, 250, 0.2); }
+       .pin-input::placeholder { letter-spacing: 2px; color: #6b7280; font-size: 1rem; font-weight: 500; }
+       .btn-primary { position: relative; width: 100%; padding: 18px; border-radius: 16px; border: none; background: linear-gradient(135deg, var(--accent), #3b82f6); color: #fff; font-weight: 600; font-size: 1.05rem; cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); font-family: inherit; box-shadow: 0 10px 25px rgba(96, 165, 250, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2); overflow: hidden; }
+       .btn-primary::after { content: ''; position: absolute; top: 0; left: -100%; width: 50%; height: 100%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent); transform: skewX(-20deg); transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1); }
+       .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 15px 35px rgba(96, 165, 250, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2); }
+       .btn-primary:hover::after { left: 150%; }
+       .btn-primary:active { transform: translateY(1px); box-shadow: 0 5px 15px rgba(96, 165, 250, 0.3); }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body>
+    
     <div class="grid-bg"></div>
     <div class="ambient-light"></div>
     <div class="login-box" id="loginBox">
         <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>
         <h2 style="margin:0 0 30px 0; font-weight:600; font-size:1.5rem; letter-spacing:-0.5px;">Nexus Core</h2>
-        <div id="qrcode" class="qr-container">
-            <svg class="spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10" stroke-opacity="0.25"></circle><path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"></path></svg>
+        
+        <div id="passkeyView">
+            <div id="qrcode" class="qr-container">
+                <svg class="spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10" stroke-opacity="0.25"></circle><path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"></path></svg>
+            </div>
+            <p class="instruction">Scan with your iPhone camera<br>to authenticate via <strong>Passkey</strong>.</p>
         </div>
-        <p class="instruction">Scan with your iPhone camera<br>to authenticate via <strong>Passkey</strong>.</p>
+
+        <div id="pinView" style="display:none; padding-top: 10px;">
+            <input type="password" id="pinInput" placeholder="ADMIN PIN" class="pin-input" onkeydown="if(event.key==='Enter') loginWithPin()" />
+            <button onclick="loginWithPin()" class="btn-primary" id="pinBtn">Unlock Dashboard</button>
+            <p id="pinError" style="color: #ef4444; font-size: 0.9rem; margin-top: 15px; display: none;"></p>
+        </div>
+
+        <div class="auth-toggle">
+            <button onclick="toggleView('passkey')" id="btnPasskey" class="active">Passkey</button>
+            <button onclick="toggleView('pin')" id="btnPin">PIN Code</button>
+        </div>
     </div>
     <script>
+        function toggleView(view) {
+            const toggle = document.querySelector('.auth-toggle');
+            if (view === 'passkey') {
+                document.getElementById('passkeyView').style.display = 'block';
+                document.getElementById('pinView').style.display = 'none';
+                document.getElementById('btnPasskey').classList.add('active');
+                document.getElementById('btnPin').classList.remove('active');
+                if(toggle) toggle.classList.remove('pin-active');
+            } else {
+                document.getElementById('passkeyView').style.display = 'none';
+                document.getElementById('pinView').style.display = 'block';
+                document.getElementById('btnPasskey').classList.remove('active');
+                document.getElementById('btnPin').classList.add('active');
+                if(toggle) toggle.classList.add('pin-active');
+                document.getElementById('pinInput').focus();
+            }
+        }
+        
+        async function loginWithPin() {
+            const pin = document.getElementById('pinInput').value;
+            const btn = document.getElementById('pinBtn');
+            const err = document.getElementById('pinError');
+            if(!pin) return;
+            btn.innerText = 'Verifying...';
+            btn.style.opacity = '0.7';
+            err.style.display = 'none';
+            try {
+                const res = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ pin })
+                });
+                if (res.ok) {
+                    document.getElementById('loginBox').innerHTML = '<svg class="logo-icon" style="color:#10b981;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg><div class="success-msg">Access Granted</div><p style="color:#a1a1aa; margin-top:10px;">Redirecting...</p>';
+                    setTimeout(() => window.location.href = '/', 1000);
+                } else {
+                    err.innerText = 'Invalid PIN code';
+                    err.style.display = 'block';
+                    btn.innerText = 'Unlock Dashboard';
+                    btn.style.opacity = '1';
+                }
+            } catch(e) {
+                err.innerText = 'Connection error';
+                err.style.display = 'block';
+                btn.innerText = 'Unlock Dashboard';
+                btn.style.opacity = '1';
+            }
+        }
+
         async function init() {
             try {
                 const res = await fetch('/api/auth/session/create');
@@ -2450,9 +2593,10 @@ const server = http.createServer(async (req, res) => {
 
     // 🚀 [API_ROUTE: /api/init-data] - Route API backend
     if (req.url.startsWith('/api/log')) { require('fs').appendFileSync('frontend_error.log', req.url + '\n'); return res.end(); }
-    if (req.url === '/debug') { res.writeHead(200); return res.end(JSON.stringify(memoryStats)); }
+    if (req.url === '/debug') {
+        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized'); res.writeHead(200); return res.end(JSON.stringify(memoryStats)); }
     if (req.url === '/api/init-data' && req.method === 'GET') {
-        // if (!isAuthenticated && req.url !== '/api/init-data') return res.writeHead(401).end('Unauthorized');
+        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         let memberCount = "N/A"; let onlineCount = "N/A"; let activeTickets = 0;
         const guild = client.guilds.cache.first();
         if (guild) {
@@ -2476,7 +2620,7 @@ const server = http.createServer(async (req, res) => {
     
     // 🚀 [API_ROUTE: /api/backups] - Route API backend
     if (req.url === '/api/backups' && req.method === 'GET') {
-        // if (!isAuthenticated && req.url !== '/api/init-data') return res.writeHead(401).end('Unauthorized');
+        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         const fs = require('fs');
         const files = fs.readdirSync(__dirname).filter(f => f.startsWith('stats_backup_') && f.endsWith('.json'));
         const backups = files.map(f => {
@@ -2489,7 +2633,7 @@ const server = http.createServer(async (req, res) => {
 
     // 🚀 [API_ROUTE_DYNAMIC: /api/backups/download] - Route API dynamique
     if (req.url.startsWith('/api/backups/download') && req.method === 'GET') {
-        // if (!isAuthenticated && req.url !== '/api/init-data') return res.writeHead(401).end('Unauthorized');
+        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         const urlObj = new URL(req.url, `http://${req.headers.host}`);
         const file = urlObj.searchParams.get('file');
         if (!file || !file.startsWith('stats_backup_') || !file.endsWith('.json') || file.includes('/')) {
@@ -2507,7 +2651,7 @@ const server = http.createServer(async (req, res) => {
 
     // 🚀 [API_ROUTE: /api/export] - Route API backend
     if (req.url === '/api/export' && req.method === 'GET') {
-        // if (!isAuthenticated && req.url !== '/api/init-data') return res.writeHead(401).end('Unauthorized');
+        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         systemLog('INFO', 'DASHBOARD', 'Transaction ledger exported to CSV.');
         let csv = "\uFEFFDate,Customer,Product,Price\n"; 
         if (Array.isArray(memoryStats.recent_transactions)) {
@@ -2521,7 +2665,7 @@ const server = http.createServer(async (req, res) => {
 
     // 🚀 [API_ROUTE: /api/live] - Route API backend
     if (req.url === '/api/live' && req.method === 'GET') {
-        // if (!isAuthenticated && req.url !== '/api/init-data') return res.writeHead(401).end('Unauthorized');
+        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         const guild = client.guilds.cache.first(); let activeTickets = 0;
         if(guild) activeTickets = guild.channels.cache.filter(c => c.name.startsWith('shop-') || c.name.startsWith('support-')).size;
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -2530,7 +2674,7 @@ const server = http.createServer(async (req, res) => {
 
     // 🚀 [API_ROUTE: /api/tickets] - Route API backend
     if (req.url === '/api/tickets' && req.method === 'GET') {
-        // if (!isAuthenticated && req.url !== '/api/init-data') return res.writeHead(401).end('Unauthorized');
+        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         const guild = client.guilds.cache.first();
         let tickets = [];
         if (guild) {
@@ -2549,7 +2693,7 @@ const server = http.createServer(async (req, res) => {
 
     // 🚀 [API_ROUTE_DYNAMIC: /api/tickets/messages] - Route API dynamique
     if (req.url.startsWith('/api/tickets/messages') && req.method === 'GET') {
-        // if (!isAuthenticated && req.url !== '/api/init-data') return res.writeHead(401).end('Unauthorized');
+        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         const urlObj = new URL(req.url, `http://${req.headers.host}`);
         const channelId = urlObj.searchParams.get('channelId');
         const guild = client.guilds.cache.first();
@@ -2579,7 +2723,7 @@ const server = http.createServer(async (req, res) => {
 
     // 🚀 [API_ROUTE: /api/monitoring] - Route API backend
     if (req.url === '/api/monitoring' && req.method === 'GET') {
-        // if (!isAuthenticated && req.url !== '/api/init-data') return res.writeHead(401).end('Unauthorized');
+        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         
         let upstashStatus = 'offline', upstashLatency = 0;
         let rewarbleStatus = 'offline', rewarbleLatency = 0;
@@ -2654,7 +2798,7 @@ const server = http.createServer(async (req, res) => {
 
     // 🚀 [API_ROUTE_DYNAMIC: /api/members] - Route API dynamique
     if (req.url.startsWith('/api/members') && req.method === 'GET') {
-        // if (!isAuthenticated && req.url !== '/api/init-data') return res.writeHead(401).end('Unauthorized');
+        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         const guild = client.guilds.cache.first();
         if(!guild) return res.writeHead(400).end('[]');
         try {
@@ -2686,8 +2830,8 @@ const server = http.createServer(async (req, res) => {
     // === [ANCHOR: API_ROUTES_POST_ACTIONS] ===
     // 🚀 [API_ROUTE: /api/action] - Route API backend
     if (req.url === '/api/action' && req.method === 'POST') {
-        // if (!isAuthenticated && req.url !== '/api/init-data') return res.writeHead(401).end('Unauthorized');
-        let body = ''; req.on('data', chunk => body += chunk.toString());
+        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
+        let body = ''; let bodySize3 = 0; req.on('data', chunk => { bodySize3 += chunk.length; if(bodySize3 > 5*1024*1024) req.socket.destroy(); else body += chunk.toString(); });
         req.on('end', async () => {
             try {
                 const data = JSON.parse(body);
@@ -7755,6 +7899,55 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             reader.readAsText(file);
         };
         initDashboard();
+
+        // 🚀 [FRAMER_MOTION] - Animations d'entrée et de survol
+        const style = document.createElement('style');
+        style.textContent = ".card:hover, .admin-btn:hover, .product-card:hover { transform: none !important; box-shadow: none !important; }";
+        document.head.appendChild(style);
+
+        import("https://cdn.jsdelivr.net/npm/motion@11.11.13/+esm").then(({ animate, stagger, inView }) => {
+            // Entry Animations for Cards
+            inView(".card, .product-card", (info) => {
+                animate(info.target, { opacity: [0, 1], y: [40, 0], scale: [0.95, 1] }, { duration: 0.6, easing: [0.16, 1, 0.3, 1] });
+            });
+
+            // Entry Animations for Buttons
+            inView(".admin-btn", (info) => {
+                animate(info.target, { opacity: [0, 1], scale: [0.9, 1] }, { duration: 0.5, easing: [0.16, 1, 0.3, 1] });
+            });
+
+            // Live Hover Animations via Event Delegation
+            document.body.addEventListener("mouseover", (e) => {
+                const card = e.target.closest(".card, .product-card");
+                if (card && !card.dataset.hovering) {
+                    card.dataset.hovering = "true";
+                    animate(card, { scale: 1.02, y: -4, boxShadow: "0 15px 35px rgba(0,0,0,0.3)" }, { duration: 0.2, easing: "easeOut" });
+                }
+                const btn = e.target.closest(".admin-btn");
+                if (btn && !btn.dataset.hovering) {
+                    btn.dataset.hovering = "true";
+                    animate(btn, { scale: 1.04, y: -2, boxShadow: "0 8px 25px rgba(0,0,0,0.3)" }, { duration: 0.2, easing: "easeOut" });
+                }
+            });
+
+            document.body.addEventListener("mouseout", (e) => {
+                const card = e.target.closest(".card, .product-card");
+                if (card && card.dataset.hovering) {
+                    if (!e.relatedTarget || !card.contains(e.relatedTarget)) {
+                        delete card.dataset.hovering;
+                        animate(card, { scale: 1, y: 0, boxShadow: "0 8px 32px rgba(0,0,0,0.2)" }, { duration: 0.4, easing: "easeOut" });
+                    }
+                }
+                const btn = e.target.closest(".admin-btn");
+                if (btn && btn.dataset.hovering) {
+                    if (!e.relatedTarget || !btn.contains(e.relatedTarget)) {
+                        delete btn.dataset.hovering;
+                        animate(btn, { scale: 1, y: 0, boxShadow: "0 4px 15px rgba(0,0,0,0.2)" }, { duration: 0.3, easing: "easeOut" });
+                    }
+                }
+            });
+        });
+
     </script>
 </body>
 </html>`;
@@ -7768,6 +7961,15 @@ server.on('upgrade', (request, socket, head) => {
     const pathname = request.url;
 
     if (pathname === '/ws') {
+        const cookie = request.headers.cookie || '';
+        let match = cookie.match(/auth_session=([a-zA-Z0-9]+)/);
+        const isAuthenticated = match && memoryStats.activeSessions && memoryStats.activeSessions.includes(match[1]);
+        if (!isAuthenticated) {
+            socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+            socket.destroy();
+            return;
+        }
+
         wss.handleUpgrade(request, socket, head, (ws) => {
             wss.emit('connection', ws, request);
         });
