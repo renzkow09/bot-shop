@@ -267,8 +267,9 @@ async function backupToDiscord() {
             systemLog('INFO', 'DISCORD_BACKUP', 'Created #database-backups channel.');
         }
         
-        if (!memoryStats || Object.keys(memoryStats).length === 0 || (!memoryStats.transactions && Object.keys(memoryStats).length < 5)) {
-            systemLog('WARN', 'DISCORD_BACKUP', 'Aborting backup: memoryStats appears empty or uninitialized.');
+        // Do not backup if the database has practically no real business data (to avoid wiping out good backups with just patchnotes)
+        if (!memoryStats || Object.keys(memoryStats).length === 0 || (!memoryStats.transactions && !memoryStats.total_transactions && !memoryStats.recent_transactions)) {
+            systemLog('WARN', 'DISCORD_BACKUP', 'Aborting backup: memoryStats appears empty or uninitialized (missing business data).');
             return;
         }
         const buffer = Buffer.from(JSON.stringify(memoryStats, null, 2), 'utf8');
@@ -310,6 +311,12 @@ async function loadCloudStats() {
         const res = await axios.get(`${cleanUrl}/get/bot_stats`, { headers: { Authorization: `Bearer ${token}` }, timeout: 10000 });
         if (res.data && res.data.result) {
             try { memoryStats = { ...memoryStats, ...JSON.parse(res.data.result) }; } catch(e) { systemLog('ERROR', 'UPSTASH', 'Invalid JSON from Cloud'); }
+        } else {
+            // Upstash works but is empty! Fallback to Discord!
+            const discordSuccess = await fetchBackupFromDiscord();
+            if (!discordSuccess && fs.existsSync(STATS_FILE)) {
+                try { memoryStats = { ...memoryStats, ...JSON.parse(fs.readFileSync(STATS_FILE, 'utf8')) }; } catch (e) {}
+            }
         }
     } catch (e) { 
         if (e.response && (e.response.status === 400 || e.response.status === 403 || e.response.status === 429)) {
@@ -386,6 +393,12 @@ function ensureMemoryInitialized() {
             
             
             
+            
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Upstash Sleep Wipe"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ Résolution de Bug Critique: Perte de données (Upstash Sleep Wipe)\n\n- **Cause**: Lorsque Render mettait le serveur en veille prolongée, la base de données Upstash Redis pouvait purger les données inactives pour libérer de la mémoire sur l'offre gratuite. Au réveil, le serveur récupérait un JSON vide (HTTP 200 OK mais résultat 'null') d'Upstash.\n- Le bot ignorait ce 'null' car ce n'était pas une erreur 400 (Quota). Il initialisait alors une base de données vide et, voyant qu'elle contenait des 'patchnotes', la considérait comme valide et écrasait toutes les sauvegardes cloud et Discord existantes !\n- **Solution**: L'absence de données valides dans Upstash déclenche désormais un appel immédiat de sauvetage au module DaaD (Discord-as-a-Database). Le script de backup (backupToDiscord) bloque aussi strictement tout envoi de sauvegarde si aucune transaction financière n'existe." });
+                syncCloud();
+            }
+
             if (!memoryStats.patchnotes.some(p => p.text.includes("GoogleGenAI is not defined - Real Fix"))) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug Critique: GoogleGenAI is not defined (Real Fix)\n\n- Le module d'IA financière plantait l'interface ('GoogleGenAI is not defined') car le code tentait encore d'instancier la classe du SDK supprimé.\n- Remplacement complet et effectif des appels d'IA par l'API REST native via Axios pointant vers le modèle `gemini-1.5-flash`. Le crash de l'interface Deep Analysis et Market Check est définitivement résolu." });
                 syncCloud();
