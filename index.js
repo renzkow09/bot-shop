@@ -99,7 +99,12 @@ let rewarbleCircuitBreaker = { fails: 0, nextTry: 0 };
 const ADMIN_DISCORD_ID = "1520551977854042114";
 const CATEGORY_CUSTOMER_ID = "1521540733226713249";
 const CATEGORY_SUPPORT_ID = "1521541155005796484";
-const DASHBOARD_PIN = "1206"; 
+const DASHBOARD_PIN = "1206";
+
+function getParisDateStr(dateObj = new Date()) {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris' }).format(dateObj);
+}
+ 
 const MONTHLY_GOAL = 500; 
 
 const TEST_VOUCHERS = { "GOYAVE5": 5 };
@@ -379,6 +384,18 @@ function ensureMemoryInitialized() {
             
             
             
+            
+            
+            if (!memoryStats.patchnotes.some(p => p.text.includes("GoogleGenAI is not defined - Real Fix"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug Critique: GoogleGenAI is not defined (Real Fix)\n\n- Le module d'IA financière plantait l'interface ('GoogleGenAI is not defined') car le code tentait encore d'instancier la classe du SDK supprimé.\n- Remplacement complet et effectif des appels d'IA par l'API REST native via Axios pointant vers le modèle `gemini-1.5-flash`. Le crash de l'interface Deep Analysis et Market Check est définitivement résolu." });
+                syncCloud();
+            }
+
+            if (!memoryStats.patchnotes.some(p => p.text.includes("TimeZone Shift"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🌍 Correction de Localisation: TimeZone Shift (Europe/Paris)\n\n- **Alignement des Données**: Les statistiques (Revenus d'aujourd'hui, Inscriptions d'aujourd'hui) utilisaient l'heure universelle (UTC) du serveur Cloud Run. Après minuit UTC (soit 1h ou 2h du matin en France), le dashboard affichait toujours les données de la veille.\n- **Formatage Local**: Implémentation de `Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris' })` pour toutes les dates de référence (today/yesterday), garantissant que 'Aujourd'hui' bascule bien à minuit, heure française." });
+                syncCloud();
+            }
+
             if (!memoryStats.patchnotes.some(p => p.text.includes("Framer Motion"))) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "✨ Amélioration UI/UX: Animations avec Framer Motion\n\n- **Animations d'Entrée**: Intégration du moteur d'animation Framer Motion (via Motion One) pour interpoler l'apparition des cartes et des boutons lors du défilement.\n- **Interactions de Survol (Hover)**: Les effets de survol natifs CSS (transformations) ont été remplacés par des délégations d'évènements JavaScript (mouseover/mouseout) propulsées par Framer Motion.\n- **Performances**: L'utilisation du module ESM allège la charge réseau tout en garantissant des courbes de bézier fluides et une fluidité 60fps." });
                 syncCloud();
@@ -822,7 +839,7 @@ async function syncCloud(isManualForce = false) {
         fs.renameSync(tempFile, STATS_FILE);
 
         // 2. Sauvegarde Rotative Automatique (Rolling Backup - 7 Jours)
-        const today = new Date().toISOString().split('T')[0]; // Format: YYYY-MM-DD
+        const today = getParisDateStr(); // Format: YYYY-MM-DD (Paris time)
         const backupFileName = `stats_backup_${today}.json`;
         const backupFilePath = path.join(__dirname, backupFileName);
 
@@ -933,7 +950,7 @@ async function checkSubscriptions() {
 // === [ANCHOR: BOT_STATISTICS_LOGGER] ===
     // 🚀 [FUNCTION: logStat] - Déclaration de fonction
 function logStat(type, value = 1, extraData = null) {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getParisDateStr();
     if (type === 'revenue') {
         memoryStats.revenue[today] = (memoryStats.revenue[today] || 0) + value;
         memoryStats.total_revenue += value;
@@ -2606,8 +2623,8 @@ const server = http.createServer(async (req, res) => {
             } catch (err) { memberCount = guild.memberCount; }
             activeTickets = guild.channels.cache.filter(c => c.name.startsWith('shop-') || c.name.startsWith('support-')).size;
         }
-        const todayStr = new Date().toISOString().split('T')[0];
-        const yesterdayStr = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+        const todayStr = getParisDateStr();
+        const yesterdayStr = getParisDateStr(Date.now() - 86400000);
         try { 
             let monthRevenue = 0; 
             if(memoryStats.revenue) Object.keys(memoryStats.revenue).forEach(date => { if(date.startsWith(todayStr.substring(0, 7))) monthRevenue += parseFloat(memoryStats.revenue[date]) || 0; });
@@ -2843,7 +2860,7 @@ const server = http.createServer(async (req, res) => {
                 if (data.action === 'edit_stat') {
                     const val = data.value;
                     if (data.key === 'today_rev') {
-                        const todayStr = new Date().toISOString().split('T')[0];
+                        const todayStr = getParisDateStr();
                         const oldVal = memoryStats.revenue[todayStr] || 0;
                         const newVal = parseFloat(val) || 0;
                         memoryStats.revenue[todayStr] = newVal;
@@ -3027,7 +3044,7 @@ const server = http.createServer(async (req, res) => {
                     if (!dateStrDisplay || !dateKey) {
                         const txDate = data.dateInput ? new Date(data.dateInput) : new Date();
                         dateStrDisplay = txDate.toLocaleString('en-US');
-                        dateKey = txDate.toISOString().split('T')[0];
+                        dateKey = getParisDateStr(txDate);
                     }
                     
                     const username = (data.username && data.username.trim() !== '') ? data.username.trim() : "Manual Entry";
@@ -3094,7 +3111,7 @@ const server = http.createServer(async (req, res) => {
                             memoryStats.total_revenue = Math.max(0, memoryStats.total_revenue - tx.price);
                             
                             try {
-                                const revKey = new Date(tx.date).toISOString().split('T')[0];
+                                const revKey = getParisDateStr(new Date(tx.date));
                                 if (memoryStats.revenue[revKey]) {
                                     memoryStats.revenue[revKey] = Math.max(0, memoryStats.revenue[revKey] - tx.price);
                                 }
@@ -3326,16 +3343,13 @@ const server = http.createServer(async (req, res) => {
                     if (!recent.length) return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ result: "<p>No recent transactions to analyze.</p>" }));
                     
                     try {
-                        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY, httpOptions: { headers: { 'User-Agent': 'aistudio-build' } } });
-                        const response = await ai.models.generateContent({
-                            model: 'gemini-3.1-pro-preview',
-                            contents: (data.lang === 'fr' ? "Analyse ces transactions récentes et génère un rapport financier complet. TU DOIS IMPÉRATIVEMENT TOUT ÉCRIRE EN FRANÇAIS (y compris les labels, titres et descriptions) au format HTML: " : "Analyze these recent transactions and provide a short financial analysis report in HTML format: ") + JSON.stringify(recent),
-                            config: {
-                                systemInstruction: `You are an expert financial analyst. ${data.lang === 'fr' ? 'You MUST write your entire response, including all HTML text, labels, and analysis, strictly in FRENCH.' : 'You MUST write your entire response strictly in ENGLISH.'} IMPORTANT: Output ONLY safe HTML fragments (like <div>, <table>, <h2>). Do NOT output global tags like <html>, <head>, <body>, or <style>.`,
-                                thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH }
-                            }
-                        });
-                        let rawHtml = response.text || "";
+                        const payload = {
+                            contents: [{ parts: [{ text: (data.lang === 'fr' ? "Analyse ces transactions récentes et génère un rapport financier complet. TU DOIS IMPÉRATIVEMENT TOUT ÉCRIRE EN FRANÇAIS (y compris les labels, titres et descriptions) au format HTML: " : "Analyze these recent transactions and provide a short financial analysis report in HTML format: ") + JSON.stringify(recent) }] }],
+                            systemInstruction: { parts: [{ text: `You are an expert financial analyst. ${data.lang === 'fr' ? 'You MUST write your entire response, including all HTML text, labels, and analysis, strictly in FRENCH.' : 'You MUST write your entire response strictly in ENGLISH.'} IMPORTANT: Output ONLY safe HTML fragments (like <div>, <table>, <h2>). Do NOT output global tags like <html>, <head>, <body>, or <style>.` }] }
+                        };
+                        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
+                        const response = await axios.post(url, payload, { headers: { 'Content-Type': 'application/json' }});
+                        let rawHtml = response.data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
                         rawHtml = rawHtml.replace(/```html/g, '').replace(/```/g, '').replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '').replace(/<\/?html[^>]*>/gi, '').replace(/<\/?head[^>]*>/gi, '').replace(/<\/?body[^>]*>/gi, '');
                         return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ result: rawHtml }));
                     } catch(e) {
@@ -3348,18 +3362,15 @@ const server = http.createServer(async (req, res) => {
                 else if (data.action === 'check_market') {
                     if (!process.env.GEMINI_API_KEY) return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ error: "GEMINI_API_KEY not configured." }));
                     try {
-                        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY, httpOptions: { headers: { 'User-Agent': 'aistudio-build' } } });
-                        const response = await ai.models.generateContent({
-                            model: 'gemini-3.1-pro-preview',
-                            contents: "Perform a quick market analysis for the digital product: " + data.product + ". Provide a short HTML report with pricing recommendations and insights. IMPORTANT: Do NOT include <html>, <head>, <body>, or global <style> tags. Output ONLY safe HTML fragments suitable to be embedded in a dark-themed UI.",
-                            config: {
-                                tools: [{ googleSearch: {} }],
-                                thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH }
-                            }
-                        });
-                        let finalHtml = response.text || "";
+                        const payload = {
+                            contents: [{ parts: [{ text: "Perform a quick market analysis for the digital product: " + data.product + ". Provide a short HTML report with pricing recommendations and insights. IMPORTANT: Do NOT include <html>, <head>, <body>, or global <style> tags. Output ONLY safe HTML fragments suitable to be embedded in a dark-themed UI." }] }],
+                            tools: [{ googleSearch: {} }]
+                        };
+                        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
+                        const response = await axios.post(url, payload, { headers: { 'Content-Type': 'application/json' }});
+                        let finalHtml = response.data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
                         finalHtml = finalHtml.replace(/```html/g, '').replace(/```/g, '').replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '').replace(/<\/?html[^>]*>/gi, '').replace(/<\/?head[^>]*>/gi, '').replace(/<\/?body[^>]*>/gi, '');
-                        const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+                        const chunks = response.data?.candidates?.[0]?.groundingMetadata?.groundingChunks;
                         if (chunks) {
                             finalHtml += '<br><br><div style="font-size:0.8em; padding:10px; background:rgba(255,255,255,0.05); border-radius:10px;">Sources analyzed via Google Search.</div>';
                         }
