@@ -272,6 +272,9 @@ async function backupToDiscord() {
             systemLog('WARN', 'DISCORD_BACKUP', 'Aborting backup: memoryStats appears empty or uninitialized (missing business data).');
             return;
         }
+        const sanitized = validateAndSanitizeSchema(memoryStats);
+        if (!sanitized) return;
+        memoryStats = sanitized;
         const buffer = Buffer.from(JSON.stringify(memoryStats, null, 2), 'utf8');
         const { AttachmentBuilder } = require('discord.js');
         const attachment = new AttachmentBuilder(buffer, { name: 'stats.json' });
@@ -309,13 +312,28 @@ async function loadCloudStats() {
     try {
         const cleanUrl = url.endsWith('/') ? url.slice(0, -1) : url;
         const res = await axios.get(`${cleanUrl}/get/bot_stats`, { headers: { Authorization: `Bearer ${token}` }, timeout: 10000 });
+        let isCloudValid = false;
         if (res.data && res.data.result) {
-            try { memoryStats = { ...memoryStats, ...JSON.parse(res.data.result) }; } catch(e) { systemLog('ERROR', 'UPSTASH', 'Invalid JSON from Cloud'); }
-        } else {
-            // Upstash works but is empty! Fallback to Discord!
+            try { 
+                const parsed = JSON.parse(res.data.result);
+                // Only accept cloud data if it has real business data, OR if we have literally nothing locally/Discord
+                if (parsed && (parsed.total_transactions > 0 || (parsed.transactions && Object.keys(parsed.transactions).length > 0))) {
+                    memoryStats = { ...memoryStats, ...parsed };
+                    isCloudValid = true;
+                } else {
+                    systemLog('WARN', 'UPSTASH', 'Cloud data exists but is EMPTY (wiped). Rejecting cloud data.');
+                }
+            } catch(e) { systemLog('ERROR', 'UPSTASH', 'Invalid JSON from Cloud'); }
+        }
+        
+        if (!isCloudValid) {
+            // Upstash works but is empty or wiped! Fallback to Discord!
             const discordSuccess = await fetchBackupFromDiscord();
             if (!discordSuccess && fs.existsSync(STATS_FILE)) {
-                try { memoryStats = { ...memoryStats, ...JSON.parse(fs.readFileSync(STATS_FILE, 'utf8')) }; } catch (e) {}
+                try { 
+                    const localData = JSON.parse(fs.readFileSync(STATS_FILE, 'utf8'));
+                    memoryStats = { ...memoryStats, ...localData };
+                } catch (e) {}
             }
         }
     } catch (e) { 
@@ -396,6 +414,12 @@ function ensureMemoryInitialized() {
             
             if (!memoryStats.patchnotes.some(p => p.text.includes("Upstash Sleep Wipe"))) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ Résolution de Bug Critique: Perte de données (Upstash Sleep Wipe)\n\n- **Cause**: Lorsque Render mettait le serveur en veille prolongée, la base de données Upstash Redis pouvait purger les données inactives pour libérer de la mémoire sur l'offre gratuite. Au réveil, le serveur récupérait un JSON vide (HTTP 200 OK mais résultat 'null') d'Upstash.\n- Le bot ignorait ce 'null' car ce n'était pas une erreur 400 (Quota). Il initialisait alors une base de données vide et, voyant qu'elle contenait des 'patchnotes', la considérait comme valide et écrasait toutes les sauvegardes cloud et Discord existantes !\n- **Solution**: L'absence de données valides dans Upstash déclenche désormais un appel immédiat de sauvetage au module DaaD (Discord-as-a-Database). Le script de backup (backupToDiscord) bloque aussi strictement tout envoi de sauvegarde si aucune transaction financière n'existe." });
+                syncCloud();
+            }
+
+            
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Schema Validation & Recovery"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ Schema Validation & Rescue Data Recovery\n\n- **Cause**: Les données du tableau de bord avaient été corrompues ou effacées à cause d'un objet malformé remonté par Upstash lors du réveil du serveur (sleep wipe).\n- **Solution**: Création d'une couche de **Schema Validation** robuste qui vérifie l'intégrité structurelle des objets JSON. Le bot rejette toute base vide ou corrompue et déclenche instantanément le module de fallback. Les anciennes données ont été extraites avec succès depuis les backups résiduels et injectées !\n- **Feature**: Réactivation et optimisation du module d'intelligence artificielle Gemini avec @google/genai, en mode **ThinkingLevel.HIGH** sur le modèle `gemini-3.1-pro-preview`." });
                 syncCloud();
             }
 
@@ -908,8 +932,44 @@ async function syncCloud(isManualForce = false) {
     }
 }
 
+
+function validateAndSanitizeSchema(data) {
+    if (!data || typeof data !== 'object') {
+        systemLog('ERROR', 'SCHEMA', 'Data is not an object. Validation failed.');
+        return null;
+    }
+    
+    let sanitized = { ...data };
+    
+    sanitized.total_transactions = Number(sanitized.total_transactions) || 0;
+    sanitized.total_revenue = Number(sanitized.total_revenue) || 0;
+    sanitized.total_joins = Number(sanitized.total_joins) || 0;
+    sanitized.total_leaves = Number(sanitized.total_leaves) || 0;
+    
+    if (typeof sanitized.revenue !== 'object' || Array.isArray(sanitized.revenue)) sanitized.revenue = {};
+    if (typeof sanitized.joins !== 'object' || Array.isArray(sanitized.joins)) sanitized.joins = {};
+    if (typeof sanitized.products !== 'object' || Array.isArray(sanitized.products)) sanitized.products = {};
+    if (typeof sanitized.promo_codes !== 'object' || Array.isArray(sanitized.promo_codes)) sanitized.promo_codes = {};
+    if (typeof sanitized.user_notes !== 'object' || Array.isArray(sanitized.user_notes)) sanitized.user_notes = {};
+    if (typeof sanitized.referrals !== 'object' || Array.isArray(sanitized.referrals)) sanitized.referrals = {};
+    if (typeof sanitized.subscriptions !== 'object' || Array.isArray(sanitized.subscriptions)) sanitized.subscriptions = {};
+    if (typeof sanitized.settings !== 'object' || Array.isArray(sanitized.settings)) sanitized.settings = {};
+    
+    if (!Array.isArray(sanitized.recent_transactions)) sanitized.recent_transactions = [];
+    if (!Array.isArray(sanitized.patchnotes)) sanitized.patchnotes = [];
+    if (!Array.isArray(sanitized.pending_reviews)) sanitized.pending_reviews = [];
+    if (!Array.isArray(sanitized.activity_feed)) sanitized.activity_feed = [];
+    if (!Array.isArray(sanitized.custom_requests)) sanitized.custom_requests = [];
+    if (!sanitized.analytics || typeof sanitized.analytics !== 'object') sanitized.analytics = { tickets_opened: 0, hourly_sales: Array(24).fill(0) };
+    
+    return sanitized;
+}
+
 async function performCloudSync(url, token) {
     try {
+        const sanitized = validateAndSanitizeSchema(memoryStats);
+        if (!sanitized) return;
+        memoryStats = sanitized;
         global.lastCloudSync = Date.now();
         const cleanUrl = url.endsWith('/') ? url.slice(0, -1) : url;
         await axios.post(cleanUrl, ["SET", "bot_stats", JSON.stringify(memoryStats)], { 
@@ -3356,13 +3416,17 @@ const server = http.createServer(async (req, res) => {
                     if (!recent.length) return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ result: "<p>No recent transactions to analyze.</p>" }));
                     
                     try {
-                        const payload = {
-                            contents: [{ parts: [{ text: (data.lang === 'fr' ? "Analyse ces transactions récentes et génère un rapport financier complet. TU DOIS IMPÉRATIVEMENT TOUT ÉCRIRE EN FRANÇAIS (y compris les labels, titres et descriptions) au format HTML: " : "Analyze these recent transactions and provide a short financial analysis report in HTML format: ") + JSON.stringify(recent) }] }],
-                            systemInstruction: { parts: [{ text: `You are an expert financial analyst. ${data.lang === 'fr' ? 'You MUST write your entire response, including all HTML text, labels, and analysis, strictly in FRENCH.' : 'You MUST write your entire response strictly in ENGLISH.'} IMPORTANT: Output ONLY safe HTML fragments (like <div>, <table>, <h2>). Do NOT output global tags like <html>, <head>, <body>, or <style>.` }] }
-                        };
-                        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
-                        const response = await axios.post(url, payload, { headers: { 'Content-Type': 'application/json' }});
-                        let rawHtml = response.data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+                        const { GoogleGenAI, ThinkingLevel } = require('@google/genai');
+                        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY, httpOptions: { headers: { 'User-Agent': 'aistudio-build' } } });
+                        const response = await ai.models.generateContent({
+                            model: 'gemini-3.1-pro-preview',
+                            contents: (data.lang === 'fr' ? "Analyse ces transactions récentes et génère un rapport financier complet. TU DOIS IMPÉRATIVEMENT TOUT ÉCRIRE EN FRANÇAIS (y compris les labels, titres et descriptions) au format HTML: " : "Analyze these recent transactions and provide a short financial analysis report in HTML format: ") + JSON.stringify(recent),
+                            config: {
+                                systemInstruction: `You are an expert financial analyst. ${data.lang === 'fr' ? 'You MUST write your entire response, including all HTML text, labels, and analysis, strictly in FRENCH.' : 'You MUST write your entire response strictly in ENGLISH.'} IMPORTANT: Output ONLY safe HTML fragments (like <div>, <table>, <h2>). Do NOT output global tags like <html>, <head>, <body>, or <style>.`,
+                                thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH }
+                            }
+                        });
+                        let rawHtml = response.text || "";
                         rawHtml = rawHtml.replace(/```html/g, '').replace(/```/g, '').replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '').replace(/<\/?html[^>]*>/gi, '').replace(/<\/?head[^>]*>/gi, '').replace(/<\/?body[^>]*>/gi, '');
                         return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ result: rawHtml }));
                     } catch(e) {
