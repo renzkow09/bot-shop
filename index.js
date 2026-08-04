@@ -441,6 +441,14 @@ function ensureMemoryInitialized() {
     memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🚨 Restauration Forcée : ID Spécifique (DaaD)\n\n- **Action** : Le système de restauration des données (Discord as a Database) a été reprogrammé pour cibler explicitement votre salon privé d'archives (ID: 1528389202058940497).\n- **Résultat** : 100% de vos données ont été extraites avec succès depuis le dernier fichier `stats.json` valide présent dans ce salon.\n- **Cloud** : La base de données Upstash a été resynchronisée de force avec ces informations pour garantir un retour immédiat à la normale sur votre Dashboard." });
     syncCloud();
 }
+            if (!memoryStats.patchnotes.some(p => p.text.includes("UI Dashboard - Navigation & Chat Re-design"))) {
+    memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🎨 UPDATE: UI Dashboard - Navigation & Chat Re-design\n\n- **Navigation (Sidebar)** : Ajout d'icônes SVG pour chaque onglet. Révision du blur, background, et des espacements pour un look beaucoup plus aéré et moderne.\n- **Organisation du Chat** : Nouveau design de l'interface Livechat avec `display: flex` forçant une hauteur de 75vh. Les bulles de discussions sont plus esthétiques (dégradés, ombres, coins arrondis intelligents).\n- **Expérience Utilisateur** : Séparation nette entre la liste des tickets et la fenêtre de discussion, rendant le tout plus compréhensible." });
+    syncCloud();
+}
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Fonctionnalité: Demande de Fermeture Ticket"))) {
+    memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🌟 NOUVEAU: Demande de Fermeture Ticket & UI Dashboard\n\n- **Côté Client (Discord)** : Ajout d'un bouton interactif '🔒 Request Close' dès l'ouverture d'un ticket (Support & Shop). L'utilisateur peut ainsi signaler proprement son intention de fermer le channel.\n- **Temps Réel (WebSockets)** : Lorsqu'un utilisateur clique sur le bouton, une notification est propulsée instantanément sur le Dashboard de l'administrateur.\n- **UI Dashboard (Premium)** : Si l'admin est actif, une popup élégante lui propose d'accepter ou de refuser la fermeture. De plus, un indicateur 🔒 clignotant (pulse) apparaît dans la liste des tickets, et une bannière d'alerte rouge est affichée au-dessus du chat pour agir rapidement.\n- **Action** : Un clic sur 'Close Ticket' archive et supprime automatiquement le channel Discord." });
+    syncCloud();
+}
             if (!memoryStats.patchnotes.some(p => p.text.includes("Coupure Dashboard & API Route"))) {
     memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🚨 HOTFIX: Coupure Dashboard & API Route\n\n- **Problème** : Le tableau de bord était totalement vide et les communications coupées (impossible de lire ou répondre aux tickets).\n- **Cause** : Le dernier patch censé empêcher le cache du navigateur ajoutait un paramètre `?t=timestamp` à la requête d'initialisation. Cependant, le routeur backend attendait l'URL exacte sans paramètre. Le serveur renvoyait du texte au lieu des données, paralysant l'interface Javascript.\n- **Correction** : Le routeur accepte désormais toutes les requêtes commençant par `/api/init-data`. Le flux de données est rétabli et les communications réactivées instantanément." });
     syncCloud();
@@ -1208,6 +1216,41 @@ async function generateTranscript(channel) {
        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 15px 35px rgba(96, 165, 250, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2); }
        .btn-primary:hover::after { left: 150%; }
        .btn-primary:active { transform: translateY(1px); box-shadow: 0 5px 15px rgba(96, 165, 250, 0.3); }
+    
+        /* Mobile Enhancements */
+        @media screen and (min-width: 901px) {
+            .burger-btn { display: none !important; }
+        }
+        @media screen and (max-width: 900px) {
+            .burger-btn { display: inline-block !important; margin-right: 15px; }
+            .overview-grid { grid-template-columns: 1fr !important; gap: 15px; }
+            .chat-container { flex-direction: column; height: auto !important; min-height: 70vh; }
+            .ticket-list { height: 250px; border-right: none; border-bottom: 1px solid rgba(255,255,255,0.05); width: 100% !important; flex-shrink: 0; }
+            
+            .sidebar { 
+                position: fixed !important; 
+                height: 100dvh; 
+                left: 0; 
+                top: 0; 
+                width: 280px !important; 
+                transform: translateX(-100%);
+                z-index: 10000;
+            }
+            .sidebar.active {
+                transform: translateX(0);
+            }
+            #mobile-overlay {
+                display: none;
+                position: fixed;
+                top: 0; left: 0; right: 0; bottom: 0;
+                background: rgba(0,0,0,0.5);
+                z-index: 9999;
+                backdrop-filter: blur(5px);
+                -webkit-backdrop-filter: blur(5px);
+            }
+            #mobile-overlay.active { display: block; }
+        }
+
     </style>
 
         </head><body><h2>Transcript of ${channel.name}</h2>`;
@@ -1493,6 +1536,23 @@ client.on('interactionCreate', async (interaction) => {
                 return;
             }
             
+            
+            if (interaction.customId === 'request_close_ticket') {
+                await interaction.deferUpdate().catch(()=>{});
+                const state = channelStates.get(interaction.channel.id) || {};
+                state.closeRequested = true;
+                channelStates.set(interaction.channel.id, state);
+                await interaction.channel.send({ content: "✅ Request to close ticket sent to staff. Please wait." }).catch(()=>{});
+                
+                // Broadcast to dashboard
+                global.broadcastToDashboard('close_request', {
+                    channelId: interaction.channel.id,
+                    channelName: interaction.channel.name,
+                    username: interaction.user.username
+                });
+                return;
+            }
+
             if (interaction.customId === 'open_shop_channel') {
                 if (processedInteractions.has(interaction.id)) return;
                 processedInteractions.add(interaction.id);
@@ -1565,11 +1625,16 @@ client.on('interactionCreate', async (interaction) => {
                 }
 
                     
+                    
+                    const closeBtnRow = new ActionRowBuilder().addComponents(
+                        new ButtonBuilder().setCustomId('request_close_ticket').setLabel('🔒 Request Close').setStyle(ButtonStyle.Danger)
+                    );
                     if(optCount > 0) {
-                        await channel.send({ content: memoryStats.messages.shop_welcome.replace('{user}', '<@' + interaction.user.id + '>') }).catch(() => {});
+                        await channel.send({ content: memoryStats.messages.shop_welcome.replace('{user}', '<@' + interaction.user.id + '>'), components: [closeBtnRow] }).catch(() => {});
                     } else {
-                        await channel.send({ content: memoryStats.messages.shop_empty.replace('{user}', '<@' + interaction.user.id + '>') }).catch(() => {});
+                        await channel.send({ content: memoryStats.messages.shop_empty.replace('{user}', '<@' + interaction.user.id + '>'), components: [closeBtnRow] }).catch(() => {});
                     }
+
                     await interaction.editReply({ content: memoryStats.messages.ticket_ready.replace('{channel}', '<#' + channel.id + '>') }).catch(() => {});
                     userTicketLocks.delete(interaction.user.id);
                 } else {
@@ -2786,7 +2851,8 @@ const server = http.createServer(async (req, res) => {
                     id: c.id, 
                     name: c.name,
                     createdTimestamp: c.createdTimestamp || 0,
-                    isSupport: c.name.startsWith('support-')
+                    isSupport: c.name.startsWith('support-'),
+                    closeRequested: channelStates.get(c.id)?.closeRequested || false
                 }));
         }
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -2820,7 +2886,8 @@ const server = http.createServer(async (req, res) => {
             }
         }
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify(msgs));
+        const cState = channelStates.get(channelId) || {};
+        return res.end(JSON.stringify({ msgs: msgs, closeRequested: cState.closeRequested || false }));
     }
 
     // 🚀 [API_ROUTE: /api/monitoring] - Route API backend
@@ -4113,112 +4180,26 @@ const server = http.createServer(async (req, res) => {
         
         
         
-        .nav-menu { display: flex; flex-direction: column; gap: 8px; padding: 20px; overflow-y: auto; flex: 1; }
-        .nav-group { font-size: 0.7em; color: var(--text-muted); font-weight: 700; margin-top: 15px; margin-bottom: 5px; letter-spacing: 1px; }
-        
-        
-        
-        
-        
-        
-        /* Mobile Enhancements */
-        @media screen and (max-width: 900px) {
-          .overview-grid { grid-template-columns: 1fr !important; gap: 15px; }
-          .chat-container { flex-direction: column; height: auto !important; min-height: 70vh; }
-          .ticket-list { height: 250px; border-right: none; border-bottom: 1px solid rgba(255,255,255,0.05); }
-          
-          .sidebar { 
-              position: fixed !important; 
-              height: 100dvh; 
-              left: 0; 
-              top: 0; 
-              width: 280px !important; 
-              z-index: 3000 !important; 
-              transform: translateX(-100%); 
-              background: rgba(18, 18, 22, 0.98) !important;
-              box-shadow: 5px 0 30px rgba(0,0,0,0.8);
-          }
-          .sidebar.mobile-open { transform: translateX(0) !important; }
-          
-          #mobile-overlay {
-              display: none;
-              position: fixed;
-              inset: 0;
-              background: rgba(0,0,0,0.6);
-              backdrop-filter: blur(5px);
-              z-index: 2999;
-          }
-          #mobile-overlay.active { display: block; }
-          
-          .top-navbar { padding: 12px 15px; }
-          .nav-brand { font-size: 1em !important; }
-          .burger-btn { font-size: 1.8em !important; }
-          .stats-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
-          .box { padding: 15px; }
-          
-          
-          /* Missing Mobile Fixes */
-          .login-box { padding: 40px 20px !important; width: 90% !important; max-width: 340px !important; margin: 0 auto !important; }
-          .login-box input { letter-spacing: 10px !important; text-indent: 10px !important; font-size: 18px !important; padding: 15px !important; }
-          
-          .kanban-board { flex-direction: column !important; min-height: auto !important; }
-          .kanban-col { min-width: 100% !important; }
-          
-          .bot-status { display: none !important; } /* Hide on mobile to save space */
-
-          /* Make tables scrollable horizontally */
-          .table-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-          table { width: 100%; min-width: 500px; }
-          
-          /* Inputs and buttons */
-          input, select, button { font-size: 16px !important; } /* Prevents iOS zoom */
-          .admin-btn { padding: 12px; margin-top: 10px; width: 100%; }
-        }
-        
-        @media screen and (max-width: 480px) {
-          .stats-grid { grid-template-columns: 1fr; }
-        }
-
-        /* SIDEBAR STYLES */
-        
-        
-        
-        
-        .nav-menu { display: flex; flex-direction: column; gap: 8px; padding: 20px; overflow-y: auto; flex: 1; }
-        .nav-group { font-size: 0.7em; color: var(--text-muted); font-weight: 700; margin-top: 15px; margin-bottom: 5px; letter-spacing: 1px; }
-        
-        
-        
-        
-        
-        
         .main-content { padding: 30px 40px; max-width: 1400px; margin: 0 auto; animation: fadeInSmooth 0.5s ease; overflow-y: auto; height: calc(100vh - 70px); width: 100%; }
-        
-         backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px); border-bottom: 0.5px solid rgba(255,255,255,0.05); white-space: nowrap; }
-        .nav-menu::-webkit-scrollbar { height: 0px;  }
-        .nav-btn { background: transparent; border: none; color: var(--text-muted); padding: 14px 20px; border-radius: 16px; cursor: pointer; font-weight: 500; transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1); display: flex; align-items: center; gap: 14px; font-size: 1.05em; position: relative; overflow: hidden; }
-        .nav-btn:hover { color: #fff; background: rgba(255,255,255,0.08); transform: translateX(6px); box-shadow: 0 6px 16px rgba(0,0,0,0.15); }
-        .nav-btn.active { background: rgba(255,255,255,0.12); color: #fff; box-shadow: 0 6px 20px rgba(0,0,0,0.2); border-left: 4px solid var(--accent-green); padding-left: 16px; font-weight: 600; }
-        .nav-btn:active { transform: translateX(2px) scale(0.98); }
         .main-content { padding: 30px 40px; max-width: 1400px; margin: 0 auto; animation: fadeInSmooth 0.5s ease; overflow-y: auto; height: calc(100vh - 120px); }
         
         
-        .ticket-list { flex: 1; background: var(--bg-card); border-radius: 24px; border: 0.5px solid var(--border-color); overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 10px; backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px); }
-        .ticket-item { padding: 15px; background: rgba(255,255,255,0.02); border-radius: 16px; cursor: pointer; transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1); font-weight: 500; font-size: 0.9em; border: 0.5px solid transparent; position: relative; overflow: hidden; }
-        .ticket-item:hover { background: rgba(255,255,255,0.06); transform: translateX(4px); box-shadow: 0 4px 15px rgba(0,0,0,0.15); border-color: rgba(255,255,255,0.05); }
-        .ticket-item.active { background: linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.1)); border: 0.5px solid rgba(255,255,255,0.15); color: #fff; box-shadow: 0 5px 20px rgba(0,0,0,0.2); border-left: 3px solid var(--accent-green); padding-left: 12px; }
+        .chat-container { display: flex; height: 75vh; gap: 20px; width: 100%; }
+        .ticket-list { width: 300px; background: rgba(20,20,25,0.6); border-radius: 20px; border: 1px solid rgba(255,255,255,0.05); overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 8px; backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: blur(20px); flex-shrink: 0; }
+        .ticket-item { padding: 14px 18px; background: transparent; border-radius: 12px; cursor: pointer; transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1); font-weight: 500; font-size: 0.9em; border: 1px solid transparent; color: rgba(255,255,255,0.7); display: flex; align-items: center; justify-content: space-between; }
+        .ticket-item:hover { background: rgba(255,255,255,0.04); color: #fff; transform: translateX(4px); }
+        .ticket-item.active { background: linear-gradient(90deg, rgba(var(--accent-green-rgb), 0.15), rgba(var(--accent-green-rgb), 0.05)); border: 1px solid rgba(var(--accent-green-rgb), 0.2); color: #fff; box-shadow: 0 4px 15px rgba(0,0,0,0.2); border-left: 4px solid var(--accent-green); font-weight: 600; padding-left: 14px; }
         .ticket-item:active { transform: translateX(2px) scale(0.98); }
-        .chat-window { flex: 3; display: flex; flex-direction: column; background: var(--bg-card); border-radius: 24px; border: 0.5px solid var(--border-color); overflow: hidden; position: relative; backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px); }
-        .chat-messages { flex: 1; padding: 25px; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; scroll-behavior: smooth; }
-        .chat-bubble { max-width: 75%; padding: 14px 18px; border-radius: 20px; line-height: 1.5; font-size: 0.95em; position: relative; animation: fadeInSmooth 0.3s ease-out; }
-        .chat-bubble.bot { align-self: flex-end; background: var(--accent-green); color: #000; border-bottom-right-radius: 4px; font-weight: 500; }
-        .react-btn { background:none; border:none; cursor:pointer; font-size:1.1em; transition:transform 0.3s cubic-bezier(0.25, 1, 0.5, 1), filter 0.3s; margin: 0 2px; }
-        .react-btn:hover { transform: scale(1.3) translateY(-2px); filter: drop-shadow(0 4px 8px rgba(0,0,0,0.5)); }
-        .react-btn:active { transform: scale(0.9) translateY(1px); }
-        .chat-bubble.user { align-self: flex-start; background: rgba(255,255,255,0.08); color: white; border-bottom-left-radius: 4px; border: 0.5px solid rgba(255,255,255,0.1); }
-        .chat-author { font-size: 0.7em; opacity: 0.6; margin-bottom: 6px; font-weight: 600; }
-        .chat-input-area { display: flex; padding: 20px; background: rgba(0,0,0,0.2); border-top: 0.5px solid rgba(255,255,255,0.05); gap: 15px; align-items: center; }
-        .chat-input-area input[type='text'] { flex: 1; margin: 0; border-radius: 16px; }
+        
+        .chat-window { flex: 1; display: flex; flex-direction: column; background: rgba(20,20,25,0.6); border-radius: 20px; border: 1px solid rgba(255,255,255,0.05); overflow: hidden; position: relative; backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: blur(20px); }
+        .chat-messages { flex: 1; padding: 30px; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; scroll-behavior: smooth; background: linear-gradient(180deg, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.4) 100%); }
+        .chat-bubble { max-width: 70%; padding: 14px 20px; border-radius: 18px; line-height: 1.5; font-size: 0.95em; position: relative; animation: fadeInSmooth 0.3s ease-out; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .chat-bubble.bot { align-self: flex-end; background: linear-gradient(135deg, var(--accent-green), #10b981); color: #000; border-bottom-right-radius: 4px; font-weight: 500; }
+        .chat-bubble.user { align-self: flex-start; background: rgba(255,255,255,0.08); color: #fff; border-bottom-left-radius: 4px; border: 1px solid rgba(255,255,255,0.05); }
+        .chat-author { font-size: 0.75em; opacity: 0.7; margin-bottom: 8px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; }
+        .chat-input-area { display: flex; padding: 20px; background: rgba(0,0,0,0.4); border-top: 1px solid rgba(255,255,255,0.05); gap: 15px; align-items: center; }
+        .chat-input-area input[type='text'] { flex: 1; margin: 0; border-radius: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 14px 20px; font-size: 0.95em; transition: all 0.3s ease; }
+        .chat-input-area input[type='text']:focus { background: rgba(255,255,255,0.08); border-color: var(--accent-green); outline: none; box-shadow: 0 0 0 3px rgba(var(--accent-green-rgb), 0.15); }
         
         /* LOG TERMINAL UI */
         .terminal-box { background: #050505; border: 0.5px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 20px; height: 600px; overflow-y: auto; font-family: 'Courier New', Courier, monospace; font-size: 0.85em; color: #a1a1aa; box-shadow: inset 0 0 30px rgba(0,0,0,0.8); }
@@ -4252,12 +4233,13 @@ const server = http.createServer(async (req, res) => {
     
         /* SIDEBAR STYLES */
         .app-layout { display: flex; height: 100dvh; overflow: hidden; width: 100%; }
-        .sidebar { width: 260px; background: rgba(0,0,0,0.8); backdrop-filter: saturate(180%) blur(20px); border-right: 0.5px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1), width 0.3s; z-index: 1001; }
+        .sidebar { width: 280px; background: rgba(15,15,20,0.85); backdrop-filter: saturate(180%) blur(30px); -webkit-backdrop-filter: saturate(180%) blur(30px); border-right: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1), width 0.3s; z-index: 1001; }
         .sidebar.closed { width: 0; transform: translateX(-100%); overflow: hidden; }
         .main-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; height: 100dvh; position: relative; }
-        .sidebar-header { padding: 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 0.5px solid rgba(255,255,255,0.05); }
-        .nav-menu { display: flex; flex-direction: column; gap: 8px; padding: 20px; overflow-y: auto; flex: 1; }
-        .nav-group { font-size: 0.7em; color: var(--text-muted); font-weight: 700; margin-top: 15px; margin-bottom: 5px; letter-spacing: 1px; }
+        .sidebar-header { padding: 30px 25px 20px 25px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.03); margin-bottom: 10px; }
+        .nav-menu { display: flex; flex-direction: column; gap: 6px; padding: 0 20px 25px 20px; overflow-y: auto; flex: 1; scrollbar-width: none; }
+        .nav-menu::-webkit-scrollbar { display: none; }
+        .nav-group { font-size: 0.7em; color: rgba(255,255,255,0.4); font-weight: 700; margin-top: 25px; margin-bottom: 10px; padding-left: 10px; letter-spacing: 1.5px; }
         
         .patchnotes-list { display: flex; flex-direction: column; gap: 20px; max-width: 800px; margin: 0 auto; padding-bottom: 50px; }
         .patchnote-item { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 25px; border-radius: 16px; display: flex; flex-direction: column; gap: 12px; position: relative; overflow: hidden; transition: transform 0.3s ease, background 0.3s ease, border-color 0.3s ease; }
@@ -4306,32 +4288,32 @@ const server = http.createServer(async (req, res) => {
             </div>
             <nav class='nav-menu'>
                 <div class='nav-group'>DASHBOARD</div>
-                <button class='nav-btn active' onclick='window.switchTab("overview", this)'>Overview</button>
-                <button class='nav-btn' onclick='window.switchTab("analytics", this)'>Analytics</button>
-                <button class='nav-btn' onclick='window.switchTab("patchnotes", this)'>Patchnotes</button>
+                <button class='nav-btn active' onclick='window.switchTab("overview", this)'><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg> Overview</button>
+                <button class='nav-btn' onclick='window.switchTab("analytics", this)'><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg> Analytics</button>
+                <button class='nav-btn' onclick='window.switchTab("patchnotes", this)'><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg> Patchnotes</button>
                 
                 <div class='nav-group'>STORE</div>
-                <button class='nav-btn' onclick='window.switchTab("transactions", this)'>Transactions</button>
-                <button class='nav-btn' onclick='window.switchTab("products", this)'>Catalog</button>
-                <button class='nav-btn' onclick='window.switchTab("mysterybox", this)'>Mystery Box</button>
-                <button class='nav-btn' onclick='window.switchTab("kanban", this)'>Kanban</button>
-                <button class='nav-btn' onclick='window.switchTab("vip", this)'>VIP Pass</button>
-                <button class='nav-btn' onclick='window.switchTab("referrals", this)'>Promos</button>
+                <button class='nav-btn' onclick='window.switchTab("transactions", this)'><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg> Transactions</button>
+                <button class='nav-btn' onclick='window.switchTab("products", this)'><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg> Catalog</button>
+                <button class='nav-btn' onclick='window.switchTab("mysterybox", this)'><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"></polyline><rect x="1" y="3" width="22" height="5"></rect><line x1="10" y1="12" x2="14" y2="12"></line></svg> Mystery Box</button>
+                <button class='nav-btn' onclick='window.switchTab("kanban", this)'><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line><line x1="15" y1="3" x2="15" y2="21"></line></svg> Kanban</button>
+                <button class='nav-btn' onclick='window.switchTab("vip", this)'><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg> VIP Pass</button>
+                <button class='nav-btn' onclick='window.switchTab("referrals", this)'><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg> Promos</button>
                 
                 <div class='nav-group'>COMMUNITY</div>
-                <button class='nav-btn' onclick='window.switchTab("livechat", this)'>Chat <span class='nav-badge' id='badge-chat'>0</span></button>
-                <button class='nav-btn' onclick='window.switchTab("audience", this)'>Audience</button>
-                <button class='nav-btn' onclick='window.switchTab("moderation", this)'>Moderation</button>
+                <button class='nav-btn' onclick='window.switchTab("livechat", this)'><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg> Chat <span class='nav-badge' id='badge-chat'>0</span></button>
+                <button class='nav-btn' onclick='window.switchTab("audience", this)'><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg> Audience</button>
+                <button class='nav-btn' onclick='window.switchTab("moderation", this)'><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg> Moderation</button>
                 
                 <div class='nav-group'>SYSTEM</div>
-                <button class='nav-btn' onclick='window.switchTab("monitoring", this)'>Diagnostics</button>
-                <button class='nav-btn' onclick='window.switchTab("terminal", this)'>🖥️ Terminal</button>
-                <button class='nav-btn' onclick='window.switchTab("backups", this)'>Backups</button>
-                <button class='nav-btn' onclick='window.switchTab("admin", this)'>Settings <span class='nav-badge' id='badge-admin'>0</span></button>
-                <button class='nav-btn' onclick='window.switchTab("messages", this)'>Messages</button>
-                <button class='nav-btn' onclick='window.switchTab("botcontrol", this)'>Bot Control</button>
+                <button class='nav-btn' onclick='window.switchTab("monitoring", this)'><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg> Diagnostics</button>
+                <button class='nav-btn' onclick='window.switchTab("terminal", this)'><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg> Terminal</button>
+                <button class='nav-btn' onclick='window.switchTab("backups", this)'><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg> Backups</button>
+                <button class='nav-btn' onclick='window.switchTab("admin", this)'><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg> Settings <span class='nav-badge' id='badge-admin'>0</span></button>
+                <button class='nav-btn' onclick='window.switchTab("messages", this)'><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg> Messages</button>
+                <button class='nav-btn' onclick='window.switchTab("botcontrol", this)'><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"></rect><circle cx="12" cy="5" r="2"></circle><path d="M12 7v4"></path><line x1="8" y1="16" x2="8" y2="16"></line><line x1="16" y1="16" x2="16" y2="16"></line></svg> Bot Control</button>
                 
-                <button class='btn-red' id='logout-btn' style='margin-top:auto;' onclick='window.logoutUser(this)'>Logout</button>
+                <button class='btn-red' id='logout-btn' style='margin-top:auto;' onclick='window.logoutUser(this)'><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg> Logout</button>
             </nav>
         </aside>
         
@@ -5836,6 +5818,16 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                 if (data.type === 'new_message' && data.channelId === activeChatChannel) {
                     window.fetchChatMessages();
                 }
+                
+                if (data.type === 'close_request') {
+                    showToast('Close requested in ' + data.channelName);
+                    window.customConfirm('TICKET CLOSURE', 'User ' + data.username + ' requested to close ticket: ' + data.channelName + '. Accept?').then(res => {
+                        if (res) {
+                            window.executeAction({ action: 'close_channel', channelId: data.channelId });
+                        }
+                    });
+                }
+
                 if (data.type === 'stats_update') {
                     window.refreshDataSilently(true);
                 }
@@ -7397,15 +7389,21 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             if(shopTickets.length > 0) { 
                 html += '<div style="display:flex; align-items:center; gap:8px; font-size:0.85em; text-transform:uppercase; color:var(--accent-green); font-weight:700; margin: 10px 0 5px 5px; border-bottom: 0.5px solid rgba(var(--accent-green-rgb), 0.2); padding-bottom:5px; letter-spacing:0.5px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg> Shop (' + shopTickets.length + ')</div>'; 
                 shopTickets.forEach(t => { 
-                    const isActive = activeChatChannel === t.id ? 'active' : ''; 
-                    html += '<div class="ticket-item ' + isActive + '" style="transition: all 0.3s;" onclick="window.openTicketChat(&quot;' + escapeInlineJS(t.id) + '&quot;)">' + escapeHTML(t.name) + '</div>'; 
+                    
+                    const isActive = activeChatChannel === t.id ? 'active' : '';
+                    let indicator = t.closeRequested ? ' <span style="color:var(--accent-red); font-size:1.1em; vertical-align:middle; float:right; animation: pulse 2s infinite;" title="Close Requested">🔒</span>' : '';
+                    html += '<div class="ticket-item ' + isActive + '" onclick="window.openTicketChat(&quot;' + escapeInlineJS(t.id) + '&quot;)"><span>' + escapeHTML(t.name) + '</span><span>' + indicator + '</span></div>';
+ 
                 }); 
             } 
             if(supportTickets.length > 0) { 
                 html += '<div style="display:flex; align-items:center; gap:8px; font-size:0.85em; text-transform:uppercase; color:var(--accent-orange); font-weight:700; margin: 20px 0 5px 5px; border-bottom: 0.5px solid rgba(245, 158, 11, 0.2); padding-bottom:5px; letter-spacing:0.5px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 18v-6a9 9 0 0 1 18 0v6"></path><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"></path></svg> Support (' + supportTickets.length + ')</div>'; 
                 supportTickets.forEach(t => { 
-                    const isActive = activeChatChannel === t.id ? 'active' : ''; 
-                    html += '<div class="ticket-item ' + isActive + '" style="transition: all 0.3s;" onclick="window.openTicketChat(&quot;' + escapeInlineJS(t.id) + '&quot;)">' + escapeHTML(t.name) + '</div>'; 
+                    
+                    const isActive = activeChatChannel === t.id ? 'active' : '';
+                    let indicator = t.closeRequested ? ' <span style="color:var(--accent-red); font-size:1.1em; vertical-align:middle; float:right; animation: pulse 2s infinite;" title="Close Requested">🔒</span>' : '';
+                    html += '<div class="ticket-item ' + isActive + '" onclick="window.openTicketChat(&quot;' + escapeInlineJS(t.id) + '&quot;)"><span>' + escapeHTML(t.name) + '</span><span>' + indicator + '</span></div>';
+ 
                 }); 
             } 
         } 
@@ -7415,7 +7413,9 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         // 🚀 [UI_ACTION: openTicketChat] - Action d'interface Dashboard
         window.openTicketChat = function(channelId) { activeChatChannel = channelId; window.loadTicketsForChat(); if(document.getElementById('chat-messages-area')) document.getElementById('chat-messages-area').innerHTML = '<div style="margin:auto; display:flex; flex-direction:column; align-items:center; gap:15px; color:var(--accent-green);"><div style="width:40px; height:40px; border:3px solid rgba(var(--accent-green-rgb), 0.1); border-top:3px solid var(--accent-green); border-radius:50%; animation:spin 1s cubic-bezier(0.68, -0.55, 0.265, 1.55) infinite; margin:auto; box-shadow:0 0 15px rgba(var(--accent-green-rgb), 0.5);"></div></div>'; window.fetchChatMessages(); };
         // 🚀 [UI_ACTION_ASYNC: fetchChatMessages] - Action asynchrone d'interface Dashboard
-        window.fetchChatMessages = async function() { if(!activeChatChannel) return; try { const res = await fetch('/api/tickets/messages?channelId=' + activeChatChannel); const msgs = await res.json(); let html = ''; if(msgs.length === 0) html = '<div style="margin:auto; display:flex; flex-direction:column; align-items:center; opacity:0.5;"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-bottom:10px;"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg><p class="text-muted text-center" style="font-family:inherit;">Awaiting transmission...</p></div>'; else { msgs.forEach(m => { const bubbleClass = m.isBot ? 'bot' : 'user'; const imgHtml = m.imageUrl ? '<br><img src="' + escapeHTML(m.imageUrl) + '" class="chat-img-preview" style="max-width:100%; border-radius:12px; margin-top:10px; cursor:pointer; border:0.5px solid rgba(255,255,255,0.1); box-shadow: 0 4px 15px rgba(0,0,0,0.3); transition: transform 0.3s;" onmouseover="this.style.transform=&quot;scale(1.02)&quot;;" onmouseout="this.style.transform=&quot;scale(1)&quot;;" onclick="window.open(&quot;' + escapeInlineJS(m.imageUrl) + '&quot;)">' : ''; const actionsHtml = '<div class="chat-bubble-actions" style="display:none; position:absolute; top:-15px; ' + (m.isBot ? 'left:15px;' : 'right:15px;') + ' background:rgba(30,30,35,0.95); backdrop-filter:blur(10px); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:4px 8px; gap:8px; box-shadow:0 5px 15px rgba(0,0,0,0.5);"><button style="background:none; border:none; cursor:pointer; color:var(--accent-green); transition:transform 0.2s;" onmouseover="this.style.transform=&quot;scale(1.2)&quot;;" onmouseout="this.style.transform=&quot;scale(1)&quot;;" onclick="window.reactMessage(' + escapeInlineJS(m.id) + ', &quot;👍&quot;)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg></button><button style="background:none; border:none; cursor:pointer; color:var(--accent-red); transition:transform 0.2s;" onmouseover="this.style.transform=&quot;scale(1.2)&quot;;" onmouseout="this.style.transform=&quot;scale(1)&quot;;" onclick="window.reactMessage(' + escapeInlineJS(m.id) + ', &quot;❤️&quot;)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg></button></div>'; html += '<div class="chat-bubble ' + bubbleClass + '" style="box-shadow: 0 4px 15px rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.05);" onmouseover="this.querySelector(&quot; .chat-bubble-actions&quot;).style.display=&quot;flex&quot;" onmouseout="this.querySelector(&quot; .chat-bubble-actions&quot;).style.display=&quot;none&quot;"><div class="chat-author" style="opacity:0.7; font-size:0.85em; font-weight:600; margin-bottom:5px; letter-spacing:0.5px;">' + escapeHTML(m.author) + '</div><div style="line-height:1.6;">' + escapeHTML(m.content) + '</div>' + imgHtml + actionsHtml + '</div>'; }); } const area = document.getElementById('chat-messages-area'); const isAtBottom = area.scrollHeight - area.scrollTop <= area.clientHeight + 100; area.innerHTML = html; if(isAtBottom) area.scrollTop = area.scrollHeight; } catch(e) {} };
+        
+        window.fetchChatMessages = async function() { if(!activeChatChannel) return; try { const res = await fetch('/api/tickets/messages?channelId=' + activeChatChannel); const responseData = await res.json(); const msgs = responseData.msgs || []; const closeRequested = responseData.closeRequested || false; let html = ''; if (closeRequested) { html += '<div style="margin:0 15px 15px 15px; padding:12px; background:rgba(255,69,58,0.1); border:1px dashed var(--accent-red); border-radius:12px; color:var(--accent-red); display:flex; justify-content:space-between; align-items:center;"><div><strong>🔒 Close Requested</strong><br><span style="font-size:0.85em; opacity: 0.8;">User has requested to close this ticket.</span></div><div><button onclick="window.sendQuickResponse(\'close\')" style="background:var(--accent-red); color:#fff; border:none; padding:8px 16px; border-radius:8px; cursor:pointer; font-weight:bold;">Close Ticket</button></div></div>'; } if(msgs.length === 0) html += '<div style="margin:auto; display:flex; flex-direction:column; align-items:center; opacity:0.5;"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-bottom:10px;"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg><p class="text-muted text-center" style="font-family:inherit;">Awaiting transmission...</p></div>'; else { msgs.forEach(m => { const bubbleClass = m.isBot ? 'bot' : 'user'; const imgHtml = m.imageUrl ? '<br><img src="' + escapeHTML(m.imageUrl) + '" class="chat-img-preview" style="max-width:100%; border-radius:12px; margin-top:10px; cursor:pointer; border:0.5px solid rgba(255,255,255,0.1); box-shadow: 0 4px 15px rgba(0,0,0,0.3); transition: transform 0.3s;" onmouseover="this.style.transform=&quot;scale(1.02)&quot;;" onmouseout="this.style.transform=&quot;scale(1)&quot;;" onclick="window.open(&quot;' + escapeInlineJS(m.imageUrl) + '&quot;)">' : ''; const actionsHtml = '<div class="chat-bubble-actions" style="display:none; position:absolute; top:-15px; ' + (m.isBot ? 'left:15px;' : 'right:15px;') + ' background:rgba(30,30,35,0.95); backdrop-filter:blur(10px); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:4px 8px; gap:8px; box-shadow:0 5px 15px rgba(0,0,0,0.5);"><button style="background:none; border:none; cursor:pointer; color:var(--accent-green); transition:transform 0.2s;" onmouseover="this.style.transform=&quot;scale(1.2)&quot;;" onmouseout="this.style.transform=&quot;scale(1)&quot;;" onclick="window.reactMessage(' + escapeInlineJS(m.id) + ', &quot;👍&quot;)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg></button><button style="background:none; border:none; cursor:pointer; color:var(--accent-red); transition:transform 0.2s;" onmouseover="this.style.transform=&quot;scale(1.2)&quot;;" onmouseout="this.style.transform=&quot;scale(1)&quot;;" onclick="window.reactMessage(' + escapeInlineJS(m.id) + ', &quot;❤️&quot;)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg></button></div>'; html += '<div class="chat-bubble ' + bubbleClass + '"' onmouseover="this.querySelector(&quot; .chat-bubble-actions&quot;).style.display=&quot;flex&quot;" onmouseout="this.querySelector(&quot; .chat-bubble-actions&quot;).style.display=&quot;none&quot;"><div class="chat-author" style="opacity:0.7; font-size:0.85em; font-weight:600; margin-bottom:5px; letter-spacing:0.5px;">' + escapeHTML(m.author) + '</div><div style="line-height:1.6;">' + escapeHTML(m.content) + '</div>' + imgHtml + actionsHtml + '</div>'; }); } const area = document.getElementById('chat-messages-area'); const isAtBottom = area.scrollHeight - area.scrollTop <= area.clientHeight + 100; area.innerHTML = html; if(isAtBottom) area.scrollTop = area.scrollHeight; } catch(e) {} };
+
         // 🚀 [UI_ACTION_ASYNC: sendChatMessage] - Action asynchrone d'interface Dashboard
         window.sendChatMessage = async function() { if(!activeChatChannel) return showToast('Select line first', 'error'); const input = document.getElementById('chat-input-text'); const fileInput = document.getElementById('chat-file-input'); const text = input.value.trim(); const file = fileInput.files[0]; if(!text && !file) return; input.value = ''; document.getElementById('attach-badge').style.display='none'; let base64 = null; if (file) { const reader = new FileReader(); reader.readAsDataURL(file); await new Promise(r => reader.onload = r); base64 = reader.result; fileInput.value = ''; } try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'send_ticket_message', channelId: activeChatChannel, message: text, imageBase64: base64, pin: PIN }) }); window.fetchChatMessages(); } catch(e) { showToast('Transmission Failed', 'error'); } };
         // 🚀 [UI_ACTION_ASYNC: reactMessage] - Action asynchrone d'interface Dashboard
