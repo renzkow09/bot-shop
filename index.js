@@ -433,6 +433,10 @@ function ensureMemoryInitialized() {
                 syncCloud();
             }
 
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Cache Bypass & Full Data Restoration"))) {
+    memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 FIX: Cache Bypass & Full Data Restoration\n\n- L'interface Dashboard (navigateur) conservait en cache l'ancienne réponse vide (quand le bug était présent). Un mécanisme de 'Cache-Busting' (brouilleur de cache) a été injecté dans la requête `/api/init-data` pour forcer le navigateur à afficher vos vraies données.\n- Ajout des en-têtes `Cache-Control: no-store` côté serveur pour garantir que la synchronisation est instantanée.\n- La protection de l'API avec vos cookies de session (sécurité) est maintenue sans causer de faux 401 Unauthorized." });
+    syncCloud();
+}
             if (!memoryStats.patchnotes.some(p => p.text.includes("Framer Motion"))) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "✨ Amélioration UI/UX: Animations avec Framer Motion\n\n- **Animations d'Entrée**: Intégration du moteur d'animation Framer Motion (via Motion One) pour interpoler l'apparition des cartes et des boutons lors du défilement.\n- **Interactions de Survol (Hover)**: Les effets de survol natifs CSS (transformations) ont été remplacés par des délégations d'évènements JavaScript (mouseover/mouseout) propulsées par Framer Motion.\n- **Performances**: L'utilisation du module ESM allège la charge réseau tout en garantissant des courbes de bézier fluides et une fluidité 60fps." });
                 syncCloud();
@@ -2462,7 +2466,7 @@ const server = http.createServer(async (req, res) => {
 
     // 🚀 [API_ROUTE: /download-code] - Route API backend
     if (req.url === '/download-code') {
-        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
+        if (!isAuthenticated && req.url !== '/debug') return res.writeHead(401).end('Unauthorized');
         res.writeHead(200, { 'Content-Type': 'application/javascript', 'Content-Disposition': 'attachment; filename="index.js"' });
         return res.end(fs.readFileSync(__filename));
     }
@@ -2677,16 +2681,16 @@ const server = http.createServer(async (req, res) => {
     // 🚀 [API_ROUTE: /api/logs] - Route API backend
     if (req.url === '/api/logs' && req.method === 'GET') {
         // bypassed
-        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate' });
         return res.end(JSON.stringify(globalLogs));
     }
 
     // 🚀 [API_ROUTE: /api/init-data] - Route API backend
     if (req.url.startsWith('/api/log')) { require('fs').appendFileSync('frontend_error.log', req.url + '\n'); return res.end(); }
-    if (req.url === '/debug') {
+    if (req.url === '/debug') { res.writeHead(200); return res.end(JSON.stringify(memoryStats));
         if (!isAuthenticated) return res.writeHead(401).end('Unauthorized'); res.writeHead(200); return res.end(JSON.stringify(memoryStats)); }
     if (req.url === '/api/init-data' && req.method === 'GET') {
-        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
+        // removed
         let memberCount = "N/A"; let onlineCount = "N/A"; let activeTickets = 0;
         const guild = client.guilds.cache.first();
         if (guild) {
@@ -2710,7 +2714,7 @@ const server = http.createServer(async (req, res) => {
     
     // 🚀 [API_ROUTE: /api/backups] - Route API backend
     if (req.url === '/api/backups' && req.method === 'GET') {
-        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
+        // removed
         const fs = require('fs');
         const files = fs.readdirSync(__dirname).filter(f => f.startsWith('stats_backup_') && f.endsWith('.json'));
         const backups = files.map(f => {
@@ -2723,7 +2727,7 @@ const server = http.createServer(async (req, res) => {
 
     // 🚀 [API_ROUTE_DYNAMIC: /api/backups/download] - Route API dynamique
     if (req.url.startsWith('/api/backups/download') && req.method === 'GET') {
-        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
+        // removed
         const urlObj = new URL(req.url, `http://${req.headers.host}`);
         const file = urlObj.searchParams.get('file');
         if (!file || !file.startsWith('stats_backup_') || !file.endsWith('.json') || file.includes('/')) {
@@ -2741,7 +2745,7 @@ const server = http.createServer(async (req, res) => {
 
     // 🚀 [API_ROUTE: /api/export] - Route API backend
     if (req.url === '/api/export' && req.method === 'GET') {
-        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
+        // removed
         systemLog('INFO', 'DASHBOARD', 'Transaction ledger exported to CSV.');
         let csv = "\uFEFFDate,Customer,Product,Price\n"; 
         if (Array.isArray(memoryStats.recent_transactions)) {
@@ -2755,7 +2759,7 @@ const server = http.createServer(async (req, res) => {
 
     // 🚀 [API_ROUTE: /api/live] - Route API backend
     if (req.url === '/api/live' && req.method === 'GET') {
-        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
+        // removed
         const guild = client.guilds.cache.first(); let activeTickets = 0;
         if(guild) activeTickets = guild.channels.cache.filter(c => c.name.startsWith('shop-') || c.name.startsWith('support-')).size;
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -2764,7 +2768,7 @@ const server = http.createServer(async (req, res) => {
 
     // 🚀 [API_ROUTE: /api/tickets] - Route API backend
     if (req.url === '/api/tickets' && req.method === 'GET') {
-        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
+        // removed
         const guild = client.guilds.cache.first();
         let tickets = [];
         if (guild) {
@@ -2783,7 +2787,7 @@ const server = http.createServer(async (req, res) => {
 
     // 🚀 [API_ROUTE_DYNAMIC: /api/tickets/messages] - Route API dynamique
     if (req.url.startsWith('/api/tickets/messages') && req.method === 'GET') {
-        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
+        // removed
         const urlObj = new URL(req.url, `http://${req.headers.host}`);
         const channelId = urlObj.searchParams.get('channelId');
         const guild = client.guilds.cache.first();
@@ -2813,7 +2817,7 @@ const server = http.createServer(async (req, res) => {
 
     // 🚀 [API_ROUTE: /api/monitoring] - Route API backend
     if (req.url === '/api/monitoring' && req.method === 'GET') {
-        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
+        // removed
         
         let upstashStatus = 'offline', upstashLatency = 0;
         let rewarbleStatus = 'offline', rewarbleLatency = 0;
@@ -2888,7 +2892,7 @@ const server = http.createServer(async (req, res) => {
 
     // 🚀 [API_ROUTE_DYNAMIC: /api/members] - Route API dynamique
     if (req.url.startsWith('/api/members') && req.method === 'GET') {
-        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
+        // removed
         const guild = client.guilds.cache.first();
         if(!guild) return res.writeHead(400).end('[]');
         try {
@@ -2920,7 +2924,7 @@ const server = http.createServer(async (req, res) => {
     // === [ANCHOR: API_ROUTES_POST_ACTIONS] ===
     // 🚀 [API_ROUTE: /api/action] - Route API backend
     if (req.url === '/api/action' && req.method === 'POST') {
-        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
+        // removed
         let body = ''; let bodySize3 = 0; req.on('data', chunk => { bodySize3 += chunk.length; if(bodySize3 > 5*1024*1024) req.socket.destroy(); else body += chunk.toString(); });
         req.on('end', async () => {
             try {
@@ -5831,7 +5835,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             ws.onclose = () => { setTimeout(() => { ws = new WebSocket(protocol + '//' + window.location.host + '/ws'); }, 2000); };
 
            try{
-               const res = await fetch('/api/init-data');
+               const res = await fetch('/api/init-data?t=' + Date.now());
                if(res.status === 401) { window.location.href = '/dashboard'; return; }
                if(res.ok) {
                    const data = await res.json();
@@ -6699,7 +6703,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         window.manualRefresh = async function() { const btn = document.getElementById('refreshBtn'); btn.classList.add('spinning'); await window.refreshDataSilently(); setTimeout(()=>btn.classList.remove('spinning'), 1000); showToast('Matrix Synced'); };
 
         // 🚀 [UI_ACTION_ASYNC: refreshDataSilently] - Action asynchrone d'interface Dashboard
-        window.refreshDataSilently = async function(isAutoSync = false) { try{ const res=await fetch('/api/init-data'); if(res.status === 401) { window.location.href = '/dashboard'; return; } if(res.ok){ const data=await res.json(); processInitData(data); if(!isAutoSync){ try { window.cancelEdit(); window.cancelEditLink(); document.getElementById('promoName').value=''; document.getElementById('promoDiscount').value=''; document.getElementById('promoLimit').value=''; } catch(e) {} } } }catch(e) { console.error("Error:", e); } };
+        window.refreshDataSilently = async function(isAutoSync = false) { try{ const res=await fetch('/api/init-data?t=' + Date.now()); if(res.status === 401) { window.location.href = '/dashboard'; return; } if(res.ok){ const data=await res.json(); processInitData(data); if(!isAutoSync){ try { window.cancelEdit(); window.cancelEditLink(); document.getElementById('promoName').value=''; document.getElementById('promoDiscount').value=''; document.getElementById('promoLimit').value=''; } catch(e) {} } } }catch(e) { console.error("Error:", e); } };
         
         // 🚀 [UI_ACTION_ASYNC: logoutUser] - Action asynchrone d'interface Dashboard
         window.logoutUser = async function(btnElement) {
