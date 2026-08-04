@@ -441,6 +441,10 @@ function ensureMemoryInitialized() {
     memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🚨 Restauration Forcée : ID Spécifique (DaaD)\n\n- **Action** : Le système de restauration des données (Discord as a Database) a été reprogrammé pour cibler explicitement votre salon privé d'archives (ID: 1528389202058940497).\n- **Résultat** : 100% de vos données ont été extraites avec succès depuis le dernier fichier `stats.json` valide présent dans ce salon.\n- **Cloud** : La base de données Upstash a été resynchronisée de force avec ces informations pour garantir un retour immédiat à la normale sur votre Dashboard." });
     syncCloud();
 }
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Coupure Dashboard & API Route"))) {
+    memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🚨 HOTFIX: Coupure Dashboard & API Route\n\n- **Problème** : Le tableau de bord était totalement vide et les communications coupées (impossible de lire ou répondre aux tickets).\n- **Cause** : Le dernier patch censé empêcher le cache du navigateur ajoutait un paramètre `?t=timestamp` à la requête d'initialisation. Cependant, le routeur backend attendait l'URL exacte sans paramètre. Le serveur renvoyait du texte au lieu des données, paralysant l'interface Javascript.\n- **Correction** : Le routeur accepte désormais toutes les requêtes commençant par `/api/init-data`. Le flux de données est rétabli et les communications réactivées instantanément." });
+    syncCloud();
+}
             if (!memoryStats.patchnotes.some(p => p.text.includes("Framer Motion"))) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "✨ Amélioration UI/UX: Animations avec Framer Motion\n\n- **Animations d'Entrée**: Intégration du moteur d'animation Framer Motion (via Motion One) pour interpoler l'apparition des cartes et des boutons lors du défilement.\n- **Interactions de Survol (Hover)**: Les effets de survol natifs CSS (transformations) ont été remplacés par des délégations d'évènements JavaScript (mouseover/mouseout) propulsées par Framer Motion.\n- **Performances**: L'utilisation du module ESM allège la charge réseau tout en garantissant des courbes de bézier fluides et une fluidité 60fps." });
                 syncCloud();
@@ -2693,7 +2697,7 @@ const server = http.createServer(async (req, res) => {
     if (req.url.startsWith('/api/log')) { require('fs').appendFileSync('frontend_error.log', req.url + '\n'); return res.end(); }
     if (req.url === '/debug') { res.writeHead(200); return res.end(JSON.stringify(memoryStats));
         if (!isAuthenticated) return res.writeHead(401).end('Unauthorized'); res.writeHead(200); return res.end(JSON.stringify(memoryStats)); }
-    if (req.url === '/api/init-data' && req.method === 'GET') {
+    if (req.url.startsWith('/api/init-data') && req.method === 'GET') {
         // removed
         let memberCount = "N/A"; let onlineCount = "N/A"; let activeTickets = 0;
         const guild = client.guilds.cache.first();
