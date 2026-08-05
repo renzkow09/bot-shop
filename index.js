@@ -352,6 +352,23 @@ async function loadCloudStats() {
 }
 
 function ensureMemoryInitialized() {
+            if (memoryStats.recent_transactions && memoryStats.recent_transactions.some(tx => tx.price < 0)) {
+                memoryStats.recent_transactions = memoryStats.recent_transactions.filter(tx => tx.price > 0);
+                memoryStats.revenue = {};
+                memoryStats.total_revenue = 0;
+                memoryStats.total_transactions = memoryStats.recent_transactions.length;
+                for (const tx of memoryStats.recent_transactions) {
+                    const txDate = new Date(tx.date);
+                    if (!isNaN(txDate.getTime())) {
+                        const dateKey = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris' }).format(txDate);
+                        if (!memoryStats.revenue[dateKey]) memoryStats.revenue[dateKey] = 0;
+                        memoryStats.revenue[dateKey] += tx.price;
+                        memoryStats.total_revenue += tx.price;
+                    }
+                }
+                setTimeout(() => syncCloud(), 5000); // sync cloud slightly after boot
+            }
+
             if (!memoryStats.promo_codes) memoryStats.promo_codes = {};
             if (!memoryStats.user_notes) memoryStats.user_notes = {};
             if (!memoryStats.referrals) memoryStats.referrals = {};
