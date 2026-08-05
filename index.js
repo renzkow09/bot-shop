@@ -1063,7 +1063,7 @@ function logStat(type, value = 1, extraData = null) {
             memoryStats.user_history[extraData.username].unshift({ product: extraData.productName, price: value, date: new Date().toLocaleString('en-US') });
             if (memoryStats.user_history[extraData.username].length > 20) memoryStats.user_history[extraData.username].pop();
             memoryStats.recent_transactions.unshift({ username: extraData.username, product: extraData.productName, price: value, date: new Date().toLocaleString('en-US') });
-            if (memoryStats.recent_transactions.length > 1000) memoryStats.recent_transactions.pop();
+            
             
             addActivity('sale', `💰 £${value} Sale: ${extraData.username} bought ${extraData.productName}`);
             notifyAdminPhone('NOUVELLE VENTE', `💰 +£${value}\n👤 Client: ${extraData.username}\n📦 Produit: ${extraData.productName}`);
@@ -3218,7 +3218,7 @@ const server = http.createServer(async (req, res) => {
                         price: price,
                         date: dateStrDisplay
                     });
-                    if (memoryStats.recent_transactions.length > 1000) memoryStats.recent_transactions.pop();
+                    
 
                     if (username !== "Manual Entry") {
                         if(!memoryStats.user_spending) memoryStats.user_spending = {};
