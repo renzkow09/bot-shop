@@ -868,6 +868,11 @@ function ensureMemoryInitialized() {
                 syncCloud();
             }
 
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Nettoyage des Transactions Négatives"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🧹 Nettoyage des Transactions Négatives\n\n- **Feature** : Suppression de toutes les transactions négatives (ex: -5) du système.\n- **Correction** : Le Total Yield et le volume global des transactions ont été recalculés sur Upstash en ne conservant strictement que les sommes positives, offrant ainsi un tableau de bord reflétant exclusivement les revenus entrants." });
+                syncCloud();
+            }
+
             if (!memoryStats.overrides) memoryStats.overrides = {};
             if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } };
             if (!memoryStats.settings.maintenance) memoryStats.settings.maintenance = { active: false, endsAt: 0, channelId: "" };
