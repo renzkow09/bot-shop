@@ -895,6 +895,11 @@ function ensureMemoryInitialized() {
                 syncCloud();
             }
 
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Triple Création de Channel"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ Fix Triple Création de Channel\n\n- **Bug** : Les utilisateurs généraient accidentellement 3 channels (ou plus) en un seul clic lors de ralentissements de l'API Discord.\n- **Cause** : Le gestionnaire REST de Discord.js possédait une configuration de 'retries' à 5 par défaut, forçant la recréation du ticket si l'API tardait à répondre.\n- **Correction** : Désactivation des retries automatiques (retries: 0) et augmentation du verrou anti-spam (userTicketLocks) de 15s à 60s pour assurer une création unique sans duplication." });
+                syncCloud();
+            }
+
             if (!memoryStats.overrides) memoryStats.overrides = {};
             if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } };
             if (!memoryStats.settings.maintenance) memoryStats.settings.maintenance = { active: false, endsAt: 0, channelId: "" };
@@ -1376,7 +1381,7 @@ async function sendShopSetup(channel) {
 const client = new Client({ 
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildPresences, GatewayIntentBits.GuildInvites],
     partials: [Partials.GuildMember, Partials.User, Partials.Message],
-    rest: { timeout: 60000, retries: 5 } 
+    rest: { timeout: 60000, retries: 0 } 
 });
 
 // 🚀 [EVENT_LISTENER: error] - Écouteur d'événement Discord
@@ -1599,7 +1604,7 @@ client.on('interactionCreate', async (interaction) => {
                     return;
                 }
                 userTicketLocks.add(interaction.user.id);
-                setTimeout(() => userTicketLocks.delete(interaction.user.id), 15000);
+                setTimeout(() => userTicketLocks.delete(interaction.user.id), 60000);
 
                 await interaction.reply({ content: '⏳ Channel is being created, please wait...', ephemeral: true }).catch(() => {});
 
@@ -1687,7 +1692,7 @@ client.on('interactionCreate', async (interaction) => {
                     return;
                 }
                 userTicketLocks.add(interaction.user.id);
-                setTimeout(() => userTicketLocks.delete(interaction.user.id), 15000);
+                setTimeout(() => userTicketLocks.delete(interaction.user.id), 60000);
 
                 await interaction.reply({ content: '⏳ Channel is being created, please wait...', ephemeral: true }).catch(() => {});
 
