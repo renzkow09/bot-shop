@@ -352,8 +352,8 @@ async function loadCloudStats() {
 }
 
 function ensureMemoryInitialized() {
-            if (memoryStats.recent_transactions && memoryStats.recent_transactions.some(tx => tx.price < 0)) {
-                memoryStats.recent_transactions = memoryStats.recent_transactions.filter(tx => tx.price > 0);
+            if (memoryStats.recent_transactions && memoryStats.recent_transactions.some(tx => tx.price < 0 || (new Date(tx.date).getTime() && new Date(tx.date) < new Date('2026-07-04T00:00:00Z')))) {
+                memoryStats.recent_transactions = memoryStats.recent_transactions.filter(tx => tx.price > 0 && new Date(tx.date) >= new Date('2026-07-04T00:00:00Z'));
                 memoryStats.revenue = {};
                 memoryStats.total_revenue = 0;
                 memoryStats.total_transactions = memoryStats.recent_transactions.length;
@@ -887,6 +887,11 @@ function ensureMemoryInitialized() {
 
             if (!memoryStats.patchnotes.some(p => p.text.includes("Nettoyage des Transactions Négatives"))) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🧹 Nettoyage des Transactions Négatives\n\n- **Feature** : Suppression de toutes les transactions négatives (ex: -5) du système.\n- **Correction** : Le Total Yield et le volume global des transactions ont été recalculés sur Upstash en ne conservant strictement que les sommes positives, offrant ainsi un tableau de bord reflétant exclusivement les revenus entrants." });
+                syncCloud();
+            }
+
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Purge des Transactions (Pré-4 Juillet)"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🧹 Purge des Transactions (Pré-4 Juillet)\n\n- **Feature** : Suppression définitive de toutes les transactions antérieures au 4 Juillet 2026 de la base de données.\n- **Correction** : Le Total Yield et le total global des transactions ont été recalculés sur Upstash pour ne refléter que l'activité à partir du 4 Juillet 2026, offrant une vue financière plus récente et pertinente sur le Dashboard." });
                 syncCloud();
             }
 
