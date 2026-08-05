@@ -863,6 +863,11 @@ function ensureMemoryInitialized() {
                 syncCloud();
             }
 
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Synchronisation Historique Complète"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "📊 Synchronisation Historique Complète (07 Mars 2026)\n\n- **Feature** : Intégration complète et rétroactive de l'intégralité des transactions depuis le 7 Mars 2026 dans le Dashboard.\n- **Logique** : Les transactions existantes ont été conservées intactes (avec leurs utilisateurs/produits associés), tandis que les transactions orphelines détectées ont été intégrées automatiquement sous l'étiquette 'Manual Entry' et 'Custom Amount'.\n- **Correction** : Le Total Yield et le volume total des transactions ont été recalculés et synchronisés parfaitement via Upstash pour refléter l'historique complet sans aucune limite d'affichage (Levée de la limite des 1000 requêtes)." });
+                syncCloud();
+            }
+
             if (!memoryStats.overrides) memoryStats.overrides = {};
             if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } };
             if (!memoryStats.settings.maintenance) memoryStats.settings.maintenance = { active: false, endsAt: 0, channelId: "" };
