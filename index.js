@@ -402,7 +402,7 @@ async function loadCloudStats() {
                 if (watermark && watermark.total_transactions && memoryStats.total_transactions < watermark.total_transactions * DATA_DROP_THRESHOLD) {
                     global.dataIntegrityAlert = { active: true, expected: watermark.total_transactions, current: memoryStats.total_transactions || 0 };
                     systemLog('CRITICAL', 'INTEGRITY', 'Data drop detected: ' + (memoryStats.total_transactions || 0) + ' txs vs ' + watermark.total_transactions + ' expected.');
-                    if (typeof notifyAdminPhone === 'function') notifyAdminPhone('⚠️ ANOMALIE BASE DE DONNÉES', 'Chute anormale détectée au démarrage : ' + (memoryStats.total_transactions || 0) + ' transactions (contre ' + watermark.total_transactions + ' attendues). Vérifie l\'onglet Backups.');
+                    if (typeof notifyAdminPhone === 'function') notifyAdminPhone('⚠️ ANOMALIE BASE DE DONNÉES', 'Chute anormale détectée au démarrage : ' + (memoryStats.total_transactions || 0) + ' transactions (contre ' + watermark.total_transactions + ' attendues). Vérifie l’onglet Backups.');
                 }
             }
         }
@@ -1113,6 +1113,18 @@ async function syncCloud(isManualForce = false) {
     if (!memoryStats.patchnotes) memoryStats.patchnotes = [];
     if (!memoryStats.patchnotes.some(p => p.text.includes("Sync Temps Réel & Quota Discord"))) {
         memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "⚡ Sync Temps Réel & Quota Discord\n\n- **Fix Critique (Rate Limiting Discord)** : Le Dashboard appelait l'API Discord (`with_counts=true`) à CHAQUE synchronisation (toutes les 60s ou à chaque action), causant un bannissement temporaire (HTTP 429) et le blocage total de l'interface. Un système de cache local intelligent a été implémenté.\n- **Performance** : Les statistiques (Membres, En ligne, Tickets Actifs) se mettent désormais à jour de façon ultra-fluide sans jamais surcharger l'API." });
+    }
+
+    // --- PATCHNOTE: Fix Dashboard UI Freeze ---
+    if (!memoryStats.patchnotes) memoryStats.patchnotes = [];
+    if (!memoryStats.patchnotes.some(p => p.text.includes("Correction UI Dashboard Figé"))) {
+        memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔥 Correction UI Dashboard Figé\n\n- **Fix Critique (SyntaxError)** : Une erreur de syntaxe invisible due à un conflit de guillemets (l'apostrophe de 'l\'onglet') faisait crasher l'intégralité du code Javascript côté client. Le dashboard est désormais débloqué et 100% opérationnel.\n- **Stabilité UI** : Tous les boutons, statistiques dynamiques et requêtes de l'interface graphique sont rétablis." });
+    }
+
+    // --- PATCHNOTE: Fix Fallback Route ---
+    if (!memoryStats.patchnotes) memoryStats.patchnotes = [];
+    if (!memoryStats.patchnotes.some(p => p.text.includes("Correction Redirection API Bot"))) {
+        memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔥 Correction Redirection API Bot\n\n- **Fix Critique** : L'accès à l'application via des URLs contenant un slash final (ex: `/dashboard/`) ou des requêtes inconnues déclenchait l'affichage d'une page noire contenant le texte brut 'API Bot'. Le routeur traite désormais les URLs de façon plus flexible (en ignorant le slash final) et redirige toutes les routes non reconnues vers la page d'accueil/connexion." });
     }
 
     // Sauvegarde Cloud (Upstash) - With Debounce
@@ -2878,7 +2890,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     // 🚀 [API_ROUTE: /dashboard] - Route API backend
-    const basePath = req.url.split('?')[0];
+    let basePath = req.url.split('?')[0]; if (basePath.length > 1 && basePath.endsWith('/')) basePath = basePath.slice(0, -1);
     if ((basePath === '/dashboard' || basePath === '/') && !isAuthenticated) {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         return res.end(`<!DOCTYPE html>
@@ -4087,7 +4099,7 @@ const server = http.createServer(async (req, res) => {
 
     // === [ANCHOR: DASHBOARD_HTML_INJECTION] ===
     // 🚀 [API_ROUTE: /dashboard] - Route API backend
-    const basePathDash = req.url.split('?')[0];
+    let basePathDash = req.url.split('?')[0]; if (basePathDash.length > 1 && basePathDash.endsWith('/')) basePathDash = basePathDash.slice(0, -1);
     if (basePathDash === '/dashboard' || basePathDash === '/') {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         const dashboardHTML = `<!DOCTYPE html>
@@ -6496,7 +6508,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                     banner.id = 'integrity-alert-banner';
                     banner.className = 'glass-panel';
                     banner.style = 'background: rgba(249,115,22,0.15); border: 1px solid var(--accent-orange); border-radius: 12px; padding: 15px 20px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;';
-                    banner.innerHTML = '<div style="display:flex; align-items:center; gap:15px;"><span style="font-size:2em;">⚠️</span><div><h3 style="margin:0; color:var(--accent-orange);">Anomalie de données détectée !</h3><p style="margin:5px 0 0 0; color:var(--text-muted); font-size:0.9em;">Chute anormale au démarrage : <strong style="color:#fff;">' + data.dataIntegrityAlert.current + '</strong> transactions chargées contre <strong style="color:var(--accent-orange);">' + data.dataIntegrityAlert.expected + '</strong> attendues. Vérifiez l\'onglet Points de Restauration.</p></div></div><button class="btn-icon" style="background:var(--accent-orange); color:#000; border:none; padding:8px 16px; font-weight:bold; border-radius:8px; cursor:pointer;" onclick="sessionStorage.setItem(&quot;hideIntegrityAlert&quot;, &quot;1&quot;); document.getElementById(&quot;integrity-alert-banner&quot;).remove();">Ignorer</button>';
+                    banner.innerHTML = '<div style="display:flex; align-items:center; gap:15px;"><span style="font-size:2em;">⚠️</span><div><h3 style="margin:0; color:var(--accent-orange);">Anomalie de données détectée !</h3><p style="margin:5px 0 0 0; color:var(--text-muted); font-size:0.9em;">Chute anormale au démarrage : <strong style="color:#fff;">' + data.dataIntegrityAlert.current + '</strong> transactions chargées contre <strong style="color:var(--accent-orange);">' + data.dataIntegrityAlert.expected + '</strong> attendues. Vérifiez l’onglet Points de Restauration.</p></div></div><button class="btn-icon" style="background:var(--accent-orange); color:#000; border:none; padding:8px 16px; font-weight:bold; border-radius:8px; cursor:pointer;" onclick="sessionStorage.setItem(&quot;hideIntegrityAlert&quot;, &quot;1&quot;); document.getElementById(&quot;integrity-alert-banner&quot;).remove();">Ignorer</button>';
                     const container = document.querySelector('.content');
                     if (container) container.insertBefore(banner, container.firstChild);
                 }
@@ -8639,7 +8651,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
 </body>
 </html>`;
         return res.end(dashboardHTML);
-    } else { res.writeHead(200, { 'Content-Type': 'text/plain' }); res.end('API Bot'); }
+    } else { res.writeHead(302, { 'Location': '/' }); res.end(); }
 });
 
 server.listen(3000);
