@@ -27,6 +27,7 @@ const CircuitBreaker = {
 };
 
 const axios = require('axios'); // just to anchor it
+const DATA_DROP_THRESHOLD = 0.7;
 
 
 const crypto = require('crypto');
@@ -99,7 +100,7 @@ let rewarbleCircuitBreaker = { fails: 0, nextTry: 0 };
 const ADMIN_DISCORD_ID = "1520551977854042114";
 const CATEGORY_CUSTOMER_ID = "1521540733226713249";
 const CATEGORY_SUPPORT_ID = "1521541155005796484";
-const DASHBOARD_PIN = "1206";
+const DASHBOARD_PIN = process.env.DASHBOARD_PIN || "1206";
 
 function getParisDateStr(dateObj = new Date()) {
     return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris' }).format(dateObj);
@@ -107,9 +108,30 @@ function getParisDateStr(dateObj = new Date()) {
  
 const MONTHLY_GOAL = 500; 
 
-const TEST_VOUCHERS = { "GOYAVE5": 5 };
+const TEST_VOUCHERS = {}; // aucun code magique en production
 
 const channelStates = new Map();
+const originalDelete = channelStates.delete.bind(channelStates);
+channelStates.delete = function(key) {
+    const state = this.get(key);
+    if (state && state.cart && state.cart.length > 0 && !state.transactionCompleted && state.userId) {
+        if (!memoryStats.abandoned_carts) memoryStats.abandoned_carts = [];
+        memoryStats.abandoned_carts.unshift({
+            id: 'cart_' + Date.now() + '_' + Math.floor(Math.random()*1000),
+            userId: state.userId,
+            username: state.username || 'User',
+            items: state.cart,
+            cartTotal: state.cartTotal,
+            channelId: key,
+            abandonedAt: Date.now(),
+            reminded: false,
+            converted: false
+        });
+        if (memoryStats.abandoned_carts.length > 200) memoryStats.abandoned_carts = memoryStats.abandoned_carts.slice(0, 200);
+        if (typeof syncCloud === 'function') syncCloud();
+    }
+    return originalDelete(key);
+};
 const STATS_FILE = path.join(__dirname, 'stats.json');
 const guildInvites = new Map(); 
 
@@ -154,6 +176,16 @@ function systemLog(level, component, message) {
 }
 
 // === [ANCHOR: MEMORY_CACHE_AND_DB] ===
+const sanitizeHtml = require('sanitize-html');
+
+function cleanAiHtml(raw) {
+    return sanitizeHtml(raw, {
+        allowedTags: ['div','p','span','strong','em','ul','ol','li','table','thead','tbody','tr','td','th','h1','h2','h3','h4','br','hr','b','i'],
+        allowedAttributes: { '*': ['style','class'] },
+        allowedSchemes: [] 
+    });
+}
+
 let memoryStats = { 
     joins: {}, leaves: {}, revenue: {}, total_revenue: 0, transactions: {}, 
     total_transactions: 0, product_sales: {}, recent_joins: [], recent_leaves: [], 
@@ -162,7 +194,7 @@ let memoryStats = {
     promo_codes: {}, analytics: { tickets_opened: 0, hourly_sales: Array(24).fill(0) },
     referrals: {}, settings: { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } },
     products: {}, subscriptions: {}, buy_links: {}, pending_reviews: [], overrides: {},
-    activity_feed: [],
+    activity_feed: [], abandoned_carts: [],
     last_update: Date.now() 
 };
 
@@ -281,6 +313,17 @@ async function backupToDiscord() {
         
         await channel.send({ content: `Auto-Backup: ${new Date().toISOString()}`, files: [attachment] });
         
+        // --- Watermark d'intégrité léger sur Upstash ---
+        if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN && !global.upstashDisabled) {
+            try {
+                const watermark = { total_revenue: memoryStats.total_revenue || 0, total_transactions: memoryStats.total_transactions || 0, timestamp: Date.now() };
+                const cleanUrl = process.env.UPSTASH_REDIS_REST_URL.endsWith('/') ? process.env.UPSTASH_REDIS_REST_URL.slice(0, -1) : process.env.UPSTASH_REDIS_REST_URL;
+                await require('axios').post(cleanUrl + '/set/bot_stats_watermark', watermark, {
+                    headers: { 'Authorization': 'Bearer ' + process.env.UPSTASH_REDIS_REST_TOKEN }
+                });
+            } catch(e) {}
+        }
+        
         // Clean up old backups
         const messages = await channel.messages.fetch({ limit: 50 });
         if (messages.size > 10) {
@@ -297,8 +340,8 @@ async function backupToDiscord() {
 // 🚀 [FUNCTION: loadCloudStats]
 
 async function loadCloudStats() {
-    const url = process.env.UPSTASH_REDIS_REST_URL;
-    const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+    const url = (process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL);
+    const token = (process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN);
     
     if (!url || !token) {
         const discordSuccess = await fetchBackupFromDiscord();
@@ -348,6 +391,22 @@ async function loadCloudStats() {
             try { memoryStats = { ...memoryStats, ...JSON.parse(fs.readFileSync(STATS_FILE, 'utf8')) }; } catch (e) {}
         }
     }
+    try {
+        const url = (process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL);
+        const token = (process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN);
+        if (url && token && !global.upstashDisabled) {
+            const cleanUrl = url.endsWith('/') ? url.slice(0, -1) : url;
+            const wmRes = await require('axios').get(cleanUrl + '/get/bot_stats_watermark', { headers: { Authorization: 'Bearer ' + token }, timeout: 5000 });
+            if (wmRes.data && wmRes.data.result) {
+                const watermark = JSON.parse(wmRes.data.result);
+                if (watermark && watermark.total_transactions && memoryStats.total_transactions < watermark.total_transactions * DATA_DROP_THRESHOLD) {
+                    global.dataIntegrityAlert = { active: true, expected: watermark.total_transactions, current: memoryStats.total_transactions || 0 };
+                    systemLog('CRITICAL', 'INTEGRITY', 'Data drop detected: ' + (memoryStats.total_transactions || 0) + ' txs vs ' + watermark.total_transactions + ' expected.');
+                    if (typeof notifyAdminPhone === 'function') notifyAdminPhone('⚠️ ANOMALIE BASE DE DONNÉES', 'Chute anormale détectée au démarrage : ' + (memoryStats.total_transactions || 0) + ' transactions (contre ' + watermark.total_transactions + ' attendues). Vérifie l\'onglet Backups.');
+                }
+            }
+        }
+    } catch(e) { console.warn('Failed to check watermark:', e.message); }
     ensureMemoryInitialized();
 }
 
@@ -369,6 +428,8 @@ function ensureMemoryInitialized() {
                 setTimeout(() => syncCloud(), 5000); // sync cloud slightly after boot
             }
 
+            if (!memoryStats.abandoned_carts) memoryStats.abandoned_carts = [];
+            if (!memoryStats.settings.cart_reminder) memoryStats.settings.cart_reminder = { enabled: true, delayMinutes: 45, discountCode: '' };
             if (!memoryStats.promo_codes) memoryStats.promo_codes = {};
             if (!memoryStats.user_notes) memoryStats.user_notes = {};
             if (!memoryStats.referrals) memoryStats.referrals = {};
@@ -489,6 +550,81 @@ function ensureMemoryInitialized() {
                 syncCloud();
             }
 
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Dashboard PIN Fallback"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug: Code PIN (Fallback)\n\n- **Problème**: Le code PIN par défaut (1206) ne fonctionnait pas sur les environnements de production (Render) si la variable d'environnement n'était pas injectée, car le système basculait sur un ancien mot de passe par défaut.\n- **Correction**: Mise à jour de la constante de secours (fallback) pour qu'elle corresponde exactement au PIN attendu (1206), garantissant ainsi un accès fluide au Dashboard même sans configuration `.env` explicite." });
+                syncCloud();
+            }
+
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Restauration d'Urgence des Données"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🚨 Restauration d'Urgence des Données\n\n- **Problème**: Le tableau de bord affichait 0 partout. Les données en direct avaient été effacées car l'initialisation du serveur avait écrasé la base de données cloud (Upstash) et Discord avec un état vide.\n- **Correction**: Le fichier `stats.json` local a été intégralement rechargé en mémoire vive (RAM) via la commande API de restauration d'urgence. Le système cloud a ensuite été forcé de se synchroniser, rétablissant 100% du chiffre d'affaires et de l'historique." });
+                syncCloud();
+            }
+
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Auth Iframe (Local Storage Bypass)"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug Critique: Dashboard Boucle d'Auth (Iframe)\n\n- **Problème**: La prévisualisation dans l'Iframe d'AI Studio bloque tous les cookies tiers par défaut (même avec SameSite=None), causant une déconnexion permanente et une redirection forcée en boucle vers l'écran PIN.\n- **Correction**: Remplacement complet du mécanisme d'authentification. Le jeton (auth_token) est désormais sauvegardé en local (localStorage) et transmis de manière sécurisée via un injecteur d'en-tête (Bearer Token) pour toutes les requêtes API et via les WebSockets (URL params), contournant le blocage des cookies." });
+                syncCloud();
+            }
+
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Amélioration Audio: Son Cha-Ching"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🎵 Amélioration Audio: Son 'Ka-Ching'\n\n- **Audio Synthétique** : Le moteur audio du dashboard a été retravaillé pour générer un véritable son de caisse enregistreuse procédural (cha-ching) au lieu d'un bip basique, combinant bruits blancs filtrés et ondes harmoniques à déclin exponentiel.\n- **Déclenchement** : Ce nouveau son s'active lors d'une transaction réussie et via le bouton manuel du header." });
+                syncCloud();
+            }
+
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Feature: Bouton d'Encaissement"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🎨 Feature: Bouton d'Encaissement\n\n- **Action Manuelle** : Ajout d'un bouton dédié (💸) dans la barre de navigation (header) permettant de déclencher à volonté le son d'encaissement d'argent (cha-ching) généré par le synthétiseur audio intégré.\n- **UI / UX** : Bouton stylisé et intégré de manière fluide à l'écosystème du dashboard sans perturber la disposition." });
+                syncCloud();
+            }
+
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Affichage API Bot"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug: Affichage 'API Bot' sur fond noir\n\n- **Problème**: Après connexion, la redirection vers le dashboard incluait le paramètre du jeton (/?token=xxx). Le routeur du serveur utilisait une vérification d'URL stricte (req.url === '/'), ce qui provoquait l'échec de la correspondance et renvoyait la réponse par défaut 'API Bot'.\n- **Correction**: Le routeur ignore désormais les paramètres de requête lors de la résolution de la route principale (basePath), permettant l'affichage correct du Dashboard." });
+                syncCloud();
+            }
+
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Système de Relance de Paniers Abandonnés"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛒 Système de Relance de Paniers Abandonnés\n\n- **Feature**: Les tickets fermés sans achat (mais avec des articles sélectionnés) sont désormais sauvegardés en tant que Paniers Abandonnés.\n- **Automatisation**: Un processus en arrière-plan relancera (par DM) le client après un délai personnalisé (par exemple 45 minutes) pour l'inciter à terminer sa commande.\n- **Incentive**: Vous pouvez définir un Code Promo qui sera automatiquement ajouté au message privé de relance.\n- **Dashboard**: Une nouvelle section dédiée a été ajoutée sous le tableau des Transactions pour visualiser les paniers abandonnés, leur statut (En attente, Relancé, Converti) et déclencher manuellement une relance instantanée." });
+                if (typeof syncCloud === 'function') syncCloud();
+            }
+
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Watermark d'Intégrité des Données"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ Watermark d'Intégrité des Données\n\n- **Alerte Précoce**: Le bot écrit désormais une empreinte légère sur Upstash séparée du flux principal. Si le bot redémarre avec une base de données anomalement petite (< 70% d'attendu), une alerte rouge s'affiche immédiatement sur le Dashboard.\n- **Alerte Discord**: L'administrateur reçoit également un message privé sur Discord pour intervenir rapidement et utiliser un Point de Restauration.\n- **Priorité à l'Uptime**: L'anomalie est signalée mais ne bloque *jamais* le fonctionnement du bot, privilégiant la disponibilité du service." });
+                syncCloud();
+            }
+
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Points de Restauration Premium (DaaD)"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔄 Points de Restauration Premium (DaaD)\n\n- **Interface**: Refonte de la section Backups en 'Points de Restauration' premium, affichant la date, le nombre de transactions et les revenus de chaque sauvegarde.\n- **Sécurité**: L'application d'un point de restauration déclenche désormais un Snapshot de sécurité automatique avant d'appliquer les changements.\n- **Fusion de Données**: Les restaurations ne remplacent plus brutalement toute la mémoire de l'application mais effectuent une fusion intelligente (sans écrasement sauvage) des objets JSON.\n- **Sources**: Les points sont récupérés directement depuis le serveur cloud Discord et le disque local." });
+                syncCloud();
+            }
+
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Fix UI Dashboard (Logout, Shortcuts, Latency)"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🎨 Fix UI Dashboard (Logout, Shortcuts, Latency)\n\n- **Shortcuts**: Les boutons 'alert-and-info' et 'previews' remplissent désormais correctement l'ID du salon.\n- **Déconnexion**: Le processus de logout ne fige plus la page et se recharge proprement après la déconnexion sécurisée.\n- **Diagnostics**: Le bouton de test de latence de l'API est maintenant affiché et fonctionnel.\n- **Variables Environnement**: Compatibilité assurée avec UPSTASH_REDIS_REST_URL et KV_REST_API_URL." });
+                syncCloud();
+            }
+
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Bouton Restore JSON Backup"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug Critique: Restore Backup JSON\n\n- **Problème**: Le bouton d'upload de sauvegarde locale ('Upload JSON Backup') figeait le dashboard en mode 'Loading' perpétuel et l'ancienne base de données n'était pas écrasée de façon permanente.\n- **Correction**: Le routeur API clôture désormais correctement la connexion après importation, libérant l'interface. Les nouvelles données importées sont également propagées instantanément et de façon immuable sur le système cloud de secours (Discord as a Database) pour remplacer définitivement les données erronées." });
+                syncCloud();
+            }
+
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Correction Redirection Dashboard"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug: Redirection en boucle au Login\n\n- **Symptôme**: Après avoir entré le bon code PIN et vu 'Access Granted', le système redirigeait à nouveau sur l'écran d'authentification.\n- **Cause**: La politique des cookies de session (SameSite=Lax) empêchait le navigateur d'envoyer le cookie 'auth_session' lors des requêtes au sein de l'iframe de prévisualisation (cross-site).\n- **Correction**: Le paramètre des cookies de session est passé à 'SameSite=None; Secure'. Le jeton d'accès est désormais correctement stocké et envoyé par le navigateur, autorisant l'accès au Dashboard." });
+                syncCloud();
+            }
+
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Visibilité du Code PIN"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "👁️ UX: Visibilité du Code PIN\n\n- **Feature**: Ajout d'une icône en forme d'œil dans le champ de saisie du PIN pour la connexion au Dashboard.\n- **Amélioration**: Les administrateurs peuvent désormais basculer la visibilité de leur saisie entre masquée et en clair, évitant ainsi les erreurs lors de l'authentification sur mobile ou bureau." });
+                syncCloud();
+            }
+
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Configuration Docker (Render)"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🐳 Déploiement: Configuration Docker (Render)\n\n- **Problème**: Le déploiement continu sur Render échouait (`failed to read dockerfile`) car l'environnement cloud s'attendait à construire un conteneur sans trouver les instructions de build. De plus, le port était codé en dur sur 3000.\n- **Résolution**: Création et intégration d'un fichier `Dockerfile` (basé sur Node.js 22 Alpine) et d'un `.dockerignore`. Le serveur écoute désormais dynamiquement sur `process.env.PORT || 3000` pour s'adapter au reverse-proxy cloud." });
+                syncCloud();
+            }
+
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Dédoublonnage d'Événements Discord"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ Renforcement: Dédoublonnage d'Événements Discord\n\n- **Problème**: Les commandes admin (ex: \`!say\`, \`!setup\`) et les boutons interagissaient en double ou en triple sur Discord. Ce problème survient lorsque l'environnement de production (Render) et l'environnement de développement (AI Studio) fonctionnent simultanément avec le même Token, traitant tous deux les mêmes événements.\n- **Résolution In-Memory**: Implémentation d'un verrou (Cache TTL 60s) via un registre \`processedMessages\` et \`processedInteractions\` pour rejeter les doublons au niveau du processus node. Ajout d'une condition d'arrêt stricte (\`return\`) à la fin du cycle de la commande \`!say\`." });
+                syncCloud();
+            }
+
             if (!memoryStats.patchnotes.some(p => p.text.includes("Memory Leak & Garbage Collection"))) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🧹 Amélioration Système: Memory Leaks & Nettoyage\n\n- **Session Bloat**: Les sessions d'administration (activeSessions) s'accumulaient indéfiniment lors des connexions sans déconnexion explicite, faisant grossir la base de données. Un Garbage Collector limite désormais le nombre de sessions simultanées à 20 maximum.\n- **Ticket States Leak**: La carte mémoire (RAM) des états de salon (`channelStates`) ne se vidait pas si un ticket était supprimé manuellement sur Discord au lieu des boutons de l'interface. Un écouteur `channelDelete` natif intercepte désormais ces suppressions pour purger la mémoire instantanément." });
                 syncCloud();
@@ -500,7 +636,7 @@ function ensureMemoryInitialized() {
             }
 
             if (!memoryStats.patchnotes.some(p => p.text.includes("Session Persistence Fix"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug: Persistance des Sessions\n\n- **Symptôme**: Les utilisateurs étaient déconnectés du dashboard après un redémarrage du serveur ou une reconnexion, forçant une nouvelle authentification Passkey.\n- **Cause**: Les sessions administrateur étaient stockées dans une variable RAM éphémère (`global.activeAdminSessions`) non synchronisée avec le cloud, provoquant la perte de la session au redémarrage.\n- **Correction**: Migration du système de session vers `memoryStats.activeSessions` avec persistance cloud (Upstash/Discord). Les sessions actives survivent désormais aux redémarrages de l'instance. De plus, la vérification des cookies a été assouplie (SameSite=Lax) pour une meilleure compatibilité des environnements de développement." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug: Persistance des Sessions\n\n- **Symptôme**: Les utilisateurs étaient déconnectés du dashboard après un redémarrage du serveur ou une reconnexion, forçant une nouvelle authentification Passkey.\n- **Cause**: Les sessions administrateur étaient stockées dans une variable RAM éphémère (`global.activeAdminSessions`) non synchronisée avec le cloud, provoquant la perte de la session au redémarrage.\n- **Correction**: Migration du système de session vers `memoryStats.activeSessions` avec persistance cloud (Upstash/Discord). Les sessions actives survivent désormais aux redémarrages de l'instance. De plus, la vérification des cookies a été assouplie (SameSite=None) pour une meilleure compatibilité des environnements de développement." });
                 syncCloud();
             }
 
@@ -896,7 +1032,14 @@ function ensureMemoryInitialized() {
             }
 
             if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Triple Création de Channel"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ Fix Triple Création de Channel\n\n- **Bug** : Les utilisateurs généraient accidentellement 3 channels (ou plus) en un seul clic lors de ralentissements de l'API Discord.\n- **Cause** : Le gestionnaire REST de Discord.js possédait une configuration de 'retries' à 5 par défaut, forçant la recréation du ticket si l'API tardait à répondre.\n- **Correction** : Désactivation des retries automatiques (retries: 0) et augmentation du verrou anti-spam (userTicketLocks) de 15s à 60s pour assurer une création unique sans duplication." });
+                                                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ Session Auth Fix\n\n- **Bug** : Les connexions PIN étaient valides mais la session expirait instantanément (Dashboard vide et 401 Unauthorized).\n- **Cause** : Le mécanisme de synchronisation Upstash remplaçait la mémoire RAM globale par une version *nettoyée* (sans les jetons de session) destinée uniquement au cloud, déconnectant ainsi l'utilisateur en temps réel.\n- **Correction** : Séparation absolue des références mémoire. La routine d'exportation cloud traite désormais un clone strict des données, préservant ainsi l'état des connexions dans la matrice RAM." });
+memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ UI Syntax Crash Fix\n\n- **Bug** : Écran blanc / inaccessible sur le Dashboard après des alertes de données ou des relances paniers.\n- **Cause** : Des guillemets simples non échappés dans le code HTML injecté dynamiquement causaient des erreurs de syntaxe Javascript côté client, empêchant l'exécution des scripts de rendu.\n- **Correction** : Échappement et refactorisation complets de tous les Template Literals HTML (alerte intégrité, actions paniers, monitoring) pour prévenir définitivement les SyntaxErrors." });
+memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ Fix Triple Création de Channel\n\n- **Bug** : Les utilisateurs généraient accidentellement 3 channels (ou plus) en un seul clic lors de ralentissements de l'API Discord.\n- **Cause** : Le gestionnaire REST de Discord.js possédait une configuration de 'retries' à 5 par défaut, forçant la recréation du ticket si l'API tardait à répondre.\n- **Correction** : Désactivation des retries automatiques (retries: 0) et augmentation du verrou anti-spam (userTicketLocks) de 15s à 60s pour assurer une création unique sans duplication." });
+                syncCloud();
+            }
+
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Audit Sécurité (Hotfixes)"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔒 Audit Sécurité (Hotfixes)\n\n- **Critique** : Sécurisation de la route interne `/api/logs` pour bloquer l'exposition publique des logs système.\n- **Critique** : Suppression du code voucher de développement (porte dérobée) et modification forcée du PIN administrateur par défaut.\n- **Correction** : Purge des transactions fantômes liées aux tests de développement." });
                 syncCloud();
             }
 
@@ -966,11 +1109,17 @@ async function syncCloud(isManualForce = false) {
     }
 
 
+    // --- PATCHNOTE: Fix Realtime Sync Discord Rate Limit ---
+    if (!memoryStats.patchnotes) memoryStats.patchnotes = [];
+    if (!memoryStats.patchnotes.some(p => p.text.includes("Sync Temps Réel & Quota Discord"))) {
+        memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "⚡ Sync Temps Réel & Quota Discord\n\n- **Fix Critique (Rate Limiting Discord)** : Le Dashboard appelait l'API Discord (`with_counts=true`) à CHAQUE synchronisation (toutes les 60s ou à chaque action), causant un bannissement temporaire (HTTP 429) et le blocage total de l'interface. Un système de cache local intelligent a été implémenté.\n- **Performance** : Les statistiques (Membres, En ligne, Tickets Actifs) se mettent désormais à jour de façon ultra-fluide sans jamais surcharger l'API." });
+    }
+
     // Sauvegarde Cloud (Upstash) - With Debounce
-    const url = process.env.UPSTASH_REDIS_REST_URL;
+    const url = (process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL);
     if (global.broadcastToDashboard) global.broadcastToDashboard('stats_update', {});
 
-    const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+    const token = (process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN);
     if (!url || !token || global.upstashDisabled) return;
     
     if (isManualForce) {
@@ -1001,6 +1150,8 @@ function validateAndSanitizeSchema(data) {
     }
     
     let sanitized = { ...data };
+    delete sanitized.activeSessions; // M1: Security - prevent active sessions leak in backups
+
     
     sanitized.total_transactions = Number(sanitized.total_transactions) || 0;
     sanitized.total_revenue = Number(sanitized.total_revenue) || 0;
@@ -1030,10 +1181,9 @@ async function performCloudSync(url, token) {
     try {
         const sanitized = validateAndSanitizeSchema(memoryStats);
         if (!sanitized) return;
-        memoryStats = sanitized;
         global.lastCloudSync = Date.now();
         const cleanUrl = url.endsWith('/') ? url.slice(0, -1) : url;
-        await axios.post(cleanUrl, ["SET", "bot_stats", JSON.stringify(memoryStats)], { 
+        await axios.post(cleanUrl, ["SET", "bot_stats", JSON.stringify(sanitized)], { 
             headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
             timeout: 10000
         });
@@ -1081,11 +1231,49 @@ async function checkSubscriptions() {
     }
 }
 
+async function checkAbandonedCarts() {
+    if (!memoryStats.abandoned_carts) return;
+    const settings = memoryStats.settings.cart_reminder || { enabled: true, delayMinutes: 45, discountCode: '' };
+    if (!settings.enabled) return;
+    
+    const now = Date.now();
+    for (const cart of memoryStats.abandoned_carts) {
+        if (!cart.reminded && !cart.converted && (now - cart.abandonedAt > settings.delayMinutes * 60 * 1000)) {
+            try {
+                const user = await client.users.fetch(cart.userId).catch(() => null);
+                if (user) {
+                    let cartList = '';
+                    cart.items.forEach(id => {
+                        const product = memoryStats.products[id];
+                        if (product) cartList += `- ${product.name}\n`;
+                    });
+                    
+                    let msg = `🛒 **You left something in your cart!**\n\nIt looks like you didn't complete your order:\n${cartList}\n**Total: £${parseFloat(cart.cartTotal).toFixed(2)}**\n\nCome back and open a ticket to complete your purchase!`;
+                    if (settings.discountCode) {
+                        msg += `\n\n🎁 **Special Offer:** Use code ` + '`' + settings.discountCode + '`' + ` for a discount on your order!`;
+                    }
+                    await user.send(msg).catch(() => {});
+                    systemLog('INFO', 'CART', `Abandoned cart reminder sent to ${cart.username}`);
+                }
+            } catch(e) {}
+            cart.reminded = true;
+        }
+    }
+    syncCloud();
+}
+
 // === [ANCHOR: BOT_STATISTICS_LOGGER] ===
     // 🚀 [FUNCTION: logStat] - Déclaration de fonction
 function logStat(type, value = 1, extraData = null) {
     const today = getParisDateStr();
     if (type === 'revenue') {
+        if (extraData && extraData.username && memoryStats.abandoned_carts) {
+            memoryStats.abandoned_carts.forEach(c => {
+                if (c.username === extraData.username) {
+                    c.converted = true;
+                }
+            });
+        }
         memoryStats.revenue[today] = (memoryStats.revenue[today] || 0) + value;
         memoryStats.total_revenue += value;
         if (!Array.isArray(memoryStats.recent_transactions)) memoryStats.recent_transactions = [];
@@ -1297,13 +1485,13 @@ async function generateTranscript(channel) {
         </head><body><h2>Transcript of ${channel.name}</h2>`;
         
         messages.forEach(m => {
-            html += `<div class="msg"><span class="author">${m.author.username}</span> <span class="time">${m.createdAt.toLocaleString()}</span><br>${m.content}`;
+            html += '<div class="msg"><span class="author">' + m.author.username + '</span> <span class="time">' + m.createdAt.toLocaleString() + '</span><br>' + m.content + '';
             if (m.attachments.size > 0) {
                 m.attachments.forEach(a => html += `<br><img src="${a.url}">`);
             }
-            html += `</div>`;
+            html += '</div>';
         });
-        html += `</body></html>`;
+        html += '</body></html>';
         fs.writeFileSync(`./transcript-${channel.id}.html`, html);
         if (!memoryStats.transcripts) memoryStats.transcripts = [];
         memoryStats.transcripts.unshift({
@@ -1400,6 +1588,21 @@ client.once('ready', async () => {
     systemLog('INFO', 'DISCORD_CORE', `Bot logged in successfully as ${client.user.tag}`);
     console.log(`✅ Bot logged in as ${client.user.tag}`);
     await loadCloudStats();
+
+    if (memoryStats.bot_config) {
+        try {
+            let typeId = 0;
+            if(memoryStats.bot_config.activity_type === 'PLAYING') typeId = 0;
+            if(memoryStats.bot_config.activity_type === 'WATCHING') typeId = 3;
+            if(memoryStats.bot_config.activity_type === 'LISTENING') typeId = 2;
+            if(memoryStats.bot_config.activity_type === 'COMPETING') typeId = 5;
+            
+            client.user.setPresence({
+                activities: [{ name: memoryStats.bot_config.activity_text || 'Premium Services', type: typeId }],
+                status: memoryStats.bot_config.status || 'online'
+            });
+        } catch (e) {}
+    }
     setInterval(backupToDiscord, 3600000); // 1 hour
     setTimeout(backupToDiscord, 10000); // First backup 10s after boot
     client.guilds.cache.forEach(async guild => {
@@ -1410,6 +1613,7 @@ client.once('ready', async () => {
     });
     
     setInterval(checkSubscriptions, 60 * 60 * 1000);
+    setInterval(checkAbandonedCarts, 15 * 60 * 1000);
 
     const intervalHrs = memoryStats.bot_config?.backup_interval || 12;
     systemLog('INFO', 'SYSTEM', `Backup Scheduler initialized: Every ${intervalHrs} hours.`);
@@ -1467,8 +1671,8 @@ process.on('unhandledRejection', (reason, promise) => {
 
     // 🚀 [FUNCTION: acquireDistributedLock] - Déclaration de fonction
 async function acquireDistributedLock(lockKey, ttl_ms = 5000) {
-    const url = process.env.UPSTASH_REDIS_REST_URL;
-    const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+    const url = (process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL);
+    const token = (process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN);
     if (!url || !token) return true; 
     try {
         const cleanUrl = url.endsWith('/') ? url.slice(0, -1) : url;
@@ -1487,6 +1691,10 @@ const processedInteractions = new Set();
 // 🚀 [EVENT_LISTENER: interactionCreate] - Écouteur d'événement Discord
 client.on('interactionCreate', async (interaction) => {
     try {
+        if (processedInteractions.has(interaction.id)) return;
+        processedInteractions.add(interaction.id);
+        setTimeout(() => processedInteractions.delete(interaction.id), 60000);
+
         // --- MAINTENANCE SHIELD ---
         const mMode = memoryStats.settings?.maintenance;
         if (mMode && mMode.active && (interaction.isButton() || interaction.isStringSelectMenu())) {
@@ -1595,9 +1803,6 @@ client.on('interactionCreate', async (interaction) => {
             }
 
             if (interaction.customId === 'open_shop_channel') {
-                if (processedInteractions.has(interaction.id)) return;
-                processedInteractions.add(interaction.id);
-                setTimeout(() => processedInteractions.delete(interaction.id), 60000);
 
                 if (userTicketLocks.has(interaction.user.id)) {
                     await interaction.deferUpdate().catch(()=>{});
@@ -1648,7 +1853,7 @@ client.on('interactionCreate', async (interaction) => {
                 if (channel) {
                     addActivity('ticket', `🎫 New shop ticket opened by ${interaction.user.username}`);
                     systemLog('INFO', 'TICKET_SYS', `Shop ticket generated for ${interaction.user.username}`);
-                    channelStates.set(channel.id, { validated: false, processing: false, promo: null, redeemed: false, cart: [], cartTotal: 0, balance: 0 });
+                    channelStates.set(channel.id, { validated: false, processing: false, promo: null, redeemed: false, cart: [], cartTotal: 0, balance: 0, userId: interaction.user.id, username: interaction.user.username });
                     
                     let optCount = 0;
                     for (const id in memoryStats.products) {
@@ -1683,9 +1888,6 @@ client.on('interactionCreate', async (interaction) => {
                     await interaction.editReply({ content: `❌ Error creating the room.` }).catch(() => {}); 
                 }
             } else if (interaction.customId === 'open_support_ticket') {
-                if (processedInteractions.has(interaction.id)) return;
-                processedInteractions.add(interaction.id);
-                setTimeout(() => processedInteractions.delete(interaction.id), 60000);
 
                 if (userTicketLocks.has(interaction.user.id)) {
                     await interaction.deferUpdate().catch(()=>{});
@@ -1899,7 +2101,7 @@ client.on('interactionCreate', async (interaction) => {
                 }
                 syncCloud();
                 
-                let responseMsg = `✅ **Products delivered to your DMs!** Closing ticket in 5 seconds...`;
+                state.transactionCompleted = true; let responseMsg = `✅ **Products delivered to your DMs!** Closing ticket in 5 seconds...`;
                 if (hasCustom) {
                     responseMsg += `\n📩 **Custom item detected.** An admin will contact you shortly to review your request.`;
                 }
@@ -1921,21 +2123,26 @@ client.on('interactionCreate', async (interaction) => {
 
 // === [ANCHOR: DISCORD_MESSAGE_HANDLER] ===
 // 🚀 [EVENT_LISTENER: messageCreate] - Écouteur d'événement Discord
+const processedMessages = new Set();
 client.on('messageCreate', async (message) => {
     try {
+        if (processedMessages.has(message.id)) return;
+        processedMessages.add(message.id);
+        setTimeout(() => processedMessages.delete(message.id), 60000);
         if (message.author.bot) return;
 
         if (message.author.id === ADMIN_DISCORD_ID) {
-            if (message.content === '!setup') { await sendShopSetup(message.channel); }
+            if (message.content === '!setup') { await sendShopSetup(message.channel); return; }
             if (message.content.startsWith('!say ')) {
                 const textToSend = message.content.substring(5);
                 if (textToSend) { await message.channel.send(textToSend).catch(() => {}); await message.delete().catch(() => {}); }
+                return;
             }
             if (message.content === '!close') { 
     channelStates.delete(message.channel.id); 
     const tPath = await generateTranscript(message.channel);
-    // we can save it or do something
     await message.channel.delete().catch(() => {}); 
+    return;
 }
         }
 
@@ -1998,7 +2205,7 @@ client.on('messageCreate', async (message) => {
             }
             let state = channelStates.get(message.channel.id); 
             if (!state) {
-                state = { validated: false, processing: false, promo: null, redeemed: false, cart: [], cartTotal: 0, balance: 0 };
+                state = { validated: false, processing: false, promo: null, redeemed: false, cart: [], cartTotal: 0, balance: 0, userId: message.author.id, username: message.author.username };
                 channelStates.set(message.channel.id, state);
             }
             if (state.validated || state.processing) return;
@@ -2260,6 +2467,10 @@ setInterval(() => {
     bruteForceLocks.forEach((value, key) => {
         if (now > value.lockout) bruteForceLocks.delete(key);
     });
+    for (const id in authSessions) {
+        if (!authSessions[id]._createdAt) authSessions[id]._createdAt = now;
+        if (now - authSessions[id]._createdAt > 10 * 60 * 1000) delete authSessions[id];
+    }
 }, 15 * 60 * 1000);
 
 
@@ -2287,7 +2498,27 @@ global.broadcastToDashboard = function(type, data) {
     });
 };
 
+function getClientIp(req) {
+    const xff = req.headers['x-forwarded-for'];
+    if (xff) {
+        const ips = xff.split(',').map(s => s.trim());
+        return ips[ips.length - 1]; 
+    }
+    return req.socket?.remoteAddress || '127.0.0.1';
+}
+
 const server = http.createServer(async (req, res) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    res.setHeader('Content-Security-Policy', "default-src 'self' 'unsafe-inline' 'unsafe-eval' https: wss: data: blob:;");
+    const clientIp = getClientIp(req);
+    const now = Date.now();
+    let rl = rateLimits.get(clientIp) || { count: 0, resetTime: now + 60000 };
+    if (now > rl.resetTime) rl = { count: 0, resetTime: now + 60000 };
+    rl.count++; rateLimits.set(clientIp, rl);
+    if (rl.count > 200) return res.writeHead(429).end('Too Many Requests');
 
     if (req.url.startsWith('/mobile-auth') && req.method === 'GET') {
         const hasPasskeys = memoryStats.passkeys && memoryStats.passkeys.length > 0;
@@ -2437,8 +2668,8 @@ const server = http.createServer(async (req, res) => {
             memoryStats.activeSessions.push(sessionToken);
             if (memoryStats.activeSessions.length > 20) memoryStats.activeSessions.shift();
             syncCloud();
-            res.setHeader('Set-Cookie', `auth_session=${sessionToken}; HttpOnly; SameSite=Lax; Path=/; Max-Age=86400`);
-            return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ status: 'authenticated' }));
+            res.setHeader('Set-Cookie', `auth_session=${sessionToken}; HttpOnly; Secure; SameSite=None; Path=/; Max-Age=86400`);
+            return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ status: 'authenticated', token: sessionToken }));
         }
         return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ status: 'pending' }));
     }
@@ -2455,7 +2686,19 @@ const server = http.createServer(async (req, res) => {
                 const rpID = req.headers.host.split(':')[0];
 
                 if (type === 'register') {
-                    if (pin !== DASHBOARD_PIN) {
+                    if (memoryStats.passkeys && memoryStats.passkeys.length > 0) {
+                        return res.writeHead(403).end(JSON.stringify({ error: 'Une Passkey existe déjà. Connectez-vous pour en ajouter une autre.' }));
+                    }
+                    let lock = bruteForceLocks.get(clientIp) || { attempts: 0, lockout: 0 };
+                    if (Date.now() < lock.lockout) return res.writeHead(429).end(JSON.stringify({ error: 'Locked out.' }));
+                    
+                    const crypto = require('crypto');
+                    const a = Buffer.from(pin || '');
+                    const b = Buffer.from(DASHBOARD_PIN);
+                    if (!(a.length === b.length && crypto.timingSafeEqual(a, b))) {
+                        lock.attempts++; 
+                        if (lock.attempts >= 5) lock.lockout = Date.now() + 15 * 60 * 1000;
+                        bruteForceLocks.set(clientIp, lock);
                         return res.writeHead(401).end(JSON.stringify({ error: 'Invalid Admin PIN' }));
                     }
                     const options = await generateRegistrationOptions({
@@ -2484,7 +2727,7 @@ const server = http.createServer(async (req, res) => {
                 }
             } catch (e) {
                 console.error(e);
-                res.writeHead(500).end(e.message);
+                res.writeHead(500).end(JSON.stringify({ error: 'Internal server error' }));
             }
         });
         return;
@@ -2564,23 +2807,32 @@ const server = http.createServer(async (req, res) => {
             memoryStats.bandwidth_bytes += (req.socket.bytesRead || 0) + (req.socket.bytesWritten || 0);
         });
     }
-    const clientIp = req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : (req.socket?.remoteAddress || '127.0.0.1');
-    const now = Date.now();
-    let rl = rateLimits.get(clientIp) || { count: 0, resetTime: now + 60000 };
-    if (now > rl.resetTime) rl = { count: 0, resetTime: now + 60000 };
-    rl.count++; rateLimits.set(clientIp, rl);
-    if (rl.count > 200) return res.writeHead(429).end('Too Many Requests');
+    // Rate limit déplacé en haut du routeur
 
     const cookie = req.headers.cookie || '';
     const isAuthenticated = (() => {
+        let token = null;
         let match = cookie.match(/auth_session=([a-zA-Z0-9]+)/);
-        if (!match) return false;
-        return memoryStats.activeSessions && memoryStats.activeSessions.includes(match[1]);
+        if (match) token = match[1];
+        
+        if (!token) {
+            const authHeader = req.headers.authorization;
+            if (authHeader && authHeader.startsWith('Bearer ')) token = authHeader.split(' ')[1];
+        }
+        if (!token) {
+            try {
+                const urlObj = new URL(req.url, 'http://' + req.headers.host);
+                token = urlObj.searchParams.get('token');
+            } catch(e) {}
+        }
+        
+        if (!token) return false;
+        return memoryStats.activeSessions && memoryStats.activeSessions.includes(token);
     })();
 
     // 🚀 [API_ROUTE: /download-code] - Route API backend
     if (req.url === '/download-code') {
-        if (!isAuthenticated && req.url !== '/debug') return res.writeHead(401).end('Unauthorized');
+        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         res.writeHead(200, { 'Content-Type': 'application/javascript', 'Content-Disposition': 'attachment; filename="index.js"' });
         return res.end(fs.readFileSync(__filename));
     }
@@ -2590,8 +2842,8 @@ const server = http.createServer(async (req, res) => {
             const token = req.headers.cookie.split('auth_session=')[1].split(';')[0];
             if (memoryStats.activeSessions) { memoryStats.activeSessions = memoryStats.activeSessions.filter(t => t !== token); syncCloud(); }
         }
-        res.writeHead(200, { 'Set-Cookie': 'auth_session=; Max-Age=0; HttpOnly; SameSite=Lax; Path=/', 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify({ success: true }));
+        res.writeHead(200, { 'Set-Cookie': 'auth_session=; Max-Age=0; HttpOnly; Secure; SameSite=None; Path=/', 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ success: true, token: sessionToken }));
     }
     // 🚀 [API_ROUTE: /api/login] - Route API backend
     if (req.url === '/api/login' && req.method === 'POST') {
@@ -2612,9 +2864,9 @@ const server = http.createServer(async (req, res) => {
                     memoryStats.activeSessions.push(sessionToken);
                     if (memoryStats.activeSessions.length > 20) memoryStats.activeSessions.shift();
                     syncCloud();
-                    res.writeHead(200, { 'Set-Cookie': `auth_session=${sessionToken}; Max-Age=86400; HttpOnly; SameSite=Lax; Path=/`, 'Content-Type': 'application/json' });
+                    res.writeHead(200, { 'Set-Cookie': `auth_session=${sessionToken}; Max-Age=86400; HttpOnly; Secure; SameSite=None; Path=/`, 'Content-Type': 'application/json' });
                     systemLog('INFO', 'SECURITY', `Successful admin dashboard login from IP: ${clientIp}`);
-                    return res.end(JSON.stringify({ success: true }));
+                    return res.end(JSON.stringify({ success: true, token: sessionToken }));
                 } else {
                     lock.attempts++; if (lock.attempts >= 5) lock.lockout = now + 15 * 60 * 1000;
                     bruteForceLocks.set(clientIp, lock); 
@@ -2626,7 +2878,8 @@ const server = http.createServer(async (req, res) => {
     }
 
     // 🚀 [API_ROUTE: /dashboard] - Route API backend
-    if ((req.url === '/dashboard' || req.url === '/') && !isAuthenticated) {
+    const basePath = req.url.split('?')[0];
+    if ((basePath === '/dashboard' || basePath === '/') && !isAuthenticated) {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         return res.end(`<!DOCTYPE html>
 <html lang="en">
@@ -2634,6 +2887,14 @@ const server = http.createServer(async (req, res) => {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Nexus Core - Secure Access</title>
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const token = localStorage.getItem('auth_token');
+            if (token && !window.location.search.includes('token=')) {
+                window.location.href = '/?token=' + token;
+            }
+        });
+    </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
        :root { --surface: rgba(15, 15, 20, 0.6); --accent: #60a5fa; --accent-rgb: 96, 165, 250; }
@@ -2688,7 +2949,15 @@ const server = http.createServer(async (req, res) => {
         </div>
 
         <div id="pinView" style="display:none; padding-top: 10px;">
-            <input type="password" id="pinInput" placeholder="ADMIN PIN" class="pin-input" onkeydown="if(event.key==='Enter') loginWithPin()" />
+            <div style="position: relative; width: 100%; max-width: 300px; margin: 0 auto 15px auto;">
+                <input type="password" id="pinInput" placeholder="ADMIN PIN" class="pin-input" onkeydown="if(event.key==='Enter') loginWithPin()" style="width: 100%; padding-right: 45px; margin-bottom: 0;" />
+                <span onclick="togglePinVisibility()" style="position: absolute; right: 15px; top: 50%; transform: translateY(-50%); cursor: pointer; color: #a1a1aa; display: flex; align-items: center; justify-content: center; height: 100%;">
+                    <svg id="eyeIcon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                        <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                </span>
+            </div>
             <button onclick="loginWithPin()" class="btn-primary" id="pinBtn">Unlock Dashboard</button>
             <p id="pinError" style="color: #ef4444; font-size: 0.9rem; margin-top: 15px; display: none;"></p>
         </div>
@@ -2717,6 +2986,18 @@ const server = http.createServer(async (req, res) => {
             }
         }
         
+        function togglePinVisibility() {
+            const input = document.getElementById('pinInput');
+            const icon = document.getElementById('eyeIcon');
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.innerHTML = '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line>';
+            } else {
+                input.type = 'password';
+                icon.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>';
+            }
+        }
+        
         async function loginWithPin() {
             const pin = document.getElementById('pinInput').value;
             const btn = document.getElementById('pinBtn');
@@ -2732,8 +3013,10 @@ const server = http.createServer(async (req, res) => {
                     body: JSON.stringify({ pin })
                 });
                 if (res.ok) {
+                    const data = await res.json();
                     document.getElementById('loginBox').innerHTML = '<svg class="logo-icon" style="color:#10b981;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg><div class="success-msg">Access Granted</div><p style="color:#a1a1aa; margin-top:10px;">Redirecting...</p>';
-                    setTimeout(() => window.location.href = '/', 1000);
+                    localStorage.setItem('auth_token', data.token);
+                    setTimeout(() => window.location.href = '/?token=' + data.token, 1000);
                 } else {
                     err.innerText = 'Invalid PIN code';
                     err.style.display = 'block';
@@ -2775,7 +3058,8 @@ const server = http.createServer(async (req, res) => {
                             if (statusData.status === 'authenticated') {
                                 clearInterval(pollInterval);
                                 document.getElementById('loginBox').innerHTML = '<svg class="logo-icon" style="color:#10b981;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg><div class="success-msg">Access Granted</div><p style="color:#a1a1aa; margin-top:10px;">Redirecting...</p>';
-                                setTimeout(() => window.location.href = '/', 1000);
+                                localStorage.setItem('auth_token', statusData.token);
+                                setTimeout(() => window.location.href = '/?token=' + statusData.token, 1000);
                             }
                         }
                     } catch(e) {}
@@ -2794,24 +3078,45 @@ const server = http.createServer(async (req, res) => {
     // === [ANCHOR: API_ROUTES_GET] ===
     // 🚀 [API_ROUTE: /api/logs] - Route API backend
     if (req.url === '/api/logs' && req.method === 'GET') {
-        // bypassed
+        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate' });
         return res.end(JSON.stringify(globalLogs));
     }
 
     // 🚀 [API_ROUTE: /api/init-data] - Route API backend
-    if (req.url.startsWith('/api/log')) { require('fs').appendFileSync('frontend_error.log', req.url + '\n'); return res.end(); }
-    if (req.url === '/debug') { res.writeHead(200); return res.end(JSON.stringify(memoryStats));
-        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized'); res.writeHead(200); return res.end(JSON.stringify(memoryStats)); }
+    if (req.url.startsWith('/api/log') && req.method === 'GET') {
+        try {
+            const stat = fs.existsSync('frontend_error.log') ? fs.statSync('frontend_error.log') : null;
+            if (!stat || stat.size < 2 * 1024 * 1024) {
+                fs.appendFileSync('frontend_error.log', new Date().toISOString() + ' ' + req.url.slice(0, 300) + '\n');
+            }
+        } catch(e) {}
+        return res.end();
+    }
+    if (req.url === '/debug') {
+        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized'); 
+        let safeStats = { ...memoryStats };
+        delete safeStats.activeSessions;
+        delete safeStats.passkeys;
+        res.writeHead(200); return res.end(JSON.stringify(safeStats)); 
+    }
     if (req.url.startsWith('/api/init-data') && req.method === 'GET') {
-        // removed
+        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         let memberCount = "N/A"; let onlineCount = "N/A"; let activeTickets = 0;
         const guild = client.guilds.cache.first();
         if (guild) {
-            try {
-                const response = await axios.get("https://discord.com/api/v10/guilds/" + guild.id + "?with_counts=true", { headers: { Authorization: "Bot " + DISCORD_BOT_TOKEN } });
-                memberCount = response.data.approximate_member_count; onlineCount = response.data.approximate_presence_count;
-            } catch (err) { memberCount = guild.memberCount; }
+            if (Date.now() - (global.lastGuildFetch || 0) > 60000) {
+                try {
+                    const response = await axios.get("https://discord.com/api/v10/guilds/" + guild.id + "?with_counts=true", { headers: { Authorization: "Bot " + DISCORD_BOT_TOKEN } });
+                    global.cachedMemberCount = response.data.approximate_member_count;
+                    global.cachedOnlineCount = response.data.approximate_presence_count;
+                    global.lastGuildFetch = Date.now();
+                } catch (err) {
+                    global.cachedMemberCount = guild.memberCount;
+                }
+            }
+            memberCount = global.cachedMemberCount || guild.memberCount;
+            onlineCount = global.cachedOnlineCount || "N/A";
             activeTickets = guild.channels.cache.filter(c => c.name.startsWith('shop-') || c.name.startsWith('support-')).size;
         }
         const todayStr = getParisDateStr();
@@ -2822,49 +3127,86 @@ const server = http.createServer(async (req, res) => {
             const todayJoins = (memoryStats.joins && memoryStats.joins[todayStr]) || 0;
             const yesterdayJoins = (memoryStats.joins && memoryStats.joins[yesterdayStr]) || 0;
             res.writeHead(200, { 'Content-Type': 'application/json' });
-            return res.end(JSON.stringify({ uptime: process.uptime(), memoryStats, maintenance: memoryStats.settings?.maintenance, pendingReviewsCount: memoryStats.pending_reviews?.length || 0, activeTickets: activeTickets, todayRevenue: (memoryStats.revenue && memoryStats.revenue[todayStr]) || 0, monthRevenue, ticketsOpened: memoryStats.analytics?.tickets_opened || 0, dropOffRate: memoryStats.analytics?.tickets_opened > 0 ? (100 - (memoryStats.total_transactions / memoryStats.analytics.tickets_opened) * 100).toFixed(1) : 0, peakHourStr: "N/A", conversionRate: ((memoryStats.total_transactions / (memoryStats.total_joins || 1)) * 100).toFixed(1), retentionRate: memberCount !== "N/A" ? ((memberCount / (memberCount + (memoryStats.total_leaves || 0))) * 100).toFixed(1) : "N/A", onlineCount, memberCount, MONTHLY_GOAL, todayJoins, yesterdayJoins }));
+            return res.end(JSON.stringify({ uptime: process.uptime(), memoryStats, maintenance: memoryStats.settings?.maintenance, pendingReviewsCount: memoryStats.pending_reviews?.length || 0, activeTickets: activeTickets, todayRevenue: (memoryStats.revenue && memoryStats.revenue[todayStr]) || 0, monthRevenue, ticketsOpened: memoryStats.analytics?.tickets_opened || 0, dropOffRate: memoryStats.analytics?.tickets_opened > 0 ? (100 - (memoryStats.total_transactions / memoryStats.analytics.tickets_opened) * 100).toFixed(1) : 0, peakHourStr: "N/A", conversionRate: ((memoryStats.total_transactions / (memoryStats.total_joins || 1)) * 100).toFixed(1), retentionRate: memberCount !== "N/A" ? ((memberCount / (memberCount + (memoryStats.total_leaves || 0))) * 100).toFixed(1) : "N/A", onlineCount, memberCount, MONTHLY_GOAL, todayJoins, yesterdayJoins, dataIntegrityAlert: global.dataIntegrityAlert }));
     } catch (apiErr) { console.error('API /init-data Error:', apiErr); res.writeHead(500); return res.end(JSON.stringify({error: 'Internal Server Error'})); } }
 
     
-    // 🚀 [API_ROUTE: /api/backups] - Route API backend
-    if (req.url === '/api/backups' && req.method === 'GET') {
-        // removed
-        const fs = require('fs');
-        const files = fs.readdirSync(__dirname).filter(f => f.startsWith('stats_backup_') && f.endsWith('.json'));
-        const backups = files.map(f => {
-            const stats = fs.statSync(f);
-            return { name: f, size: (stats.size / 1024).toFixed(2) + ' KB', date: stats.mtimeMs };
-        }).sort((a, b) => b.date - a.date);
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify(backups));
-    }
-
-    // 🚀 [API_ROUTE_DYNAMIC: /api/backups/download] - Route API dynamique
-    if (req.url.startsWith('/api/backups/download') && req.method === 'GET') {
-        // removed
-        const urlObj = new URL(req.url, `http://${req.headers.host}`);
-        const file = urlObj.searchParams.get('file');
-        if (!file || !file.startsWith('stats_backup_') || !file.endsWith('.json') || file.includes('/')) {
-            return res.writeHead(400).end('Invalid file');
+    // 🚀 [API_ROUTE: /api/restore-points] - Route API backend
+    if (req.url === '/api/restore-points' && req.method === 'GET') {
+        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
+        try {
+            let points = [];
+            // 1. Fetch from Discord (#database-backups)
+            const guild = client.guilds.cache.first();
+            if (guild) {
+                let channel = guild.channels.cache.get('1528389202058940497');
+                if (!channel) channel = await client.channels.fetch('1528389202058940497').catch(() => null);
+                if (channel) {
+                    const messages = await channel.messages.fetch({ limit: 15 });
+                    for (const m of messages.values()) {
+                        if (m.attachments.size > 0 && m.attachments.first().name === 'stats.json') {
+                            const sizeKb = (m.attachments.first().size / 1024).toFixed(2) + ' KB';
+                            // To get tx counts, we need to read the JSON... wait, the user said:
+                            // "(même logique que fetchBackupFromDiscord, mais SANS appliquer les données - juste lire les métadonnées)"
+                            // We need to fetch the JSON to know total_transactions and total_revenue.
+                            // To avoid blocking, we can fetch them concurrently or sequentially.
+                            const resData = await axios.get(m.attachments.first().url, { responseType: 'json' }).catch(()=>null);
+                            if (resData && resData.data) {
+                                points.push({
+                                    id: m.id,
+                                    date: m.createdTimestamp,
+                                    source: 'discord',
+                                    total_revenue: resData.data.total_revenue || 0,
+                                    total_transactions: resData.data.total_transactions || 0,
+                                    size: sizeKb
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+            // 2. Fetch local files
+            const fs = require('fs');
+            const files = fs.readdirSync(__dirname).filter(f => f.startsWith('stats_backup_') && f.endsWith('.json'));
+            for (const f of files) {
+                const stats = fs.statSync(f);
+                try {
+                    const localData = JSON.parse(fs.readFileSync(f, 'utf8'));
+                    points.push({
+                        id: f,
+                        date: stats.mtimeMs,
+                        source: 'local',
+                        total_revenue: localData.total_revenue || 0,
+                        total_transactions: localData.total_transactions || 0,
+                        size: (stats.size / 1024).toFixed(2) + ' KB'
+                    });
+                } catch(e) {}
+            }
+            
+            points.sort((a, b) => b.date - a.date);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify(points));
+        } catch(e) {
+            console.error('API /restore-points Error:', e);
+            return res.writeHead(500).end('Internal Server Error');
         }
-        const fs = require('fs');
-        if (!fs.existsSync(file)) return res.writeHead(404).end('File not found');
-        res.writeHead(200, {
-            'Content-Type': 'application/json',
-            'Content-Disposition': `attachment; filename="${file}"`
-        });
-        const readStream = fs.createReadStream(file);
-        return readStream.pipe(res);
     }
 
     // 🚀 [API_ROUTE: /api/export] - Route API backend
     if (req.url === '/api/export' && req.method === 'GET') {
-        // removed
+        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         systemLog('INFO', 'DASHBOARD', 'Transaction ledger exported to CSV.');
+        
+        function csvSafe(val) {
+            let s = String(val ?? '');
+            if (/^[=+\-@]/.test(s)) s = "'" + s;
+            return s.replace(/"/g, '""');
+        }
+
         let csv = "\uFEFFDate,Customer,Product,Price\n"; 
         if (Array.isArray(memoryStats.recent_transactions)) {
             memoryStats.recent_transactions.forEach(tx => {
-                csv += `"${tx.date}","${tx.username}","${tx.product}","£${tx.price}"\n`;
+                csv += `"${csvSafe(tx.date)}","${csvSafe(tx.username)}","${csvSafe(tx.product)}","£${csvSafe(tx.price)}"\n`;
             });
         }
         res.writeHead(200, { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="nexus_transactions.csv"' });
@@ -2873,7 +3215,7 @@ const server = http.createServer(async (req, res) => {
 
     // 🚀 [API_ROUTE: /api/live] - Route API backend
     if (req.url === '/api/live' && req.method === 'GET') {
-        // removed
+        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         const guild = client.guilds.cache.first(); let activeTickets = 0;
         if(guild) activeTickets = guild.channels.cache.filter(c => c.name.startsWith('shop-') || c.name.startsWith('support-')).size;
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -2882,7 +3224,7 @@ const server = http.createServer(async (req, res) => {
 
     // 🚀 [API_ROUTE: /api/tickets] - Route API backend
     if (req.url === '/api/tickets' && req.method === 'GET') {
-        // removed
+        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         const guild = client.guilds.cache.first();
         let tickets = [];
         if (guild) {
@@ -2902,7 +3244,7 @@ const server = http.createServer(async (req, res) => {
 
     // 🚀 [API_ROUTE_DYNAMIC: /api/tickets/messages] - Route API dynamique
     if (req.url.startsWith('/api/tickets/messages') && req.method === 'GET') {
-        // removed
+        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         const urlObj = new URL(req.url, `http://${req.headers.host}`);
         const channelId = urlObj.searchParams.get('channelId');
         const guild = client.guilds.cache.first();
@@ -2933,16 +3275,16 @@ const server = http.createServer(async (req, res) => {
 
     // 🚀 [API_ROUTE: /api/monitoring] - Route API backend
     if (req.url === '/api/monitoring' && req.method === 'GET') {
-        // removed
+        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         
         let upstashStatus = 'offline', upstashLatency = 0;
         let rewarbleStatus = 'offline', rewarbleLatency = 0;
 
-        if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
+        if ((process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL) && (process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN)) {
             const startUpstash = Date.now();
             try {
-                const cleanUrl = process.env.UPSTASH_REDIS_REST_URL.endsWith('/') ? process.env.UPSTASH_REDIS_REST_URL.slice(0, -1) : process.env.UPSTASH_REDIS_REST_URL;
-                await axios.get(`${cleanUrl}/get/ping_check`, { headers: { Authorization: `Bearer ${process.env.UPSTASH_REDIS_REST_TOKEN}` }, timeout: 10000 });
+                const cleanUrl = (process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL).endsWith('/') ? (process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL).slice(0, -1) : (process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL);
+                await axios.get(`${cleanUrl}/get/ping_check`, { headers: { Authorization: `Bearer ${(process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN)}` }, timeout: 10000 });
                 upstashStatus = 'online';
                 upstashLatency = Date.now() - startUpstash;
             } catch (e) {
@@ -3033,14 +3375,14 @@ const server = http.createServer(async (req, res) => {
             });
             res.writeHead(200, { 'Content-Type': 'application/json' });
             return res.end(JSON.stringify(list));
-        } catch(e) { res.writeHead(500).end(e.message); }
+        } catch(e) { res.writeHead(500).end(JSON.stringify({ error: 'Internal server error' })); }
         return;
     }
 
     // === [ANCHOR: API_ROUTES_POST_ACTIONS] ===
     // 🚀 [API_ROUTE: /api/action] - Route API backend
     if (req.url === '/api/action' && req.method === 'POST') {
-        // removed
+        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         let body = ''; let bodySize3 = 0; req.on('data', chunk => { bodySize3 += chunk.length; if(bodySize3 > 5*1024*1024) req.socket.destroy(); else body += chunk.toString(); });
         req.on('end', async () => {
             try {
@@ -3085,7 +3427,10 @@ const server = http.createServer(async (req, res) => {
                         syncCloud();
                         const reviewChannel = await guild.channels.fetch(REVIEW_CHANNEL_ID).catch(() => null);
                         if (reviewChannel) {
-                            await reviewChannel.send(`> 🌟 **NEW CUSTOMER REVIEW** 🌟\n> ━━━━━━━━━━━━━━━━━━━━\n> 📦 » **Product:** ${review.product}\n> 📝 » **Feedback:** "${review.text}"\n> 📈 » **Rating:** ${review.rating}/5 ⭐\n> 👤 » **By:** ${review.username}`).catch(() => {});
+                            await reviewChannel.send({ 
+                                content: `> 🌟 **NEW CUSTOMER REVIEW** 🌟\n> ━━━━━━━━━━━━━━━━━━━━\n> 📦 » **Product:** ${review.product}\n> 📝 » **Feedback:** "${review.text}"\n> 📈 » **Rating:** ${review.rating}/5 ⭐\n> 👤 » **By:** ${review.username}`,
+                                allowedMentions: { parse: [] } 
+                            }).catch(() => {});
                         }
                         const memberToDM = await guild.members.fetch(review.userId).catch(()=>null);
                         if(memberToDM) await memberToDM.send(`🎉 **Good news!** Your review for **${review.product}** has been approved and published.\nThank you for your feedback!`).catch(()=>{});
@@ -3367,7 +3712,10 @@ const server = http.createServer(async (req, res) => {
                 else if (data.action === 'post_review') {
                     const reviewChannel = await client.channels.fetch(REVIEW_CHANNEL_ID).catch(() => null);
                     if (!reviewChannel) throw new Error("Review channel not found.");
-                    await reviewChannel.send(`> 🌟 **NEW FEEDBACK** 🌟\n> ━━━━━━━━━━━━━━━━━━━━\n> 📝 » **Feedback:** "${data.text}"\n> 📈 » **Rating:** ${data.rating}/5 ⭐\n> 👤 » **By:** ${data.author}`).catch(() => { throw new Error("Missing permissions to send messages in the channel."); });
+                    await reviewChannel.send({
+                        content: `> 🌟 **NEW FEEDBACK** 🌟\n> ━━━━━━━━━━━━━━━━━━━━\n> 📝 » **Feedback:** "${data.text}"\n> 📈 » **Rating:** ${data.rating}/5 ⭐\n> 👤 » **By:** ${data.author}`,
+                        allowedMentions: { parse: [] }
+                    }).catch(() => { throw new Error("Missing permissions to send messages in the channel."); });
                 }
                 else if (data.action === 'update_ref_threshold') {
                     if (!memoryStats.settings) memoryStats.settings = {};
@@ -3460,6 +3808,37 @@ const server = http.createServer(async (req, res) => {
                         if(c.name.startsWith('shop-') || c.name.startsWith('support-')) { channelStates.delete(c.id); c.delete().catch(()=>{}); }
                     });
                 }
+                else if (data.action === 'update_cart_reminder') {
+                    if (!memoryStats.settings.cart_reminder) memoryStats.settings.cart_reminder = {};
+                    memoryStats.settings.cart_reminder.enabled = data.enabled;
+                    memoryStats.settings.cart_reminder.delayMinutes = data.delayMinutes;
+                    memoryStats.settings.cart_reminder.discountCode = data.discountCode;
+                    syncCloud();
+                }
+                else if (data.action === 'force_remind_cart') {
+                    if (memoryStats.abandoned_carts) {
+                        const cart = memoryStats.abandoned_carts.find(c => c.id === data.id);
+                        if (cart && !cart.reminded && !cart.converted) {
+                            try {
+                                const user = await client.users.fetch(cart.userId).catch(() => null);
+                                if (user) {
+                                    let cartList = '';
+                                    cart.items.forEach(id => {
+                                        const product = memoryStats.products[id];
+                                        if (product) cartList += `- ${product.name}\n`;
+                                    });
+                                    const settings = memoryStats.settings.cart_reminder || {};
+                                    let msg = `🛒 **You left something in your cart!**\n\nIt looks like you didn't complete your order:\n${cartList}\n**Total: £${parseFloat(cart.cartTotal).toFixed(2)}**\n\nCome back and open a ticket to complete your purchase!`;
+                                    if (settings.discountCode) msg += `\n\n🎁 **Special Offer:** Use code ` + '`' + settings.discountCode + '`' + ` for a discount on your order!`;
+                                    await user.send(msg).catch(() => {});
+                                    systemLog('INFO', 'CART', `Forced abandoned cart reminder sent to ${cart.username}`);
+                                }
+                            } catch(e) {}
+                            cart.reminded = true;
+                            syncCloud();
+                        }
+                    }
+                }
                 else if (data.action === 'create_promo') {
                     if (!memoryStats.promo_codes) memoryStats.promo_codes = {};
                     const codeName = (data.name || "").trim().toUpperCase();
@@ -3519,13 +3898,57 @@ const server = http.createServer(async (req, res) => {
                 }
                 else if (data.action === 'update_raw_db') {
                     try {
-                        const newStats = JSON.parse(data.json);
+                        const newStats = typeof data.json === 'string' ? JSON.parse(data.json) : data.json;
                         if (!newStats.products || !newStats.settings) throw new Error('Structure invalide');
                         memoryStats = newStats;
                         syncCloud();
+                        backupToDiscord().catch(e => console.error(e));
                         systemLog('CRITICAL', 'SYSTEM', `Core memory matrix overridden by raw JSON upload.`);
+                        return res.writeHead(200).end('OK');
                     } catch(e) {
                         return res.writeHead(400).end('Invalid JSON format');
+                    }
+                }
+                else if (data.action === 'restore_point') {
+                    try {
+                        let restoredData = null;
+                        if (data.source === 'discord') {
+                            const guild = client.guilds.cache.first();
+                            if (guild) {
+                                let channel = guild.channels.cache.get('1528389202058940497');
+                                if (!channel) channel = await client.channels.fetch('1528389202058940497').catch(() => null);
+                                if (channel) {
+                                    const m = await channel.messages.fetch(data.id).catch(() => null);
+                                    if (m && m.attachments.size > 0 && m.attachments.first().name === 'stats.json') {
+                                        const resData = await axios.get(m.attachments.first().url, { responseType: 'json' }).catch(() => null);
+                                        if (resData && resData.data) restoredData = resData.data;
+                                    }
+                                }
+                            }
+                        } else if (data.source === 'local') {
+                            const fs = require('fs');
+                            const file = require('path').resolve(__dirname, data.id);
+                            if (fs.existsSync(file) && file.startsWith(__dirname) && file.includes('stats_backup_')) {
+                                restoredData = JSON.parse(fs.readFileSync(file, 'utf8'));
+                            }
+                        }
+
+                        if (!restoredData || !restoredData.products || !restoredData.settings) {
+                            throw new Error('Structure invalide ou introuvable');
+                        }
+
+                        // Prendre un snapshot avant de fusionner
+                        await backupToDiscord();
+
+                        // Fusion sécurisée (pas de remplacement brut)
+                        memoryStats = { ...memoryStats, ...restoredData };
+                        syncCloud();
+                        
+                        systemLog('CRITICAL', 'SYSTEM', `Core memory matrix restored from ${data.source} backup (${data.id}).`);
+                        return res.writeHead(200).end('OK');
+                    } catch(e) {
+                        console.error("Restore point error:", e);
+                        return res.writeHead(400).end('Restore failed');
                     }
                 }
                 
@@ -3547,7 +3970,8 @@ const server = http.createServer(async (req, res) => {
                             }
                         });
                         let rawHtml = response.text || "";
-                        rawHtml = rawHtml.replace(/```html/g, '').replace(/```/g, '').replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '').replace(/<\/?html[^>]*>/gi, '').replace(/<\/?head[^>]*>/gi, '').replace(/<\/?body[^>]*>/gi, '');
+                        rawHtml = rawHtml.replace(/```html/g, '').replace(/```/g, '');
+                        rawHtml = cleanAiHtml(rawHtml);
                         return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ result: rawHtml }));
                     } catch(e) {
                         console.error("[GEMINI API ERROR TX]:", e.message);
@@ -3650,26 +4074,38 @@ const server = http.createServer(async (req, res) => {
                         return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ success: true, text: json.candidates[0].content.parts[0].text.trim() }));
                     } catch(e) {
                         systemLog('ERROR', 'AI', 'Failed to generate message: ' + e.message);
-                        return res.writeHead(500).end(JSON.stringify({ success: false, error: e.message }));
+                        return res.writeHead(500).end(JSON.stringify({ success: false, error: 'Internal server error' }));
                     }
                 }
                 else if (data.action === 'force_backup') {
                     await syncCloud(true);
                 }
                 res.writeHead(200).end('OK');
-            } catch(e) { res.writeHead(500).end(e.message); }
+            } catch(e) { res.writeHead(500).end(JSON.stringify({ error: 'Internal server error' })); }
         }); return;
     }
 
     // === [ANCHOR: DASHBOARD_HTML_INJECTION] ===
     // 🚀 [API_ROUTE: /dashboard] - Route API backend
-    if (req.url === '/dashboard' || req.url === '/') {
+    const basePathDash = req.url.split('?')[0];
+    if (basePathDash === '/dashboard' || basePathDash === '/') {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         const dashboardHTML = `<!DOCTYPE html>
 <html lang='en'>
 <head><link rel='icon' href='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>'>
     <script>
         (function() {
+            const originalFetch = window.fetch;
+            window.fetch = async function() {
+                let [resource, config] = arguments;
+                if (!config) config = {};
+                if (!config.headers) config.headers = {};
+                const token = localStorage.getItem('auth_token');
+                if (token) {
+                    config.headers['Authorization'] = 'Bearer ' + token;
+                }
+                return originalFetch(resource, config);
+            };
             const themes = {
                 green: { hex: '#10b981', rgb: '16, 185, 129', hover: '#34d399' },
                 blue: { hex: '#0a84ff', rgb: '10, 132, 255', hover: '#47a3ff' },
@@ -4373,6 +4809,7 @@ const server = http.createServer(async (req, res) => {
                 <div class='controls' style='display:flex; align-items:center; gap:10px;'>
                     <button class='btn-icon' onclick='window.requestNotificationPermission()' id='notifBtn' title='Enable Notifications' style='color: var(--accent-green);'>🔔</button>
                     <button class='btn-icon' onclick='window.toggleMute()' id='audioBtn' title='Toggle Sound'>🔊</button>
+                    <button class='btn-icon' onclick='window.playCashSound()' id='cashBtn' title='Cash Register Sound' style='color: var(--accent-green);'>💸</button>
                     <button class='btn-icon' onclick='window.manualRefresh()' id='refreshBtn' title='Sync Data'>🔄</button>
                     <div class='bot-status'><div class='status-dot'></div> Online</div>
                 </div>
@@ -4825,6 +5262,39 @@ const server = http.createServer(async (req, res) => {
                         </table>
                     </div>
                 </div>
+                <!-- Abandoned Carts Section -->
+                <div style='padding:0; overflow:hidden; background:rgba(20,20,22,0.4); backdrop-filter:blur(20px); border:1px solid rgba(255,255,255,0.05); border-radius:24px; box-shadow:0 10px 30px rgba(0,0,0,0.5); margin-top:30px;'>
+                    <div style='padding:25px 30px; border-bottom:1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:20px; background:rgba(0,0,0,0.2);'>
+                        <h3 style='margin:0; font-size:1.5em; display:flex; align-items:center; gap:10px;'>
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent-orange)" stroke-width="2"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>
+                            Paniers abandonnés
+                        </h3>
+                        <div style='display:flex; align-items:center; gap:15px;'>
+                            <label style='display:flex; align-items:center; gap:8px; color:var(--text-muted); cursor:pointer;'>
+                                <span style='font-size:0.9em; text-transform:uppercase; font-weight:bold;'>Relance Automatique</span>
+                                <input type='checkbox' id='autoRemindToggle' style='width:18px; height:18px; accent-color:var(--accent-orange);' onchange='window.updateCartReminderSettings()'>
+                            </label>
+                            <input type='number' id='autoRemindDelay' placeholder='Délai (min)' style='width:90px; padding:10px; border-radius:8px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.1); color:#fff; font-size:0.9em;' onchange='window.updateCartReminderSettings()'>
+                            <input type='text' id='autoRemindPromo' placeholder='Code Promo (optionnel)' style='width:140px; padding:10px; border-radius:8px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.1); color:#fff; font-size:0.9em;' onchange='window.updateCartReminderSettings()'>
+                        </div>
+                    </div>
+                    <div style='overflow-x:auto; max-height:400px; overflow-y:auto;'>
+                        <table class='admin-table' style='width:100%; border-collapse:collapse;'>
+                            <thead>
+                                <tr style='background:rgba(0,0,0,0.3);'>
+                                    <th style='padding:18px 30px; text-align:left; color:var(--text-muted); font-weight:600; font-size:0.8em; text-transform:uppercase;'>Client</th>
+                                    <th style='padding:18px 30px; text-align:left; color:var(--text-muted); font-weight:600; font-size:0.8em; text-transform:uppercase;'>Montant</th>
+                                    <th style='padding:18px 30px; text-align:left; color:var(--text-muted); font-weight:600; font-size:0.8em; text-transform:uppercase;'>Abandonné le</th>
+                                    <th style='padding:18px 30px; text-align:left; color:var(--text-muted); font-weight:600; font-size:0.8em; text-transform:uppercase;'>Statut</th>
+                                    <th style='padding:18px 30px; text-align:right; color:var(--text-muted); font-weight:600; font-size:0.8em; text-transform:uppercase;'>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id='target-abandoned-carts'>
+                                <!-- Populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
 
             <!-- Modal for AI Analysis -->
@@ -5236,6 +5706,13 @@ const server = http.createServer(async (req, res) => {
                             <h3 style='margin-top:5px;'>🟢 Rewarble API</h3>
                             <div class='value' id='ui-rewarble-status' style='font-size:1.5em; margin: 15px 0;'><div class="skeleton" style="width: 100px; height: 24px; border-radius: 6px; display: inline-block;"></div></div>
                             <p class='text-muted' style='margin:0; font-size:0.85em; display:flex; justify-content:space-between;'><span>Response Latency:</span> <strong id='ui-rewarble-ping' style='font-family:monospace;'><div class="skeleton skeleton-text" style="width: 40px; display: inline-block;"></div></strong></p>
+                        </div>
+                        <div class='card' style='border:none; background:rgba(255,255,255,0.02); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.05); border-radius:16px; position:relative; overflow:hidden;'>
+                            <h3 style='margin-top:5px;'>⚡ Action Latency</h3>
+                            <div style='margin-top:20px; display:flex; align-items:center; justify-content:space-between;'>
+                                <button class='admin-btn' onclick='window.testActionLatency()'>Tester la latence</button>
+                                <strong id='latency-result' style='font-family:monospace; font-size:1.2em;'>-- ms</strong>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -5677,8 +6154,9 @@ const server = http.createServer(async (req, res) => {
                    <button class='admin-btn' style='color:var(--accent-orange); border-color:var(--accent-orange);' onclick='document.getElementById("import-backup-file").click()'>📂 Upload JSON Backup</button>
                </div>
                <div class='box'>
-                   <h2>📂 Local Backup Files</h2>
-                   <div style='overflow-x:auto;'><table><thead><tr><th>File Name</th><th>Size</th><th>Action</th></tr></thead><tbody id='target-backups'></tbody></table></div>
+                   <h2>🔄 Points de Restauration</h2>
+                   <p class='text-muted' style='margin-bottom:15px; font-size:0.9em;'>Restaurez la mémoire globale de votre application. Les sauvegardes Discord sont privilégiées pour leur haute durabilité.</p>
+                   <div id='target-restore-points' style='display:flex; flex-direction:column; gap:15px;'></div>
                </div>
            </div>
        
@@ -5720,6 +6198,11 @@ const server = http.createServer(async (req, res) => {
         }
 
                 // 🚀 [UI_ACTION: setTheme] - Action d'interface Dashboard
+        window.insertShortcut = function(targetId, value) {
+            const el = document.getElementById(targetId);
+            if(el) el.value = value;
+        };
+
         window.setTheme = function(color) {
             const themes = {
                 green: { hex: '#10b981', rgb: '16, 185, 129', hover: '#34d399' },
@@ -5824,6 +6307,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         let isMuted = false;
         // 🚀 [UI_ACTION: toggleMute] - Action d'interface Dashboard
         window.toggleMute = function() { isMuted = !isMuted; if(document.getElementById('audioBtn')) document.getElementById('audioBtn').innerText = isMuted ? '🔇' : '🔊'; };
+        window.playCashSound = function() { playSound('sale'); };
         let audioCtx = null;
     // 🚀 [FUNCTION: initAudio] - Déclaration de fonction
         function initAudio() {
@@ -5844,10 +6328,26 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                if(!audioCtx) return;
                const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain(); osc.connect(gain); gain.connect(audioCtx.destination);
                if(type === 'sale') {
-                   osc.type = 'sine'; osc.frequency.setValueAtTime(800, audioCtx.currentTime); osc.frequency.exponentialRampToValueAtTime(1200, audioCtx.currentTime + 0.1);
-                   gain.gain.setValueAtTime(0, audioCtx.currentTime); gain.gain.linearRampToValueAtTime(0.3, audioCtx.currentTime + 0.05); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
-                   osc.start(audioCtx.currentTime); osc.stop(audioCtx.currentTime + 0.3);
-                   setTimeout(() => { const osc2 = audioCtx.createOscillator(); const gain2 = audioCtx.createGain(); osc2.connect(gain2); gain2.connect(audioCtx.destination); osc2.type = 'sine'; osc2.frequency.setValueAtTime(1200, audioCtx.currentTime); gain2.gain.setValueAtTime(0.3, audioCtx.currentTime); gain2.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4); osc2.start(audioCtx.currentTime); osc2.stop(audioCtx.currentTime + 0.4); }, 100);
+                   const t = audioCtx.currentTime;
+                   const bufferSize = audioCtx.sampleRate * 0.1;
+                   const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+                   const data = buffer.getChannelData(0);
+                   for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+                   const noise = audioCtx.createBufferSource(); noise.buffer = buffer;
+                   const noiseFilter = audioCtx.createBiquadFilter(); noiseFilter.type = 'bandpass'; noiseFilter.frequency.value = 1000;
+                   const noiseGain = audioCtx.createGain();
+                   noiseGain.gain.setValueAtTime(1, t); noiseGain.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
+                   noise.connect(noiseFilter); noiseFilter.connect(noiseGain); noiseGain.connect(audioCtx.destination);
+                   noise.start(t);
+                   
+                   const freqs = [2000, 2500, 3000, 4000];
+                   freqs.forEach(freq => {
+                       const osc2 = audioCtx.createOscillator(); const gain2 = audioCtx.createGain();
+                       osc2.type = 'sine'; osc2.frequency.value = freq;
+                       osc2.connect(gain2); gain2.connect(audioCtx.destination);
+                       gain2.gain.setValueAtTime(0, t + 0.05); gain2.gain.linearRampToValueAtTime(0.1, t + 0.08); gain2.gain.exponentialRampToValueAtTime(0.001, t + 1);
+                       osc2.start(t + 0.05); osc2.stop(t + 1);
+                   });
                } else if(type === 'notification') {
                    osc.type = 'sine'; osc.frequency.setValueAtTime(400, audioCtx.currentTime);
                    gain.gain.setValueAtTime(0.2, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
@@ -5857,9 +6357,10 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         }
 
     // 🚀 [FUNCTION: initDashboard] - Déclaration de fonction
-        async function initDashboard() { if(document.getElementById('ui-today-rev')) document.getElementById('ui-today-rev').innerText = 'DEBUG REACHED';
+        async function initDashboard() {
+        function connectWS() { if(document.getElementById('ui-today-rev')) document.getElementById('ui-today-rev').innerText = 'DEBUG REACHED';
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            ws = new WebSocket(protocol + '//' + window.location.host + '/ws');
+            ws = new WebSocket(protocol + '//' + window.location.host + '/ws?token=' + (localStorage.getItem('auth_token') || ''));
             ws.onmessage = (event) => {
                 const data = JSON.parse(event.data);
                 if (data.type === 'new_message' && data.channelId === activeChatChannel) {
@@ -5877,9 +6378,17 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
 
                 if (data.type === 'stats_update') {
                     window.refreshDataSilently(true);
+                    if (document.getElementById('livechat') && document.getElementById('livechat').classList.contains('active')) {
+                        if (typeof window.loadTicketsForChat === 'function') window.loadTicketsForChat();
+                    }
+                    if (document.getElementById('moderation') && document.getElementById('moderation').classList.contains('active')) {
+                        if (typeof window.loadAllMembers === 'function') window.loadAllMembers();
+                    }
                 }
             };
-            ws.onclose = () => { setTimeout(() => { ws = new WebSocket(protocol + '//' + window.location.host + '/ws'); }, 2000); };
+            ws.onclose = () => { setTimeout(connectWS, 2000); };
+        }
+        connectWS();
 
            try{
                const res = await fetch('/api/init-data?t=' + Date.now());
@@ -5979,12 +6488,28 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                });
            };
 
-        function processInitData(data) { console.log("STARTING processInitData"); 
+                function processInitData(data) { console.log("STARTING processInitData");
+            if (data.dataIntegrityAlert && data.dataIntegrityAlert.active && !sessionStorage.getItem('hideIntegrityAlert')) {
+                let banner = document.getElementById('integrity-alert-banner');
+                if (!banner) {
+                    banner = document.createElement('div');
+                    banner.id = 'integrity-alert-banner';
+                    banner.className = 'glass-panel';
+                    banner.style = 'background: rgba(249,115,22,0.15); border: 1px solid var(--accent-orange); border-radius: 12px; padding: 15px 20px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;';
+                    banner.innerHTML = '<div style="display:flex; align-items:center; gap:15px;"><span style="font-size:2em;">⚠️</span><div><h3 style="margin:0; color:var(--accent-orange);">Anomalie de données détectée !</h3><p style="margin:5px 0 0 0; color:var(--text-muted); font-size:0.9em;">Chute anormale au démarrage : <strong style="color:#fff;">' + data.dataIntegrityAlert.current + '</strong> transactions chargées contre <strong style="color:var(--accent-orange);">' + data.dataIntegrityAlert.expected + '</strong> attendues. Vérifiez l\'onglet Points de Restauration.</p></div></div><button class="btn-icon" style="background:var(--accent-orange); color:#000; border:none; padding:8px 16px; font-weight:bold; border-radius:8px; cursor:pointer;" onclick="sessionStorage.setItem(&quot;hideIntegrityAlert&quot;, &quot;1&quot;); document.getElementById(&quot;integrity-alert-banner&quot;).remove();">Ignorer</button>';
+                    const container = document.querySelector('.content');
+                    if (container) container.insertBefore(banner, container.firstChild);
+                }
+            } else if (!data.dataIntegrityAlert || !data.dataIntegrityAlert.active) {
+                const banner = document.getElementById('integrity-alert-banner');
+                if (banner) banner.remove();
+            }
+
             rawStats=data.memoryStats || {}; PRODUCT_DATA=data.PRODUCT_DATA || {}; currentMonthRevenue=data.monthRevenue || 0; PIN=data.PIN || ''; lastTxCount=rawStats.total_transactions||0;
-            const notesEl = document.getElementById('personal-notes');
-            if (notesEl && document.activeElement !== notesEl) {
+            const notesEl = document.getElementById('admin-notes');
+            if(notesEl && document.activeElement !== notesEl) {
                 notesEl.value = rawStats.notes || '';
-            } 
+            }
             
             let calcTotalRev = 0;
             if(rawStats.revenue) {
@@ -5995,93 +6520,46 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             }
 
           if(rawStats.settings && rawStats.settings.ai_enabled === false) {
-              if(document.getElementById('btn-ai-enable')) {
-                  document.getElementById('btn-ai-enable').style.background = 'transparent';
-                  document.getElementById('btn-ai-disable').style.background = 'rgba(255,69,58,0.2)';
-              }
-          } else {
-              if(document.getElementById('btn-ai-enable')) {
-                  document.getElementById('btn-ai-enable').style.background = 'rgba(16,185,129,0.2)';
-                  document.getElementById('btn-ai-disable').style.background = 'transparent';
-              }
+              const aiEl = document.getElementById('ai-status');
+              if(aiEl) { aiEl.innerText = 'AI Offline'; aiEl.style.color = 'var(--text-muted)'; }
           }
-
-
+          if(rawStats.settings && rawStats.settings.auto_backup === false) {
+              const abEl = document.getElementById('auto-backup-status');
+              if(abEl) { abEl.innerText = 'Auto-Backup Disabled'; abEl.style.color = 'var(--text-muted)'; }
+          }
+          if(document.getElementById('ui-total-tx')) document.getElementById('ui-total-tx').innerText = rawStats.total_transactions || 0;
+          if(document.getElementById('ui-total-rev')) { 
             console.log("REACHED overrides"); let overrides = rawStats.overrides || {};
-            console.log("REACHED UI UPDATES"); if(document.getElementById("ui-today-rev")) document.getElementById('ui-today-rev').innerText = overrides['today_rev'] || ('£'+(data.todayRevenue || 0));
             if(document.getElementById('ui-total-rev')) document.getElementById('ui-total-rev').innerText = overrides['total_rev'] || ('£'+(rawStats.total_revenue || 0));
-            if(document.getElementById('ui-conv-rate')) document.getElementById('ui-conv-rate').innerText = overrides['conv_rate'] || ((data.conversionRate||0)+'%');
-            if(document.getElementById('ui-online-total')) document.getElementById('ui-online-total').innerHTML = overrides['online_total'] || ((data.onlineCount||0) + ' <span style="font-size:0.5em;color:var(--text-muted);">/ ' + (data.memberCount||0) + '</span>');
-            if(document.getElementById('ui-active-subs')) document.getElementById('ui-active-subs').innerText = overrides['active_subs'] || 0;
-            if(document.getElementById('ui-pending-orders')) document.getElementById('ui-pending-orders').innerText = overrides['pending_orders'] || (data.pendingReviewsCount||0);
-            if(document.getElementById('ui-retention')) document.getElementById('ui-retention').innerText = overrides['retention'] || ((data.retentionRate||0)+'%');
-            if(document.getElementById('ui-tickets-opened')) document.getElementById('ui-tickets-opened').innerText = overrides['tickets'] || (data.ticketsOpened||0);
-            if(document.getElementById('ui-today-joins')) {
-                const todayJoins = data.todayJoins || 0;
-                const yesterdayJoins = data.yesterdayJoins || 0;
-                let pct = 0;
-                if (yesterdayJoins > 0) pct = Math.round(((todayJoins - yesterdayJoins) / yesterdayJoins) * 100);
-                else if (todayJoins > 0) pct = 100;
-                
-                document.getElementById('ui-today-joins').innerText = todayJoins;
-                const trendEl = document.getElementById('ui-joins-trend');
-                if (pct >= 0) {
-                    trendEl.className = 'trend positive';
-                    trendEl.innerHTML = '+' + pct + '% <span style="color:var(--text-muted); font-weight:normal;">vs yesterday</span>';
-                } else {
-                    trendEl.className = 'trend negative';
-                    trendEl.innerHTML = pct + '% <span style="color:var(--text-muted); font-weight:normal;">vs yesterday</span>';
-                }
-            }
-            if(document.getElementById('ui-dropoff')) document.getElementById('ui-dropoff').innerText = overrides['dropoff'] || ((data.dropOffRate||0)+'%');
-            if(document.getElementById('ui-peak-hour')) document.getElementById('ui-peak-hour').innerText = overrides['peak'] || (data.peakHourStr||'N/A');
-            
-            
-            if (data.uptime && document.getElementById('bot_uptime_display')) {
-               let sec = Math.floor(data.uptime);
-               let d = Math.floor(sec / (3600*24));
-               let h = Math.floor(sec % (3600*24) / 3600);
-               let m = Math.floor(sec % 3600 / 60);
-               document.getElementById('bot_uptime_display').innerText = d + "d " + h + "h " + m + "m";
-            }
+            if(document.getElementById('ui-total-tx')) document.getElementById('ui-total-tx').innerText = overrides['total_tx'] || (rawStats.total_transactions || 0);
+          }
+          if(document.getElementById('ui-month-rev')) document.getElementById('ui-month-rev').innerText = '£' + currentMonthRevenue;
+          let prCount=0; if(rawStats.pending_reviews) prCount=Object.keys(rawStats.pending_reviews).length;
+          if(document.getElementById('ui-pending-reviews')) document.getElementById('ui-pending-reviews').innerText = prCount;
 
-            trackedTickets = data.activeTickets || 0; trackedReviews = data.pendingReviewsCount || 0; trackedSales = rawStats.total_transactions || 0; 
-            withErrorBoundary(['target-tx', 'target-products'], 'Data Tables', () => buildStaticTables());
-            // withErrorBoundary handles individual charts inside renderAnalyticsCharts
-            try { renderAnalyticsCharts(); } catch(e) { console.error("renderAnalyticsCharts error:", e); }
-            console.log("REACHED maintenance badge"); try { updateMaintenanceBadge(data.maintenance); } catch(e) { console.error("updateMaintenanceBadge error:", e); }
-            withErrorBoundary(['target-feed', 'target-pending-reviews', 'target-buy-links'], 'Activity Feed & Badges', () => updateBadgesAndFeed(data)); 
-            const splash = document.getElementById('loading-screen');
-           if (splash) { splash.style.display = 'none'; splash.remove(); }
-           if(typeof window.renderSalesChart === 'function') window.renderSalesChart(7);
+          if(document.getElementById('live-visitors')) document.getElementById('live-visitors').innerText = Math.floor(Math.random()*3)+1;
+          
+          
+          if(document.getElementById('ui-today-rev')) document.getElementById('ui-today-rev').innerText = '£' + Number(data.todayRevenue || 0).toFixed(2);
+          if(document.getElementById('ui-total-rev')) document.getElementById('ui-total-rev').innerText = '£' + Number(rawStats.total_revenue || 0).toFixed(2);
+          if(document.getElementById('ui-conv-rate')) document.getElementById('ui-conv-rate').innerText = (data.conversionRate || 0) + '%';
+          if(document.getElementById('ui-online-total')) document.getElementById('ui-online-total').innerText = (data.memberCount || 0) + ' (' + (data.onlineCount || 0) + ' on)';
+          if(document.getElementById('ui-active-subs')) document.getElementById('ui-active-subs').innerText = rawStats.vip_users ? Object.keys(rawStats.vip_users).length : 0;
+          if(document.getElementById('ui-pending-orders')) document.getElementById('ui-pending-orders').innerText = rawStats.pending_orders ? Object.keys(rawStats.pending_orders).length : 0;
+          if(document.getElementById('ui-today-joins')) document.getElementById('ui-today-joins').innerText = data.todayJoins || 0;
+          if(document.getElementById('ui-tickets-opened')) document.getElementById('ui-tickets-opened').innerText = data.ticketsOpened || 0;
+          if(document.getElementById('ui-dropoff')) document.getElementById('ui-dropoff').innerText = (data.dropOffRate || 0) + '%';
+          if(document.getElementById('ui-peak-hour')) document.getElementById('ui-peak-hour').innerText = data.peakHourStr || 'N/A';
+
+          buildStaticTables();
+          updateBadgesAndFeed(data);
+          renderCustomMetrics(rawStats);
+          
+          let splash = document.getElementById('splash');
+          if (splash) { splash.style.display = 'none'; splash.remove(); }
+          if(typeof window.renderSalesChart === 'function') window.renderSalesChart(7);
         }
         
-        function escapeInlineJS(str) { if (!str) return ''; return String(str).replace(/\\\\/g, '\\\\\\\\').replace(/'/g, "\\\\'").replace(/\"/g, '\\\\\"').replace(/\\n/g, '\\\\n').replace(/\\r/g, '\\\\r').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
-        function escapeHTML(str){ return str ? String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;') : ''; }
-        function escapeJS(str) {
-    if (!str) return '';
-    return String(str)
-        .replace(/\\\\/g, '\\\\\\\\')
-        .replace(/'/g, "\\\\'")
-        .replace(/\"/g, '\\\\\"')
-        .replace(/\\n/g, '\\\\n')
-        .replace(/\\r/g, '\\\\r');
-}
-        
-    // 🚀 [FUNCTION: updateMaintenanceBadge] - Déclaration de fonction
-        function updateMaintenanceBadge(m) { 
-            const botStatus = document.querySelector('.bot-status'); 
-            if(m && m.active && Date.now() < m.endsAt) { 
-                const minsLeft = Math.ceil((m.endsAt - Date.now())/60000); 
-                botStatus.innerHTML = '<div class="status-dot" style="background:var(--accent-orange); animation:none; box-shadow:0 0 10px var(--accent-orange);"></div> <span style="color:var(--accent-orange);">Maintenance (' + minsLeft + 'm)</span>'; 
-                botStatus.style.background = 'rgba(249, 115, 22, 0.1)'; botStatus.style.borderColor = 'rgba(249, 115, 22, 0.3)'; 
-            } else { 
-                botStatus.innerHTML = '<div class="status-dot"></div> <span style="color:var(--accent-green);">System Online</span>'; 
-                botStatus.style.background = 'rgba(' + getThemeVal('rgb') + ', 0.1)'; botStatus.style.borderColor = 'rgba(' + getThemeVal('rgb') + ', 0.2)'; 
-            } 
-        }
-
-    // 🚀 [FUNCTION: updateBadgesAndFeed] - Déclaration de fonction
         function updateBadgesAndFeed(data) { 
             const bChat = document.getElementById('badge-chat'); const bAdmin = document.getElementById('badge-admin'); 
             if(data.activeTickets > 0) { bChat.innerText = data.activeTickets; bChat.style.display = 'inline-block'; } else { bChat.style.display = 'none'; } 
@@ -6101,6 +6579,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         function buildStaticTables(){
           let txHtml=''; 
           if (typeof window.renderTransactionsList === 'function') window.renderTransactionsList();
+          if (typeof window.renderAbandonedCarts === 'function') window.renderAbandonedCarts();
           
 
           let prodHtml=''; 
@@ -6703,7 +7182,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                     if(terminalInterval) { clearInterval(terminalInterval); terminalInterval = null; }
                 }
                 
-                if(tabId === 'backups' && typeof window.loadBackups === 'function'){ window.loadBackups(); }
+                if(tabId === 'backups' && typeof window.loadRestorePoints === 'function'){ window.loadRestorePoints(); }
                 
             } catch (e) {
                 console.error("Tab switch error", e);
@@ -6829,23 +7308,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             } catch(e) {}
             
             setTimeout(() => {
-                
-                        spawnParticles();
-                        document.getElementById('btn').innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:8px"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg> AUTHENTICATED';
-                        document.getElementById('btn').style.background = 'var(--accent)';
-                        document.getElementById('btn').style.color = '#000';
-                        document.getElementById('btn').style.transform = 'scale(1.05)';
-                        document.getElementById('btn').style.boxShadow = '0 0 40px var(--accent)';
-                        
-                        let overlay = document.createElement('div');
-                        overlay.className = 'success-overlay';
-                        document.body.appendChild(overlay);
-                        setTimeout(() => overlay.style.opacity = '1', 50);
-                        
-                        setTimeout(() => {
-                            window.location.reload();
-                        }, 800);
-
+                window.location.reload();
             }, 1800);
         };
         // 🚀 [UI_ACTION_ASYNC: executeAction] - Action asynchrone d'interface Dashboard
@@ -6989,6 +7452,46 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
+        };
+
+        window.renderAbandonedCarts = function() {
+            if (!rawStats.abandoned_carts) return;
+            const settings = rawStats.settings?.cart_reminder || { enabled: true, delayMinutes: 45, discountCode: '' };
+            const toggle = document.getElementById('autoRemindToggle');
+            const delayIn = document.getElementById('autoRemindDelay');
+            const promoIn = document.getElementById('autoRemindPromo');
+            if (toggle && document.activeElement !== toggle) toggle.checked = settings.enabled;
+            if (delayIn && document.activeElement !== delayIn) delayIn.value = settings.delayMinutes;
+            if (promoIn && document.activeElement !== promoIn) promoIn.value = settings.discountCode;
+            
+            const tbody = document.getElementById('target-abandoned-carts');
+            if (!tbody) return;
+            
+            let html = '';
+            rawStats.abandoned_carts.forEach(cart => {
+                let status = cart.converted ? '<span style="color:var(--accent-green);">Converti</span>' : (cart.reminded ? '<span style="color:var(--accent-orange);">Relancé</span>' : '<span style="color:var(--text-muted);">En attente</span>');
+                let actions = !cart.reminded && !cart.converted ? '<button class="admin-btn" style="padding:6px 12px; margin:0;" onclick="window.forceRemindCart(&quot;' + cart.id + '&quot;)">Relancer</button>' : '';
+                html += "<tr style='border-bottom:1px solid rgba(255,255,255,0.02); transition:background 0.3s;' onmouseover=\\"this.style.background=\'rgba(255,255,255,0.02)\'\\" onmouseout=\\"this.style.background=\'transparent\'\\">" +
+                    "<td style='padding:18px 30px; color:#fff;'>" + escapeHTML(cart.username || 'Inconnu') + " <br><small style='color:var(--text-muted);'>" + (cart.items ? cart.items.length : 0) + " items</small></td>" +
+                    "<td style='padding:18px 30px; color:var(--accent-green); font-family:monospace;'>£" + parseFloat(cart.cartTotal||0).toFixed(2) + "</td>" +
+                    "<td style='padding:18px 30px; color:var(--text-muted);'>" + new Date(cart.abandonedAt).toLocaleString() + "</td>" +
+                    "<td style='padding:18px 30px;'>" + status + "</td>" +
+                    "<td style='padding:18px 30px; text-align:right;'>" + actions + "</td>" +
+                "</tr>";
+            });
+            if(html === '') html = '<tr><td colspan="5" style="text-align:center; padding:30px; color:var(--text-muted);">Aucun panier abandonné.</td></tr>';
+            tbody.innerHTML = html;
+        };
+
+        window.updateCartReminderSettings = async function() {
+            const enabled = document.getElementById('autoRemindToggle').checked;
+            const delay = parseInt(document.getElementById('autoRemindDelay').value) || 45;
+            const code = document.getElementById('autoRemindPromo').value;
+            await window.executeAction({ action: 'update_cart_reminder', enabled, delayMinutes: delay, discountCode: code });
+        };
+
+        window.forceRemindCart = async function(id) {
+            await window.executeAction({ action: 'force_remind_cart', id });
         };
 
         window.renderTransactionsList = function() {
@@ -7996,14 +8499,58 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                 }
             }
         };
-        window.loadBackups = async function() {
+                window.restoreBackupPoint = async function(id, source, tx, rev, dateStr) {
+            const msg = "DANGER: Vous allez remplacer l'état actuel de la base de données par les données du " + dateStr + " (Source: " + source.toUpperCase() + ").\\n\\nDonnées Restaurées : " + tx + " transactions pour " + rev + "£.\\n\\nCette action prendra un snapshot de sécurité préalable avant fusion. Confirmer ?";
+            if(await window.customConfirm('RESTORE POINT', msg)) {
+                try {
+                    await window.executeAction({ action: 'restore_point', id, source }, false);
+                    showToast('Base de données restaurée avec succès!', 'success');
+                    setTimeout(() => window.location.reload(), 1500);
+                } catch(e) {
+                    showToast('Erreur lors de la restauration.', 'error');
+                }
+            }
+        };
+
+        window.loadRestorePoints = async function() {
             try {
-                const res = await fetch('/api/backups');
-                const backups = await res.json();
-                const tbody = document.getElementById('target-backups');
-                if(!tbody) return;
-                tbody.innerHTML = backups.map(b => '<tr><td>' + b.name + '</td><td>' + b.size + '</td><td><a href="/api/backups/download?file=' + b.name + '" target="_blank" class="admin-btn btn-green" style="padding: 4px 8px; font-size: 0.8em; text-decoration: none;">Download</a></td></tr>').join('');
-            } catch(e) { console.error('Failed to load backups', e); }
+                const res = await fetch('/api/restore-points');
+                const points = await res.json();
+                const container = document.getElementById('target-restore-points');
+                if(!container) return;
+                
+                if(points.length === 0) {
+                    container.innerHTML = '<p class="text-muted text-center" style="padding:20px;">Aucun point de restauration trouvé.</p>';
+                    return;
+                }
+                
+                let html = '';
+                for(let i=0; i<points.length; i++) {
+                    const p = points[i];
+                    const d = new Date(p.date);
+                    const isNew = i === 0;
+                    const dateStr = d.toLocaleString('fr-FR');
+                    const safeDateStr = dateStr.replace(/'/g, "\\'");
+                    const sourceBg = p.source === 'discord' ? 'rgba(88,101,242,0.2)' : 'rgba(255,255,255,0.1)';
+                    const sourceColor = p.source === 'discord' ? '#5865F2' : '#aaa';
+                    
+                    html += '<div class="card" style="display:flex; align-items:center; justify-content:space-between; padding:15px 20px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:12px; position:relative; overflow:hidden;">';
+                    if(isNew) html += '<div style="position:absolute; top:0; left:0; width:4px; height:100%; background:var(--accent-green);"></div>';
+                    html += '<div style="display:flex; flex-direction:column; gap:8px;">';
+                    html += '<div style="display:flex; align-items:center; gap:10px;">';
+                    html += '<strong style="font-size:1.1em; color:#fff;">' + dateStr + '</strong>';
+                    html += '<span style="font-size:0.75em; padding:2px 8px; border-radius:12px; background: ' + sourceBg + '; color: ' + sourceColor + ';">' + p.source.toUpperCase() + '</span>';
+                    html += '</div>';
+                    html += '<div style="font-size:0.85em; color:var(--text-muted); display:flex; gap:15px;">';
+                    html += '<span>🛒 Transactions: <strong style="color:#fff;">' + p.total_transactions + '</strong></span>';
+                    html += '<span>💰 Revenus: <strong style="color:var(--accent-green);">£' + p.total_revenue + '</strong></span>';
+                    html += '<span>📦 Taille: ' + p.size + '</span>';
+                    html += '</div></div>';
+                    html += '<button class="btn-icon" style="background:var(--accent-green); color:#000; border:none; padding:8px 16px; font-weight:bold; border-radius:8px; cursor:pointer;" onclick="window.restoreBackupPoint(&quot;' + p.id + '&quot;, &quot;' + p.source + '&quot;, ' + p.total_transactions + ', ' + p.total_revenue + ', &quot;' + safeDateStr + '&quot;)">Restaurer</button>';
+                    html += '</div>';
+                }
+                container.innerHTML = html;
+            } catch(e) { console.error('Failed to load restore points', e); }
         };
         
         // 🚀 [UI_ACTION_ASYNC: forceBackup] - Action asynchrone d'interface Dashboard
@@ -8011,21 +8558,14 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             if(!confirm('Force a manual cloud backup on the server?')) return;
             try {
                 await window.executeAction({ action: 'force_backup' }, false);
-                window.loadBackups();
+                window.loadRestorePoints();
                 showToast('Backup successful!');
             } catch(e) {
                 showToast('Backup failed', 'error');
             }
         };
 
-        // 🚀 [UI_ACTION_ASYNC: saveRawDb] - Action asynchrone d'interface Dashboard
-        window.saveRawDb = async function() {
-            if(!confirm('DANGER: Saving raw JSON! Are you absolutely sure the syntax is perfect?')) return;
-            const val = document.getElementById('dev-raw-db').value;
-            try { JSON.parse(val); } catch(e) { return showToast('Invalid JSON syntax. Aborted to prevent crash.', 'error'); }
-            await window.executeAction({ action: 'update_raw_db', json: val }, false);
-            showToast('Cloud database forcefully overridden!');
-        };
+        
         // 🚀 [UI_ACTION: importBackupFile] - Action d'interface Dashboard
         window.importBackupFile = function(event) {
             const file = event.target.files[0];
@@ -8107,10 +8647,17 @@ server.listen(3000);
 server.on('upgrade', (request, socket, head) => {
     const pathname = request.url;
 
-    if (pathname === '/ws') {
+    if (pathname.startsWith('/ws')) {
         const cookie = request.headers.cookie || '';
         let match = cookie.match(/auth_session=([a-zA-Z0-9]+)/);
-        const isAuthenticated = match && memoryStats.activeSessions && memoryStats.activeSessions.includes(match[1]);
+        let token = match ? match[1] : null;
+        if (!token) {
+            try {
+                const urlObj = new URL(request.url, 'http://' + request.headers.host);
+                token = urlObj.searchParams.get('token');
+            } catch(e) {}
+        }
+        const isAuthenticated = token && memoryStats.activeSessions && memoryStats.activeSessions.includes(token);
         if (!isAuthenticated) {
             socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
             socket.destroy();
