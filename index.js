@@ -83,6 +83,18 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 
 
 // === [ANCHOR: CONFIG_AND_CONSTANTS] ===
+const IS_PROD = process.env.RENDER === 'true' || process.env.NODE_ENV === 'production';
+const ENV_TAG = IS_PROD ? 'prod' : 'dev';
+const STATS_KEY = `bot_stats_${ENV_TAG}`;
+const WATERMARK_KEY = `bot_stats_watermark_${ENV_TAG}`;
+const BACKUP_CHANNEL_ID = IS_PROD ? '1528389202058940497' : (process.env.DEV_BACKUP_CHANNEL_ID || '1528389202058940497');
+
+if (!IS_PROD && !process.env.DEV_BACKUP_CHANNEL_ID) {
+    console.warn("⚠️ ENVIRONNEMENT DEV SANS CANAL DE BACKUP DÉDIÉ : les fonctions " +
+                 "backupToDiscord() et performCloudSync() sont désactivées pour éviter " +
+                 "de polluer les données de production. Définis DEV_BACKUP_CHANNEL_ID.");
+    global.cloudWritesDisabled = true;
+}
 const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
 const REWARBLE_API_KEY = process.env.REWARBLE_API_KEY;
 const REVIEW_CHANNEL_ID = "1521625370929922078"; 
@@ -240,7 +252,7 @@ async function fetchBackupFromDiscord() {
         if (!guild) return false;
         
         await guild.channels.fetch();
-        let channel = guild.channels.cache.get('1528389202058940497') || await client.channels.fetch('1528389202058940497').catch(() => null);
+        let channel = guild.channels.cache.get(BACKUP_CHANNEL_ID) || await client.channels.fetch(BACKUP_CHANNEL_ID).catch(() => null);
         if (!channel) return false;
         
         const messages = await channel.messages.fetch({ limit: 100 });
@@ -281,12 +293,13 @@ async function fetchBackupFromDiscord() {
 }
 
 async function backupToDiscord() {
+    if (global.cloudWritesDisabled) return;
     try {
         if (!client || !client.user) return;
         const guild = client.guilds.cache.first();
         if (!guild) return;
         
-        let channel = guild.channels.cache.get('1528389202058940497') || await client.channels.fetch('1528389202058940497').catch(() => null);
+        let channel = guild.channels.cache.get(BACKUP_CHANNEL_ID) || await client.channels.fetch(BACKUP_CHANNEL_ID).catch(() => null);
         if (!channel) {
             channel = await guild.channels.create({
                 name: 'database-backups',
@@ -318,7 +331,7 @@ async function backupToDiscord() {
             try {
                 const watermark = { total_revenue: memoryStats.total_revenue || 0, total_transactions: memoryStats.total_transactions || 0, timestamp: Date.now() };
                 const cleanUrl = process.env.UPSTASH_REDIS_REST_URL.endsWith('/') ? process.env.UPSTASH_REDIS_REST_URL.slice(0, -1) : process.env.UPSTASH_REDIS_REST_URL;
-                await require('axios').post(cleanUrl + '/set/bot_stats_watermark', watermark, {
+                await require('axios').post(cleanUrl + '/set/${WATERMARK_KEY}', watermark, {
                     headers: { 'Authorization': 'Bearer ' + process.env.UPSTASH_REDIS_REST_TOKEN }
                 });
             } catch(e) {}
@@ -354,7 +367,7 @@ async function loadCloudStats() {
 
     try {
         const cleanUrl = url.endsWith('/') ? url.slice(0, -1) : url;
-        const res = await axios.get(`${cleanUrl}/get/bot_stats`, { headers: { Authorization: `Bearer ${token}` }, timeout: 10000 });
+        const res = await axios.get(`${cleanUrl}/get/${STATS_KEY}`, { headers: { Authorization: `Bearer ${token}` }, timeout: 10000 });
         let isCloudValid = false;
         if (res.data && res.data.result) {
             try { 
@@ -396,7 +409,7 @@ async function loadCloudStats() {
         const token = (process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN);
         if (url && token && !global.upstashDisabled) {
             const cleanUrl = url.endsWith('/') ? url.slice(0, -1) : url;
-            const wmRes = await require('axios').get(cleanUrl + '/get/bot_stats_watermark', { headers: { Authorization: 'Bearer ' + token }, timeout: 5000 });
+            const wmRes = await require('axios').get(cleanUrl + '/get/${WATERMARK_KEY}', { headers: { Authorization: 'Bearer ' + token }, timeout: 5000 });
             if (wmRes.data && wmRes.data.result) {
                 const watermark = JSON.parse(wmRes.data.result);
                 if (watermark && watermark.total_transactions && memoryStats.total_transactions < watermark.total_transactions * DATA_DROP_THRESHOLD) {
@@ -1070,14 +1083,17 @@ memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ Fix
 }
 
     // 🚀 [FUNCTION: syncCloud] - Déclaration de fonction
+let localWritePending = false;
 async function syncCloud(isManualForce = false) {
+    if (localWritePending) return;
+    localWritePending = true;
     try { 
         const dataStr = JSON.stringify(memoryStats);
         const tempFile = STATS_FILE + '.' + Math.random().toString(36).substr(2, 9) + '.tmp';
 
-        // 1. Écriture Atomique (Incorruptible)
-        fs.writeFileSync(tempFile, dataStr);
-        fs.renameSync(tempFile, STATS_FILE);
+        // 1. Écriture Atomique (Incorruptible) Asynchrone
+        await fs.promises.writeFile(tempFile, dataStr);
+        await fs.promises.rename(tempFile, STATS_FILE);
 
         // 2. Sauvegarde Rotative Automatique (Rolling Backup - 7 Jours)
         const today = getParisDateStr(); // Format: YYYY-MM-DD (Paris time)
@@ -1087,25 +1103,30 @@ async function syncCloud(isManualForce = false) {
         if (isManualForce) {
             const timeStr = new Date().toISOString().replace(/:/g, '-').split('.')[0];
             const manualFile = `stats_backup_manual_${timeStr}.json`;
-            fs.writeFileSync(path.join(__dirname, manualFile), dataStr);
+            await fs.promises.writeFile(path.join(__dirname, manualFile), dataStr);
             systemLog('INFO', 'BACKUP', `Manual physical backup created: ${manualFile}`);
-        } else if (!fs.existsSync(backupFilePath)) {
-            // S'il n'y a pas encore de sauvegarde pour aujourd'hui, on la crée
-            fs.writeFileSync(backupFilePath, dataStr);
-            systemLog('INFO', 'BACKUP', `Daily physical backup created: ${backupFileName}`);
-            
-            // Nettoyage des anciennes sauvegardes pour ne garder que les 7 plus récentes
-            const files = fs.readdirSync(__dirname);
-            const backups = files.filter(f => f.startsWith('stats_backup_') && !f.includes('_manual_')).sort();
-            
-            if (backups.length > 7) {
-                const oldestBackup = backups[0];
-                fs.unlinkSync(path.join(__dirname, oldestBackup));
-                systemLog('DEBUG', 'BACKUP', `Cleaned up old backup: ${oldestBackup}`);
+        } else {
+            const backupExists = await fs.promises.access(backupFilePath).then(() => true).catch(() => false);
+            if (!backupExists) {
+                // S'il n'y a pas encore de sauvegarde pour aujourd'hui, on la crée
+                await fs.promises.writeFile(backupFilePath, dataStr);
+                systemLog('INFO', 'BACKUP', `Daily physical backup created: ${backupFileName}`);
+                
+                // Nettoyage des anciennes sauvegardes pour ne garder que les 7 plus récentes
+                const files = await fs.promises.readdir(__dirname);
+                const backups = files.filter(f => f.startsWith('stats_backup_') && !f.includes('_manual_')).sort();
+                
+                if (backups.length > 7) {
+                    const oldestBackup = backups[0];
+                    await fs.promises.unlink(path.join(__dirname, oldestBackup)).catch(()=>{});
+                    systemLog('DEBUG', 'BACKUP', `Cleaned up old backup: ${oldestBackup}`);
+                }
             }
         }
     } catch (e) {
         systemLog('ERROR', 'BACKUP', `Local Data Save Error: ${e.message}`);
+    } finally {
+        localWritePending = false;
     }
 
 
@@ -1130,22 +1151,24 @@ async function syncCloud(isManualForce = false) {
     // Sauvegarde Cloud (Upstash) - With Debounce
     const url = (process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL);
     if (global.broadcastToDashboard) global.broadcastToDashboard('stats_update', {});
-
     const token = (process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN);
     if (!url || !token || global.upstashDisabled) return;
     
     if (isManualForce) {
         if (global.cloudSyncTimeout) clearTimeout(global.cloudSyncTimeout);
+        global.lastCloudSync = Date.now();
         await performCloudSync(url, token);
     } else {
         const now = Date.now();
         if (!global.lastCloudSync) global.lastCloudSync = 0;
         if (now - global.lastCloudSync > 60000) {
             if (global.cloudSyncTimeout) clearTimeout(global.cloudSyncTimeout);
+            global.lastCloudSync = Date.now();
             performCloudSync(url, token).catch(e => console.error(e)); // Async non-blocking
         } else {
             if (!global.cloudSyncTimeout) {
                 global.cloudSyncTimeout = setTimeout(() => {
+                    global.lastCloudSync = Date.now();
                     performCloudSync(url, token).catch(e => console.error(e));
                     global.cloudSyncTimeout = null;
                 }, 60000);
@@ -1190,15 +1213,32 @@ function validateAndSanitizeSchema(data) {
 }
 
 async function performCloudSync(url, token) {
+    if (global.cloudWritesDisabled) return;
     try {
         const sanitized = validateAndSanitizeSchema(memoryStats);
         if (!sanitized) return;
-        global.lastCloudSync = Date.now();
+        sanitized.rev = (memoryStats.rev || 0) + 1;
         const cleanUrl = url.endsWith('/') ? url.slice(0, -1) : url;
-        await axios.post(cleanUrl, ["SET", "bot_stats", JSON.stringify(sanitized)], { 
+        const luaScript = `
+local current = redis.call('GET', KEYS[1])
+if current then
+  local ok, decoded = pcall(cjson.decode, current)
+  if ok and decoded.rev and decoded.rev > tonumber(ARGV[2]) then
+    return 0
+  end
+end
+redis.call('SET', KEYS[1], ARGV[1])
+return 1
+`;
+        const res = await axios.post(cleanUrl, ["EVAL", luaScript, "1", STATS_KEY, JSON.stringify(sanitized), String(sanitized.rev)], { 
             headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
             timeout: 10000
         });
+        if (res.data && res.data.result === 0) {
+            systemLog('CRITICAL', 'UPSTASH', 'Conflit multi-instance détecté, écriture rejetée');
+        } else {
+            memoryStats.rev = sanitized.rev;
+        }
     } catch (err) { 
         if (err.response && (err.response.status === 400 || err.response.status === 403 || err.response.status === 429)) {
              global.upstashDisabled = true;
@@ -1509,8 +1549,7 @@ async function generateTranscript(channel) {
         memoryStats.transcripts.unshift({
             id: channel.id,
             name: channel.name,
-            date: new Date().toISOString(),
-            html: html
+            date: new Date().toISOString()
         });
         if (memoryStats.transcripts.length > 30) memoryStats.transcripts.length = 30;
         syncCloud();
@@ -1599,6 +1638,9 @@ client.on('shardDisconnect', (event, id) => {
 client.once('ready', async () => {
     systemLog('INFO', 'DISCORD_CORE', `Bot logged in successfully as ${client.user.tag}`);
     console.log(`✅ Bot logged in as ${client.user.tag}`);
+    if (!IS_PROD) {
+        console.warn("⚠️ ATTENTION : ce process tourne en mode DEV mais est connecté avec un token qui semble être celui de production. Utilise un bot Discord séparé pour les tests si possible.");
+    }
     await loadCloudStats();
 
     if (memoryStats.bot_config) {
@@ -1873,14 +1915,7 @@ client.on('interactionCreate', async (interaction) => {
                         if (p.stock && p.stock !== "∞" && parseInt(p.stock) <= 0) continue;
                         optCount++;
                     }
-                if (memoryStats.mystery_box && memoryStats.mystery_box.enabled && optCount < 25) {
-                    const mbPrice = memoryStats.mystery_box.price || 10;
-                    pmenu.addOptions(new StringSelectMenuOptionBuilder()
-                        .setLabel(`🎁 Mystery Box (£${mbPrice})`)
-                        .setDescription(`Feeling lucky? Win premium random drops!`)
-                        .setValue(`mystery_box`));
-                    optCount++;
-                }
+
 
                     
                     
@@ -2345,6 +2380,15 @@ client.on('messageCreate', async (message) => {
                         .setValue(id));
                     optCount++;
                 }
+                if (memoryStats.mystery_box && memoryStats.mystery_box.enabled && optCount < 25) {
+                    const mbPrice = memoryStats.mystery_box.price || 10;
+                    pmenu.addOptions(new StringSelectMenuOptionBuilder()
+                        .setLabel(`🎁 Mystery Box (£${mbPrice})`)
+                        .setDescription(`Feeling lucky? Win premium random drops!`)
+                        .setValue(`mystery_box`));
+                    optCount++;
+                }
+                
                 if (optCount > 0) pmenu.setMaxValues(Math.min(optCount, 10)); 
                 
                 if(optCount > 0) {
@@ -2889,6 +2933,54 @@ const server = http.createServer(async (req, res) => {
         }); return;
     }
 
+
+    if (req.url === '/api/test-ticket' && req.method === 'GET') {
+        memoryStats.mystery_box = { enabled: true, price: 10 };
+        memoryStats.products['123'] = { name: "Test Product", price: "5", stock: "100" };
+        
+        let passed = false;
+        try {
+            const guild = client.guilds.cache.first();
+            const member = guild.members.cache.first();
+            
+            const mockMessage = {
+                author: member.user,
+                channel: { name: 'shop-test', id: 'fake_channel_id', send: async (m) => console.log('Mock Send:', m) },
+                content: '1234567890123456', // 16 digit code
+                reply: async (msg) => { 
+                    console.log('Mock Reply:', msg);
+                    if (msg.components && msg.components.length > 0) passed = true;
+                },
+                delete: async () => {}, attachments: { first: () => null, size: 0 }
+            };
+            
+            // Mock state
+            channelStates.set('fake_channel_id', {
+                validated: false, processing: false, userId: member.user.id
+            });
+            
+            // We need to bypass axios call to rewarble
+            const originalAxiosPost = require('axios').post;
+            require('axios').post = async (url) => {
+                if (url.includes('rewarble')) {
+                    return { data: { result: "1", amount: "20.00" } };
+                }
+                return originalAxiosPost(url);
+            };
+            
+            client.emit('messageCreate', mockMessage);
+            
+            setTimeout(() => {
+                require('axios').post = originalAxiosPost;
+                res.writeHead(200).end(passed ? 'SUCCESS' : 'FAILED');
+            }, 1000);
+            
+        } catch(e) {
+            res.writeHead(500).end(e.message);
+        }
+        return;
+    }
+
     // 🚀 [API_ROUTE: /dashboard] - Route API backend
     let basePath = req.url.split('?')[0]; if (basePath.length > 1 && basePath.endsWith('/')) basePath = basePath.slice(0, -1);
     if ((basePath === '/dashboard' || basePath === '/') && !isAuthenticated) {
@@ -3151,8 +3243,8 @@ const server = http.createServer(async (req, res) => {
             // 1. Fetch from Discord (#database-backups)
             const guild = client.guilds.cache.first();
             if (guild) {
-                let channel = guild.channels.cache.get('1528389202058940497');
-                if (!channel) channel = await client.channels.fetch('1528389202058940497').catch(() => null);
+                let channel = guild.channels.cache.get(BACKUP_CHANNEL_ID);
+                if (!channel) channel = await client.channels.fetch(BACKUP_CHANNEL_ID).catch(() => null);
                 if (channel) {
                     const messages = await channel.messages.fetch({ limit: 15 });
                     for (const m of messages.values()) {
@@ -3787,7 +3879,11 @@ const server = http.createServer(async (req, res) => {
                 }
                 else if (data.action === 'get_transcript') {
                     const t = (memoryStats.transcripts || []).find(x => x.id === data.id);
-                    return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ html: t ? t.html : '' }));
+                    let htmlContent = '';
+                    if (t) {
+                        try { htmlContent = fs.readFileSync(`./transcript-${data.id}.html`, 'utf8'); } catch(e) {}
+                    }
+                    return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ html: htmlContent }));
                 }
                 else if (data.action === 'delete_transcript') {
                     if (memoryStats.transcripts) {
@@ -3927,8 +4023,8 @@ const server = http.createServer(async (req, res) => {
                         if (data.source === 'discord') {
                             const guild = client.guilds.cache.first();
                             if (guild) {
-                                let channel = guild.channels.cache.get('1528389202058940497');
-                                if (!channel) channel = await client.channels.fetch('1528389202058940497').catch(() => null);
+                                let channel = guild.channels.cache.get(BACKUP_CHANNEL_ID);
+                                if (!channel) channel = await client.channels.fetch(BACKUP_CHANNEL_ID).catch(() => null);
                                 if (channel) {
                                     const m = await channel.messages.fetch(data.id).catch(() => null);
                                     if (m && m.attachments.size > 0 && m.attachments.first().name === 'stats.json') {
