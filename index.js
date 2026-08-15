@@ -1292,6 +1292,470 @@ async function generateTranscript(channel) {
             #mobile-overlay.active { display: block; }
         }
 
+
+        /* ============================================
+           120Hz PERFORMANCE LAYER
+           ============================================ */
+        * { -webkit-tap-highlight-color: transparent; }
+        
+        .nav-btn, .admin-btn, .card, .glass-panel, .product-card,
+        .feed-item, .kanban-card, .ticket-item, .modal-content {
+            will-change: transform;
+            transform: translateZ(0);
+            -webkit-transform: translateZ(0);
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
+        }
+        .main-content {
+            -webkit-overflow-scrolling: touch;
+            scroll-behavior: smooth;
+            overscroll-behavior: contain;
+        }
+        /* Tab transitions at GPU-speed */
+        .tab-content {
+            contain: layout style paint;
+        }
+        
+        /* ============================================
+           MOBILE SAFARI FIXES
+           ============================================ */
+        @supports (padding-bottom: env(safe-area-inset-bottom)) {
+            .sidebar { padding-bottom: env(safe-area-inset-bottom); }
+            .sidebar-footer { padding-bottom: calc(env(safe-area-inset-bottom) + 16px); }
+            .main-content { padding-bottom: calc(40px + env(safe-area-inset-bottom)); }
+            .top-navbar { padding-top: max(12px, env(safe-area-inset-top)); }
+        }
+        @media (max-width: 768px) {
+            .app-layout { flex-direction: column; }
+            .sidebar {
+                position: fixed;
+                top: 0; left: 0; bottom: 0;
+                width: 80vw !important;
+                max-width: 300px;
+                z-index: 1001;
+                transform: translateX(-100%);
+                -webkit-transform: translateX(-100%);
+                transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+                -webkit-transition: -webkit-transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+            }
+            .sidebar.open {
+                transform: translateX(0) !important;
+                -webkit-transform: translateX(0) !important;
+            }
+            .sidebar.closed {
+                transform: translateX(-100%) !important;
+                -webkit-transform: translateX(-100%) !important;
+            }
+            .main-area { width: 100%; }
+            .main-content { padding: 16px; height: calc(100dvh - 60px); }
+            .top-navbar { padding: 10px 16px; }
+            .stats-grid { grid-template-columns: 1fr !important; }
+            .product-grid { grid-template-columns: 1fr !important; }
+            .chat-container { flex-direction: column; height: auto; }
+            .ticket-list { width: 100% !important; max-height: 180px; }
+            .kanban-board { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+            .sidebar-footer { padding: 12px 16px; }
+            table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; white-space: nowrap; }
+            .box h2 { font-size: 1.1em; }
+            .msg-grid { grid-template-columns: 1fr !important; }
+        }
+        @media (max-width: 480px) {
+            .main-content { padding: 12px; }
+            .glass-stat-value { font-size: 2em !important; }
+            .premium-stats-grid { grid-template-columns: 1fr 1fr !important; }
+        }
+        
+        /* ============================================
+           REFRESH BUTTON ANIMATION
+           ============================================ */
+        #refreshBtn svg {
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        #refreshBtn.spinning svg {
+            animation: spinRefresh 0.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        }
+        #refreshBtn.done svg {
+            animation: bounceCheck 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        @keyframes spinRefresh {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        @keyframes bounceCheck {
+            0% { transform: scale(1) rotate(360deg); }
+            50% { transform: scale(1.3) rotate(360deg); }
+            100% { transform: scale(1) rotate(360deg); }
+        }
+        #refreshBtn:not(.spinning):hover svg {
+            transform: rotate(180deg);
+        }
+        
+        /* ============================================
+           DEEP SCAN BUTTON - HIGH VISIBILITY
+           ============================================ */
+        .btn-deep-scan {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+            color: #000 !important;
+            border: none !important;
+            font-weight: 700 !important;
+            box-shadow: 0 0 20px rgba(16,185,129,0.4), 0 4px 15px rgba(16,185,129,0.3) !important;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            font-size: 0.8em;
+            animation: glowPulseGreen 3s ease-in-out infinite;
+        }
+        .btn-deep-scan:hover {
+            background: linear-gradient(135deg, #34d399 0%, #10b981 100%) !important;
+            box-shadow: 0 0 30px rgba(16,185,129,0.6), 0 8px 25px rgba(16,185,129,0.4) !important;
+            transform: translateY(-2px) scale(1.03) !important;
+            color: #000 !important;
+        }
+        .btn-deep-scan.scanning {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+            box-shadow: 0 0 25px rgba(245,158,11,0.5) !important;
+            animation: scanPulse 1s ease-in-out infinite !important;
+        }
+        @keyframes glowPulseGreen {
+            0%, 100% { box-shadow: 0 0 20px rgba(16,185,129,0.3), 0 4px 15px rgba(16,185,129,0.2); }
+            50% { box-shadow: 0 0 35px rgba(16,185,129,0.6), 0 4px 20px rgba(16,185,129,0.4); }
+        }
+        @keyframes scanPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        
+        /* ============================================
+           DIAGNOSTICS ULTRA-PREMIUM
+           ============================================ */
+        .diag-container {
+            position: relative;
+            overflow: hidden;
+            background: #050508;
+            border-radius: 28px;
+            border: 1px solid rgba(255,255,255,0.04);
+            padding: 36px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.05);
+        }
+        .diag-noise {
+            position: absolute;
+            inset: 0;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+            pointer-events: none;
+            opacity: 0.4;
+            z-index: 0;
+            border-radius: inherit;
+        }
+        .diag-aurora {
+            position: absolute;
+            pointer-events: none;
+            z-index: 0;
+        }
+        .diag-aurora-1 {
+            top: -20%; left: -10%;
+            width: 60%; height: 60%;
+            background: radial-gradient(circle, rgba(16,185,129,0.06) 0%, transparent 70%);
+            animation: auroraDrift1 8s ease-in-out infinite alternate;
+        }
+        .diag-aurora-2 {
+            bottom: -10%; right: -10%;
+            width: 50%; height: 50%;
+            background: radial-gradient(circle, rgba(59,130,246,0.05) 0%, transparent 70%);
+            animation: auroraDrift2 10s ease-in-out infinite alternate;
+        }
+        .diag-aurora-3 {
+            top: 30%; left: 40%;
+            width: 40%; height: 40%;
+            background: radial-gradient(circle, rgba(168,85,247,0.04) 0%, transparent 70%);
+            animation: auroraDrift3 12s ease-in-out infinite alternate;
+        }
+        @keyframes auroraDrift1 {
+            from { transform: translate(0, 0) scale(1); }
+            to { transform: translate(5%, 10%) scale(1.15); }
+        }
+        @keyframes auroraDrift2 {
+            from { transform: translate(0, 0) scale(1); }
+            to { transform: translate(-8%, -5%) scale(1.2); }
+        }
+        @keyframes auroraDrift3 {
+            from { transform: translate(0, 0) scale(1); }
+            to { transform: translate(6%, -8%) scale(0.9); }
+        }
+        .diag-header {
+            position: relative;
+            z-index: 2;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .diag-title {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+        .diag-title-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 14px;
+            background: rgba(16,185,129,0.1);
+            border: 1px solid rgba(16,185,129,0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 20px rgba(16,185,129,0.2), inset 0 1px 0 rgba(16,185,129,0.1);
+            animation: iconPulse 3s ease-in-out infinite;
+        }
+        @keyframes iconPulse {
+            0%, 100% { box-shadow: 0 0 20px rgba(16,185,129,0.2), inset 0 1px 0 rgba(16,185,129,0.1); }
+            50% { box-shadow: 0 0 35px rgba(16,185,129,0.4), inset 0 1px 0 rgba(16,185,129,0.2); }
+        }
+        .diag-title h2 {
+            margin: 0; font-size: 1.4em; font-weight: 700;
+            background: linear-gradient(135deg, #fff 0%, rgba(16,185,129,0.8) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            border: none; padding: 0;
+        }
+        .diag-subtitle {
+            font-size: 0.85em;
+            color: rgba(255,255,255,0.4);
+            margin-top: 3px;
+            font-weight: 400;
+        }
+        .diag-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 16px;
+            margin-top: 28px;
+            position: relative;
+            z-index: 2;
+        }
+        .diag-card {
+            background: rgba(255,255,255,0.025);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 20px;
+            padding: 22px;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+            animation: fadeUp 0.6s cubic-bezier(0.2,0.8,0.2,1) backwards;
+        }
+        .diag-card:hover {
+            border-color: rgba(255,255,255,0.12);
+            background: rgba(255,255,255,0.04);
+            transform: translateY(-4px);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.4);
+        }
+        .diag-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+        }
+        .diag-card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 18px;
+        }
+        .diag-card-label {
+            font-size: 0.78em;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+            color: rgba(255,255,255,0.4);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .diag-badge {
+            font-size: 0.7em;
+            padding: 3px 8px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            letter-spacing: 0px;
+        }
+        .metric-bar-bg {
+            height: 5px;
+            background: rgba(255,255,255,0.06);
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 8px;
+            position: relative;
+        }
+        .metric-bar-fill {
+            height: 100%;
+            border-radius: 10px;
+            transition: width 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+        .metric-bar-fill::after {
+            content: '';
+            position: absolute;
+            top: 0; left: -100%; right: 0; bottom: 0;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            animation: barShimmer 2s ease-in-out infinite;
+        }
+        @keyframes barShimmer {
+            0% { left: -100%; }
+            100% { left: 200%; }
+        }
+        .diag-value {
+            font-size: 2em;
+            font-weight: 800;
+            letter-spacing: -1px;
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            line-height: 1;
+            margin-bottom: 4px;
+        }
+        .diag-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            font-size: 0.88em;
+            transition: background 0.2s ease;
+        }
+        .diag-row:last-child { border-bottom: none; }
+        .diag-row:hover { 
+            background: rgba(255,255,255,0.02);
+            border-radius: 8px;
+            padding-left: 6px;
+            padding-right: 6px;
+        }
+        .diag-row-label {
+            color: rgba(255,255,255,0.5);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .diag-row-value {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-weight: 600;
+            color: #fff;
+        }
+        .diag-section-title {
+            font-size: 0.7em;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: rgba(255,255,255,0.3);
+            margin: 32px 0 14px 0;
+            position: relative;
+            z-index: 2;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .diag-section-title::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: linear-gradient(90deg, rgba(255,255,255,0.08), transparent);
+        }
+        .gateway-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 14px;
+            position: relative;
+            z-index: 2;
+        }
+        .gateway-card {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 18px;
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.4s cubic-bezier(0.2,0.8,0.2,1);
+            animation: fadeUp 0.6s cubic-bezier(0.2,0.8,0.2,1) backwards;
+        }
+        .gateway-card:hover {
+            border-color: rgba(255,255,255,0.1);
+            background: rgba(255,255,255,0.035);
+            transform: translateY(-3px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+        }
+        .gateway-top-bar {
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+            border-radius: 18px 18px 0 0;
+            transition: all 1s ease;
+        }
+        .gateway-status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 10px;
+            font-size: 0.75em;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+        .gateway-value {
+            font-size: 1.6em;
+            font-weight: 800;
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            letter-spacing: -0.5px;
+            margin: 10px 0 6px 0;
+        }
+        /* Circular progress ring */
+        .ring-wrap {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            flex: 1;
+            padding: 10px 0;
+        }
+        /* Scan animation overlay */
+        .scan-line {
+            position: absolute;
+            left: 0; right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, rgba(16,185,129,0.6), transparent);
+            animation: scanLine 2s linear infinite;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .diag-card.scanning .scan-line,
+        .diag-container.scanning .scan-line {
+            opacity: 1;
+        }
+        @keyframes scanLine {
+            0% { top: -2px; }
+            100% { top: 100%; }
+        }
+        /* Pulse dot for live indicators */
+        .live-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            display: inline-block;
+            position: relative;
+            flex-shrink: 0;
+        }
+        .live-dot::after {
+            content: '';
+            position: absolute;
+            inset: -3px;
+            border-radius: 50%;
+            background: inherit;
+            opacity: 0.3;
+            animation: ripplePulse 2s ease-out infinite;
+        }
+        @keyframes ripplePulse {
+            0% { transform: scale(1); opacity: 0.3; }
+            100% { transform: scale(2.5); opacity: 0; }
+        }
+
     </style>
 
         </head><body><h2>Transcript of ${channel.name}</h2>`;
@@ -5086,134 +5550,195 @@ const server = http.createServer(async (req, res) => {
             </div>
             
             <div id='monitoring' class='tab-content'>
-                <div class='box' style='background:#050505; position:relative; overflow:hidden;'>
-                    <!-- Background ambient glow -->
-                    <div style='position:absolute; top:-50%; left:-10%; width:120%; height:100%; background: radial-gradient(circle, rgba(var(--accent-green-rgb),0.03) 0%, transparent 60%); pointer-events:none;'></div>
+                <div class='diag-container' id='diag-main'>
+                    <!-- Ambient glows -->
+                    <div class='diag-aurora diag-aurora-1'></div>
+                    <div class='diag-aurora diag-aurora-2'></div>
+                    <div class='diag-aurora diag-aurora-3'></div>
+                    <div class='diag-noise'></div>
                     
-                    <div style='display:flex; justify-content:space-between; align-items:center; position:relative; z-index:1;'>
-                        <h2 style='margin:0; border:none; padding:0; display:flex; align-items:center; gap:10px;'>
-                            <div class='status-pulse' style='background:var(--accent-green);'></div> 
-                            Nexus Mainframe Monitor
-                        </h2>
-                        <button class='admin-btn btn-green' style='margin:0; background:rgba(255,255,255,0.05); border:0.5px solid rgba(255,255,255,0.1); color:#fff; display:flex; align-items:center; gap:8px;' onclick='window.runDiagnostics()'>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.92-10.27l-3.27-3.27"/></svg> 
+                    <!-- Header -->
+                    <div class='diag-header'>
+                        <div class='diag-title'>
+                            <div class='diag-title-icon'>
+                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+                            </div>
+                            <div>
+                                <h2>Nexus Mainframe</h2>
+                                <div class='diag-subtitle'>Live telemetry — core nodes, security & API gateways</div>
+                            </div>
+                        </div>
+                        <button class='admin-btn btn-deep-scan' id='deep-scan-btn' onclick='window.runDiagnostics()' style='margin:0; display:flex; align-items:center; gap:8px;'>
+                            <svg id='deep-scan-icon' width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.92-10.27l-3.27-3.27"/></svg>
                             Deep Scan
                         </button>
                     </div>
-                    <p class='text-muted' style='margin-top:10px; margin-bottom:30px; font-size:0.9em; position:relative; z-index:1;'>Live telemetry from core processing nodes, security shields, and external API gateways.</p>
                     
-                    <div class='stats-grid' style='position:relative; z-index:1;'>
-                        <div class='card' style='border:none; background:rgba(255,255,255,0.02); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.05); border-radius:16px;'>
-                            <h3 style='display:flex; align-items:center; justify-content:space-between;'>🖥️ Core Compute <span style='font-size:0.65em; padding:3px 8px; border-radius:8px; background:rgba(255,255,255,0.1); font-family:monospace;' id='ui-os-plat'><div class="skeleton skeleton-text" style="width: 60px; display: inline-block;"></div></span></h3>
-                            <div style='margin-top:25px;'>
-                                <div style='display:flex; justify-content:space-between; font-size:0.8em; text-transform:uppercase; font-weight:bold; color:var(--text-muted);'>
-                                    <span>CPU Load</span> <span id='ui-cpu-txt'><div class="skeleton skeleton-text" style="width: 40px; display: inline-block;"></div></span>
+                    <!-- Core Metrics Grid -->
+                    <div class='diag-grid'>
+                        <!-- CPU & RAM Card -->
+                        <div class='diag-card' style='animation-delay:0.1s'>
+                            <div class='scan-line'></div>
+                            <div class='diag-card-header'>
+                                <span class='diag-card-label'>
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="2" x2="9" y2="4"/><line x1="15" y1="2" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="22"/><line x1="15" y1="20" x2="15" y2="22"/><line x1="20" y1="9" x2="22" y2="9"/><line x1="20" y1="14" x2="22" y2="14"/><line x1="2" y1="9" x2="4" y2="9"/><line x1="2" y1="14" x2="4" y2="14"/></svg>
+                                    Core Compute
+                                </span>
+                                <span class='diag-badge' id='ui-os-plat' style='background:rgba(255,255,255,0.06); color:rgba(255,255,255,0.6);'>—</span>
+                            </div>
+                            
+                            <div style='margin-bottom:18px;'>
+                                <div style='display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px;'>
+                                    <span style='font-size:0.78em; color:rgba(255,255,255,0.4); text-transform:uppercase; letter-spacing:0.8px;'>CPU Load</span>
+                                    <span id='ui-cpu-txt' style='font-size:0.85em; font-weight:700; font-family:monospace; color:#fff;'>—</span>
                                 </div>
                                 <div class='metric-bar-bg'>
-                                    <div class='metric-bar-fill' id='ui-cpu-bar' style='background:var(--accent-green); width:0%;'></div>
+                                    <div class='metric-bar-fill' id='ui-cpu-bar' style='background: linear-gradient(90deg, #10b981, #34d399); width:0%;'></div>
                                 </div>
                             </div>
-                            <div style='margin-top:20px;'>
-                                <div style='display:flex; justify-content:space-between; font-size:0.8em; text-transform:uppercase; font-weight:bold; color:var(--text-muted);'>
-                                    <span>RAM Memory</span> <span id='ui-ram-txt'><div class="skeleton skeleton-text" style="width: 40px; display: inline-block;"></div></span>
+                            
+                            <div style='margin-bottom:16px;'>
+                                <div style='display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px;'>
+                                    <span style='font-size:0.78em; color:rgba(255,255,255,0.4); text-transform:uppercase; letter-spacing:0.8px;'>RAM Memory</span>
+                                    <span id='ui-ram-txt' style='font-size:0.85em; font-weight:700; font-family:monospace; color:#fff;'>—</span>
                                 </div>
                                 <div class='metric-bar-bg'>
-                                    <div class='metric-bar-fill' id='ui-ram-bar' style='background:var(--accent-blue); width:0%;'></div>
+                                    <div class='metric-bar-fill' id='ui-ram-bar' style='background: linear-gradient(90deg, #3b82f6, #60a5fa); width:0%;'></div>
                                 </div>
-                                <div style='text-align:right; font-size:0.7em; color:var(--text-muted); margin-top:5px; font-family:monospace;' id='ui-os-ram'>-- GB / -- GB</div>
+                                <div style='text-align:right; font-size:0.7em; color:rgba(255,255,255,0.3); margin-top:4px; font-family:monospace;' id='ui-os-ram'>— GB / — GB</div>
                             </div>
-                            <div style='margin-top:20px; font-size:0.85em; display:flex; justify-content:space-between; border-top:1px solid rgba(255,255,255,0.05); padding-top:15px;'>
-                                <span class='text-muted'>Node Uptime:</span> <strong id='ui-os-up' style='font-family:monospace;'><div class="skeleton skeleton-text" style="width: 40px; display: inline-block;"></div></strong>
+                            
+                            <div class='diag-row' style='border-top: 1px solid rgba(255,255,255,0.05); padding-top:12px; margin-top:4px;'>
+                                <span class='diag-row-label'><div class='live-dot' style='background:#10b981;'></div>Node Uptime</span>
+                                <span class='diag-row-value text-green' id='ui-os-up'>—</span>
                             </div>
                         </div>
                         
-                        <div class='card' style='border:none; background:rgba(255,255,255,0.02); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.05); border-radius:16px;'>
-                            <h3 style='display:flex; align-items:center; justify-content:space-between;'>⚙️ V8 Runtime <span style='font-size:0.65em; padding:3px 8px; border-radius:8px; background:rgba(168,85,247,0.1); color:#a855f7; font-family:monospace;' id='ui-proc-up'><div class="skeleton skeleton-text" style="width: 60px; display: inline-block;"></div></span></h3>
-                            <div style='margin-top:20px; font-size:0.9em; line-height:2.2;'>
-                                <div style='display:flex; justify-content:space-between; align-items:center;'>
-                                    <span class='text-muted' style='display:flex; align-items:center; gap:8px;'><div class='status-pulse' style='background:var(--accent-purple); width:6px; height:6px;'></div> Memory (RSS)</span> 
-                                    <strong id='ui-proc-rss' style='color:var(--accent-purple); font-family:monospace;'><div class="skeleton skeleton-text" style="width: 40px; display: inline-block;"></div></strong>
+                        <!-- V8 Runtime Card -->
+                        <div class='diag-card' style='animation-delay:0.2s'>
+                            <div class='scan-line'></div>
+                            <div class='diag-card-header'>
+                                <span class='diag-card-label'>
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                                    V8 Runtime
+                                </span>
+                                <span class='diag-badge' id='ui-proc-up' style='background:rgba(168,85,247,0.15); color:#a855f7;'>—</span>
+                            </div>
+                            <div class='diag-row'>
+                                <span class='diag-row-label'><div class='live-dot' style='background:#a855f7;'></div>Memory (RSS)</span>
+                                <span class='diag-row-value' id='ui-proc-rss' style='color:#a855f7;'>—</span>
+                            </div>
+                            <div class='diag-row'>
+                                <span class='diag-row-label'><div class='live-dot' style='background:#f59e0b;'></div>Heap Used</span>
+                                <span class='diag-row-value' id='ui-proc-heap' style='color:#f59e0b;'>—</span>
+                            </div>
+                            <div class='diag-row'>
+                                <span class='diag-row-label'><div class='live-dot' style='background:#f43f5e;'></div>Event Loop Lag</span>
+                                <span class='diag-row-value' id='ui-proc-lag' style='color:#f43f5e;'>—</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Defense Matrix Card -->
+                        <div class='diag-card' style='animation-delay:0.3s'>
+                            <div class='scan-line'></div>
+                            <div class='diag-card-header'>
+                                <span class='diag-card-label'>
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                                    Defense Matrix
+                                </span>
+                                <span class='diag-badge' id='ui-fw-status' style='background:rgba(16,185,129,0.15); color:#10b981;'>—</span>
+                            </div>
+                            <div class='diag-row'>
+                                <span class='diag-row-label'><div class='live-dot' style='background:#f59e0b;'></div>IPs Rate-Limited</span>
+                                <div style='display:flex; align-items:center; gap:10px;'>
+                                    <div style='width:50px; height:3px; background:rgba(255,255,255,0.06); border-radius:4px; overflow:hidden;'>
+                                        <div id='ui-sec-rates-bar' style='width:0%; height:100%; background:#f59e0b; border-radius:4px; transition:width 1s ease;'></div>
+                                    </div>
+                                    <span class='diag-row-value' id='ui-sec-rates' style='color:#f59e0b; min-width:24px; text-align:right;'>—</span>
                                 </div>
-                                <div style='display:flex; justify-content:space-between; align-items:center;'>
-                                    <span class='text-muted' style='display:flex; align-items:center; gap:8px;'><div class='status-pulse' style='background:var(--accent-orange); width:6px; height:6px;'></div> Memory (Heap)</span> 
-                                    <strong id='ui-proc-heap' style='font-family:monospace;'><div class="skeleton skeleton-text" style="width: 40px; display: inline-block;"></div></strong>
-                                </div>
-                                <div style='display:flex; justify-content:space-between; align-items:center;'>
-                                    <span class='text-muted' style='display:flex; align-items:center; gap:8px;'><div class='status-pulse' style='background:#f43f5e; width:6px; height:6px;'></div> Event Loop Lag</span> 
-                                    <strong id='ui-proc-lag' style='font-family:monospace;'><div class="skeleton skeleton-text" style="width: 40px; display: inline-block;"></div></strong>
+                            </div>
+                            <div class='diag-row'>
+                                <span class='diag-row-label'><div class='live-dot' style='background:#f43f5e;'></div>Brute-Force Locks</span>
+                                <div style='display:flex; align-items:center; gap:10px;'>
+                                    <div style='width:50px; height:3px; background:rgba(255,255,255,0.06); border-radius:4px; overflow:hidden;'>
+                                        <div id='ui-sec-locks-bar' style='width:0%; height:100%; background:#f43f5e; border-radius:4px; transition:width 1s ease;'></div>
+                                    </div>
+                                    <span class='diag-row-value' id='ui-sec-locks' style='color:#f43f5e; min-width:24px; text-align:right;'>—</span>
                                 </div>
                             </div>
                         </div>
-
-                        <div class='card' style='border:none; background:rgba(255,255,255,0.02); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.05); border-radius:16px;'>
-                            <h3 style='display:flex; align-items:center; justify-content:space-between;'>🛡️ Defense Matrix <span style='font-size:0.65em; padding:3px 8px; border-radius:8px; background:rgba(16,185,129,0.1); color:var(--accent-green); font-family:monospace;' id='ui-fw-status'><div class="skeleton skeleton-text" style="width: 60px; display: inline-block;"></div></span></h3>
-                            <div style='margin-top:20px; font-size:0.9em; line-height:2.2;'>
-                                <div style='display:flex; justify-content:space-between; align-items:center;'>
-                                    <span class='text-muted'>IPs Rate-Limited</span> 
-                                    <div style='display:flex; align-items:center; gap:10px;'>
-                                        <div style='width:60px; height:4px; background:rgba(255,255,255,0.1); border-radius:2px;'><div id='ui-sec-rates-bar' style='width:0%; height:100%; background:var(--accent-orange); border-radius:2px; transition:0.5s;'></div></div>
-                                        <strong id='ui-sec-rates' style='color:var(--accent-orange); font-family:monospace; min-width:30px; text-align:right;'><div class="skeleton skeleton-text" style="width: 40px; display: inline-block;"></div></strong>
-                                    </div>
-                                </div>
-                                <div style='display:flex; justify-content:space-between; align-items:center;'>
-                                    <span class='text-muted'>Brute-Force Locks</span> 
-                                    <div style='display:flex; align-items:center; gap:10px;'>
-                                        <div style='width:60px; height:4px; background:rgba(255,255,255,0.1); border-radius:2px;'><div id='ui-sec-locks-bar' style='width:0%; height:100%; background:var(--accent-red); border-radius:2px; transition:0.5s;'></div></div>
-                                        <strong id='ui-sec-locks' style='color:var(--accent-red); font-family:monospace; min-width:30px; text-align:right;'><div class="skeleton skeleton-text" style="width: 40px; display: inline-block;"></div></strong>
-                                    </div>
-                                </div>
+                        
+                        <!-- Bandwidth Donut Card -->
+                        <div class='diag-card' style='animation-delay:0.4s; display:flex; flex-direction:column;'>
+                            <div class='scan-line'></div>
+                            <div class='diag-card-header'>
+                                <span class='diag-card-label'>
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4.93 4.93l4.24 4.24M14.83 9.17l4.24-4.24M14.83 14.83l4.24 4.24M9.17 14.83l-4.24 4.24M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>
+                                    Bandwidth
+                                </span>
+                                <span class='diag-badge' id='ui-bw-status' style='background:rgba(59,130,246,0.15); color:#3b82f6;'>—</span>
                             </div>
-                        </div>
-
-                        <div class='card' style='border:none; background:rgba(255,255,255,0.02); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.05); border-radius:16px; display:flex; flex-direction:column;'>
-                            <h3 style='display:flex; align-items:center; justify-content:space-between; margin-top:0;'>🌐 Bandwidth <span style='font-size:0.65em; padding:3px 8px; border-radius:8px; background:rgba(59,130,246,0.1); color:var(--accent-blue); font-family:monospace;' id='ui-bw-status'><div class="skeleton skeleton-text" style="width: 60px; display: inline-block;"></div></span></h3>
-                            <div style='display:flex; justify-content:center; align-items:center; flex-direction:column; flex:1; margin-top: 10px;'>
-                                <div style="position:relative; width: 120px; height: 120px;">
-                                    <svg width="120" height="120" viewBox="0 0 120 120" style="transform: rotate(-90deg);">
-                                        <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="10" stroke-linecap="round" />
-                                        <circle id="ui-bw-circle" cx="60" cy="60" r="50" fill="none" stroke="var(--accent-blue)" stroke-width="10" stroke-linecap="round" stroke-dasharray="314.16" stroke-dashoffset="314.16" style="transition: stroke-dashoffset 1.5s cubic-bezier(0.4, 0, 0.2, 1), stroke 0.5s;" />
+                            <div class='ring-wrap'>
+                                <div style='position:relative; width:110px; height:110px;'>
+                                    <svg width="110" height="110" viewBox="0 0 110 110" style='transform:rotate(-90deg);'>
+                                        <circle cx="55" cy="55" r="46" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="9" stroke-linecap="round"/>
+                                        <circle id="ui-bw-circle" cx="55" cy="55" r="46" fill="none" stroke="url(#bwGrad)" stroke-width="9" stroke-linecap="round" stroke-dasharray="289.02" stroke-dashoffset="289.02" style="transition: stroke-dashoffset 1.5s cubic-bezier(0.4, 0, 0.2, 1);"/>
+                                        <defs>
+                                            <linearGradient id="bwGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                                <stop offset="0%" stop-color="#3b82f6"/>
+                                                <stop offset="100%" stop-color="#60a5fa"/>
+                                            </linearGradient>
+                                        </defs>
                                     </svg>
-                                    <div style="position:absolute; top:0; left:0; width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center;">
-                                        <span id="ui-bw-txt" style="font-size:1.6em; font-weight:bold; font-family:monospace; margin-bottom:-5px;">--%</span>
-                                        <span style="font-size:0.55em; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-top:2px;">of 5 GB</span>
+                                    <div style='position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;'>
+                                        <span id="ui-bw-txt" style='font-size:1.4em; font-weight:800; font-family:monospace; color:#fff;'>--%</span>
+                                        <span style='font-size:0.55em; color:rgba(255,255,255,0.4); text-transform:uppercase; letter-spacing:1px; margin-top:2px;'>of 5 GB</span>
                                     </div>
                                 </div>
-                                <div style='text-align:center; font-size:0.75em; color:var(--text-muted); margin-top:15px; font-family:monospace;' id='ui-bw-details'>-- MB / 5.00 GB</div>
+                                <div style='text-align:center; font-size:0.72em; color:rgba(255,255,255,0.3); margin-top:12px; font-family:monospace;' id='ui-bw-details'>— MB / 5.00 GB</div>
                             </div>
                         </div>
                     </div>
-
-                    <h3 style='margin-top:40px; margin-bottom:20px; color:#fff; font-size:1em; letter-spacing:1px; text-transform:uppercase;'>Gateway Uplinks</h3>
-                    <div class='stats-grid' style='position:relative; z-index:1;'>
-                        <div class='card' id='card-discord' style='border:none; background:rgba(255,255,255,0.02); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.05); border-radius:16px; position:relative; overflow:hidden;'>
-                            <div id='glow-discord' style='position:absolute; top:0; left:0; width:100%; height:4px; background:var(--text-muted); transition:1s;'></div>
-                            <h3 style='margin-top:5px;'>🔵 Discord WS</h3>
-                            <div class='value' id='ui-discord-ws' style='font-size:1.8em; margin: 15px 0; font-family:monospace;'><div class="skeleton" style="width: 80px; height: 24px; border-radius: 6px; display: inline-block;"></div></div>
-                            <div style='font-size:0.85em; line-height:2;'>
-                                <div style='display:flex; justify-content:space-between;'><span class='text-muted'>Status:</span> <strong id='ui-discord-status'><div class="skeleton skeleton-text" style="width: 40px; display: inline-block;"></div></strong></div>
-                                <div style='display:flex; justify-content:space-between;'><span class='text-muted'>Guilds:</span> <strong id='ui-discord-guilds' style='font-family:monospace;'><div class="skeleton skeleton-text" style="width: 40px; display: inline-block;"></div></strong></div>
-                                <div style='display:flex; justify-content:space-between;'><span class='text-muted'>Cached Users:</span> <strong id='ui-discord-users' style='font-family:monospace;'><div class="skeleton skeleton-text" style="width: 40px; display: inline-block;"></div></strong></div>
+                    
+                    <!-- Gateway Uplinks Section -->
+                    <div class='diag-section-title'>Gateway Uplinks</div>
+                    <div class='gateway-grid'>
+                        <div class='gateway-card' id='card-discord' style='animation-delay:0.5s'>
+                            <div class='gateway-top-bar' id='glow-discord' style='background:var(--text-muted);'></div>
+                            <div class='diag-card-label' style='margin-bottom:10px;'>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style='color:#5865F2;'><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057.1 18.101.1 18.103.118 18.11a19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/></svg>
+                                Discord WS
                             </div>
-                        </div>
-
-                        <div class='card' id='card-upstash' style='border:none; background:rgba(255,255,255,0.02); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.05); border-radius:16px; position:relative; overflow:hidden;'>
-                            <div id='glow-upstash' style='position:absolute; top:0; left:0; width:100%; height:4px; background:var(--text-muted); transition:1s;'></div>
-                            <h3 style='margin-top:5px;'>🔴 Upstash DB</h3>
-                            <div class='value' id='ui-upstash-status' style='font-size:1.5em; margin: 15px 0;'><div class="skeleton" style="width: 100px; height: 24px; border-radius: 6px; display: inline-block;"></div></div>
-                            <p class='text-muted' style='margin:0; font-size:0.85em; display:flex; justify-content:space-between;'><span>Response Latency:</span> <strong id='ui-upstash-ping' style='font-family:monospace;'><div class="skeleton skeleton-text" style="width: 40px; display: inline-block;"></div></strong></p>
+                            <div class='gateway-value' id='ui-discord-ws'>—</div>
+                            <div class='diag-row'><span class='diag-row-label'>Status</span><strong id='ui-discord-status' style='font-family:monospace; font-size:0.85em;'>—</strong></div>
+                            <div class='diag-row'><span class='diag-row-label'>Guilds</span><strong id='ui-discord-guilds' style='font-family:monospace; font-size:0.85em;'>—</strong></div>
+                            <div class='diag-row'><span class='diag-row-label'>Cached Users</span><strong id='ui-discord-users' style='font-family:monospace; font-size:0.85em;'>—</strong></div>
                         </div>
                         
-                        <div class='card' id='card-rewarble' style='border:none; background:rgba(255,255,255,0.02); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.05); border-radius:16px; position:relative; overflow:hidden;'>
-                            <div id='glow-rewarble' style='position:absolute; top:0; left:0; width:100%; height:4px; background:var(--text-muted); transition:1s;'></div>
-                            <h3 style='margin-top:5px;'>🟢 Rewarble API</h3>
-                            <div class='value' id='ui-rewarble-status' style='font-size:1.5em; margin: 15px 0;'><div class="skeleton" style="width: 100px; height: 24px; border-radius: 6px; display: inline-block;"></div></div>
-                            <p class='text-muted' style='margin:0; font-size:0.85em; display:flex; justify-content:space-between;'><span>Response Latency:</span> <strong id='ui-rewarble-ping' style='font-family:monospace;'><div class="skeleton skeleton-text" style="width: 40px; display: inline-block;"></div></strong></p>
+                        <div class='gateway-card' id='card-upstash' style='animation-delay:0.6s'>
+                            <div class='gateway-top-bar' id='glow-upstash' style='background:var(--text-muted);'></div>
+                            <div class='diag-card-label' style='margin-bottom:10px;'>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3"/></svg>
+                                Upstash DB
+                            </div>
+                            <div class='gateway-value' id='ui-upstash-status'>—</div>
+                            <div class='diag-row'><span class='diag-row-label'>Latency</span><strong id='ui-upstash-ping' style='font-family:monospace; font-size:0.85em;'>—</strong></div>
+                        </div>
+                        
+                        <div class='gateway-card' id='card-rewarble' style='animation-delay:0.7s'>
+                            <div class='gateway-top-bar' id='glow-rewarble' style='background:var(--text-muted);'></div>
+                            <div class='diag-card-label' style='margin-bottom:10px;'>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><path d="M12 22C6.48 22 2 17.52 2 12S6.48 2 12 2s10 4.48 10 10-4.48 10-10 10z"/><path d="M15 9H9v6h6V9z"/></svg>
+                                Rewarble API
+                            </div>
+                            <div class='gateway-value' id='ui-rewarble-status'>—</div>
+                            <div class='diag-row'><span class='diag-row-label'>Latency</span><strong id='ui-rewarble-ping' style='font-family:monospace; font-size:0.85em;'>—</strong></div>
                         </div>
                     </div>
                 </div>
             </div>
-                
-            <div id='terminal' class='tab-content'>
+            
+                        <div id='terminal' class='tab-content'>
                 <div class='box' style='background:#050505;'>
                     <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;'>
                         <h2 style='margin:0; font-family:monospace; color:var(--accent-green);'>root@nexus:~# system_logs</h2>
@@ -6719,7 +7244,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         }
         
         // 🚀 [UI_ACTION_ASYNC: manualRefresh] - Action asynchrone d'interface Dashboard
-        window.manualRefresh = async function() { const btn = document.getElementById('refreshBtn'); btn.classList.add('spinning'); await window.refreshDataSilently(); setTimeout(()=>btn.classList.remove('spinning'), 1000); showToast('Matrix Synced'); };
+                window.manualRefresh = async function() { const btn = document.getElementById('refreshBtn'); btn.classList.remove('done'); btn.classList.add('spinning'); try { await window.refreshDataSilently(); } catch(e){} btn.classList.remove('spinning'); btn.classList.add('done'); setTimeout(()=>btn.classList.remove('done'), 1000); };
 
         // 🚀 [UI_ACTION_ASYNC: refreshDataSilently] - Action asynchrone d'interface Dashboard
         window.refreshDataSilently = async function(isAutoSync = false) { try{ const res=await fetch('/api/init-data?t=' + Date.now()); if(res.status === 401) { window.location.href = '/dashboard'; return; } if(res.ok){ const data=await res.json(); processInitData(data); if(!isAutoSync){ try { window.cancelEdit(); window.cancelEditLink(); document.getElementById('promoName').value=''; document.getElementById('promoDiscount').value=''; document.getElementById('promoLimit').value=''; } catch(e) {} } } }catch(e) { console.error("Error:", e); } };
