@@ -4859,7 +4859,7 @@ const server = http.createServer(async (req, res) => {
                        <p style='color: var(--text-muted); margin: 8px 0 0 0; font-size: 1.05em; font-weight: 500;'>Real-time financial telemetry & network pulse</p>
                    </div>
                                       <div style='display: flex; gap: 15px;'>
-                       <button class='glass-panel' onclick='window.openWidgetModal()' style='padding: 8px 16px; border-radius: 20px; font-size: 0.85em; font-weight: 600; display: flex; align-items: center; gap: 8px; cursor: pointer; border: 1px solid rgba(255,255,255,0.1); transition: all 0.3s ease;'>âž• Add Widget</button>
+                       <button onclick='window.openWidgetModal()' style='padding:9px 18px; border-radius:20px; font-size:0.82em; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:7px; background:rgba(16,185,129,0.12); border:1px solid rgba(16,185,129,0.3); color:#10b981; transition:all 0.25s ease; letter-spacing:0.3px; flex-shrink:0;' onmouseover="this.style.background='rgba(16,185,129,0.22)';this.style.borderColor='rgba(16,185,129,0.5)';this.style.transform='translateY(-1px)';this.style.boxShadow='0 4px 15px rgba(16,185,129,0.2)'" onmouseout="this.style.background='rgba(16,185,129,0.12)';this.style.borderColor='rgba(16,185,129,0.3)';this.style.transform='translateY(0)';this.style.boxShadow='none'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg> Widgets</button>
                        <div class='glass-panel' style='padding: 8px 16px; border-radius: 20px; font-size: 0.85em; font-weight: 600; display: flex; align-items: center; gap: 8px; box-shadow: none;'>
                            <div class='status-dot' style='margin:0;'></div> ALL SYSTEMS NOMINAL
                        </div>
@@ -7215,7 +7215,6 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                 const tabs = document.getElementsByClassName('tab-content');
                 for(let i=0; i<tabs.length; i++) {
                     tabs[i].classList.remove('active');
-                    tabs[i].style.display = 'none';
                 }
                 const navBtns = document.getElementsByClassName('nav-btn');
                 for(let i=0; i<navBtns.length; i++) {
@@ -7223,10 +7222,9 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                 }
                 const target = document.getElementById(tabId);
                 if(target) {
-                    target.style.display = 'block';
-                    // Trigger reflow for GPU-composited animation
-                    void target.offsetWidth;
-                    target.classList.add('active');
+                    requestAnimationFrame(() => {
+                        target.classList.add('active');
+                    });
                 }
                 if(btn) btn.classList.add('active');
                 
@@ -7250,6 +7248,9 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                     if(terminalInterval) { clearInterval(terminalInterval); terminalInterval = null; }
                 }
                 
+                if(tabId === 'transactions' && typeof window.renderTransactionsList === 'function') {
+                    setTimeout(() => window.renderTransactionsList(), 50);
+                }
                 if(tabId === 'backups' && typeof window.loadBackups === 'function'){ window.loadBackups(); }
                 
             } catch (e) {
