@@ -1959,6 +1959,7 @@ async function acquireDistributedLock(lockKey, ttl_ms = 5000) {
 }
 
 const userTicketLocks = new Set();
+const channelCreationLocks = new Map(); // Promise-based locks to prevent race conditions
 const processedInteractions = new Set();
 // 🚀 [EVENT_LISTENER: interactionCreate] - Écouteur d'événement Discord
 client.on('interactionCreate', async (interaction) => {
@@ -2086,7 +2087,14 @@ client.on('interactionCreate', async (interaction) => {
 
                 const rawName = interaction.user.username.toLowerCase().replace(/[^a-z0-9]/g, '');
                 const sanitizedName = rawName.length > 0 ? rawName : interaction.user.id;
-                const existingChannel = interaction.guild.channels.cache.find(c => c.name === `shop-${sanitizedName}` || c.name === `support-${sanitizedName}`);
+                // Fresh fetch to prevent stale cache duplicate channels
+                let existingChannel = null;
+                try {
+                    await interaction.guild.channels.fetch();
+                    existingChannel = interaction.guild.channels.cache.find(c => c.name === `shop-${sanitizedName}` || c.name === `support-${sanitizedName}`);
+                } catch(e) {
+                    existingChannel = interaction.guild.channels.cache.find(c => c.name === `shop-${sanitizedName}` || c.name === `support-${sanitizedName}`);
+                }
                 
                 if (existingChannel) {
                     userTicketLocks.delete(interaction.user.id);
@@ -2174,7 +2182,15 @@ client.on('interactionCreate', async (interaction) => {
 
                 const rawName = interaction.user.username.toLowerCase().replace(/[^a-z0-9]/g, '');
                 const sanitizedName = rawName.length > 0 ? rawName : interaction.user.id;
-                const existingChannel = interaction.guild.channels.cache.find(c => c.name === `shop-${sanitizedName}` || c.name === `support-${sanitizedName}`);
+                
+                // Fresh fetch to prevent stale cache duplicate channels
+                let existingChannel = null;
+                try {
+                    await interaction.guild.channels.fetch();
+                    existingChannel = interaction.guild.channels.cache.find(c => c.name === `shop-${sanitizedName}` || c.name === `support-${sanitizedName}`);
+                } catch(e) {
+                    existingChannel = interaction.guild.channels.cache.find(c => c.name === `shop-${sanitizedName}` || c.name === `support-${sanitizedName}`);
+                }
                 
                 if (existingChannel) {
                     userTicketLocks.delete(interaction.user.id);
@@ -4251,13 +4267,18 @@ const server = http.createServer(async (req, res) => {
         .bot-status { display:flex; align-items:center; gap:8px; background:rgba(var(--accent-green-rgb),0.08); border:1px solid rgba(var(--accent-green-rgb),0.18); padding:6px 14px; border-radius:20px; font-weight:600; color:var(--accent-green); font-size:0.82em; letter-spacing:0.5px; backdrop-filter:blur(12px); }
 
         /* === TAB SYSTEM === */
-        .tab-content { display:none; }
+        .tab-content { 
+            display: none;
+            opacity: 0;
+        }
         .tab-content.active {
             display: block;
-            animation: fadeUp 0.45s var(--spring) both;
+            animation: tabFadeIn 0.38s cubic-bezier(0.2,0.8,0.2,1) forwards;
         }
-        /* For monitoring tab which needs special grid layout */
-        #monitoring.active { display: block; }
+        @keyframes tabFadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
 
         /* === STATS GRID === */
         .stats-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:18px; margin-bottom:28px; }
@@ -5567,22 +5588,22 @@ const server = http.createServer(async (req, res) => {
             </div>
             
             <div id='monitoring' class='tab-content'>
-                <div class='diag-container' id='diag-main'>
-                    <!-- Ambient glows -->
-                    <div class='diag-aurora diag-aurora-1'></div>
-                    <div class='diag-aurora diag-aurora-2'></div>
-                    <div class='diag-aurora diag-aurora-3'></div>
-                    <div class='diag-noise'></div>
+                <!-- DIAGNOSTICS PREMIUM PAGE -->
+                <div style='position:relative; overflow:hidden; background:linear-gradient(180deg, #07090f 0%, #0a0c14 100%); border-radius:24px; border:1px solid rgba(255,255,255,0.05); box-shadow:0 30px 80px rgba(0,0,0,0.7);'>
+                    
+                    <!-- Ambient aurora -->
+                    <div style='position:absolute; top:-100px; left:-100px; width:500px; height:400px; background:radial-gradient(circle, rgba(16,185,129,0.04) 0%, transparent 70%); pointer-events:none; animation:auroraDrift1 8s ease-in-out infinite alternate;'></div>
+                    <div style='position:absolute; bottom:-80px; right:-60px; width:400px; height:300px; background:radial-gradient(circle, rgba(59,130,246,0.04) 0%, transparent 70%); pointer-events:none; animation:auroraDrift2 10s ease-in-out infinite alternate;'></div>
                     
                     <!-- Header -->
-                    <div class='diag-header'>
-                        <div class='diag-title'>
-                            <div class='diag-title-icon'>
+                    <div style='padding:28px 32px 24px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.04); position:relative; z-index:2;'>
+                        <div style='display:flex; align-items:center; gap:16px;'>
+                            <div style='width:46px; height:46px; border-radius:14px; background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.2); display:flex; align-items:center; justify-content:center; box-shadow:0 0 24px rgba(16,185,129,0.15); animation:iconPulse 3s ease-in-out infinite;'>
                                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
                             </div>
                             <div>
-                                <h2>Nexus Mainframe</h2>
-                                <div class='diag-subtitle'>Live telemetry — core nodes, security & API gateways</div>
+                                <h2 style='margin:0; font-size:1.4em; font-weight:700; background:linear-gradient(135deg,#fff 0%,rgba(16,185,129,0.8) 100%); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; border:none; padding:0;'>Nexus Mainframe</h2>
+                                <div style='font-size:0.8em; color:rgba(255,255,255,0.35); margin-top:3px; display:flex; align-items:center; gap:8px;'><div style='width:6px; height:6px; border-radius:50%; background:#10b981; box-shadow:0 0 8px rgba(16,185,129,0.6); animation:pulseDot 2s ease-in-out infinite;'></div> Live telemetry — core nodes, security &amp; API gateways</div>
                             </div>
                         </div>
                         <button class='admin-btn btn-deep-scan' id='deep-scan-btn' onclick='window.runDiagnostics()' style='margin:0; display:flex; align-items:center; gap:8px;'>
@@ -5591,171 +5612,171 @@ const server = http.createServer(async (req, res) => {
                         </button>
                     </div>
                     
-                    <!-- Core Metrics Grid -->
-                    <div class='diag-grid'>
+                    <!-- Main Metrics 2x2 Grid -->
+                    <div style='padding:24px 32px 16px; display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:16px; position:relative; z-index:2;'>
+                        
                         <!-- CPU & RAM Card -->
-                        <div class='diag-card' style='animation-delay:0.1s'>
-                            <div class='scan-line'></div>
-                            <div class='diag-card-header'>
-                                <span class='diag-card-label'>
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="2" x2="9" y2="4"/><line x1="15" y1="2" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="22"/><line x1="15" y1="20" x2="15" y2="22"/><line x1="20" y1="9" x2="22" y2="9"/><line x1="20" y1="14" x2="22" y2="14"/><line x1="2" y1="9" x2="4" y2="9"/><line x1="2" y1="14" x2="4" y2="14"/></svg>
-                                    Core Compute
-                                </span>
-                                <span class='diag-badge' id='ui-os-plat' style='background:rgba(255,255,255,0.06); color:rgba(255,255,255,0.6);'>—</span>
+                        <div style='background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06); border-radius:20px; padding:22px; position:relative; overflow:hidden; transition:border-color 0.3s ease, transform 0.3s cubic-bezier(0.2,0.8,0.2,1), box-shadow 0.3s ease; animation:fadeUp 0.5s cubic-bezier(0.2,0.8,0.2,1) 0.1s both;' onmouseover="this.style.borderColor='rgba(16,185,129,0.2)';this.style.transform='translateY(-3px)';this.style.boxShadow='0 12px 40px rgba(0,0,0,0.4)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.06)';this.style.transform='translateY(0)';this.style.boxShadow='none'">
+                            <div style='position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,#10b981,transparent);border-radius:20px 20px 0 0;'></div>
+                            <div style='display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;'>
+                                <div style='display:flex;align-items:center;gap:10px;'>
+                                    <div style='width:34px;height:34px;border-radius:10px;background:rgba(16,185,129,0.1);display:flex;align-items:center;justify-content:center;'><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="2" x2="9" y2="4"/><line x1="15" y1="2" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="22"/><line x1="15" y1="20" x2="15" y2="22"/><line x1="20" y1="9" x2="22" y2="9"/><line x1="20" y1="14" x2="22" y2="14"/><line x1="2" y1="9" x2="4" y2="9"/><line x1="2" y1="14" x2="4" y2="14"/></svg></div>
+                                    <span style='font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,0.45);'>Core Compute</span>
+                                </div>
+                                <span id='ui-os-plat' style='font-size:0.65em;padding:3px 8px;border-radius:7px;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.45);font-family:monospace;'>—</span>
                             </div>
-                            
-                            <div style='margin-bottom:18px;'>
-                                <div style='display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px;'>
-                                    <span style='font-size:0.78em; color:rgba(255,255,255,0.4); text-transform:uppercase; letter-spacing:0.8px;'>CPU Load</span>
-                                    <span id='ui-cpu-txt' style='font-size:0.85em; font-weight:700; font-family:monospace; color:#fff;'>—</span>
+                            <div style='margin-bottom:14px;'>
+                                <div style='display:flex;justify-content:space-between;margin-bottom:6px;'>
+                                    <span style='font-size:0.72em;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:0.8px;'>CPU</span>
+                                    <span id='ui-cpu-txt' style='font-size:0.78em;font-weight:700;font-family:monospace;color:#10b981;'>—</span>
                                 </div>
-                                <div class='metric-bar-bg'>
-                                    <div class='metric-bar-fill' id='ui-cpu-bar' style='background: linear-gradient(90deg, #10b981, #34d399); width:0%;'></div>
+                                <div style='height:5px;background:rgba(255,255,255,0.05);border-radius:10px;overflow:hidden;'>
+                                    <div id='ui-cpu-bar' style='height:100%;border-radius:10px;background:linear-gradient(90deg,#10b981,#34d399);width:0%;transition:width 1.2s cubic-bezier(0.4,0,0.2,1);position:relative;overflow:hidden;'><div style='position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.3),transparent);animation:barShimmer 2s ease-in-out infinite;'></div></div>
                                 </div>
                             </div>
-                            
-                            <div style='margin-bottom:16px;'>
-                                <div style='display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px;'>
-                                    <span style='font-size:0.78em; color:rgba(255,255,255,0.4); text-transform:uppercase; letter-spacing:0.8px;'>RAM Memory</span>
-                                    <span id='ui-ram-txt' style='font-size:0.85em; font-weight:700; font-family:monospace; color:#fff;'>—</span>
+                            <div style='margin-bottom:14px;'>
+                                <div style='display:flex;justify-content:space-between;margin-bottom:6px;'>
+                                    <span style='font-size:0.72em;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:0.8px;'>RAM</span>
+                                    <span id='ui-ram-txt' style='font-size:0.78em;font-weight:700;font-family:monospace;color:#3b82f6;'>—</span>
                                 </div>
-                                <div class='metric-bar-bg'>
-                                    <div class='metric-bar-fill' id='ui-ram-bar' style='background: linear-gradient(90deg, #3b82f6, #60a5fa); width:0%;'></div>
+                                <div style='height:5px;background:rgba(255,255,255,0.05);border-radius:10px;overflow:hidden;'>
+                                    <div id='ui-ram-bar' style='height:100%;border-radius:10px;background:linear-gradient(90deg,#3b82f6,#60a5fa);width:0%;transition:width 1.2s cubic-bezier(0.4,0,0.2,1);position:relative;overflow:hidden;'><div style='position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.3),transparent);animation:barShimmer 2s ease-in-out 0.5s infinite;'></div></div>
                                 </div>
-                                <div style='text-align:right; font-size:0.7em; color:rgba(255,255,255,0.3); margin-top:4px; font-family:monospace;' id='ui-os-ram'>— GB / — GB</div>
+                                <div style='text-align:right;font-size:0.65em;color:rgba(255,255,255,0.2);margin-top:4px;font-family:monospace;' id='ui-os-ram'>— / —</div>
                             </div>
-                            
-                            <div class='diag-row' style='border-top: 1px solid rgba(255,255,255,0.05); padding-top:12px; margin-top:4px;'>
-                                <span class='diag-row-label'><div class='live-dot' style='background:#10b981;'></div>Node Uptime</span>
-                                <span class='diag-row-value text-green' id='ui-os-up'>—</span>
+                            <div style='display:flex;justify-content:space-between;align-items:center;padding-top:12px;border-top:1px solid rgba(255,255,255,0.04);'>
+                                <span style='font-size:0.75em;color:rgba(255,255,255,0.3);display:flex;align-items:center;gap:6px;'><div style='width:6px;height:6px;border-radius:50%;background:#10b981;animation:pulseDot 2s ease-in-out infinite;flex-shrink:0;'></div>Node Uptime</span>
+                                <span id='ui-os-up' style='font-family:monospace;font-size:0.78em;font-weight:700;color:#10b981;'>—</span>
                             </div>
                         </div>
                         
                         <!-- V8 Runtime Card -->
-                        <div class='diag-card' style='animation-delay:0.2s'>
-                            <div class='scan-line'></div>
-                            <div class='diag-card-header'>
-                                <span class='diag-card-label'>
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
-                                    V8 Runtime
-                                </span>
-                                <span class='diag-badge' id='ui-proc-up' style='background:rgba(168,85,247,0.15); color:#a855f7;'>—</span>
+                        <div style='background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:20px;padding:22px;position:relative;overflow:hidden;transition:border-color 0.3s ease,transform 0.3s cubic-bezier(0.2,0.8,0.2,1),box-shadow 0.3s ease;animation:fadeUp 0.5s cubic-bezier(0.2,0.8,0.2,1) 0.2s both;' onmouseover="this.style.borderColor='rgba(168,85,247,0.25)';this.style.transform='translateY(-3px)';this.style.boxShadow='0 12px 40px rgba(0,0,0,0.4)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.06)';this.style.transform='translateY(0)';this.style.boxShadow='none'">
+                            <div style='position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,#a855f7,transparent);border-radius:20px 20px 0 0;'></div>
+                            <div style='display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;'>
+                                <div style='display:flex;align-items:center;gap:10px;'>
+                                    <div style='width:34px;height:34px;border-radius:10px;background:rgba(168,85,247,0.1);display:flex;align-items:center;justify-content:center;'><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a855f7" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg></div>
+                                    <span style='font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,0.45);'>V8 Runtime</span>
+                                </div>
+                                <span id='ui-proc-up' style='font-size:0.65em;padding:3px 8px;border-radius:7px;background:rgba(168,85,247,0.12);color:#a855f7;font-family:monospace;'>—</span>
                             </div>
-                            <div class='diag-row'>
-                                <span class='diag-row-label'><div class='live-dot' style='background:#a855f7;'></div>Memory (RSS)</span>
-                                <span class='diag-row-value' id='ui-proc-rss' style='color:#a855f7;'>—</span>
-                            </div>
-                            <div class='diag-row'>
-                                <span class='diag-row-label'><div class='live-dot' style='background:#f59e0b;'></div>Heap Used</span>
-                                <span class='diag-row-value' id='ui-proc-heap' style='color:#f59e0b;'>—</span>
-                            </div>
-                            <div class='diag-row'>
-                                <span class='diag-row-label'><div class='live-dot' style='background:#f43f5e;'></div>Event Loop Lag</span>
-                                <span class='diag-row-value' id='ui-proc-lag' style='color:#f43f5e;'>—</span>
+                            <div style='display:flex;flex-direction:column;gap:13px;'>
+                                <div style='display:flex;justify-content:space-between;align-items:center;'>
+                                    <span style='font-size:0.78em;color:rgba(255,255,255,0.35);display:flex;align-items:center;gap:6px;'><div style='width:6px;height:6px;border-radius:50%;background:#a855f7;animation:pulseDot 2s ease-in-out 0.3s infinite;flex-shrink:0;'></div>Memory RSS</span>
+                                    <span id='ui-proc-rss' style='font-family:monospace;font-size:0.82em;font-weight:700;color:#a855f7;'>—</span>
+                                </div>
+                                <div style='display:flex;justify-content:space-between;align-items:center;'>
+                                    <span style='font-size:0.78em;color:rgba(255,255,255,0.35);display:flex;align-items:center;gap:6px;'><div style='width:6px;height:6px;border-radius:50%;background:#f59e0b;animation:pulseDot 2s ease-in-out 0.6s infinite;flex-shrink:0;'></div>Heap Used</span>
+                                    <span id='ui-proc-heap' style='font-family:monospace;font-size:0.82em;font-weight:700;color:#f59e0b;'>—</span>
+                                </div>
+                                <div style='display:flex;justify-content:space-between;align-items:center;padding-top:12px;border-top:1px solid rgba(255,255,255,0.04);'>
+                                    <span style='font-size:0.78em;color:rgba(255,255,255,0.35);display:flex;align-items:center;gap:6px;'><div style='width:6px;height:6px;border-radius:50%;background:#f43f5e;animation:pulseDot 2s ease-in-out 0.9s infinite;flex-shrink:0;'></div>Event Loop Lag</span>
+                                    <span id='ui-proc-lag' style='font-family:monospace;font-size:0.82em;font-weight:700;color:#f43f5e;'>—</span>
+                                </div>
                             </div>
                         </div>
                         
                         <!-- Defense Matrix Card -->
-                        <div class='diag-card' style='animation-delay:0.3s'>
-                            <div class='scan-line'></div>
-                            <div class='diag-card-header'>
-                                <span class='diag-card-label'>
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                                    Defense Matrix
-                                </span>
-                                <span class='diag-badge' id='ui-fw-status' style='background:rgba(16,185,129,0.15); color:#10b981;'>—</span>
-                            </div>
-                            <div class='diag-row'>
-                                <span class='diag-row-label'><div class='live-dot' style='background:#f59e0b;'></div>IPs Rate-Limited</span>
-                                <div style='display:flex; align-items:center; gap:10px;'>
-                                    <div style='width:50px; height:3px; background:rgba(255,255,255,0.06); border-radius:4px; overflow:hidden;'>
-                                        <div id='ui-sec-rates-bar' style='width:0%; height:100%; background:#f59e0b; border-radius:4px; transition:width 1s ease;'></div>
-                                    </div>
-                                    <span class='diag-row-value' id='ui-sec-rates' style='color:#f59e0b; min-width:24px; text-align:right;'>—</span>
+                        <div style='background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:20px;padding:22px;position:relative;overflow:hidden;transition:border-color 0.3s ease,transform 0.3s cubic-bezier(0.2,0.8,0.2,1),box-shadow 0.3s ease;animation:fadeUp 0.5s cubic-bezier(0.2,0.8,0.2,1) 0.3s both;' onmouseover="this.style.borderColor='rgba(16,185,129,0.25)';this.style.transform='translateY(-3px)';this.style.boxShadow='0 12px 40px rgba(0,0,0,0.4)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.06)';this.style.transform='translateY(0)';this.style.boxShadow='none'">
+                            <div style='position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,#10b981,transparent);border-radius:20px 20px 0 0;'></div>
+                            <div style='display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;'>
+                                <div style='display:flex;align-items:center;gap:10px;'>
+                                    <div style='width:34px;height:34px;border-radius:10px;background:rgba(16,185,129,0.1);display:flex;align-items:center;justify-content:center;'><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+                                    <span style='font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,0.45);'>Defense Matrix</span>
                                 </div>
+                                <span id='ui-fw-status' style='font-size:0.65em;padding:3px 8px;border-radius:7px;background:rgba(16,185,129,0.12);color:#10b981;font-family:monospace;'>—</span>
                             </div>
-                            <div class='diag-row'>
-                                <span class='diag-row-label'><div class='live-dot' style='background:#f43f5e;'></div>Brute-Force Locks</span>
-                                <div style='display:flex; align-items:center; gap:10px;'>
-                                    <div style='width:50px; height:3px; background:rgba(255,255,255,0.06); border-radius:4px; overflow:hidden;'>
-                                        <div id='ui-sec-locks-bar' style='width:0%; height:100%; background:#f43f5e; border-radius:4px; transition:width 1s ease;'></div>
+                            <div style='display:flex;flex-direction:column;gap:15px;'>
+                                <div>
+                                    <div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;'>
+                                        <span style='font-size:0.78em;color:rgba(255,255,255,0.35);display:flex;align-items:center;gap:6px;'><div style='width:6px;height:6px;border-radius:50%;background:#f59e0b;animation:pulseDot 2s ease-in-out infinite;flex-shrink:0;'></div>IPs Rate-Limited</span>
+                                        <span id='ui-sec-rates' style='font-family:monospace;font-size:0.82em;font-weight:700;color:#f59e0b;'>—</span>
                                     </div>
-                                    <span class='diag-row-value' id='ui-sec-locks' style='color:#f43f5e; min-width:24px; text-align:right;'>—</span>
+                                    <div style='height:4px;background:rgba(255,255,255,0.05);border-radius:10px;overflow:hidden;'><div id='ui-sec-rates-bar' style='height:100%;width:0%;background:linear-gradient(90deg,#f59e0b,#fbbf24);border-radius:10px;transition:width 1s ease;'></div></div>
+                                </div>
+                                <div>
+                                    <div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;'>
+                                        <span style='font-size:0.78em;color:rgba(255,255,255,0.35);display:flex;align-items:center;gap:6px;'><div style='width:6px;height:6px;border-radius:50%;background:#f43f5e;animation:pulseDot 2s ease-in-out 0.5s infinite;flex-shrink:0;'></div>Brute-Force Locks</span>
+                                        <span id='ui-sec-locks' style='font-family:monospace;font-size:0.82em;font-weight:700;color:#f43f5e;'>—</span>
+                                    </div>
+                                    <div style='height:4px;background:rgba(255,255,255,0.05);border-radius:10px;overflow:hidden;'><div id='ui-sec-locks-bar' style='height:100%;width:0%;background:linear-gradient(90deg,#f43f5e,#fb7185);border-radius:10px;transition:width 1s ease;'></div></div>
                                 </div>
                             </div>
                         </div>
                         
                         <!-- Bandwidth Donut Card -->
-                        <div class='diag-card' style='animation-delay:0.4s; display:flex; flex-direction:column;'>
-                            <div class='scan-line'></div>
-                            <div class='diag-card-header'>
-                                <span class='diag-card-label'>
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4.93 4.93l4.24 4.24M14.83 9.17l4.24-4.24M14.83 14.83l4.24 4.24M9.17 14.83l-4.24 4.24M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>
-                                    Bandwidth
-                                </span>
-                                <span class='diag-badge' id='ui-bw-status' style='background:rgba(59,130,246,0.15); color:#3b82f6;'>—</span>
+                        <div style='background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:20px;padding:22px;display:flex;flex-direction:column;position:relative;overflow:hidden;transition:border-color 0.3s ease,transform 0.3s cubic-bezier(0.2,0.8,0.2,1),box-shadow 0.3s ease;animation:fadeUp 0.5s cubic-bezier(0.2,0.8,0.2,1) 0.4s both;' onmouseover="this.style.borderColor='rgba(59,130,246,0.25)';this.style.transform='translateY(-3px)';this.style.boxShadow='0 12px 40px rgba(0,0,0,0.4)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.06)';this.style.transform='translateY(0)';this.style.boxShadow='none'">
+                            <div style='position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,#3b82f6,transparent);border-radius:20px 20px 0 0;'></div>
+                            <div style='display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;'>
+                                <div style='display:flex;align-items:center;gap:10px;'>
+                                    <div style='width:34px;height:34px;border-radius:10px;background:rgba(59,130,246,0.1);display:flex;align-items:center;justify-content:center;'><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2"><path d="M4.93 4.93l4.24 4.24M14.83 9.17l4.24-4.24M14.83 14.83l4.24 4.24M9.17 14.83l-4.24 4.24M12 2v4M12 18v4M2 12h4M18 12h4"/></svg></div>
+                                    <span style='font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,0.45);'>Bandwidth</span>
+                                </div>
+                                <span id='ui-bw-status' style='font-size:0.65em;padding:3px 8px;border-radius:7px;background:rgba(59,130,246,0.12);color:#3b82f6;font-family:monospace;'>—</span>
                             </div>
-                            <div class='ring-wrap'>
-                                <div style='position:relative; width:110px; height:110px;'>
-                                    <svg width="110" height="110" viewBox="0 0 110 110" style='transform:rotate(-90deg);'>
-                                        <circle cx="55" cy="55" r="46" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="9" stroke-linecap="round"/>
-                                        <circle id="ui-bw-circle" cx="55" cy="55" r="46" fill="none" stroke="url(#bwGrad)" stroke-width="9" stroke-linecap="round" stroke-dasharray="289.02" stroke-dashoffset="289.02" style="transition: stroke-dashoffset 1.5s cubic-bezier(0.4, 0, 0.2, 1);"/>
-                                        <defs>
-                                            <linearGradient id="bwGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                                                <stop offset="0%" stop-color="#3b82f6"/>
-                                                <stop offset="100%" stop-color="#60a5fa"/>
-                                            </linearGradient>
-                                        </defs>
+                            <div style='display:flex;align-items:center;justify-content:center;flex-direction:column;flex:1;gap:8px;'>
+                                <div style='position:relative;width:100px;height:100px;'>
+                                    <svg width="100" height="100" viewBox="0 0 100 100" style='transform:rotate(-90deg);'>
+                                        <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="8" stroke-linecap="round"/>
+                                        <circle id="ui-bw-circle" cx="50" cy="50" r="40" fill="none" stroke="url(#bwGrad2)" stroke-width="8" stroke-linecap="round" stroke-dasharray="251.33" stroke-dashoffset="251.33" style="transition:stroke-dashoffset 1.5s cubic-bezier(0.4,0,0.2,1);"/>
+                                        <defs><linearGradient id="bwGrad2" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#3b82f6"/><stop offset="100%" stop-color="#60a5fa"/></linearGradient></defs>
                                     </svg>
-                                    <div style='position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;'>
-                                        <span id="ui-bw-txt" style='font-size:1.4em; font-weight:800; font-family:monospace; color:#fff;'>--%</span>
-                                        <span style='font-size:0.55em; color:rgba(255,255,255,0.4); text-transform:uppercase; letter-spacing:1px; margin-top:2px;'>of 5 GB</span>
+                                    <div style='position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;'>
+                                        <span id="ui-bw-txt" style='font-size:1.25em;font-weight:800;font-family:monospace;color:#fff;'>--%</span>
+                                        <span style='font-size:0.48em;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:1px;'>of 5GB</span>
                                     </div>
                                 </div>
-                                <div style='text-align:center; font-size:0.72em; color:rgba(255,255,255,0.3); margin-top:12px; font-family:monospace;' id='ui-bw-details'>— MB / 5.00 GB</div>
+                                <div style='font-size:0.68em;color:rgba(255,255,255,0.2);font-family:monospace;text-align:center;' id='ui-bw-details'>— MB / 5.00 GB</div>
                             </div>
                         </div>
                     </div>
                     
                     <!-- Gateway Uplinks Section -->
-                    <div class='diag-section-title'>Gateway Uplinks</div>
-                    <div class='gateway-grid'>
-                        <div class='gateway-card' id='card-discord' style='animation-delay:0.5s'>
-                            <div class='gateway-top-bar' id='glow-discord' style='background:var(--text-muted);'></div>
-                            <div class='diag-card-label' style='margin-bottom:10px;'>
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style='color:#5865F2;'><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057.1 18.101.1 18.103.118 18.11a19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/></svg>
-                                Discord WS
-                            </div>
-                            <div class='gateway-value' id='ui-discord-ws'>—</div>
-                            <div class='diag-row'><span class='diag-row-label'>Status</span><strong id='ui-discord-status' style='font-family:monospace; font-size:0.85em;'>—</strong></div>
-                            <div class='diag-row'><span class='diag-row-label'>Guilds</span><strong id='ui-discord-guilds' style='font-family:monospace; font-size:0.85em;'>—</strong></div>
-                            <div class='diag-row'><span class='diag-row-label'>Cached Users</span><strong id='ui-discord-users' style='font-family:monospace; font-size:0.85em;'>—</strong></div>
+                    <div style='padding:0 32px 28px;position:relative;z-index:2;'>
+                        <div style='display:flex;align-items:center;gap:12px;margin-bottom:14px;'>
+                            <span style='font-size:0.68em;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:rgba(255,255,255,0.25);white-space:nowrap;'>Gateway Uplinks</span>
+                            <div style='flex:1;height:1px;background:linear-gradient(90deg,rgba(255,255,255,0.06),transparent);'></div>
                         </div>
-                        
-                        <div class='gateway-card' id='card-upstash' style='animation-delay:0.6s'>
-                            <div class='gateway-top-bar' id='glow-upstash' style='background:var(--text-muted);'></div>
-                            <div class='diag-card-label' style='margin-bottom:10px;'>
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3"/></svg>
-                                Upstash DB
+                        <div style='display:grid;grid-template-columns:repeat(auto-fit, minmax(190px, 1fr));gap:12px;'>
+                            
+                            <div id='card-discord' style='background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:18px;padding:18px;position:relative;overflow:hidden;transition:border-color 0.3s ease,transform 0.3s cubic-bezier(0.2,0.8,0.2,1);animation:fadeUp 0.5s cubic-bezier(0.2,0.8,0.2,1) 0.5s both;' onmouseover="this.style.borderColor='rgba(88,101,242,0.3)';this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.05)';this.style.transform='translateY(0)'">
+                                <div id='glow-discord' style='position:absolute;top:0;left:0;right:0;height:3px;background:rgba(255,255,255,0.1);border-radius:18px 18px 0 0;transition:all 1s ease;'></div>
+                                <div style='display:flex;align-items:center;gap:7px;margin-bottom:12px;'>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="#5865F2"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057.1 18.101.1 18.103.118 18.11a19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/></svg>
+                                    <span style='font-size:0.72em;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:rgba(255,255,255,0.4);'>Discord WS</span>
+                                </div>
+                                <div id='ui-discord-ws' style='font-size:1.7em;font-weight:800;font-family:monospace;color:#fff;margin-bottom:10px;letter-spacing:-0.5px;'>—</div>
+                                <div style='display:flex;flex-direction:column;gap:6px;'>
+                                    <div style='display:flex;justify-content:space-between;font-size:0.75em;'><span style='color:rgba(255,255,255,0.3);'>Status</span><strong id='ui-discord-status' style='font-family:monospace;'>—</strong></div>
+                                    <div style='display:flex;justify-content:space-between;font-size:0.75em;'><span style='color:rgba(255,255,255,0.3);'>Guilds</span><strong id='ui-discord-guilds' style='font-family:monospace;'>—</strong></div>
+                                    <div style='display:flex;justify-content:space-between;font-size:0.75em;'><span style='color:rgba(255,255,255,0.3);'>Cached Users</span><strong id='ui-discord-users' style='font-family:monospace;'>—</strong></div>
+                                </div>
                             </div>
-                            <div class='gateway-value' id='ui-upstash-status'>—</div>
-                            <div class='diag-row'><span class='diag-row-label'>Latency</span><strong id='ui-upstash-ping' style='font-family:monospace; font-size:0.85em;'>—</strong></div>
-                        </div>
-                        
-                        <div class='gateway-card' id='card-rewarble' style='animation-delay:0.7s'>
-                            <div class='gateway-top-bar' id='glow-rewarble' style='background:var(--text-muted);'></div>
-                            <div class='diag-card-label' style='margin-bottom:10px;'>
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><path d="M12 22C6.48 22 2 17.52 2 12S6.48 2 12 2s10 4.48 10 10-4.48 10-10 10z"/><path d="M15 9H9v6h6V9z"/></svg>
-                                Rewarble API
+                            
+                            <div id='card-upstash' style='background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:18px;padding:18px;position:relative;overflow:hidden;transition:border-color 0.3s ease,transform 0.3s cubic-bezier(0.2,0.8,0.2,1);animation:fadeUp 0.5s cubic-bezier(0.2,0.8,0.2,1) 0.6s both;' onmouseover="this.style.borderColor='rgba(239,68,68,0.3)';this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.05)';this.style.transform='translateY(0)'">
+                                <div id='glow-upstash' style='position:absolute;top:0;left:0;right:0;height:3px;background:rgba(255,255,255,0.1);border-radius:18px 18px 0 0;transition:all 1s ease;'></div>
+                                <div style='display:flex;align-items:center;gap:7px;margin-bottom:12px;'>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3"/></svg>
+                                    <span style='font-size:0.72em;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:rgba(255,255,255,0.4);'>Upstash DB</span>
+                                </div>
+                                <div id='ui-upstash-status' style='font-size:1.4em;font-weight:800;color:#fff;margin-bottom:12px;'>—</div>
+                                <div style='display:flex;justify-content:space-between;font-size:0.75em;'><span style='color:rgba(255,255,255,0.3);'>Latency</span><strong id='ui-upstash-ping' style='font-family:monospace;'>—</strong></div>
                             </div>
-                            <div class='gateway-value' id='ui-rewarble-status'>—</div>
-                            <div class='diag-row'><span class='diag-row-label'>Latency</span><strong id='ui-rewarble-ping' style='font-family:monospace; font-size:0.85em;'>—</strong></div>
+                            
+                            <div id='card-rewarble' style='background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:18px;padding:18px;position:relative;overflow:hidden;transition:border-color 0.3s ease,transform 0.3s cubic-bezier(0.2,0.8,0.2,1);animation:fadeUp 0.5s cubic-bezier(0.2,0.8,0.2,1) 0.7s both;' onmouseover="this.style.borderColor='rgba(16,185,129,0.3)';this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.05)';this.style.transform='translateY(0)'">
+                                <div id='glow-rewarble' style='position:absolute;top:0;left:0;right:0;height:3px;background:rgba(255,255,255,0.1);border-radius:18px 18px 0 0;transition:all 1s ease;'></div>
+                                <div style='display:flex;align-items:center;gap:7px;margin-bottom:12px;'>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M15 9H9v6h6V9z"/></svg>
+                                    <span style='font-size:0.72em;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:rgba(255,255,255,0.4);'>Rewarble API</span>
+                                </div>
+                                <div id='ui-rewarble-status' style='font-size:1.4em;font-weight:800;color:#fff;margin-bottom:12px;'>—</div>
+                                <div style='display:flex;justify-content:space-between;font-size:0.75em;'><span style='color:rgba(255,255,255,0.3);'>Latency</span><strong id='ui-rewarble-ping' style='font-family:monospace;'>—</strong></div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
-            
-                        <div id='terminal' class='tab-content'>
+            <div id='terminal' class='tab-content'>
                 <div class='box' style='background:#050505;'>
                     <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;'>
                         <h2 style='margin:0; font-family:monospace; color:var(--accent-green);'>root@nexus:~# system_logs</h2>
@@ -7096,7 +7117,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                         document.getElementById('ui-bw-txt').innerText = pct + '%';
                         document.getElementById('ui-bw-details').innerText = bwMB + ' MB / 5.00 GB';
                         
-                        const circumference = 314.16;
+                        const circumference = 251.33; // 2*pi*40 matching new ring SVG
                         const offset = circumference - (pct / 100) * circumference;
                         document.getElementById('ui-bw-circle').style.strokeDashoffset = offset;
 
@@ -7177,7 +7198,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                     // Desktop: toggle 'closed' class
                     sidebar.classList.toggle('closed');
                 }
-            };;
+            };
         
         window.switchTab = function(tabId, btn) {
             if (window.innerWidth <= 900) {
@@ -7202,12 +7223,10 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                 }
                 const target = document.getElementById(tabId);
                 if(target) {
-                    target.classList.add('active');
                     target.style.display = 'block';
-                    // Trigger reflow for animations
+                    // Trigger reflow for GPU-composited animation
                     void target.offsetWidth;
-                    target.style.animation = 'none';
-                    target.style.animation = 'fadeInSmooth 0.4s cubic-bezier(0.25, 1, 0.5, 1)';
+                    target.classList.add('active');
                 }
                 if(btn) btn.classList.add('active');
                 
