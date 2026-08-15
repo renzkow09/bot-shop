@@ -1298,13 +1298,13 @@ async function generateTranscript(channel) {
            ============================================ */
         * { -webkit-tap-highlight-color: transparent; }
         
-        .nav-btn, .admin-btn, .card, .glass-panel, .product-card,
-        .feed-item, .kanban-card, .ticket-item, .modal-content {
+        /* GPU acceleration only where needed */
+        .nav-btn, .admin-btn {
             will-change: transform;
+        }
+        .card, .glass-panel {
             transform: translateZ(0);
             -webkit-transform: translateZ(0);
-            backface-visibility: hidden;
-            -webkit-backface-visibility: hidden;
         }
         .main-content {
             -webkit-overflow-scrolling: touch;
@@ -1439,9 +1439,11 @@ async function generateTranscript(channel) {
         .diag-noise {
             position: absolute;
             inset: 0;
-            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+            background-image: 
+                radial-gradient(circle at 20% 80%, rgba(255,255,255,0.015) 1px, transparent 1px),
+                radial-gradient(circle at 80% 20%, rgba(255,255,255,0.015) 1px, transparent 1px);
+            background-size: 40px 40px, 30px 30px;
             pointer-events: none;
-            opacity: 0.4;
             z-index: 0;
             border-radius: inherit;
         }
@@ -1756,7 +1758,17 @@ async function generateTranscript(channel) {
             100% { transform: scale(2.5); opacity: 0; }
         }
 
-    </style>
+    
+        /* Performance: prevent nested backdrop-filter */
+        .diag-container .diag-card {
+            backdrop-filter: none;
+            -webkit-backdrop-filter: none;
+        }
+        .sidebar .nav-btn {
+            backdrop-filter: none;
+            -webkit-backdrop-filter: none;
+        }
+        </style>
 
         </head><body><h2>Transcript of ${channel.name}</h2>`;
         
@@ -4239,8 +4251,13 @@ const server = http.createServer(async (req, res) => {
         .bot-status { display:flex; align-items:center; gap:8px; background:rgba(var(--accent-green-rgb),0.08); border:1px solid rgba(var(--accent-green-rgb),0.18); padding:6px 14px; border-radius:20px; font-weight:600; color:var(--accent-green); font-size:0.82em; letter-spacing:0.5px; backdrop-filter:blur(12px); }
 
         /* === TAB SYSTEM === */
-        .tab-content { display:none; animation:fadeUp 0.45s var(--spring) both; }
-        .tab-content.active { display:block; }
+        .tab-content { display:none; }
+        .tab-content.active {
+            display: block;
+            animation: fadeUp 0.45s var(--spring) both;
+        }
+        /* For monitoring tab which needs special grid layout */
+        #monitoring.active { display: block; }
 
         /* === STATS GRID === */
         .stats-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:18px; margin-bottom:28px; }
@@ -7014,7 +7031,13 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         };
         
         // 🚀 [UI_ACTION_ASYNC: runDiagnostics] - Action asynchrone d'interface Dashboard
-        window.runDiagnostics = async function() {
+        window.runDiagnostics = async function() { 
+                // Animate scan button
+                const scanBtn = document.getElementById('deep-scan-btn');
+                if (scanBtn) { scanBtn.classList.add('scanning'); }
+                const diagMain = document.getElementById('diag-main');
+                if (diagMain) { diagMain.classList.add('scanning'); }
+                
             if(document.getElementById('ui-upstash-status')) document.getElementById('ui-upstash-status').innerHTML = '<span style="animation:pulse 1s infinite">⏳</span> Ping...';
             if(document.getElementById('ui-rewarble-status')) document.getElementById('ui-rewarble-status').innerHTML = '<span style="animation:pulse 1s infinite">⏳</span> Ping...';
             if(document.getElementById('ui-discord-ws')) document.getElementById('ui-discord-ws').innerText = '...';
@@ -7132,21 +7155,29 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             } catch(e) { 
                 console.error('Diag Error:', e); 
                 showToast('Diagnostics Failed: ' + e.message, 'error'); 
+            } finally {
+                const scanBtn = document.getElementById('deep-scan-btn');
+                if (scanBtn) scanBtn.classList.remove('scanning');
+                const diagMain = document.getElementById('diag-main');
+                if (diagMain) diagMain.classList.remove('scanning');
             }
         };
         
         
         // 🚀 [UI_ACTION: toggleSidebar] - Action d'interface Dashboard
         window.toggleSidebar = function() {
-            const sidebar = document.getElementById('sidebar');
-            const overlay = document.getElementById('mobile-overlay');
-            if (window.innerWidth <= 900) {
-                if(sidebar) sidebar.classList.toggle('mobile-open');
-                if(overlay) overlay.classList.toggle('active');
-            } else {
-                if(sidebar) sidebar.classList.toggle('closed');
-            }
-        };
+                const sidebar = document.getElementById('sidebar');
+                const overlay = document.getElementById('mobile-overlay');
+                if (!sidebar) return;
+                // Mobile: toggle 'open' class
+                if (window.innerWidth <= 768) {
+                    sidebar.classList.toggle('open');
+                    if (overlay) overlay.classList.toggle('active');
+                } else {
+                    // Desktop: toggle 'closed' class
+                    sidebar.classList.toggle('closed');
+                }
+            };;
         
         window.switchTab = function(tabId, btn) {
             if (window.innerWidth <= 900) {
