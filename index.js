@@ -1,4 +1,4 @@
-try { require('dotenv').config({ path: __dirname + '/.env' }); } catch (e) { console.warn("âš ï¸ dotenv module not found. Running with system environment variables."); }
+try { require('dotenv').config({ path: __dirname + '/.env' }); } catch (e) { console.warn("⚠️ dotenv module not found. Running with system environment variables."); }
 // === [ANCHOR: IMPORTS_AND_CRASH_HANDLER] ===
 const { Client, GatewayIntentBits, Partials, ButtonBuilder, ActionRowBuilder, ButtonStyle, ChannelType, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, EmbedBuilder, AttachmentBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 
@@ -34,14 +34,14 @@ let webauthnServer;
 try {
     webauthnServer = require('@simplewebauthn/server');
 } catch (e) {
-    console.warn("âš ï¸ @simplewebauthn/server not found. Attempting dynamic installation (Render Hotfix)...");
+    console.warn("⚠️ @simplewebauthn/server not found. Attempting dynamic installation (Render Hotfix)...");
     try {
         require('child_process').execSync('npm install @simplewebauthn/server', { stdio: 'inherit' });
         const resolvedPath = require('child_process').execSync("node -e \"console.log(require.resolve('@simplewebauthn/server'))\"").toString().trim();
         webauthnServer = require(resolvedPath);
-        console.log("âœ… @simplewebauthn/server installed successfully.");
+        console.log("✅ @simplewebauthn/server installed successfully.");
     } catch (err) {
-        console.error("âŒ Failed to install @simplewebauthn/server:", err.message);
+        console.error("❌ Failed to install @simplewebauthn/server:", err.message);
         process.exit(1);
     }
 }
@@ -86,11 +86,11 @@ const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
 const REWARBLE_API_KEY = process.env.REWARBLE_API_KEY;
 const REVIEW_CHANNEL_ID = "1521625370929922078"; 
 const SHOP_CHANNEL_ID = "1520803761130311970"; 
-// ðŸ‘‘ VIP Role ID
+// 👑 VIP Role ID
 const VIP_ROLE_ID = "REMPLACE_AVEC_ID_ROLE_VIP"; 
 
 if (!DISCORD_BOT_TOKEN) {
-    console.error("âš ï¸ WARNING: DISCORD_BOT_TOKEN is missing! Bot will not connect to Discord.");
+    console.error("⚠️ WARNING: DISCORD_BOT_TOKEN is missing! Bot will not connect to Discord.");
 }
 
 const REWARBLE_API_URL = "https://api.rewarble.com/client/1.00/redeem"; 
@@ -124,7 +124,7 @@ setInterval(() => {
 const MAX_LOGS = 500;
 let globalLogs = [];
 
-    // ðŸš€ [FUNCTION: redactSecrets] - DÃ©claration de fonction
+    // 🚀 [FUNCTION: redactSecrets] - Déclaration de fonction
 function redactSecrets(text) {
     if (typeof text !== 'string') text = String(text);
     const secrets = [DISCORD_BOT_TOKEN, REWARBLE_API_KEY, DASHBOARD_PIN].filter(Boolean);
@@ -134,7 +134,7 @@ function redactSecrets(text) {
     return text;
 }
 
-    // ðŸš€ [FUNCTION: systemLog] - DÃ©claration de fonction
+    // 🚀 [FUNCTION: systemLog] - Déclaration de fonction
 function systemLog(level, component, message) {
     const now = new Date();
     const timeStr = now.toTimeString().split(' ')[0]; 
@@ -166,33 +166,33 @@ let memoryStats = {
     last_update: Date.now() 
 };
 
-// ðŸ“¦ INTEGRATION: Stock initialized to infinity ("âˆž")
+// 📦 INTEGRATION: Stock initialized to infinity ("∞")
 const INITIAL_PRODUCTS = {
-    "1": { name: "Moderation Bot", price: "5", link: "https://github.com/...", category: "ðŸ’¬ DISCORD", stock: "âˆž", desc: "Advanced moderation with AI.", upsellId: "6", upsellDiscount: 20 }, 
-    "2": { name: "Economy Bot", price: "5", link: "https://github.com/...", category: "ðŸ’¬ DISCORD", stock: "âˆž", desc: "Economy system." },
-    "3": { name: "Crypto Tracker", price: "5", link: "https://github.com/...", category: "ðŸ“± TELEGRAM", stock: "âˆž", desc: "Tracks crypto prices." }, 
-    "4": { name: "Dashboard Template", price: "5", link: "https://github.com/...", category: "ðŸŒ WEB", stock: "âˆž", desc: "Web dashboard." },
-    "5": { name: "Utility Bot", price: "5", link: "https://github.com/...", category: "ðŸ› ï¸ UTILITY", stock: "âˆž", desc: "General utility bot." }, 
-    "VIP": { name: "ðŸ‘‘ Developer Pass", price: "20", link: "Welcome to VIP!", category: "ðŸ‘‘ SUBSCRIPTION", stock: "âˆž", desc: "Access to all templates." }
+    "1": { name: "Moderation Bot", price: "5", link: "https://github.com/...", category: "💬 DISCORD", stock: "∞", desc: "Advanced moderation with AI.", upsellId: "6", upsellDiscount: 20 }, 
+    "2": { name: "Economy Bot", price: "5", link: "https://github.com/...", category: "💬 DISCORD", stock: "∞", desc: "Economy system." },
+    "3": { name: "Crypto Tracker", price: "5", link: "https://github.com/...", category: "📱 TELEGRAM", stock: "∞", desc: "Tracks crypto prices." }, 
+    "4": { name: "Dashboard Template", price: "5", link: "https://github.com/...", category: "🌐 WEB", stock: "∞", desc: "Web dashboard." },
+    "5": { name: "Utility Bot", price: "5", link: "https://github.com/...", category: "🛠️ UTILITY", stock: "∞", desc: "General utility bot." }, 
+    "VIP": { name: "👑 Developer Pass", price: "20", link: "Welcome to VIP!", category: "👑 SUBSCRIPTION", stock: "∞", desc: "Access to all templates." }
 };
 
 const INITIAL_BUY_LINKS = {
-    "1": { label: "ðŸ’³ Buy Â£5", url: "https://www.eneba.com/rewarble-rewarble-revolut-5-gbp-voucher-global" },
-    "2": { label: "ðŸ’³ Buy Â£10", url: "https://www.eneba.com/rewarble-rewarble-revolut-10-gbp-voucher-global" },
-    "3": { label: "ðŸ’³ Buy Â£15", url: "https://www.eneba.com/rewarble-rewarble-revolut-15-gbp-voucher-global" },
-    "4": { label: "ðŸ’³ Buy Â£20", url: "https://www.eneba.com/rewarble-rewarble-revolut-20-gbp-voucher-global" }
+    "1": { label: "💳 Buy £5", url: "https://www.eneba.com/rewarble-rewarble-revolut-5-gbp-voucher-global" },
+    "2": { label: "💳 Buy £10", url: "https://www.eneba.com/rewarble-rewarble-revolut-10-gbp-voucher-global" },
+    "3": { label: "💳 Buy £15", url: "https://www.eneba.com/rewarble-rewarble-revolut-15-gbp-voucher-global" },
+    "4": { label: "💳 Buy £20", url: "https://www.eneba.com/rewarble-rewarble-revolut-20-gbp-voucher-global" }
 };
 
 // === [ANCHOR: CLOUD_SYNC_FUNCTIONS] ===
-    // ðŸš€ [FUNCTION: notifyAdminPhone] - DÃ©claration de fonction
+    // 🚀 [FUNCTION: notifyAdminPhone] - Déclaration de fonction
 async function notifyAdminPhone(title, msg) {
     try {
         const admin = await client.users.fetch(ADMIN_DISCORD_ID);
-        if (admin) await admin.send(`ðŸ“± **NOTIFICATION SYSTÃˆME**\n**${title}**\n> ${msg}`);
+        if (admin) await admin.send(`📱 **NOTIFICATION SYSTÈME**\n**${title}**\n> ${msg}`);
     } catch(e) {}
 }
 
-    // ðŸš€ [FUNCTION: addActivity] - DÃ©claration de fonction
+    // 🚀 [FUNCTION: addActivity] - Déclaration de fonction
 function addActivity(type, message) {
     if (!memoryStats.activity_feed) memoryStats.activity_feed = [];
     memoryStats.activity_feed.unshift({ type, message, time: Date.now() });
@@ -294,7 +294,7 @@ async function backupToDiscord() {
     }
 }
 
-// ðŸš€ [FUNCTION: loadCloudStats]
+// 🚀 [FUNCTION: loadCloudStats]
 
 async function loadCloudStats() {
     const url = process.env.UPSTASH_REDIS_REST_URL;
@@ -379,23 +379,23 @@ function ensureMemoryInitialized() {
             if (!Array.isArray(memoryStats.patchnotes)) memoryStats.patchnotes = [];
             
             if (!memoryStats.patchnotes.some(p => p.text.includes("Intelligence Artificielle: Thinking High"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ§  Intelligence Artificielle: Thinking High\n\n- IntÃ©gration de la nouvelle architecture Gemini 3.1 Pro via le SDK @google/genai.\n- Activation du paramÃ¨tre 'ThinkingLevel.HIGH' pour l'analyse financiÃ¨re profonde et l'Ã©tude de marchÃ© afin de dÃ©bloquer une capacitÃ© de rÃ©flexion et d'extrapolation optimale des donnÃ©es.\n- RÃ©solution d'un dÃ©faut de synchronisation RAM empÃªchant les donnÃ©es restaurÃ©es (stats.json) de s'afficher sur l'interface." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🧠 Intelligence Artificielle: Thinking High\n\n- Intégration de la nouvelle architecture Gemini 3.1 Pro via le SDK @google/genai.\n- Activation du paramètre 'ThinkingLevel.HIGH' pour l'analyse financière profonde et l'étude de marché afin de débloquer une capacité de réflexion et d'extrapolation optimale des données.\n- Résolution d'un défaut de synchronisation RAM empêchant les données restaurées (stats.json) de s'afficher sur l'interface." });
                 syncCloud();
             }
             if (!memoryStats.patchnotes.some(p => p.text.includes("Migration: SDK Google GenAI"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ”§ Migration: SDK Google GenAI\n\n- Remplacement des appels `fetch` bruts par le SDK officiel `@google/genai` pour une meilleure stabilitÃ© et gestion des erreurs.\n- Le problÃ¨me de limite de quota (Service Busy / You exceed) est liÃ© Ã  l'utilisation du modÃ¨le `gemini-3.1-pro-preview` qui nÃ©cessite une clÃ© API facturÃ©e sur Google Cloud. Si le message persiste sur Render, il faut upgrader le compte Google Cloud de la clÃ© API, ou repasser sur `gemini-3.5-flash`." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Migration: SDK Google GenAI\n\n- Remplacement des appels `fetch` bruts par le SDK officiel `@google/genai` pour une meilleure stabilité et gestion des erreurs.\n- Le problème de limite de quota (Service Busy / You exceed) est lié à l'utilisation du modèle `gemini-3.1-pro-preview` qui nécessite une clé API facturée sur Google Cloud. Si le message persiste sur Render, il faut upgrader le compte Google Cloud de la clé API, ou repasser sur `gemini-3.5-flash`." });
                 syncCloud();
             }
 
             
             if (!memoryStats.patchnotes.some(p => p.text.includes("QR Code & WebAuthn (Passkeys) Integration"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ“± SÃ©curitÃ©: QR Code & WebAuthn (Passkeys) Integration\n\n- Remplacement complet du systÃ¨me de PIN sur desktop par un systÃ¨me de connexion ultra-premium par QR Code.\n- IntÃ©gration de la technologie WebAuthn (Passkeys). En scannant le QR code avec un iPhone, l'authentification se fait via FaceID/TouchID.\n- Interface Mobile-first avec animations subtiles et retours haptiques natifs du navigateur.\n- Le tableau de bord de bureau interroge en temps rÃ©el (polling) l'Ã©tat de la session et se dÃ©verrouille automatiquement." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "📱 Sécurité: QR Code & WebAuthn (Passkeys) Integration\n\n- Remplacement complet du système de PIN sur desktop par un système de connexion ultra-premium par QR Code.\n- Intégration de la technologie WebAuthn (Passkeys). En scannant le QR code avec un iPhone, l'authentification se fait via FaceID/TouchID.\n- Interface Mobile-first avec animations subtiles et retours haptiques natifs du navigateur.\n- Le tableau de bord de bureau interroge en temps réel (polling) l'état de la session et se déverrouille automatiquement." });
                 syncCloud();
             }
 
             
             if (!memoryStats.patchnotes.some(p => p.text.includes("Fix WebAuthn Render Crash"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ”§ RÃ©solution de Bug Critique: Crash au dÃ©ploiement (WebAuthn)\n\n- L'environnement cloud plantait avec l'erreur (Cannot find module '@simplewebauthn/server') car la dÃ©pendance manquait sur le serveur.\n- ImplÃ©mentation d'un systÃ¨me d'auto-installation Ã  la volÃ©e (Zero Install). Si le module est absent, le bot l'installe dynamiquement au dÃ©marrage, garantissant la rÃ©silience du fichier index.js unique." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug Critique: Crash au déploiement (WebAuthn)\n\n- L'environnement cloud plantait avec l'erreur (Cannot find module '@simplewebauthn/server') car la dépendance manquait sur le serveur.\n- Implémentation d'un système d'auto-installation à la volée (Zero Install). Si le module est absent, le bot l'installe dynamiquement au démarrage, garantissant la résilience du fichier index.js unique." });
                 syncCloud();
             }
 
@@ -412,13 +412,13 @@ function ensureMemoryInitialized() {
             
             
             if (!memoryStats.patchnotes.some(p => p.text.includes("Revamp Design Connexion"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸŽ¨ AmÃ©lioration UI/UX: Ã‰cran de Connexion\n\n- **Boutons ModernisÃ©s**: Refonte esthÃ©tique des boutons de l'Ã©cran de connexion (effets de survol animÃ©s, lueurs dynamiques).\n- **SÃ©lecteur Passkey/PIN**: Remplacement de l'ancien sÃ©lecteur par un composant 'segment' fluide et animÃ© (type Apple) pour basculer de maniÃ¨re transparente entre les modes de connexion.\n- **Input PIN**: Stylisation du champ de saisie du PIN avec un espacement amÃ©liorÃ© et un focus lumineux." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🎨 Amélioration UI/UX: Écran de Connexion\n\n- **Boutons Modernisés**: Refonte esthétique des boutons de l'écran de connexion (effets de survol animés, lueurs dynamiques).\n- **Sélecteur Passkey/PIN**: Remplacement de l'ancien sélecteur par un composant 'segment' fluide et animé (type Apple) pour basculer de manière transparente entre les modes de connexion.\n- **Input PIN**: Stylisation du champ de saisie du PIN avec un espacement amélioré et un focus lumineux." });
                 syncCloud();
             }
 
             
-            if (!memoryStats.patchnotes.some(p => p.text.includes("Correction UI: Ã‰cran de Connexion"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸŽ¨ AmÃ©lioration UI/UX: Ã‰cran de Connexion\n\n- **Boutons ModernisÃ©s**: Refonte esthÃ©tique des boutons de l'Ã©cran de connexion avec une lueur dynamique, des effets de survol animÃ©s et un fond dÃ©gradÃ© Ã©lÃ©gant.\n- **SÃ©lecteur Passkey/PIN**: Remplacement de l'ancien sÃ©lecteur grisÃ¢tre par un composant 'segment' fluide avec glissement animÃ© (faÃ§on iOS) pour un ressenti ultra-premium.\n- **Input PIN**: Stylisation du champ de saisie du PIN avec un espacement accentuÃ©, un tracking plus large et une bordure focus lumineuse bleue." });
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Correction UI: Écran de Connexion"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🎨 Amélioration UI/UX: Écran de Connexion\n\n- **Boutons Modernisés**: Refonte esthétique des boutons de l'écran de connexion avec une lueur dynamique, des effets de survol animés et un fond dégradé élégant.\n- **Sélecteur Passkey/PIN**: Remplacement de l'ancien sélecteur grisâtre par un composant 'segment' fluide avec glissement animé (façon iOS) pour un ressenti ultra-premium.\n- **Input PIN**: Stylisation du champ de saisie du PIN avec un espacement accentué, un tracking plus large et une bordure focus lumineuse bleue." });
                 syncCloud();
             }
 
@@ -430,168 +430,168 @@ function ensureMemoryInitialized() {
             
             
             if (!memoryStats.patchnotes.some(p => p.text.includes("Upstash Sleep Wipe"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ›¡ï¸ RÃ©solution de Bug Critique: Perte de donnÃ©es (Upstash Sleep Wipe)\n\n- **Cause**: Lorsque Render mettait le serveur en veille prolongÃ©e, la base de donnÃ©es Upstash Redis pouvait purger les donnÃ©es inactives pour libÃ©rer de la mÃ©moire sur l'offre gratuite. Au rÃ©veil, le serveur rÃ©cupÃ©rait un JSON vide (HTTP 200 OK mais rÃ©sultat 'null') d'Upstash.\n- Le bot ignorait ce 'null' car ce n'Ã©tait pas une erreur 400 (Quota). Il initialisait alors une base de donnÃ©es vide et, voyant qu'elle contenait des 'patchnotes', la considÃ©rait comme valide et Ã©crasait toutes les sauvegardes cloud et Discord existantes !\n- **Solution**: L'absence de donnÃ©es valides dans Upstash dÃ©clenche dÃ©sormais un appel immÃ©diat de sauvetage au module DaaD (Discord-as-a-Database). Le script de backup (backupToDiscord) bloque aussi strictement tout envoi de sauvegarde si aucune transaction financiÃ¨re n'existe." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ Résolution de Bug Critique: Perte de données (Upstash Sleep Wipe)\n\n- **Cause**: Lorsque Render mettait le serveur en veille prolongée, la base de données Upstash Redis pouvait purger les données inactives pour libérer de la mémoire sur l'offre gratuite. Au réveil, le serveur récupérait un JSON vide (HTTP 200 OK mais résultat 'null') d'Upstash.\n- Le bot ignorait ce 'null' car ce n'était pas une erreur 400 (Quota). Il initialisait alors une base de données vide et, voyant qu'elle contenait des 'patchnotes', la considérait comme valide et écrasait toutes les sauvegardes cloud et Discord existantes !\n- **Solution**: L'absence de données valides dans Upstash déclenche désormais un appel immédiat de sauvetage au module DaaD (Discord-as-a-Database). Le script de backup (backupToDiscord) bloque aussi strictement tout envoi de sauvegarde si aucune transaction financière n'existe." });
                 syncCloud();
             }
 
             
             if (!memoryStats.patchnotes.some(p => p.text.includes("Schema Validation & Recovery"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ›¡ï¸ Schema Validation & Rescue Data Recovery\n\n- **Cause**: Les donnÃ©es du tableau de bord avaient Ã©tÃ© corrompues ou effacÃ©es Ã  cause d'un objet malformÃ© remontÃ© par Upstash lors du rÃ©veil du serveur (sleep wipe).\n- **Solution**: CrÃ©ation d'une couche de **Schema Validation** robuste qui vÃ©rifie l'intÃ©gritÃ© structurelle des objets JSON. Le bot rejette toute base vide ou corrompue et dÃ©clenche instantanÃ©ment le module de fallback. Les anciennes donnÃ©es ont Ã©tÃ© extraites avec succÃ¨s depuis les backups rÃ©siduels et injectÃ©es !\n- **Feature**: RÃ©activation et optimisation du module d'intelligence artificielle Gemini avec @google/genai, en mode **ThinkingLevel.HIGH** sur le modÃ¨le `gemini-3.1-pro-preview`." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ Schema Validation & Rescue Data Recovery\n\n- **Cause**: Les données du tableau de bord avaient été corrompues ou effacées à cause d'un objet malformé remonté par Upstash lors du réveil du serveur (sleep wipe).\n- **Solution**: Création d'une couche de **Schema Validation** robuste qui vérifie l'intégrité structurelle des objets JSON. Le bot rejette toute base vide ou corrompue et déclenche instantanément le module de fallback. Les anciennes données ont été extraites avec succès depuis les backups résiduels et injectées !\n- **Feature**: Réactivation et optimisation du module d'intelligence artificielle Gemini avec @google/genai, en mode **ThinkingLevel.HIGH** sur le modèle `gemini-3.1-pro-preview`." });
                 syncCloud();
             }
 
             if (!memoryStats.patchnotes.some(p => p.text.includes("GoogleGenAI is not defined - Real Fix"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ”§ RÃ©solution de Bug Critique: GoogleGenAI is not defined (Real Fix)\n\n- Le module d'IA financiÃ¨re plantait l'interface ('GoogleGenAI is not defined') car le code tentait encore d'instancier la classe du SDK supprimÃ©.\n- Remplacement complet et effectif des appels d'IA par l'API REST native via Axios pointant vers le modÃ¨le `gemini-1.5-flash`. Le crash de l'interface Deep Analysis et Market Check est dÃ©finitivement rÃ©solu." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug Critique: GoogleGenAI is not defined (Real Fix)\n\n- Le module d'IA financière plantait l'interface ('GoogleGenAI is not defined') car le code tentait encore d'instancier la classe du SDK supprimé.\n- Remplacement complet et effectif des appels d'IA par l'API REST native via Axios pointant vers le modèle `gemini-1.5-flash`. Le crash de l'interface Deep Analysis et Market Check est définitivement résolu." });
                 syncCloud();
             }
 
             if (!memoryStats.patchnotes.some(p => p.text.includes("TimeZone Shift"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸŒ Correction de Localisation: TimeZone Shift (Europe/Paris)\n\n- **Alignement des DonnÃ©es**: Les statistiques (Revenus d'aujourd'hui, Inscriptions d'aujourd'hui) utilisaient l'heure universelle (UTC) du serveur Cloud Run. AprÃ¨s minuit UTC (soit 1h ou 2h du matin en France), le dashboard affichait toujours les donnÃ©es de la veille.\n- **Formatage Local**: ImplÃ©mentation de `Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris' })` pour toutes les dates de rÃ©fÃ©rence (today/yesterday), garantissant que 'Aujourd'hui' bascule bien Ã  minuit, heure franÃ§aise." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🌍 Correction de Localisation: TimeZone Shift (Europe/Paris)\n\n- **Alignement des Données**: Les statistiques (Revenus d'aujourd'hui, Inscriptions d'aujourd'hui) utilisaient l'heure universelle (UTC) du serveur Cloud Run. Après minuit UTC (soit 1h ou 2h du matin en France), le dashboard affichait toujours les données de la veille.\n- **Formatage Local**: Implémentation de `Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris' })` pour toutes les dates de référence (today/yesterday), garantissant que 'Aujourd'hui' bascule bien à minuit, heure française." });
                 syncCloud();
             }
 
             if (!memoryStats.patchnotes.some(p => p.text.includes("Cache Bypass & Full Data Restoration"))) {
-    memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ”§ FIX: Cache Bypass & Full Data Restoration\n\n- L'interface Dashboard (navigateur) conservait en cache l'ancienne rÃ©ponse vide (quand le bug Ã©tait prÃ©sent). Un mÃ©canisme de 'Cache-Busting' (brouilleur de cache) a Ã©tÃ© injectÃ© dans la requÃªte `/api/init-data` pour forcer le navigateur Ã  afficher vos vraies donnÃ©es.\n- Ajout des en-tÃªtes `Cache-Control: no-store` cÃ´tÃ© serveur pour garantir que la synchronisation est instantanÃ©e.\n- La protection de l'API avec vos cookies de session (sÃ©curitÃ©) est maintenue sans causer de faux 401 Unauthorized." });
+    memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 FIX: Cache Bypass & Full Data Restoration\n\n- L'interface Dashboard (navigateur) conservait en cache l'ancienne réponse vide (quand le bug était présent). Un mécanisme de 'Cache-Busting' (brouilleur de cache) a été injecté dans la requête `/api/init-data` pour forcer le navigateur à afficher vos vraies données.\n- Ajout des en-têtes `Cache-Control: no-store` côté serveur pour garantir que la synchronisation est instantanée.\n- La protection de l'API avec vos cookies de session (sécurité) est maintenue sans causer de faux 401 Unauthorized." });
     syncCloud();
 }
-            if (!memoryStats.patchnotes.some(p => p.text.includes("Restauration ForcÃ©e : ID SpÃ©cifique"))) {
-    memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸš¨ Restauration ForcÃ©e : ID SpÃ©cifique (DaaD)\n\n- **Action** : Le systÃ¨me de restauration des donnÃ©es (Discord as a Database) a Ã©tÃ© reprogrammÃ© pour cibler explicitement votre salon privÃ© d'archives (ID: 1528389202058940497).\n- **RÃ©sultat** : 100% de vos donnÃ©es ont Ã©tÃ© extraites avec succÃ¨s depuis le dernier fichier `stats.json` valide prÃ©sent dans ce salon.\n- **Cloud** : La base de donnÃ©es Upstash a Ã©tÃ© resynchronisÃ©e de force avec ces informations pour garantir un retour immÃ©diat Ã  la normale sur votre Dashboard." });
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Restauration Forcée : ID Spécifique"))) {
+    memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🚨 Restauration Forcée : ID Spécifique (DaaD)\n\n- **Action** : Le système de restauration des données (Discord as a Database) a été reprogrammé pour cibler explicitement votre salon privé d'archives (ID: 1528389202058940497).\n- **Résultat** : 100% de vos données ont été extraites avec succès depuis le dernier fichier `stats.json` valide présent dans ce salon.\n- **Cloud** : La base de données Upstash a été resynchronisée de force avec ces informations pour garantir un retour immédiat à la normale sur votre Dashboard." });
     syncCloud();
 }
             if (!memoryStats.patchnotes.some(p => p.text.includes("Correction Critique : Crash Client JS"))) {
-    memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸš¨ FIX: Correction Critique : Crash Client JS\n\n- **ProblÃ¨me** : Une erreur de syntaxe invisible (guillemets non Ã©chappÃ©s) bloquait l'exÃ©cution du JavaScript dans le navigateur.\n- **SymptÃ´me** : Boutons de navigation inactifs et chargement des donnÃ©es figÃ© (Ã©cran noir/vide de donnÃ©es).\n- **RÃ©solution** : Validation stricte des attributs HTML gÃ©nÃ©rÃ©s dynamiquement (substitution sÃ©curisÃ©e via entitÃ©s &quot;). Les WebSockets et interactions sont de retour." });
+    memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🚨 FIX: Correction Critique : Crash Client JS\n\n- **Problème** : Une erreur de syntaxe invisible (guillemets non échappés) bloquait l'exécution du JavaScript dans le navigateur.\n- **Symptôme** : Boutons de navigation inactifs et chargement des données figé (écran noir/vide de données).\n- **Résolution** : Validation stricte des attributs HTML générés dynamiquement (substitution sécurisée via entités &quot;). Les WebSockets et interactions sont de retour." });
     syncCloud();
 }
             if (!memoryStats.patchnotes.some(p => p.text.includes("UI Dashboard - Navigation & Chat Re-design"))) {
-    memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸŽ¨ UPDATE: UI Dashboard - Navigation & Chat Re-design\n\n- **Navigation (Sidebar)** : Ajout d'icÃ´nes SVG pour chaque onglet. RÃ©vision du blur, background, et des espacements pour un look beaucoup plus aÃ©rÃ© et moderne.\n- **Organisation du Chat** : Nouveau design de l'interface Livechat avec `display: flex` forÃ§ant une hauteur de 75vh. Les bulles de discussions sont plus esthÃ©tiques (dÃ©gradÃ©s, ombres, coins arrondis intelligents).\n- **ExpÃ©rience Utilisateur** : SÃ©paration nette entre la liste des tickets et la fenÃªtre de discussion, rendant le tout plus comprÃ©hensible." });
+    memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🎨 UPDATE: UI Dashboard - Navigation & Chat Re-design\n\n- **Navigation (Sidebar)** : Ajout d'icônes SVG pour chaque onglet. Révision du blur, background, et des espacements pour un look beaucoup plus aéré et moderne.\n- **Organisation du Chat** : Nouveau design de l'interface Livechat avec `display: flex` forçant une hauteur de 75vh. Les bulles de discussions sont plus esthétiques (dégradés, ombres, coins arrondis intelligents).\n- **Expérience Utilisateur** : Séparation nette entre la liste des tickets et la fenêtre de discussion, rendant le tout plus compréhensible." });
     syncCloud();
 }
-            if (!memoryStats.patchnotes.some(p => p.text.includes("FonctionnalitÃ©: Demande de Fermeture Ticket"))) {
-    memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸŒŸ NOUVEAU: Demande de Fermeture Ticket & UI Dashboard\n\n- **CÃ´tÃ© Client (Discord)** : Ajout d'un bouton interactif 'ðŸ”’ Request Close' dÃ¨s l'ouverture d'un ticket (Support & Shop). L'utilisateur peut ainsi signaler proprement son intention de fermer le channel.\n- **Temps RÃ©el (WebSockets)** : Lorsqu'un utilisateur clique sur le bouton, une notification est propulsÃ©e instantanÃ©ment sur le Dashboard de l'administrateur.\n- **UI Dashboard (Premium)** : Si l'admin est actif, une popup Ã©lÃ©gante lui propose d'accepter ou de refuser la fermeture. De plus, un indicateur ðŸ”’ clignotant (pulse) apparaÃ®t dans la liste des tickets, et une banniÃ¨re d'alerte rouge est affichÃ©e au-dessus du chat pour agir rapidement.\n- **Action** : Un clic sur 'Close Ticket' archive et supprime automatiquement le channel Discord." });
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Fonctionnalité: Demande de Fermeture Ticket"))) {
+    memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🌟 NOUVEAU: Demande de Fermeture Ticket & UI Dashboard\n\n- **Côté Client (Discord)** : Ajout d'un bouton interactif '🔒 Request Close' dès l'ouverture d'un ticket (Support & Shop). L'utilisateur peut ainsi signaler proprement son intention de fermer le channel.\n- **Temps Réel (WebSockets)** : Lorsqu'un utilisateur clique sur le bouton, une notification est propulsée instantanément sur le Dashboard de l'administrateur.\n- **UI Dashboard (Premium)** : Si l'admin est actif, une popup élégante lui propose d'accepter ou de refuser la fermeture. De plus, un indicateur 🔒 clignotant (pulse) apparaît dans la liste des tickets, et une bannière d'alerte rouge est affichée au-dessus du chat pour agir rapidement.\n- **Action** : Un clic sur 'Close Ticket' archive et supprime automatiquement le channel Discord." });
     syncCloud();
 }
             if (!memoryStats.patchnotes.some(p => p.text.includes("Coupure Dashboard & API Route"))) {
-    memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸš¨ HOTFIX: Coupure Dashboard & API Route\n\n- **ProblÃ¨me** : Le tableau de bord Ã©tait totalement vide et les communications coupÃ©es (impossible de lire ou rÃ©pondre aux tickets).\n- **Cause** : Le dernier patch censÃ© empÃªcher le cache du navigateur ajoutait un paramÃ¨tre `?t=timestamp` Ã  la requÃªte d'initialisation. Cependant, le routeur backend attendait l'URL exacte sans paramÃ¨tre. Le serveur renvoyait du texte au lieu des donnÃ©es, paralysant l'interface Javascript.\n- **Correction** : Le routeur accepte dÃ©sormais toutes les requÃªtes commenÃ§ant par `/api/init-data`. Le flux de donnÃ©es est rÃ©tabli et les communications rÃ©activÃ©es instantanÃ©ment." });
+    memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🚨 HOTFIX: Coupure Dashboard & API Route\n\n- **Problème** : Le tableau de bord était totalement vide et les communications coupées (impossible de lire ou répondre aux tickets).\n- **Cause** : Le dernier patch censé empêcher le cache du navigateur ajoutait un paramètre `?t=timestamp` à la requête d'initialisation. Cependant, le routeur backend attendait l'URL exacte sans paramètre. Le serveur renvoyait du texte au lieu des données, paralysant l'interface Javascript.\n- **Correction** : Le routeur accepte désormais toutes les requêtes commençant par `/api/init-data`. Le flux de données est rétabli et les communications réactivées instantanément." });
     syncCloud();
 }
             if (!memoryStats.patchnotes.some(p => p.text.includes("Framer Motion"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "âœ¨ AmÃ©lioration UI/UX: Animations avec Framer Motion\n\n- **Animations d'EntrÃ©e**: IntÃ©gration du moteur d'animation Framer Motion (via Motion One) pour interpoler l'apparition des cartes et des boutons lors du dÃ©filement.\n- **Interactions de Survol (Hover)**: Les effets de survol natifs CSS (transformations) ont Ã©tÃ© remplacÃ©s par des dÃ©lÃ©gations d'Ã©vÃ¨nements JavaScript (mouseover/mouseout) propulsÃ©es par Framer Motion.\n- **Performances**: L'utilisation du module ESM allÃ¨ge la charge rÃ©seau tout en garantissant des courbes de bÃ©zier fluides et une fluiditÃ© 60fps." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "✨ Amélioration UI/UX: Animations avec Framer Motion\n\n- **Animations d'Entrée**: Intégration du moteur d'animation Framer Motion (via Motion One) pour interpoler l'apparition des cartes et des boutons lors du défilement.\n- **Interactions de Survol (Hover)**: Les effets de survol natifs CSS (transformations) ont été remplacés par des délégations d'évènements JavaScript (mouseover/mouseout) propulsées par Framer Motion.\n- **Performances**: L'utilisation du module ESM allège la charge réseau tout en garantissant des courbes de bézier fluides et une fluidité 60fps." });
                 syncCloud();
             }
 
-            if (!memoryStats.patchnotes.some(p => p.text.includes("SÃ©curitÃ©: Blocage DoS & Reverse Proxy"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ›¡ï¸ Renforcement SÃ©curitÃ©: RÃ©solution DÃ©ni de Service (DoS) et IP\n\n- **Faille OOM (Memory Exhaustion)**: Certaines routes API (telles que `/api/action` et Passkey) acceptaient des payloads HTTP sans aucune limite de taille de body. Un attaquant pouvait saturer la RAM (buffer illimitÃ©) et faire crasher le serveur (OOM Kill). Des limites strictes de poids de body (1MB/5MB) couplÃ©es Ã  une destruction `req.socket.destroy()` ont Ã©tÃ© instaurÃ©es.\n- **Faille IP / Rate Limit Global**: DerriÃ¨re l'architecture Cloud Run (reverse proxy), `req.socket.remoteAddress` retournait toujours l'IP du Proxy. Par consÃ©quent, les mÃ©canismes Anti-Bruteforce et de limitation de dÃ©bit (Rate Limiting) bannissaient TOUS les utilisateurs si un seul dÃ©clenchait la sÃ©curitÃ©. L'IP est dÃ©sormais extraite prioritairement via le header HTTP `x-forwarded-for`." });
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Sécurité: Blocage DoS & Reverse Proxy"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ Renforcement Sécurité: Résolution Déni de Service (DoS) et IP\n\n- **Faille OOM (Memory Exhaustion)**: Certaines routes API (telles que `/api/action` et Passkey) acceptaient des payloads HTTP sans aucune limite de taille de body. Un attaquant pouvait saturer la RAM (buffer illimité) et faire crasher le serveur (OOM Kill). Des limites strictes de poids de body (1MB/5MB) couplées à une destruction `req.socket.destroy()` ont été instaurées.\n- **Faille IP / Rate Limit Global**: Derrière l'architecture Cloud Run (reverse proxy), `req.socket.remoteAddress` retournait toujours l'IP du Proxy. Par conséquent, les mécanismes Anti-Bruteforce et de limitation de débit (Rate Limiting) bannissaient TOUS les utilisateurs si un seul déclenchait la sécurité. L'IP est désormais extraite prioritairement via le header HTTP `x-forwarded-for`." });
                 syncCloud();
             }
 
-            if (!memoryStats.patchnotes.some(p => p.text.includes("SÃ©curitÃ©: Authentification Globale"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ›¡ï¸ Renforcement SÃ©curitÃ©: Comblement des Failles d'Authentification\n\n- **API Bypassed**: Plusieurs routes critiques backend (telles que `/api/action`, `/api/init-data`, et l'exportation des donnÃ©es) avaient leur vÃ©rification d'authentification dÃ©sactivÃ©e, permettant un accÃ¨s public.\n- **Data Leak WS**: Le point de terminaison WebSocket (`/ws`) pour le rafraÃ®chissement en temps rÃ©el acceptait n'importe quelle connexion sans valider le jeton de session, exposant potentiellement les messages du support (tickets).\n- **RÃ©solution**: Restauration de l'instruction stricte `if (!isAuthenticated) return 401` sur TOUTES les routes (y compris `/debug` et `/download-code`). Le flux d'Upgrade WebSocket vÃ©rifie dÃ©sormais rigoureusement le cookie `auth_session` avant de transfÃ©rer les donnÃ©es." });
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Sécurité: Authentification Globale"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ Renforcement Sécurité: Comblement des Failles d'Authentification\n\n- **API Bypassed**: Plusieurs routes critiques backend (telles que `/api/action`, `/api/init-data`, et l'exportation des données) avaient leur vérification d'authentification désactivée, permettant un accès public.\n- **Data Leak WS**: Le point de terminaison WebSocket (`/ws`) pour le rafraîchissement en temps réel acceptait n'importe quelle connexion sans valider le jeton de session, exposant potentiellement les messages du support (tickets).\n- **Résolution**: Restauration de l'instruction stricte `if (!isAuthenticated) return 401` sur TOUTES les routes (y compris `/debug` et `/download-code`). Le flux d'Upgrade WebSocket vérifie désormais rigoureusement le cookie `auth_session` avant de transférer les données." });
                 syncCloud();
             }
 
             if (!memoryStats.patchnotes.some(p => p.text.includes("Memory Leak & Garbage Collection"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ§¹ AmÃ©lioration SystÃ¨me: Memory Leaks & Nettoyage\n\n- **Session Bloat**: Les sessions d'administration (activeSessions) s'accumulaient indÃ©finiment lors des connexions sans dÃ©connexion explicite, faisant grossir la base de donnÃ©es. Un Garbage Collector limite dÃ©sormais le nombre de sessions simultanÃ©es Ã  20 maximum.\n- **Ticket States Leak**: La carte mÃ©moire (RAM) des Ã©tats de salon (`channelStates`) ne se vidait pas si un ticket Ã©tait supprimÃ© manuellement sur Discord au lieu des boutons de l'interface. Un Ã©couteur `channelDelete` natif intercepte dÃ©sormais ces suppressions pour purger la mÃ©moire instantanÃ©ment." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🧹 Amélioration Système: Memory Leaks & Nettoyage\n\n- **Session Bloat**: Les sessions d'administration (activeSessions) s'accumulaient indéfiniment lors des connexions sans déconnexion explicite, faisant grossir la base de données. Un Garbage Collector limite désormais le nombre de sessions simultanées à 20 maximum.\n- **Ticket States Leak**: La carte mémoire (RAM) des états de salon (`channelStates`) ne se vidait pas si un ticket était supprimé manuellement sur Discord au lieu des boutons de l'interface. Un écouteur `channelDelete` natif intercepte désormais ces suppressions pour purger la mémoire instantanément." });
                 syncCloud();
             }
 
             if (!memoryStats.patchnotes.some(p => p.text.includes("Add PIN Login to Dashboard"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "âœ¨ Nouvelle FonctionnalitÃ©: Option de Connexion par PIN\n\n- **Ajout**: Une interface de connexion par code PIN (1206) a Ã©tÃ© ajoutÃ©e sur la page du dashboard pour offrir une alternative au Passkey.\n- **Design**: IntÃ©gration d'un systÃ¨me d'onglets (Toggle) Ã©lÃ©gant permettant de basculer facilement entre la vue 'Passkey' (QR Code) et la vue 'PIN Code' (Champ de saisie).\n- **RÃ©solution**: RÃ©pond Ã  la demande d'avoir le choix entre les deux mÃ©thodes de connexion, particuliÃ¨rement utile si le tÃ©lÃ©phone n'est pas Ã  portÃ©e de main." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "✨ Nouvelle Fonctionnalité: Option de Connexion par PIN\n\n- **Ajout**: Une interface de connexion par code PIN (1206) a été ajoutée sur la page du dashboard pour offrir une alternative au Passkey.\n- **Design**: Intégration d'un système d'onglets (Toggle) élégant permettant de basculer facilement entre la vue 'Passkey' (QR Code) et la vue 'PIN Code' (Champ de saisie).\n- **Résolution**: Répond à la demande d'avoir le choix entre les deux méthodes de connexion, particulièrement utile si le téléphone n'est pas à portée de main." });
                 syncCloud();
             }
 
             if (!memoryStats.patchnotes.some(p => p.text.includes("Session Persistence Fix"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ”§ RÃ©solution de Bug: Persistance des Sessions\n\n- **SymptÃ´me**: Les utilisateurs Ã©taient dÃ©connectÃ©s du dashboard aprÃ¨s un redÃ©marrage du serveur ou une reconnexion, forÃ§ant une nouvelle authentification Passkey.\n- **Cause**: Les sessions administrateur Ã©taient stockÃ©es dans une variable RAM Ã©phÃ©mÃ¨re (`global.activeAdminSessions`) non synchronisÃ©e avec le cloud, provoquant la perte de la session au redÃ©marrage.\n- **Correction**: Migration du systÃ¨me de session vers `memoryStats.activeSessions` avec persistance cloud (Upstash/Discord). Les sessions actives survivent dÃ©sormais aux redÃ©marrages de l'instance. De plus, la vÃ©rification des cookies a Ã©tÃ© assouplie (SameSite=Lax) pour une meilleure compatibilitÃ© des environnements de dÃ©veloppement." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug: Persistance des Sessions\n\n- **Symptôme**: Les utilisateurs étaient déconnectés du dashboard après un redémarrage du serveur ou une reconnexion, forçant une nouvelle authentification Passkey.\n- **Cause**: Les sessions administrateur étaient stockées dans une variable RAM éphémère (`global.activeAdminSessions`) non synchronisée avec le cloud, provoquant la perte de la session au redémarrage.\n- **Correction**: Migration du système de session vers `memoryStats.activeSessions` avec persistance cloud (Upstash/Discord). Les sessions actives survivent désormais aux redémarrages de l'instance. De plus, la vérification des cookies a été assouplie (SameSite=Lax) pour une meilleure compatibilité des environnements de développement." });
                 syncCloud();
             }
 
             if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Dashboard Redirect After Passkey"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ”§ RÃ©solution de Bug: Redirection Dashboard Post-Passkey\n\n- **SymptÃ´me**: AprÃ¨s une authentification FaceID/TouchID rÃ©ussie, la page de connexion Desktop restait bloquÃ©e sur le QR code et ne redirigeait pas vers le dashboard.\n- **Cause**: L'API de statut de session retournait un cookie obsolÃ¨te ('session_token') non reconnu par le middleware d'authentification du dashboard qui attend 'auth_session'.\n- **Correction**: Alignement de la crÃ©ation de cookie Post-WebAuthn sur le systÃ¨me standard (global.activeAdminSessions + cookie 'auth_session'). La redirection fonctionne parfaitement." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug: Redirection Dashboard Post-Passkey\n\n- **Symptôme**: Après une authentification FaceID/TouchID réussie, la page de connexion Desktop restait bloquée sur le QR code et ne redirigeait pas vers le dashboard.\n- **Cause**: L'API de statut de session retournait un cookie obsolète ('session_token') non reconnu par le middleware d'authentification du dashboard qui attend 'auth_session'.\n- **Correction**: Alignement de la création de cookie Post-WebAuthn sur le système standard (global.activeAdminSessions + cookie 'auth_session'). La redirection fonctionne parfaitement." });
                 syncCloud();
             }
 
             if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Passkey Authentication API"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ”§ RÃ©solution de Bug: Ã‰chec de VÃ©rification Passkey (FaceID)\n\n- **SymptÃ´me**: L'authentification FaceID/TouchID retournait systÃ©matiquement 'Failed to verify authentication'.\n- **Cause**: L'API du serveur WebAuthn (@simplewebauthn/server v13) utilise dÃ©sormais un paramÃ¨tre 'credential' (avec 'id' et 'publicKey') au lieu de l'ancien format 'authenticator' (avec 'credentialID' et 'credentialPublicKey'). Le serveur Ã©chouait silencieusement car il ne trouvait pas la clÃ© publique.\n- **Correction**: Mise Ã  jour de l'objet de vÃ©rification d'authentification pour respecter le nouveau standard de la v13. L'authentification biomÃ©trique est dÃ©sormais parfaitement fonctionnelle." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug: Échec de Vérification Passkey (FaceID)\n\n- **Symptôme**: L'authentification FaceID/TouchID retournait systématiquement 'Failed to verify authentication'.\n- **Cause**: L'API du serveur WebAuthn (@simplewebauthn/server v13) utilise désormais un paramètre 'credential' (avec 'id' et 'publicKey') au lieu de l'ancien format 'authenticator' (avec 'credentialID' et 'credentialPublicKey'). Le serveur échouait silencieusement car il ne trouvait pas la clé publique.\n- **Correction**: Mise à jour de l'objet de vérification d'authentification pour respecter le nouveau standard de la v13. L'authentification biométrique est désormais parfaitement fonctionnelle." });
                 syncCloud();
             }
 
             if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Invalid Admin PIN"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ”§ RÃ©solution de Bug: Code PIN Invalide\n\n- **SymptÃ´me**: L'insertion du code 1206 retournait systÃ©matiquement 'Invalid Admin PIN'.\n- **Cause**: Utilisation d'une ancienne variable d'environnement (process.env.ADMIN_PIN) non dÃ©finie au lieu de la constante systÃ¨me 'DASHBOARD_PIN'.\n- **Correction**: Mise Ã  jour de la constante de vÃ©rification pour matcher parfaitement le PIN de configuration systÃ¨me (1206)." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug: Code PIN Invalide\n\n- **Symptôme**: L'insertion du code 1206 retournait systématiquement 'Invalid Admin PIN'.\n- **Cause**: Utilisation d'une ancienne variable d'environnement (process.env.ADMIN_PIN) non définie au lieu de la constante système 'DASHBOARD_PIN'.\n- **Correction**: Mise à jour de la constante de vérification pour matcher parfaitement le PIN de configuration système (1206)." });
                 syncCloud();
             }
 
             if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Crash Dashboard Auth"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ”§ RÃ©solution de Bug Critique: Crash du Serveur au Login\n\n- **SymptÃ´me**: L'accÃ¨s Ã  la page de connexion provoquait un crash immÃ©diat du bot (ReferenceError: window is not defined).\n- **Cause**: Une erreur d'interpolation JavaScript cÃ´tÃ© serveur tentait d'Ã©valuer les variables du navigateur ('window' et 'data.sessionId') pendant la gÃ©nÃ©ration de la page au lieu de les envoyer au client.\n- **Correction**: Ã‰chappement rigoureux des variables d'environnement frontend. Le portail d'authentification WebAuthn est dÃ©sormais 100% stable et fonctionnel." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug Critique: Crash du Serveur au Login\n\n- **Symptôme**: L'accès à la page de connexion provoquait un crash immédiat du bot (ReferenceError: window is not defined).\n- **Cause**: Une erreur d'interpolation JavaScript côté serveur tentait d'évaluer les variables du navigateur ('window' et 'data.sessionId') pendant la génération de la page au lieu de les envoyer au client.\n- **Correction**: Échappement rigoureux des variables d'environnement frontend. Le portail d'authentification WebAuthn est désormais 100% stable et fonctionnel." });
                 syncCloud();
             }
 
             if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Shutdown Sequence"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ”§ RÃ©solution de Bug Critique: Ã‰chec de sauvegarde sur Render\n\n- Le bot tentait d'envoyer la sauvegarde DaaD (Discord as a Database) *aprÃ¨s* avoir fermÃ© sa connexion (client.destroy()) lors de la rÃ©ception du signal SIGTERM (redÃ©marrage cloud).\n- L'ordre d'arrÃªt a Ã©tÃ© corrigÃ© : le bot effectue dÃ©sormais toutes ses sauvegardes rÃ©seaux avant de couper sa connexion, garantissant 0 perte de donnÃ©es lors des mises Ã  jour." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug Critique: Échec de sauvegarde sur Render\n\n- Le bot tentait d'envoyer la sauvegarde DaaD (Discord as a Database) *après* avoir fermé sa connexion (client.destroy()) lors de la réception du signal SIGTERM (redémarrage cloud).\n- L'ordre d'arrêt a été corrigé : le bot effectue désormais toutes ses sauvegardes réseaux avant de couper sa connexion, garantissant 0 perte de données lors des mises à jour." });
                 syncCloud();
             }
 
             if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Auth & Data Loss"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ”§ RÃ©solution de Bug Critique: Perte de donnÃ©es & Auth WebAuthn figÃ©e\n\n- Le module d'authentification par Passkeys (WebAuthn) ne s'affichait pas car une vÃ©rification de session Ã©tait accidentellement bypassÃ©e (toujours 'true'). L'authentification biomÃ©trique est dÃ©sormais parfaitement fonctionnelle.\n- Les donnÃ©es de transactions semblaient perdues car un crash serveur a provoquÃ© la sauvegarde d'un Ã©tat vide vers Discord, Ã©crasant les donnÃ©es saines. L'algorithme de restauration a Ã©tÃ© considÃ©rablement renforcÃ© : il scanne dÃ©sormais jusqu'Ã  100 anciennes sauvegardes Discord pour retrouver et restaurer intelligemment la derniÃ¨re sauvegarde contenant vos transactions rÃ©elles. Le systÃ¨me de backup refuse dÃ©sormais de sauvegarder un Ã©tat vide." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug Critique: Perte de données & Auth WebAuthn figée\n\n- Le module d'authentification par Passkeys (WebAuthn) ne s'affichait pas car une vérification de session était accidentellement bypassée (toujours 'true'). L'authentification biométrique est désormais parfaitement fonctionnelle.\n- Les données de transactions semblaient perdues car un crash serveur a provoqué la sauvegarde d'un état vide vers Discord, écrasant les données saines. L'algorithme de restauration a été considérablement renforcé : il scanne désormais jusqu'à 100 anciennes sauvegardes Discord pour retrouver et restaurer intelligemment la dernière sauvegarde contenant vos transactions réelles. Le système de backup refuse désormais de sauvegarder un état vide." });
                 syncCloud();
             }
 
             if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Zero Install Syntax Error"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ”§ RÃ©solution de Bug Critique: Ã‰chec d'Ã©valuation Node.js (Zero Install)\n\n- Le module de rÃ©solution dynamique de chemin souffrait d'une erreur d'Ã©chappement de guillemets lors du spawn du sous-processus Node.\n- L'expression a Ã©tÃ© corrigÃ©e pour Ãªtre proprement Ã©chappÃ©e, rÃ©tablissant le fonctionnement de l'auto-installation Ã  chaud sur les nouveaux dÃ©ploiements." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug Critique: Échec d'évaluation Node.js (Zero Install)\n\n- Le module de résolution dynamique de chemin souffrait d'une erreur d'échappement de guillemets lors du spawn du sous-processus Node.\n- L'expression a été corrigée pour être proprement échappée, rétablissant le fonctionnement de l'auto-installation à chaud sur les nouveaux déploiements." });
                 syncCloud();
             }
 
             if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Dynamic Require Absolute Path Resolution"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ”§ RÃ©solution de Bug Critique: Crash d'auto-installation (WebAuthn)\n\n- Le workaround prÃ©cÃ©dent pour l'auto-installation manquait de prÃ©cision sur le chemin du module (exports) et Ã©chouait sur Render.\n- Remplacement par une rÃ©solution dynamique robuste : Node.js spawn un processus enfant pour obtenir le chemin absolu exact (require.resolve) et contourne ainsi de maniÃ¨re infaillible le negative cache du processus principal." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug Critique: Crash d'auto-installation (WebAuthn)\n\n- Le workaround précédent pour l'auto-installation manquait de précision sur le chemin du module (exports) et échouait sur Render.\n- Remplacement par une résolution dynamique robuste : Node.js spawn un processus enfant pour obtenir le chemin absolu exact (require.resolve) et contourne ainsi de manière infaillible le negative cache du processus principal." });
                 syncCloud();
             }
 
             if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Dynamic Require Cache (Render)"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ”§ RÃ©solution de Bug Critique: Crash d'auto-installation (WebAuthn)\n\n- Le module 'Zero Install' Ã©chouait Ã  charger la dÃ©pendance fraÃ®chement tÃ©lÃ©chargÃ©e Ã  cause du cache de rÃ©solution de modules de Node.js.\n- L'auto-installeur utilise maintenant le chemin absolu (process.cwd() + node_modules) pour contourner le cache et assurer un dÃ©marrage fluide sur Render." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug Critique: Crash d'auto-installation (WebAuthn)\n\n- Le module 'Zero Install' échouait à charger la dépendance fraîchement téléchargée à cause du cache de résolution de modules de Node.js.\n- L'auto-installeur utilise maintenant le chemin absolu (process.cwd() + node_modules) pour contourner le cache et assurer un démarrage fluide sur Render." });
                 syncCloud();
             }
 
             if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Crash dotenv"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ”§ Anticipation et Auto-Correction: Fix Crash dotenv\n\n- Encapsulation de l'import dotenv dans un bloc try/catch pour Ã©viter un plantage (Crash Node.js 'Cannot find module dotenv') lors du dÃ©ploiement en environnement cloud." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Anticipation et Auto-Correction: Fix Crash dotenv\n\n- Encapsulation de l'import dotenv dans un bloc try/catch pour éviter un plantage (Crash Node.js 'Cannot find module dotenv') lors du déploiement en environnement cloud." });
                 syncCloud();
             }
             if (!memoryStats.patchnotes.some(p => p.text.includes("Fix UI Freeze"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ”§ Anticipation et Auto-Correction: Fix UI Freeze\n\n- Correction du blocage complet du dashboard (figÃ© sans donnÃ©es) causÃ© par l'absence d'initialisation des variables si Upstash est hors-ligne ou absent.\n- Ajout d'une redirection automatique vers la page de login si la session du serveur expire (Erreur 401)." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Anticipation et Auto-Correction: Fix UI Freeze\n\n- Correction du blocage complet du dashboard (figé sans données) causé par l'absence d'initialisation des variables si Upstash est hors-ligne ou absent.\n- Ajout d'une redirection automatique vers la page de login si la session du serveur expire (Erreur 401)." });
                 syncCloud();
             }
-            if (!memoryStats.patchnotes.some(p => p.text.includes("Fix âŒ Please wait, processing previous request"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ”§ RÃ©solution de Bug Critique: Channel Creation Error\n\n- Suppression de l'erreur persistante (âŒ Please wait, processing previous request).\n- Retrait du lock distribuÃ© problÃ©matique sur l'ouverture des tickets, remplacÃ© par une gestion en mÃ©moire plus rÃ©siliente.\n- Ajout d'une protection fallback si le pseudo contient uniquement des caractÃ¨res spÃ©ciaux, prÃ©venant ainsi les crashs Discord API pour nom de channel vide.\n- Ajout de catch sur la crÃ©ation du channel pour gÃ©rer les permissions ou la limite maximale des 500 channels sans faire crash le bot." });
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Fix ❌ Please wait, processing previous request"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug Critique: Channel Creation Error\n\n- Suppression de l'erreur persistante (❌ Please wait, processing previous request).\n- Retrait du lock distribué problématique sur l'ouverture des tickets, remplacé par une gestion en mémoire plus résiliente.\n- Ajout d'une protection fallback si le pseudo contient uniquement des caractères spéciaux, prévenant ainsi les crashs Discord API pour nom de channel vide.\n- Ajout de catch sur la création du channel pour gérer les permissions ou la limite maximale des 500 channels sans faire crash le bot." });
             }
             if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Discord API Crash on Shop Channel"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ”§ RÃ©solution de Bug Critique: Le bot ne crÃ©ait plus de channels\n\n- Correction d'un plantage critique liÃ© aux limites de l'API Discord (Select Menu max_values ne pouvant pas dÃ©passer le nombre d'options et limite stricte de 25 produits).\n- Le bot gÃ¨re maintenant correctement les catalogues de toutes tailles sans crasher lors de l'ouverture du ticket." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug Critique: Le bot ne créait plus de channels\n\n- Correction d'un plantage critique lié aux limites de l'API Discord (Select Menu max_values ne pouvant pas dépasser le nombre d'options et limite stricte de 25 produits).\n- Le bot gère maintenant correctement les catalogues de toutes tailles sans crasher lors de l'ouverture du ticket." });
             }
                         if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Checkout Bypass"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ”§ RÃ©solution de Bug Critique: Livraison produit sans paiement (Bypass Rewarble)\n\n- Le bot livrait immÃ©diatement le produit en message privÃ© dÃ¨s qu'un client cliquait sur le menu dÃ©roulant du shop, contournant le paiement Rewarble.\n- Refonte totale du processus de commande: la sÃ©lection de produits ajoute dÃ©sormais les articles au panier, calcule le prix total et demande la validation du paiement avant toute livraison.\n- Ajout d'une gestion multi-articles dynamique.\n- Ajout d'un systÃ¨me de libÃ©ration instantanÃ©e des verrous de crÃ©ation de ticket (userTicketLocks) pour Ã©viter de bloquer l'utilisateur." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug Critique: Livraison produit sans paiement (Bypass Rewarble)\n\n- Le bot livrait immédiatement le produit en message privé dès qu'un client cliquait sur le menu déroulant du shop, contournant le paiement Rewarble.\n- Refonte totale du processus de commande: la sélection de produits ajoute désormais les articles au panier, calcule le prix total et demande la validation du paiement avant toute livraison.\n- Ajout d'une gestion multi-articles dynamique.\n- Ajout d'un système de libération instantanée des verrous de création de ticket (userTicketLocks) pour éviter de bloquer l'utilisateur." });
                 syncCloud();
             }
             if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Ticket Lock Freeze"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ”§ Anticipation et Auto-Correction: Fix Ticket Lock Freeze\n\n- Ajout d'un timeout strict (3000ms) sur les appels Axios vers Upstash pour acquireDistributedLock et syncCloud pour Ã©viter un blocage indÃ©fini du bot.\n- SÃ©curisation du parentId lors de la crÃ©ation de channels : vÃ©rification que la catÃ©gorie ciblÃ©e est bien de type GuildCategory pour Ã©viter un crash API Discord." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Anticipation et Auto-Correction: Fix Ticket Lock Freeze\n\n- Ajout d'un timeout strict (3000ms) sur les appels Axios vers Upstash pour acquireDistributedLock et syncCloud pour éviter un blocage indéfini du bot.\n- Sécurisation du parentId lors de la création de channels : vérification que la catégorie ciblée est bien de type GuildCategory pour éviter un crash API Discord." });
             }
             if (!memoryStats.patchnotes.some(p => p.text.includes("Fix SyntaxError Transcripts"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ”§ RÃ©solution de Bug Critique: Dashboard figÃ© sans donnÃ©es\n\n- Correction d'une erreur de syntaxe HTML/JS (SyntaxError: Unexpected string) dans le systÃ¨me de Transcripts qui empÃªchait l'exÃ©cution du script principal du dashboard.\n- SÃ©curisation des attributs 'onclick' avec encodage HTML (&quot;) pour Ã©viter tout conflit de guillemets." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug Critique: Dashboard figé sans données\n\n- Correction d'une erreur de syntaxe HTML/JS (SyntaxError: Unexpected string) dans le système de Transcripts qui empêchait l'exécution du script principal du dashboard.\n- Sécurisation des attributs 'onclick' avec encodage HTML (&quot;) pour éviter tout conflit de guillemets." });
                 syncCloud();
             }
             if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Unknown Channel API Error"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ”§ RÃ©solution de Bug: DiscordAPIError[10003] Unknown Channel\n\n- Correction d'un crash de la fonction de gÃ©nÃ©ration de transcript (generateTranscript) lorsque le salon avait dÃ©jÃ  Ã©tÃ© supprimÃ© par l'utilisateur ou le systÃ¨me avant l'exÃ©cution (catch du code 10003 sans alarme).\n- Ajout de blocs try/catch et suppressions sÃ©curisÃ©es (catch(()=>{...})) sur toutes les tentatives d'envoi de messages de broadcast pour prÃ©venir les fuites de mÃ©moire et rejets de promesses non gÃ©rÃ©s." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug: DiscordAPIError[10003] Unknown Channel\n\n- Correction d'un crash de la fonction de génération de transcript (generateTranscript) lorsque le salon avait déjà été supprimé par l'utilisateur ou le système avant l'exécution (catch du code 10003 sans alarme).\n- Ajout de blocs try/catch et suppressions sécurisées (catch(()=>{...})) sur toutes les tentatives d'envoi de messages de broadcast pour prévenir les fuites de mémoire et rejets de promesses non gérés." });
                 syncCloud();
             }
             
             const defaultMessages = {
-                shop_welcome: "ðŸ‘‹ Welcome {user}!\n\n**ðŸ” Step 1: Please paste your Rewarble voucher or promo code in this channel to fund your session.**\nAfter validation, you will be able to select your items.",
-                shop_empty: "ðŸ‘‹ Welcome {user}!\n\nâŒ The shop is currently empty.",
-                ticket_ready: "âœ… Your channel is ready: {channel}",
-                vip_welcome: "ðŸ‘‘ **WELCOME TO VIP!** Your 30-Day pass is now active. Enjoy your exclusive content and 20% off all future purchases in the shop!",
-                maintenance_embed_title: "ðŸš§ Shop Under Maintenance",
-                maintenance_embed_desc: "Our system is currently undergoing updates or restocking.\n\nâ³ **Expected return:** {time}.\n\nPlease try again later. Your codes and purchases are perfectly safe!",
-                checkout_success_dm: "âœ¨ **Purchase Successful!** Here is your item: {product}",
-                checkout_failed_dm: "âš ï¸ I couldn't DM you the product '{product}'. Please check your privacy settings.",
-                checkout_complete_channel: "âœ… **Products delivered to your DMs!** Closing ticket in 5 seconds...",
-                invalid_code: "âŒ Invalid format. Please enter a valid Rewarble code or Promo code.",
-                already_validated: "âœ… Your code is already validated! Please select your items from the menu.",
-                code_limit_reached: "âŒ Sorry, this code has reached its usage limit!"
+                shop_welcome: "👋 Welcome {user}!\n\n**🔐 Step 1: Please paste your Rewarble voucher or promo code in this channel to fund your session.**\nAfter validation, you will be able to select your items.",
+                shop_empty: "👋 Welcome {user}!\n\n❌ The shop is currently empty.",
+                ticket_ready: "✅ Your channel is ready: {channel}",
+                vip_welcome: "👑 **WELCOME TO VIP!** Your 30-Day pass is now active. Enjoy your exclusive content and 20% off all future purchases in the shop!",
+                maintenance_embed_title: "🚧 Shop Under Maintenance",
+                maintenance_embed_desc: "Our system is currently undergoing updates or restocking.\n\n⏳ **Expected return:** {time}.\n\nPlease try again later. Your codes and purchases are perfectly safe!",
+                checkout_success_dm: "✨ **Purchase Successful!** Here is your item: {product}",
+                checkout_failed_dm: "⚠️ I couldn't DM you the product '{product}'. Please check your privacy settings.",
+                checkout_complete_channel: "✅ **Products delivered to your DMs!** Closing ticket in 5 seconds...",
+                invalid_code: "❌ Invalid format. Please enter a valid Rewarble code or Promo code.",
+                already_validated: "✅ Your code is already validated! Please select your items from the menu.",
+                code_limit_reached: "❌ Sorry, this code has reached its usage limit!"
             };
             if (!memoryStats.messages) memoryStats.messages = defaultMessages;
             else {
@@ -602,301 +602,301 @@ function ensureMemoryInitialized() {
 
             
             if (!memoryStats.patchnotes.some(p => p.text.includes("Bot Messages Configuration Panel"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "âœ¨ NOUVEAUTÃ‰: Bot Messages Configuration Panel\n\n- Ajout d'un panel ultra premium pour configurer tous les messages automatisÃ©s du bot.\n- Support total des variables de personnalisation ({user}, {channel}, etc).\n- IntÃ©gration de l'Intelligence Artificielle (Gemini 1.5 Pro avec Thinking Level: HIGH) pour gÃ©nÃ©rer des messages captivants, professionnels et personnalisÃ©s." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "✨ NOUVEAUTÉ: Bot Messages Configuration Panel\n\n- Ajout d'un panel ultra premium pour configurer tous les messages automatisés du bot.\n- Support total des variables de personnalisation ({user}, {channel}, etc).\n- Intégration de l'Intelligence Artificielle (Gemini 1.5 Pro avec Thinking Level: HIGH) pour générer des messages captivants, professionnels et personnalisés." });
                 syncCloud();
             }
 
             
             if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Dashboard Loading Bug"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ”§ RÃ©solution de Bug: Dashboard Messages figÃ©s sur 'Loading...'\n\n- Correction d'un problÃ¨me d'injection du code Javascript empÃªchant la rÃ©cupÃ©ration des donnÃ©es de messages.\n- SÃ©curisation du processus d'hydratation des donnÃ©es cÃ´tÃ© client pour prÃ©venir les Ã©crasements intempestifs si l'utilisateur est en train d'Ã©diter un champ." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug: Dashboard Messages figés sur 'Loading...'\n\n- Correction d'un problème d'injection du code Javascript empêchant la récupération des données de messages.\n- Sécurisation du processus d'hydratation des données côté client pour prévenir les écrasements intempestifs si l'utilisateur est en train d'éditer un champ." });
                 syncCloud();
             }
 
             
             if (!memoryStats.patchnotes.some(p => p.text.includes("Bot Control Center"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ’Ž DESIGN UPGRADE: Bot Control Center\n\n- Ajout d'une interface premium ultra complÃ¨te pour gÃ©rer le bot en direct.\n- ContrÃ´le de la prÃ©sence (Playing, Watching, etc).\n- Module Anti-Raid dynamique avec seuil paramÃ©trable et auto-kick.\n- Scheduler de sauvegarde cloud paramÃ©trable de 1h Ã  24h.\n- Affichage de l'Uptime en direct." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "💎 DESIGN UPGRADE: Bot Control Center\n\n- Ajout d'une interface premium ultra complète pour gérer le bot en direct.\n- Contrôle de la présence (Playing, Watching, etc).\n- Module Anti-Raid dynamique avec seuil paramétrable et auto-kick.\n- Scheduler de sauvegarde cloud paramétrable de 1h à 24h.\n- Affichage de l'Uptime en direct." });
                 syncCloud();
             }
 
             
             if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Bot Control Crash"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ”§ RÃ©solution de Bug Critique: Dashboard figÃ© sur Loading\n\n- Correction d'une erreur d'hydratation (ReferenceError: data is not defined) dans l'interface Bot Control qui stoppait l'exÃ©cution de Javascript.\n- Optimisation de l'affichage de l'uptime et de l'Ã©tat du mode anti-raid sans Ã©crasement en direct." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug Critique: Dashboard figé sur Loading\n\n- Correction d'une erreur d'hydratation (ReferenceError: data is not defined) dans l'interface Bot Control qui stoppait l'exécution de Javascript.\n- Optimisation de l'affichage de l'uptime et de l'état du mode anti-raid sans écrasement en direct." });
                 syncCloud();
             }
 
             
             if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Deep AI Analysis Error"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ”§ RÃ©solution de Bug: Deep AI Analysis Error\n\n- Le module d'IA financiÃ¨re plantait l'interface (Unexpected token 'G', \"GEMINI_API\"...) lorsque la clÃ© Gemini n'Ã©tait pas configurÃ©e, le serveur renvoyant une rÃ©ponse textuelle brute inattendue par le client JSON.\n- RÃ©Ã©criture du backend pour retourner de vÃ©ritables exceptions JSON rattrapables cotÃ© client, avec des messages d'erreurs Ã©lÃ©gants et explicites dans le dashboard." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug: Deep AI Analysis Error\n\n- Le module d'IA financière plantait l'interface (Unexpected token 'G', \"GEMINI_API\"...) lorsque la clé Gemini n'était pas configurée, le serveur renvoyant une réponse textuelle brute inattendue par le client JSON.\n- Réécriture du backend pour retourner de véritables exceptions JSON rattrapables coté client, avec des messages d'erreurs élégants et explicites dans le dashboard." });
                 syncCloud();
             }
 
             
             if (!memoryStats.patchnotes.some(p => p.text.includes("Render: Gemini API Key"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ”§ Configuration requise pour Render\n\n- Pour utiliser les fonctionnalitÃ©s d'IA (Deep AI Analysis & Market Check) sur votre hÃ©bergement Render, n'oubliez pas d'ajouter la variable d'environnement `GEMINI_API_KEY` dans l'onglet Environment de votre service Render." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Configuration requise pour Render\n\n- Pour utiliser les fonctionnalités d'IA (Deep AI Analysis & Market Check) sur votre hébergement Render, n'oubliez pas d'ajouter la variable d'environnement `GEMINI_API_KEY` dans l'onglet Environment de votre service Render." });
                 syncCloud();
             }
 
             
             if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Gemini JSON Parse Error"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ”§ RÃ©solution de Bug: Analysis Failed (Unexpected token 'Y')\n\n- Correction d'un crash de l'interface Deep AI Analysis lorsque l'API Google Gemini renvoyait un message d'erreur texte (ex: Quota exceeded) au lieu de JSON.\n- Le backend intercepte dÃ©sormais les rÃ©ponses texte pour les afficher Ã©lÃ©gamment dans le Dashboard sans gÃ©nÃ©rer d'exception ParseError." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug: Analysis Failed (Unexpected token 'Y')\n\n- Correction d'un crash de l'interface Deep AI Analysis lorsque l'API Google Gemini renvoyait un message d'erreur texte (ex: Quota exceeded) au lieu de JSON.\n- Le backend intercepte désormais les réponses texte pour les afficher élégamment dans le Dashboard sans générer d'exception ParseError." });
                 syncCloud();
             }
 
             
             if (!memoryStats.patchnotes.some(p => p.text.includes("Graceful Quota Handling"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ”§ RÃ©solution de Bug: Gestion des Limites d'IA\n\n- Le backend intercepte dÃ©sormais les erreurs de quota Google Gemini (ex: \"You exceed\") et renvoie un statut standardisÃ©.\n- Le Dashboard affiche maintenant une interface dÃ©diÃ©e 'Service Busy' avec une couleur d'avertissement orange au lieu d'un crash d'analyse brutal en rouge." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug: Gestion des Limites d'IA\n\n- Le backend intercepte désormais les erreurs de quota Google Gemini (ex: \"You exceed\") et renvoie un statut standardisé.\n- Le Dashboard affiche maintenant une interface dédiée 'Service Busy' avec une couleur d'avertissement orange au lieu d'un crash d'analyse brutal en rouge." });
                 syncCloud();
             }
 
             
-            if (!memoryStats.patchnotes.some(p => p.text.includes("Mise Ã  jour: CompatibilitÃ© des ModÃ¨les IA"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ”§ Mise Ã  jour: CompatibilitÃ© des ModÃ¨les IA\n\n- Le systÃ¨me tentait d'appeler `gemini-3.1-pro-preview` et `gemini-3.5-flash` qui sont des versions non publiÃ©es publiquement.\n- Remplacement par les modÃ¨les de production stables (`gemini-1.5-pro-latest` et `gemini-3.5-flash`) pour Ã©viter les erreurs de quota/modÃ¨le introuvable cÃ´tÃ© Google.\n- Si l'erreur de quota (Service Busy) persiste, cela signifie que la clÃ© API utilisÃ©e a Ã©puisÃ© son quota gratuit ou nÃ©cessite un compte de facturation Google Cloud actif." });
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Mise à jour: Compatibilité des Modèles IA"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Mise à jour: Compatibilité des Modèles IA\n\n- Le système tentait d'appeler `gemini-3.1-pro-preview` et `gemini-3.5-flash` qui sont des versions non publiées publiquement.\n- Remplacement par les modèles de production stables (`gemini-1.5-pro-latest` et `gemini-3.5-flash`) pour éviter les erreurs de quota/modèle introuvable côté Google.\n- Si l'erreur de quota (Service Busy) persiste, cela signifie que la clé API utilisée a épuisé son quota gratuit ou nécessite un compte de facturation Google Cloud actif." });
                 syncCloud();
             }
 
             if (!memoryStats.patchnotes.some(p => p.text.includes("Intelligence Artificielle: Thinking High"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ§  Intelligence Artificielle: Thinking High\n\n- IntÃ©gration de la nouvelle architecture Gemini 3.1 Pro via le SDK @google/genai.\n- Activation du paramÃ¨tre 'ThinkingLevel.HIGH' pour l'analyse financiÃ¨re profonde et l'Ã©tude de marchÃ© afin de dÃ©bloquer une capacitÃ© de rÃ©flexion et d'extrapolation optimale des donnÃ©es.\n- RÃ©solution d'un dÃ©faut de synchronisation RAM empÃªchant les donnÃ©es restaurÃ©es (stats.json) de s'afficher sur l'interface." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🧠 Intelligence Artificielle: Thinking High\n\n- Intégration de la nouvelle architecture Gemini 3.1 Pro via le SDK @google/genai.\n- Activation du paramètre 'ThinkingLevel.HIGH' pour l'analyse financière profonde et l'étude de marché afin de débloquer une capacité de réflexion et d'extrapolation optimale des données.\n- Résolution d'un défaut de synchronisation RAM empêchant les données restaurées (stats.json) de s'afficher sur l'interface." });
                 syncCloud();
             }
 
             if (!memoryStats.patchnotes.some(p => p.text.includes("Upstash Recovery"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ›¡ï¸ Upstash Data Recovery & Render Optimization\n\n- Restauration de la connexion principale vers la base de donnÃ©es Upstash. Les donnÃ©es rÃ©elles (Transactions, Total Yield) qui semblaient perdues suite au dÃ©passement de quota local ont Ã©tÃ© reconnectÃ©es et s'afficheront au redÃ©marrage de l'instance.\n- Impact de la mise Ã  jour prÃ©cÃ©dente (Zero-Polling) : la consommation de bande passante Render est passÃ©e de ~30 GB/mois Ã  moins de 60 MB/mois, garantissant un fonctionnement 100% gratuit sur le mois entier." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ Upstash Data Recovery & Render Optimization\n\n- Restauration de la connexion principale vers la base de données Upstash. Les données réelles (Transactions, Total Yield) qui semblaient perdues suite au dépassement de quota local ont été reconnectées et s'afficheront au redémarrage de l'instance.\n- Impact de la mise à jour précédente (Zero-Polling) : la consommation de bande passante Render est passée de ~30 GB/mois à moins de 60 MB/mois, garantissant un fonctionnement 100% gratuit sur le mois entier." });
                 syncCloud();
             }
 
             if (!memoryStats.patchnotes.some(p => p.text.includes("Zero-Polling Architecture"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ›‘ Render Bandwidth Quota Suspension & Zero-Polling Architecture\n\n- Le service d'hÃ©bergement (Render) a suspendu l'instance car la limite de bande passante gratuite (5 GB) a Ã©tÃ© atteinte.\n- **Cause racine :** Le Dashboard tÃ©lÃ©chargeait l'intÃ©gralitÃ© de la base de donnÃ©es (178 Ko) toutes les 15 secondes. Un onglet ouvert en arriÃ¨re-plan consommait ~1 Go/jour.\n- **Correctif Ultime :** Suppression totale du \"Polling\" (requÃªtes Ã  intervalle rÃ©gulier). Le Dashboard utilise dÃ©sormais une architecture WebSocket 100% rÃ©active. Les donnÃ©es ne sont tÃ©lÃ©chargÃ©es QUE lorsqu'une modification a lieu cÃ´tÃ© serveur (nouvelle vente, message, etc.).\n- **RÃ©sultat :** Consommation rÃ©seau en attente rÃ©duite Ã  0 octet. Le bot peut dÃ©sormais tourner indÃ©finiment sur l'offre gratuite de Render.\n- Pour dÃ©bloquer l'instance ce mois-ci, cliquez sur 'Remove usage limits' dans Render (0.15$/GB), ou attendez la rÃ©initialisation du mois." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛑 Render Bandwidth Quota Suspension & Zero-Polling Architecture\n\n- Le service d'hébergement (Render) a suspendu l'instance car la limite de bande passante gratuite (5 GB) a été atteinte.\n- **Cause racine :** Le Dashboard téléchargeait l'intégralité de la base de données (178 Ko) toutes les 15 secondes. Un onglet ouvert en arrière-plan consommait ~1 Go/jour.\n- **Correctif Ultime :** Suppression totale du \"Polling\" (requêtes à intervalle régulier). Le Dashboard utilise désormais une architecture WebSocket 100% réactive. Les données ne sont téléchargées QUE lorsqu'une modification a lieu côté serveur (nouvelle vente, message, etc.).\n- **Résultat :** Consommation réseau en attente réduite à 0 octet. Le bot peut désormais tourner indéfiniment sur l'offre gratuite de Render.\n- Pour débloquer l'instance ce mois-ci, cliquez sur 'Remove usage limits' dans Render (0.15$/GB), ou attendez la réinitialisation du mois." });
                 syncCloud();
             }
 
             
             if (!memoryStats.patchnotes.some(p => p.text.includes("SDK Google GenAI"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ”§ Migration: SDK Google GenAI\n\n- Remplacement des appels `fetch` bruts par le SDK officiel `@google/genai` pour une meilleure stabilitÃ© et gestion des erreurs.\n- Le problÃ¨me de limite de quota (Service Busy / You exceed) est liÃ© Ã  l'utilisation du modÃ¨le `gemini-3.1-pro-preview` qui nÃ©cessite une clÃ© API facturÃ©e sur Google Cloud. Si le message persiste sur Render, il faut upgrader le compte Google Cloud de la clÃ© API, ou passer sur `gemini-3.5-flash`." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Migration: SDK Google GenAI\n\n- Remplacement des appels `fetch` bruts par le SDK officiel `@google/genai` pour une meilleure stabilité et gestion des erreurs.\n- Le problème de limite de quota (Service Busy / You exceed) est lié à l'utilisation du modèle `gemini-3.1-pro-preview` qui nécessite une clé API facturée sur Google Cloud. Si le message persiste sur Render, il faut upgrader le compte Google Cloud de la clé API, ou passer sur `gemini-3.5-flash`." });
                 syncCloud();
             }
 
             
             if (!memoryStats.patchnotes.some(p => p.text.includes("Fix SDK Initialization"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ”§ RÃ©solution de Bug: GoogleGenAI is not defined\n\n- L'import du SDK @google/genai manquait Ã  l'appel lors de la prÃ©cÃ©dente mise Ã  jour suite Ã  un Ã©chec d'injection du module.\n- L'import est dÃ©sormais correctement dÃ©clarÃ© dans l'en-tÃªte du fichier, rÃ©tablissant l'accÃ¨s aux requÃªtes IA de Deep Analysis et Market Scan." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug: GoogleGenAI is not defined\n\n- L'import du SDK @google/genai manquait à l'appel lors de la précédente mise à jour suite à un échec d'injection du module.\n- L'import est désormais correctement déclaré dans l'en-tête du fichier, rétablissant l'accès aux requêtes IA de Deep Analysis et Market Scan." });
                 syncCloud();
             }
 
             
             if (!memoryStats.patchnotes.some(p => p.text.includes("Retrait SDK & Flash-Latest"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ”§ RÃ©solution de Bug Critique: Crash au dÃ©ploiement (Render)\n\n- L'environnement Render plantait sur l'erreur (Cannot find module '@google/genai') car le SDK n'Ã©tait pas inclus dans les dÃ©pendances par dÃ©faut de l'utilisateur.\n- Suppression totale de la dÃ©pendance externe : le Dashboard utilise dÃ©sormais un pont d'API REST natif (Fetch) garantissant un fonctionnement 'Zero Install'.\n- Les requÃªtes sont redirigÃ©es vers le modÃ¨le 'gemini-3.5-flash', universellement compatible et rapide." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug Critique: Crash au déploiement (Render)\n\n- L'environnement Render plantait sur l'erreur (Cannot find module '@google/genai') car le SDK n'était pas inclus dans les dépendances par défaut de l'utilisateur.\n- Suppression totale de la dépendance externe : le Dashboard utilise désormais un pont d'API REST natif (Fetch) garantissant un fonctionnement 'Zero Install'.\n- Les requêtes sont redirigées vers le modèle 'gemini-3.5-flash', universellement compatible et rapide." });
                 syncCloud();
             }
 
             
             if (!memoryStats.patchnotes.some(p => p.text.includes("Mystery Box"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸŽ Nouvelle Feature: Mystery Box\n\n- Vous pouvez dÃ©sormais configurer et activer une Mystery Box depuis le Dashboard.\n- ParamÃ©trez vos diffÃ©rents 'Drops' (Commun, Rare, LÃ©gendaire) avec leurs pourcentages de chance et le produit associÃ©.\n- Activez l'annonce publique automatique (Global Announce) pour les drops lÃ©gendaires afin de provoquer le FOMO (Fear Of Missing Out) sur le serveur !\n- Cela permet de stimuler massivement l'engagement et les micro-transactions." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🎁 Nouvelle Feature: Mystery Box\n\n- Vous pouvez désormais configurer et activer une Mystery Box depuis le Dashboard.\n- Paramétrez vos différents 'Drops' (Commun, Rare, Légendaire) avec leurs pourcentages de chance et le produit associé.\n- Activez l'annonce publique automatique (Global Announce) pour les drops légendaires afin de provoquer le FOMO (Fear Of Missing Out) sur le serveur !\n- Cela permet de stimuler massivement l'engagement et les micro-transactions." });
                 syncCloud();
             }
 
             
             if (!memoryStats.patchnotes.some(p => p.text.includes("Animation Fix & Overview UI Polish"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "âœ¨ Animation Fix & Overview UI Polish\n\n- Correction du bug visuel sur les cartes du Dashboard: le chiffre ne disparait plus (reset) lors du passage de la souris.\n- AmÃ©lioration globale de la fluiditÃ© des micro-interactions au survol.\n- Remplacement du keyframe de pulse par une transition CSS optimisÃ©e pour Ã©viter les conflits d'animations CSS." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "✨ Animation Fix & Overview UI Polish\n\n- Correction du bug visuel sur les cartes du Dashboard: le chiffre ne disparait plus (reset) lors du passage de la souris.\n- Amélioration globale de la fluidité des micro-interactions au survol.\n- Remplacement du keyframe de pulse par une transition CSS optimisée pour éviter les conflits d'animations CSS." });
                 syncCloud();
             }
 
             
             if (!memoryStats.patchnotes.some(p => p.text.includes("Premium Chart Animations & Precision"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ“ˆ Premium Chart Animations & Precision\n\n- AmÃ©lioration visuelle majeure du 'Revenue Trajectory': Le graphique utilise dÃ©sormais un gradient multi-stop, des courbes de tension optimisÃ©es et des bordures dynamiques.\n- Nouvelles animations sÃ©quentielles progressives au chargement du graphique (courbe Ã©lastique des revenus).\n- Les tooltips sont plus lisibles, adoptent le glassmorphism, et affichent les valeurs avec une prÃ©cision au centime prÃ¨s (Â£X.XX).\n- L'axe X intÃ¨gre de subtils repÃ¨res temporels pour une lecture facilitÃ©e." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "📈 Premium Chart Animations & Precision\n\n- Amélioration visuelle majeure du 'Revenue Trajectory': Le graphique utilise désormais un gradient multi-stop, des courbes de tension optimisées et des bordures dynamiques.\n- Nouvelles animations séquentielles progressives au chargement du graphique (courbe élastique des revenus).\n- Les tooltips sont plus lisibles, adoptent le glassmorphism, et affichent les valeurs avec une précision au centime près (£X.XX).\n- L'axe X intègre de subtils repères temporels pour une lecture facilitée." });
                 syncCloud();
             }
 
             
             if (!memoryStats.patchnotes.some(p => p.text.includes("Interface Mobile 100% Native & Fluide"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ“± Interface Mobile 100% Native & Fluide\n\n- Le Dashboard est dÃ©sormais parfaitement optimisÃ© pour une vue mobile (type iPhone 17).\n- ImplÃ©mentation d'un menu latÃ©ral (Sidebar) coulissant avec un overlay de flou (Glassmorphism).\n- Plus aucun 'scroll dans le vide' : Les hauteurs utilisent l'unitÃ© dynamique 'dvh' pour s'adapter parfaitement sans dÃ©border sous la barre Safari.\n- Tous les tableaux complexes (Kanban, Logs, Transactions) ont Ã©tÃ© englobÃ©s dans des blocs '.table-responsive' permettant un dÃ©filement horizontal fluide au doigt sans casser la mise en page de l'application.\n- Adaptation des boutons et inputs (font-size: 16px) pour empÃªcher les zooms forcÃ©s sur iOS." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "📱 Interface Mobile 100% Native & Fluide\n\n- Le Dashboard est désormais parfaitement optimisé pour une vue mobile (type iPhone 17).\n- Implémentation d'un menu latéral (Sidebar) coulissant avec un overlay de flou (Glassmorphism).\n- Plus aucun 'scroll dans le vide' : Les hauteurs utilisent l'unité dynamique 'dvh' pour s'adapter parfaitement sans déborder sous la barre Safari.\n- Tous les tableaux complexes (Kanban, Logs, Transactions) ont été englobés dans des blocs '.table-responsive' permettant un défilement horizontal fluide au doigt sans casser la mise en page de l'application.\n- Adaptation des boutons et inputs (font-size: 16px) pour empêcher les zooms forcés sur iOS." });
                 syncCloud();
             }
 
             
             if (!memoryStats.patchnotes.some(p => p.text.includes("Ajout d'un Favicon Dynamique"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "âš¡ Ajout d'un Favicon Dynamique\n\n- IntÃ©gration d'un favicon natif (âš¡) injectÃ© directement via SVG dans le header de l'application.\n- Cette icÃ´ne est immÃ©diatement visible dans les onglets du navigateur et l'historique sans nÃ©cessiter de tÃ©lÃ©chargement de fichier externe." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "⚡ Ajout d'un Favicon Dynamique\n\n- Intégration d'un favicon natif (⚡) injecté directement via SVG dans le header de l'application.\n- Cette icône est immédiatement visible dans les onglets du navigateur et l'historique sans nécessiter de téléchargement de fichier externe." });
                 syncCloud();
             }
 
             
             if (!memoryStats.patchnotes.some(p => p.text.includes("Correction & Injection Reviews (Queue)"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "âœ… Correction & Injection Reviews (Queue)\n\n- La file d'attente des reviews dans le panel Moderation Ã©tait simplement vide si aucun avis n'avait Ã©tÃ© postÃ©.\n- Afin de pouvoir tester l'interface d'acceptation et de refus, une fausse review (mock) a Ã©tÃ© injectÃ©e avec succÃ¨s dans la base de donnÃ©es.\n- Optimisation CSS : application de '.table-responsive' sur le bloc de reviews pour garantir le scroll mobile horizontal sans casser l'interface." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "✅ Correction & Injection Reviews (Queue)\n\n- La file d'attente des reviews dans le panel Moderation était simplement vide si aucun avis n'avait été posté.\n- Afin de pouvoir tester l'interface d'acceptation et de refus, une fausse review (mock) a été injectée avec succès dans la base de données.\n- Optimisation CSS : application de '.table-responsive' sur le bloc de reviews pour garantir le scroll mobile horizontal sans casser l'interface." });
                 syncCloud();
             }
 
             
             if (!memoryStats.patchnotes.some(p => p.text.includes("Skeleton Loaders"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ”„ Skeleton Loaders & UI Feedback\n\n- ImplÃ©mentation d'un systÃ¨me de skeleton loading CSS performant (sans JS overhead).\n- Tous les widgets du Dashboard (stats, tableaux de donnÃ©es, graphiques, logs systÃ¨me) affichent dÃ©sormais des structures grisÃ©es clignotantes pendant le fetch API initial.\n- AmÃ©lioration de la perception des performances et suppression des valeurs 'Â£0' ou '--' parasites au chargement de l'app." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔄 Skeleton Loaders & UI Feedback\n\n- Implémentation d'un système de skeleton loading CSS performant (sans JS overhead).\n- Tous les widgets du Dashboard (stats, tableaux de données, graphiques, logs système) affichent désormais des structures grisées clignotantes pendant le fetch API initial.\n- Amélioration de la perception des performances et suppression des valeurs '£0' ou '--' parasites au chargement de l'app." });
                 syncCloud();
             }
 
             
             if (!memoryStats.patchnotes.some(p => p.text.includes("Skeleton Dimensions"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ”§ Correction UI : Ajustement des dimensions des skeleton loaders\n\n- Correction d'un bug d'affichage oÃ¹ les skeletons hÃ©ritaient de la taille de police proportionnelle (em), provoquant l'apparition de gros blocs carrÃ©s sur les widgets de statistiques clÃ©s (Active Subs, Pending Orders).\n- Remplacement par des dimensions fixes absolues pour prÃ©server l'harmonie du design." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Correction UI : Ajustement des dimensions des skeleton loaders\n\n- Correction d'un bug d'affichage où les skeletons héritaient de la taille de police proportionnelle (em), provoquant l'apparition de gros blocs carrés sur les widgets de statistiques clés (Active Subs, Pending Orders).\n- Remplacement par des dimensions fixes absolues pour préserver l'harmonie du design." });
                 syncCloud();
             }
 
             
             if (!memoryStats.patchnotes.some(p => p.text.includes("Error Boundary"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ›¡ï¸ Centralized Error Boundary\n\n- ImplÃ©mentation d'un systÃ¨me de capture d'erreurs robuste (withErrorBoundary) pour l'ensemble des widgets du dashboard.\n- En cas d'Ã©chec de rendu d'un composant (tableau, graphique, flux d'activitÃ©), l'UI n'est plus bloquÃ©e. Un composant de fallback Ã©lÃ©gant signale l'erreur avec un message dÃ©taillÃ©, prÃ©servant ainsi l'expÃ©rience globale." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ Centralized Error Boundary\n\n- Implémentation d'un système de capture d'erreurs robuste (withErrorBoundary) pour l'ensemble des widgets du dashboard.\n- En cas d'échec de rendu d'un composant (tableau, graphique, flux d'activité), l'UI n'est plus bloquée. Un composant de fallback élégant signale l'erreur avec un message détaillé, préservant ainsi l'expérience globale." });
                 syncCloud();
             }
 
             
             if (!memoryStats.patchnotes.some(p => p.text.includes("Toast Notifications"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "âœ¨ Modernisation des Toast Notifications\n\n- Nouveau design des popups de confirmation (toast) avec backdrop-filter et forme pilule Ã©lÃ©gante.\n- Ajout d'icÃ´nes SVG animÃ©es (popIn) et d'un shake effect en cas d'erreur.\n- IntÃ©gration d'une barre de progression animÃ©e pour la durÃ©e d'affichage de la notification." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "✨ Modernisation des Toast Notifications\n\n- Nouveau design des popups de confirmation (toast) avec backdrop-filter et forme pilule élégante.\n- Ajout d'icônes SVG animées (popIn) et d'un shake effect en cas d'erreur.\n- Intégration d'une barre de progression animée pour la durée d'affichage de la notification." });
                 syncCloud();
             }
 
             
             if (!memoryStats.patchnotes.some(p => p.text.includes("UI Localization"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸŒ UI Localization & Consistency\n\n- Uniformisation complÃ¨te de la langue du Dashboard en Anglais (Kanban, statuts Discord, notifications de bots, messages d'erreurs).\n- Nettoyage des textes hybrides FranÃ§ais/Anglais pour une expÃ©rience utilisateur cohÃ©rente.\n- VÃ©rification de l'intÃ©gritÃ© de tous les Squelettes de chargement (Skeletons) sur l'ensemble des modules d'analytique." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🌍 UI Localization & Consistency\n\n- Uniformisation complète de la langue du Dashboard en Anglais (Kanban, statuts Discord, notifications de bots, messages d'erreurs).\n- Nettoyage des textes hybrides Français/Anglais pour une expérience utilisateur cohérente.\n- Vérification de l'intégrité de tous les Squelettes de chargement (Skeletons) sur l'ensemble des modules d'analytique." });
                 syncCloud();
             }
 
             
             if (!memoryStats.patchnotes.some(p => p.text.includes("Ultra-Complete Diagnostics & Global Localization"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ›¡ï¸ Ultra-Complete Diagnostics & Global Localization\n\n- ExÃ©cution d'une passe de diagnostics profonds (analyse mot par mot) rÃ©vÃ©lant des instabilitÃ©s UI rÃ©siduelles.\n- Nettoyage dÃ©finitif des chaÃ®nes de caractÃ¨res franÃ§aises ('Veuillez remplir tous les champs', Kanban 'NOUVELLES DEMANDES', statuts de dÃ©connexion) pour garantir une expÃ©rience 100% anglophone premium.\n- Correction du comportement des boutons temporels du graphique des ventes (perte du style 'btn-pill' lors du re-render).\n- Mise Ã  jour des identifiants IA (Gemini 3.1 Pro -> 1.5 Pro) sur les Ã©crans d'interrogation pour reflÃ©ter l'infrastructure rÃ©elle." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ Ultra-Complete Diagnostics & Global Localization\n\n- Exécution d'une passe de diagnostics profonds (analyse mot par mot) révélant des instabilités UI résiduelles.\n- Nettoyage définitif des chaînes de caractères françaises ('Veuillez remplir tous les champs', Kanban 'NOUVELLES DEMANDES', statuts de déconnexion) pour garantir une expérience 100% anglophone premium.\n- Correction du comportement des boutons temporels du graphique des ventes (perte du style 'btn-pill' lors du re-render).\n- Mise à jour des identifiants IA (Gemini 3.1 Pro -> 1.5 Pro) sur les écrans d'interrogation pour refléter l'infrastructure réelle." });
                 syncCloud();
             }
 
             
             if (!memoryStats.patchnotes.some(p => p.text.includes("Upstash Redis Timeout Optimization"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ”§ Upstash Redis Timeout Optimization\n\n- Upgraded the timeout limit for Upstash Cloud Sync from 3000ms to 10000ms to prevent background crashes during high latency periods.\n- Stabilized the dashboard background syncing." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Upstash Redis Timeout Optimization\n\n- Upgraded the timeout limit for Upstash Cloud Sync from 3000ms to 10000ms to prevent background crashes during high latency periods.\n- Stabilized the dashboard background syncing." });
                 syncCloud();
             }
 
             
             if (!memoryStats.patchnotes.some(p => p.text.includes("Premium Analytics UI & Animations"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸŽ¨ Premium Analytics UI & Animations\n\n- Refonte visuelle de l'onglet Analytics : ajout de lueurs ambiantes, bordures douces et animations de fondu 'slide-up' Ã  l'ouverture de la page.\n- AmÃ©lioration de la bibliothÃ¨que Chart.js (courbes lissÃ©es, dÃ©gradÃ©s subtils, tooltips stylisÃ©s avec ombres portÃ©es) pour une lecture de donnÃ©es premium.\n- Renforcement de l'expÃ©rience gÃ©nÃ©rale des composants graphiques." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🎨 Premium Analytics UI & Animations\n\n- Refonte visuelle de l'onglet Analytics : ajout de lueurs ambiantes, bordures douces et animations de fondu 'slide-up' à l'ouverture de la page.\n- Amélioration de la bibliothèque Chart.js (courbes lissées, dégradés subtils, tooltips stylisés avec ombres portées) pour une lecture de données premium.\n- Renforcement de l'expérience générale des composants graphiques." });
                 syncCloud();
             }
 
             
             if (!memoryStats.patchnotes.some(p => p.text.includes("Client Directory Overhaul"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ›¡ï¸ Client Directory Overhaul\n\n- Refonte totale du module de modÃ©ration (Client Directory).\n- IntÃ©gration d'une grille rÃ©active premium avec animations en cascade (slideUpFade) et effets de survol.\n- Nouveau design des fiches membres : avatars avec ombre portÃ©e, affichage clair des statuts et indicateurs actifs.\n- Optimisation de l'ergonomie des actions modÃ©ratrices (Bannissement, Mute, Warn) avec des boutons interactifs colorÃ©s et qualitatifs." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ Client Directory Overhaul\n\n- Refonte totale du module de modération (Client Directory).\n- Intégration d'une grille réactive premium avec animations en cascade (slideUpFade) et effets de survol.\n- Nouveau design des fiches membres : avatars avec ombre portée, affichage clair des statuts et indicateurs actifs.\n- Optimisation de l'ergonomie des actions modératrices (Bannissement, Mute, Warn) avec des boutons interactifs colorés et qualitatifs." });
                 syncCloud();
             }
 
             
             if (!memoryStats.patchnotes.some(p => p.text.includes("Client Directory Filter Animations"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "âœ¨ Client Directory Filter Animations & UI Premium\n\n- Correction et refonte des filtres et boutons dans l'onglet modÃ©ration.\n- Ajout d'animations fluides (rotation au survol, lueur ambiante, fondus d'apparition).\n- Remplacement des listes dÃ©roulantes par dÃ©faut par des sÃ©lecteurs premiums personnalisÃ©s.\n- IntÃ©gration d'un champ de recherche stylisÃ© avec icÃ´ne animÃ©e et feedback visuel." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "✨ Client Directory Filter Animations & UI Premium\n\n- Correction et refonte des filtres et boutons dans l'onglet modération.\n- Ajout d'animations fluides (rotation au survol, lueur ambiante, fondus d'apparition).\n- Remplacement des listes déroulantes par défaut par des sélecteurs premiums personnalisés.\n- Intégration d'un champ de recherche stylisé avec icône animée et feedback visuel." });
                 syncCloud();
             }
 
             if (!memoryStats.patchnotes.some(p => p.text.includes("FIX: Authentication & Dashboard Rendering"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ”§ FIX: Authentication & Dashboard Rendering\n\n- RÃ©tablissement complet de la barriÃ¨re de sÃ©curitÃ© PIN : le dashboard n'est plus accessible sans le code d'accÃ¨s, et la page de connexion s'affiche correctement Ã  tous les utilisateurs non-authentifiÃ©s.\n- RÃ©activation de la vÃ©rification de session sur la route `/api/init-data` (retour HTTP 401 Unauthorized).\n- Correction d'une erreur de syntaxe complexe liÃ©e Ã  l'Ã©chappement des chaÃ®nes Javascript (`SyntaxError: Unexpected identifier 'window'`) lors du rendu des widgets du dashboard." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 FIX: Authentication & Dashboard Rendering\n\n- Rétablissement complet de la barrière de sécurité PIN : le dashboard n'est plus accessible sans le code d'accès, et la page de connexion s'affiche correctement à tous les utilisateurs non-authentifiés.\n- Réactivation de la vérification de session sur la route `/api/init-data` (retour HTTP 401 Unauthorized).\n- Correction d'une erreur de syntaxe complexe liée à l'échappement des chaînes Javascript (`SyntaxError: Unexpected identifier 'window'`) lors du rendu des widgets du dashboard." });
                 syncCloud();
             }
 
             if (!memoryStats.patchnotes.some(p => p.text.includes("FIX: Widget Modal & UI Interaction"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ”§ FIX: Widget Modal & UI Interaction\n\n- Correction majeure de l'injecteur HTML du Modal Widget : le modal d'ajout de widgets ('âž• Add Widget') avait Ã©tÃ© accidentellement injectÃ© dans le gÃ©nÃ©rateur de transcriptions de chat.\n- RÃ©intÃ©gration sÃ©curisÃ©e de l'interface modale dans la boucle principale du dashboard.\n- AmÃ©lioration de la rÃ©silience du rendu des boutons d'ajout/suppression grÃ¢ce Ã  une refonte de l'Ã©chappement des chaÃ®nes d'Ã©vÃ¨nements JavaScript cÃ´tÃ© serveur." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 FIX: Widget Modal & UI Interaction\n\n- Correction majeure de l'injecteur HTML du Modal Widget : le modal d'ajout de widgets ('➕ Add Widget') avait été accidentellement injecté dans le générateur de transcriptions de chat.\n- Réintégration sécurisée de l'interface modale dans la boucle principale du dashboard.\n- Amélioration de la résilience du rendu des boutons d'ajout/suppression grâce à une refonte de l'échappement des chaînes d'évènements JavaScript côté serveur." });
                 syncCloud();
             }
             if (!memoryStats.patchnotes.some(p => p.text.includes("FIX: Widget Modal Syntax Error"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ”¥ FIX: Widget Modal Syntax Error\n\n- RÃ©solution d'une `SyntaxError: Invalid regular expression flags` critique qui causait le crash du bot au dÃ©marrage.\n- L'erreur Ã©tait liÃ©e Ã  une corruption du template literal lors de la prÃ©cÃ©dente extraction de code depuis le gÃ©nÃ©rateur de transcription.\n- Le bouton 'âž• Add Widget' est dÃ©sormais 100% fonctionnel sur le dashboard, avec un affichage fluide de la modale en surcouche complÃ¨te (z-index)." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔥 FIX: Widget Modal Syntax Error\n\n- Résolution d'une `SyntaxError: Invalid regular expression flags` critique qui causait le crash du bot au démarrage.\n- L'erreur était liée à une corruption du template literal lors de la précédente extraction de code depuis le générateur de transcription.\n- Le bouton '➕ Add Widget' est désormais 100% fonctionnel sur le dashboard, avec un affichage fluide de la modale en surcouche complète (z-index)." });
                 syncCloud();
             }
             if (!memoryStats.patchnotes.some(p => p.text.includes("Upstash Quota Fallback System"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ›¡ï¸ Upstash Quota Fallback System\n\n- DÃ©sactivation complÃ¨te et permanente de la synchronisation Upstash (Limite de 500k requÃªtes atteinte par le quota gratuit).\n- Le systÃ¨me bascule automatiquement sur une architecture 100% locale (JSON File Storage) avec des I/O asynchrones pour garantir la persistance des donnÃ©es sans latence.\n- Toutes vos donnÃ©es statistiques, historiques de transactions et configurations restent sÃ©curisÃ©es localement." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ Upstash Quota Fallback System\n\n- Désactivation complète et permanente de la synchronisation Upstash (Limite de 500k requêtes atteinte par le quota gratuit).\n- Le système bascule automatiquement sur une architecture 100% locale (JSON File Storage) avec des I/O asynchrones pour garantir la persistance des données sans latence.\n- Toutes vos données statistiques, historiques de transactions et configurations restent sécurisées localement." });
                 syncCloud();
             }
 
             if (!memoryStats.patchnotes.some(p => p.text.includes("Upstash Rate-Limit Resilience"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ›¡ï¸ Upstash Rate-Limit Resilience\n\n- Fixation de l'erreur fatale 400 (Quota Exceeded) liÃ©e Ã  la limite de 500k requÃªtes Upstash.\n- Mise en place d'un 'Circuit Breaker' (disjoncteur) : si l'API Cloud renvoie une erreur HTTP 400, 403, ou 429, la synchronisation Cloud est silencieusement coupÃ©e (mode local-only).\n- L'application reste ainsi stable, 100% fonctionnelle et fluide mÃªme avec un forfait de base saturÃ©." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ Upstash Rate-Limit Resilience\n\n- Fixation de l'erreur fatale 400 (Quota Exceeded) liée à la limite de 500k requêtes Upstash.\n- Mise en place d'un 'Circuit Breaker' (disjoncteur) : si l'API Cloud renvoie une erreur HTTP 400, 403, ou 429, la synchronisation Cloud est silencieusement coupée (mode local-only).\n- L'application reste ainsi stable, 100% fonctionnelle et fluide même avec un forfait de base saturé." });
             }
             if (!memoryStats.patchnotes.some(p => p.text.includes("Syntax Engine Repair"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ”§ Syntax Engine Repair & Chart Patch\n\n- RÃ©solution de la 'SyntaxError: missing ) after argument list' qui causait le non-affichage global du Dashboard.\n- Le correctif a Ã©tÃ© appliquÃ© au niveau de la gÃ©nÃ©ration de l'UI du composant Chart.js (Sales Trajectory).\n- Les animations extraordinairement fluides sont dÃ©sormais restaurÃ©es avec la balise 'animation: { ... }' correctement fermÃ©e." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Syntax Engine Repair & Chart Patch\n\n- Résolution de la 'SyntaxError: missing ) after argument list' qui causait le non-affichage global du Dashboard.\n- Le correctif a été appliqué au niveau de la génération de l'UI du composant Chart.js (Sales Trajectory).\n- Les animations extraordinairement fluides sont désormais restaurées avec la balise 'animation: { ... }' correctement fermée." });
             }
             if (!memoryStats.patchnotes.some(p => p.text.includes("Revenue Chart Fluid Animation"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "âœ¨ Revenue Chart Fluid Animation\n\n- Refonte complÃ¨te de l'animation d'ouverture du graphique 'Revenue Trajectory'.\n- IntÃ©gration de courbes de bÃ©zier Ã©lastiques (easeOutElastic) sur l'axe Y et la tension de ligne pour un effet de rebond organique.\n- L'apparition des points est dÃ©sormais sÃ©quencÃ©e avec un dÃ©calage exponentiel sur l'axe X, crÃ©ant une onde fluide ('wave effect') extraordinairement satisfaisante au chargement du composant." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "✨ Revenue Chart Fluid Animation\n\n- Refonte complète de l'animation d'ouverture du graphique 'Revenue Trajectory'.\n- Intégration de courbes de bézier élastiques (easeOutElastic) sur l'axe Y et la tension de ligne pour un effet de rebond organique.\n- L'apparition des points est désormais séquencée avec un décalage exponentiel sur l'axe X, créant une onde fluide ('wave effect') extraordinairement satisfaisante au chargement du composant." });
                 syncCloud();
             }
             if (!memoryStats.patchnotes.some(p => p.text.includes("Nexus Core Authentication Redesign"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ›¡ï¸ Nexus Core Authentication Redesign\n\n- Refonte visuelle complÃ¨te et premium de l'Ã©cran d'authentification (login).\n- IntÃ©gration d'un arriÃ¨re-plan 'glassmorphism' 3D en mouvement lent et d'une grille spatiale (grid mesh) Ã©lÃ©gante.\n- Animations 3D avancÃ©es (rotation spatiale, micro-interactions magnÃ©tiques sur les boutons).\n- Ajout d'effets de secousse (shake effect) lors d'un code PIN incorrect et transitions douces au succÃ¨s." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ Nexus Core Authentication Redesign\n\n- Refonte visuelle complète et premium de l'écran d'authentification (login).\n- Intégration d'un arrière-plan 'glassmorphism' 3D en mouvement lent et d'une grille spatiale (grid mesh) élégante.\n- Animations 3D avancées (rotation spatiale, micro-interactions magnétiques sur les boutons).\n- Ajout d'effets de secousse (shake effect) lors d'un code PIN incorrect et transitions douces au succès." });
                 syncCloud();
             }
             if (!memoryStats.patchnotes.some(p => p.text.includes("Live Support Console UI Overhaul"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ’¬ Live Support Console UI Overhaul\n\n- AmÃ©lioration esthÃ©tique majeure de la page Chat.\n- Remplacement complet des anciens emojis par des icÃ´nes SVG minimalistes et professionnelles.\n- IntÃ©gration d'animations fluides ('slideUpFade', 'pulseLogo') et d'effets de survol avancÃ©s sur l'ensemble des boutons et menus contextuels.\n- AmÃ©lioration de la lisibilitÃ© des messages avec de subtiles ombres portÃ©es ('box-shadow') et des contours translucides." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "💬 Live Support Console UI Overhaul\n\n- Amélioration esthétique majeure de la page Chat.\n- Remplacement complet des anciens emojis par des icônes SVG minimalistes et professionnelles.\n- Intégration d'animations fluides ('slideUpFade', 'pulseLogo') et d'effets de survol avancés sur l'ensemble des boutons et menus contextuels.\n- Amélioration de la lisibilité des messages avec de subtiles ombres portées ('box-shadow') et des contours translucides." });
                 syncCloud();
             }
 
             if (!memoryStats.patchnotes.some(p => p.text.includes("Gemini SDK Crash & Bandwidth Monitor"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ”¥ Gemini SDK Crash & Bandwidth Monitor (Render 5GB Limit)\n\n- **Fix Critique (GoogleGenAI is not defined / Module Not Found)** : L'erreur d'import de '@google/genai' qui faisait crasher l'analyse de donnÃ©es (AI Deep Analysis) a Ã©tÃ© Ã©radiquÃ©e. Le systÃ¨me utilise dÃ©sormais une API REST native `axios` ultra-lÃ©gÃ¨re pointant vers `gemini-3.5-flash`. Plus aucun crash de dÃ©pendance sur l'infrastructure Render.\n- **Feature (Monitoring)** : IntÃ©gration d'un nouveau tracker 'Bandwidth Usage' sur le Nexus Mainframe Monitor. Il surveille en temps rÃ©el (via les flux de socket Node.js) votre consommation entrante et sortante, affichant une jauge dynamique jusqu'Ã  la limite vitale de 5 GB de Render. Les statuts basculent automatiquement (OPTIMAL âž” WARNING âž” CRITICAL)." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔥 Gemini SDK Crash & Bandwidth Monitor (Render 5GB Limit)\n\n- **Fix Critique (GoogleGenAI is not defined / Module Not Found)** : L'erreur d'import de '@google/genai' qui faisait crasher l'analyse de données (AI Deep Analysis) a été éradiquée. Le système utilise désormais une API REST native `axios` ultra-légère pointant vers `gemini-3.5-flash`. Plus aucun crash de dépendance sur l'infrastructure Render.\n- **Feature (Monitoring)** : Intégration d'un nouveau tracker 'Bandwidth Usage' sur le Nexus Mainframe Monitor. Il surveille en temps réel (via les flux de socket Node.js) votre consommation entrante et sortante, affichant une jauge dynamique jusqu'à la limite vitale de 5 GB de Render. Les statuts basculent automatiquement (OPTIMAL ➔ WARNING ➔ CRITICAL)." });
                 syncCloud();
             }
 
             if (!memoryStats.patchnotes.some(p => p.text.includes("Upstash Quota Fix & Anti-Bug System"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ”§ RÃ©solution de Bug Critique: Perte de donnÃ©es (Total Yield / Transactions)\n\n- **Cause** : Les requÃªtes `syncCloud` envoyaient des donnÃ©es Ã  Upstash Ã  chaque petite action (jusqu'Ã  10 000 fois par jour), Ã©puisant le quota gratuit (HTTP 429). Lors d'un redÃ©marrage serveur par Render, le fichier local Ã©tant effacÃ© (ephemeral filesystem), le bot tÃ©lÃ©chargeait une sauvegarde datÃ©e de l'ancien Upstash, Ã©crasant ainsi toutes les nouvelles transactions.\n- **Correction** : ImplÃ©mentation d'un algorithme de _Debounce_ sur la synchronisation cloud (`performCloudSync`). Les sauvegardes Upstash sont dÃ©sormais regroupÃ©es et envoyÃ©es au maximum 1 fois par minute, rÃ©duisant les appels API de plus de 99% et protÃ©geant vos donnÃ©es !\n- **Feature** : CrÃ©ation d'un registre `anti-bug.json` pour garder une trace persistante des solutions appliquÃ©es." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Résolution de Bug Critique: Perte de données (Total Yield / Transactions)\n\n- **Cause** : Les requêtes `syncCloud` envoyaient des données à Upstash à chaque petite action (jusqu'à 10 000 fois par jour), épuisant le quota gratuit (HTTP 429). Lors d'un redémarrage serveur par Render, le fichier local étant effacé (ephemeral filesystem), le bot téléchargeait une sauvegarde datée de l'ancien Upstash, écrasant ainsi toutes les nouvelles transactions.\n- **Correction** : Implémentation d'un algorithme de _Debounce_ sur la synchronisation cloud (`performCloudSync`). Les sauvegardes Upstash sont désormais regroupées et envoyées au maximum 1 fois par minute, réduisant les appels API de plus de 99% et protégeant vos données !\n- **Feature** : Création d'un registre `anti-bug.json` pour garder une trace persistante des solutions appliquées." });
                 syncCloud();
             }
 
             if (!memoryStats.patchnotes.some(p => p.text.includes("Circular Bandwidth Indicator"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "âœ¨ Circular Bandwidth Indicator\n\n- AmÃ©lioration visuelle : Remplacement de la simple jauge de bande passante par un indicateur de progression circulaire au format SVG.\n- IntÃ©gration d'animations fluides pour le remplissage de la jauge (cubic-bezier) et transitions de couleurs (Bleu âž” Orange âž” Rouge) en approchant de la limite des 5 GB." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "✨ Circular Bandwidth Indicator\n\n- Amélioration visuelle : Remplacement de la simple jauge de bande passante par un indicateur de progression circulaire au format SVG.\n- Intégration d'animations fluides pour le remplissage de la jauge (cubic-bezier) et transitions de couleurs (Bleu ➔ Orange ➔ Rouge) en approchant de la limite des 5 GB." });
                 syncCloud();
             }
 
             if (!memoryStats.patchnotes.some(p => p.text.includes("Discord as a Database (DaaD)"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸŒŸ Discord as a Database (DaaD) - Auto Fallback\n\n- **ProblÃ¨me** : Les limites Upstash (ex: 500k requÃªtes) provoquaient des erreurs 400 (Quota Exceeded). Sur Render, le filesystem local Ã©tant Ã©phÃ©mÃ¨re, les donnÃ©es Ã©taient perdues au redÃ©marrage.\n- **Solution** : CrÃ©ation d'un systÃ¨me de backup automatisÃ© vers Discord. Si Upstash est dÃ©sactivÃ© ou en limite de quota, le bot sauvegarde/restaure automatiquement la base de donnÃ©es via un salon \`#database-backups\` 100% invisible. Aucune donnÃ©e ne sera perdue mÃªme en cas d'effacement du conteneur Render !" });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🌟 Discord as a Database (DaaD) - Auto Fallback\n\n- **Problème** : Les limites Upstash (ex: 500k requêtes) provoquaient des erreurs 400 (Quota Exceeded). Sur Render, le filesystem local étant éphémère, les données étaient perdues au redémarrage.\n- **Solution** : Création d'un système de backup automatisé vers Discord. Si Upstash est désactivé ou en limite de quota, le bot sauvegarde/restaure automatiquement la base de données via un salon \`#database-backups\` 100% invisible. Aucune donnée ne sera perdue même en cas d'effacement du conteneur Render !" });
                 syncCloud();
             }
 
             if (!memoryStats.patchnotes.some(p => p.text.includes("Discord Fallback Fix (DaaD)"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ”¥ Discord Fallback Fix (DaaD) - Restauration des donnÃ©es\n\n- **Cause** : Le systÃ¨me de fallback DaaD (Discord as a Database) Ã©tait bien configurÃ© pour se lancer en l'absence totale de variables d'environnement Upstash. Cependant, lorsqu'Upstash rejetait la connexion avec une erreur 400 (Quota Exceeded), le `catch` final exÃ©cutait uniquement la vÃ©rification du fichier local `fs.existsSync(STATS_FILE)`, Ã©crasant la base avec des donnÃ©es vides aprÃ¨s un redÃ©marrage Render.\n- **Correction** : Injection de `fetchBackupFromDiscord()` Ã  l'intÃ©rieur du bloc `catch` de `loadCloudStats()`. Le bot rÃ©cupÃ¨re dÃ©sormais instantanÃ©ment l'historique de #database-backups mÃªme en cas de mort d'Upstash.\n- **DonnÃ©es RestaurÃ©es** : 100% des transactions (Total Yield) ont Ã©tÃ© rÃ©cupÃ©rÃ©es via l'effacement des sauvegardes corrompues et la lecture du dernier backup Discord sain (255 KB)." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔥 Discord Fallback Fix (DaaD) - Restauration des données\n\n- **Cause** : Le système de fallback DaaD (Discord as a Database) était bien configuré pour se lancer en l'absence totale de variables d'environnement Upstash. Cependant, lorsqu'Upstash rejetait la connexion avec une erreur 400 (Quota Exceeded), le `catch` final exécutait uniquement la vérification du fichier local `fs.existsSync(STATS_FILE)`, écrasant la base avec des données vides après un redémarrage Render.\n- **Correction** : Injection de `fetchBackupFromDiscord()` à l'intérieur du bloc `catch` de `loadCloudStats()`. Le bot récupère désormais instantanément l'historique de #database-backups même en cas de mort d'Upstash.\n- **Données Restaurées** : 100% des transactions (Total Yield) ont été récupérées via l'effacement des sauvegardes corrompues et la lecture du dernier backup Discord sain (255 KB)." });
                 syncCloud();
             }
 
             if (!memoryStats.patchnotes.some(p => p.text.includes("AI Studio Crash Loop Fix"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ›¡ï¸ AI Studio Crash Loop Fix (Upstash Quota)\n\n- **Cause** : Lorsque Upstash atteignait sa limite gratuite (500k requÃªtes), l'API renvoyait une erreur HTTP 400. Le bot l'affichait comme une `[ERROR]` critique, ce qui dÃ©clenchait une alerte de plantage en boucle cÃ´tÃ© IA (Fix the errors in the app).\n- **Correction** : RÃ©trogradation des logs Upstash 400/403/429 en `[WARN]` puisqu'ils sont prÃ©vus et gÃ©rÃ©s parfaitement par notre fallback DaaD (Discord-as-a-Database).\n- **Consommation** : Suite au fix Debounce (qui groupe les sauvegardes 1 fois par minute max au lieu de 15 000/jour), l'estimation pour le mois prochain est de ~43 000 requÃªtes, soit moins de 10% du quota gratuit de 500k." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ AI Studio Crash Loop Fix (Upstash Quota)\n\n- **Cause** : Lorsque Upstash atteignait sa limite gratuite (500k requêtes), l'API renvoyait une erreur HTTP 400. Le bot l'affichait comme une `[ERROR]` critique, ce qui déclenchait une alerte de plantage en boucle côté IA (Fix the errors in the app).\n- **Correction** : Rétrogradation des logs Upstash 400/403/429 en `[WARN]` puisqu'ils sont prévus et gérés parfaitement par notre fallback DaaD (Discord-as-a-Database).\n- **Consommation** : Suite au fix Debounce (qui groupe les sauvegardes 1 fois par minute max au lieu de 15 000/jour), l'estimation pour le mois prochain est de ~43 000 requêtes, soit moins de 10% du quota gratuit de 500k." });
                 syncCloud();
             }
 
             if (!memoryStats.patchnotes.some(p => p.text.includes("AI Deep Analysis 404 Fix"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ”¥ Fix AI Deep Analysis (404 Error)\n\n- **Cause** : Les requÃªtes d'analyse basculaient sur le modÃ¨le `gemini-1.5-flash-latest` qui a Ã©tÃ© retirÃ© de l'API (erreur HTTP 404 Model Not Found), causant un Ã©chec total des fonctions *AI Deep Analysis* et *Market Scan*. De plus, le modÃ¨le *gemini-2.0-flash* nÃ©cessitait un compte facturÃ©.\n- **Correction** : Migration transparente de tous les endpoints d'intelligence artificielle vers le modÃ¨le ultra-rapide `gemini-3.5-flash`, garantissant une analyse instantanÃ©e et supportant pleinement le quota gratuit." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔥 Fix AI Deep Analysis (404 Error)\n\n- **Cause** : Les requêtes d'analyse basculaient sur le modèle `gemini-1.5-flash-latest` qui a été retiré de l'API (erreur HTTP 404 Model Not Found), causant un échec total des fonctions *AI Deep Analysis* et *Market Scan*. De plus, le modèle *gemini-2.0-flash* nécessitait un compte facturé.\n- **Correction** : Migration transparente de tous les endpoints d'intelligence artificielle vers le modèle ultra-rapide `gemini-3.5-flash`, garantissant une analyse instantanée et supportant pleinement le quota gratuit." });
                 syncCloud();
             }
 
             if (!memoryStats.patchnotes.some(p => p.text.includes("AI Loading Screen Overhaul"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "âœ¨ Refonte de l'Ã‰cran de Chargement IA\n\n- **Feature** : Remplacement du simple spinner de chargement par une interface dynamique et immersive.\n- **Feature** : Ajout d'une barre de progression fluide en temps rÃ©el avec des effets de nÃ©on (Gradients Purple/Blue).\n- **Feature** : IntÃ©gration d'un module textuel qui affiche en temps rÃ©el les Ã©tapes de 'rÃ©flexion' de l'Intelligence Artificielle (Ingestion, Tokenization, Analyse, etc) avec des animations de transition." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "✨ Refonte de l'Écran de Chargement IA\n\n- **Feature** : Remplacement du simple spinner de chargement par une interface dynamique et immersive.\n- **Feature** : Ajout d'une barre de progression fluide en temps réel avec des effets de néon (Gradients Purple/Blue).\n- **Feature** : Intégration d'un module textuel qui affiche en temps réel les étapes de 'réflexion' de l'Intelligence Artificielle (Ingestion, Tokenization, Analyse, etc) avec des animations de transition." });
                 syncCloud();
             }
 
             if (!memoryStats.patchnotes.some(p => p.text.includes("AI Theme Bleed Fix"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸŽ¨ AI UI Theme Bleed Fix\n\n- **Bug** : L'utilisation de *Deep AI Analysis* gÃ©nÃ©rait parfois un code HTML contenant les balises `<style>`, `<html>` et `<body>`, ce qui contaminait le DOM et transformait la page en fond blanc ou cassait le thÃ¨me visuel sombre (UI Theme Bleed).\n- **Correction** : Injection d'un prompt strict dans l'API Gemini pour forcer la production exclusive de fragments HTML sÃ©curisÃ©s avec des styles en ligne adaptÃ©s au mode sombre." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🎨 AI UI Theme Bleed Fix\n\n- **Bug** : L'utilisation de *Deep AI Analysis* générait parfois un code HTML contenant les balises `<style>`, `<html>` et `<body>`, ce qui contaminait le DOM et transformait la page en fond blanc ou cassait le thème visuel sombre (UI Theme Bleed).\n- **Correction** : Injection d'un prompt strict dans l'API Gemini pour forcer la production exclusive de fragments HTML sécurisés avec des styles en ligne adaptés au mode sombre." });
                 syncCloud();
             }
 
             if (!memoryStats.patchnotes.some(p => p.text.includes("UI Theme Bleed Fix"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸŽ¨ Correction Critique: UI Theme Bleed (Page Blanche)\n\n- **Bug** : L'utilisation de *Deep AI Analysis* ou *Market Scan* rendait parfois l'Ã©cran complÃ¨tement blanc ou cassait le Dark Mode.\n- **Cause** : L'IA gÃ©nÃ©rait parfois un document HTML complet avec ses propres balises `<style>` ou `<body>` qui Ã©crasaient le thÃ¨me global du Dashboard.\n- **Correction** : ImplÃ©mentation d'un algorithme de nettoyage robuste cÃ´tÃ© serveur (Regex Stripping) qui intercepte la rÃ©ponse de Gemini et supprime toutes les balises globales ou parasites avant de l'envoyer au client. Le Dashboard reste 100% protÃ©gÃ©.\n- **Feature** : L'interface de chargement dynamique et temps rÃ©el a Ã©tÃ© Ã©tendue Ã  tous les modules d'IA (y compris Market Scan)." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🎨 Correction Critique: UI Theme Bleed (Page Blanche)\n\n- **Bug** : L'utilisation de *Deep AI Analysis* ou *Market Scan* rendait parfois l'écran complètement blanc ou cassait le Dark Mode.\n- **Cause** : L'IA générait parfois un document HTML complet avec ses propres balises `<style>` ou `<body>` qui écrasaient le thème global du Dashboard.\n- **Correction** : Implémentation d'un algorithme de nettoyage robuste côté serveur (Regex Stripping) qui intercepte la réponse de Gemini et supprime toutes les balises globales ou parasites avant de l'envoyer au client. Le Dashboard reste 100% protégé.\n- **Feature** : L'interface de chargement dynamique et temps réel a été étendue à tous les modules d'IA (y compris Market Scan)." });
                 syncCloud();
             }
 
             if (!memoryStats.patchnotes.some(p => p.text.includes("Correction Critique: Sauvegarde des Logs & Support Multilingue"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ›¡ï¸ Correction Critique: Sauvegarde des Logs & Support Multilingue\n\n- **Bug** : Les transactions ajoutÃ©es manuellement Ã©taient systÃ©matiquement supprimÃ©es lors des redÃ©ploiements sur l'infrastructure cloud.\n- **Cause** : Le disque Render Ã©tant Ã©phÃ©mÃ¨re, si Upstash (base principale) rejetait la sauvegarde pour dÃ©passement de quota, les logs Ã©taient stockÃ©s localement mais non relayÃ©s au canal de secours Discord avant le redÃ©ploiement (qui force un arrÃªt immÃ©diat).\n- **Correction** : Injection d'une sauvegarde instantanÃ©e 'Discord as a Database' (DaaD) lors de l'enregistrement manuel. La donnÃ©e est sÃ©curisÃ©e sur un canal Discord immuable en temps rÃ©el, garantissant 0 perte de donnÃ©es, mÃªme lors d'un crash ou d'un redÃ©ploiement forcÃ©.\n- **Feature** : Ajout d'un sÃ©lecteur de langue (Anglais / FranÃ§ais) sur le Dashboard pour l'analyse financiÃ¨re via l'IA Deep Analysis (Gemini 3.5 Flash). Le backend intercepte et force le contexte linguistique avec des directives strictes." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ Correction Critique: Sauvegarde des Logs & Support Multilingue\n\n- **Bug** : Les transactions ajoutées manuellement étaient systématiquement supprimées lors des redéploiements sur l'infrastructure cloud.\n- **Cause** : Le disque Render étant éphémère, si Upstash (base principale) rejetait la sauvegarde pour dépassement de quota, les logs étaient stockés localement mais non relayés au canal de secours Discord avant le redéploiement (qui force un arrêt immédiat).\n- **Correction** : Injection d'une sauvegarde instantanée 'Discord as a Database' (DaaD) lors de l'enregistrement manuel. La donnée est sécurisée sur un canal Discord immuable en temps réel, garantissant 0 perte de données, même lors d'un crash ou d'un redéploiement forcé.\n- **Feature** : Ajout d'un sélecteur de langue (Anglais / Français) sur le Dashboard pour l'analyse financière via l'IA Deep Analysis (Gemini 3.5 Flash). Le backend intercepte et force le contexte linguistique avec des directives strictes." });
                 syncCloud();
             }
 
             if (!memoryStats.patchnotes.some(p => p.text.includes("Enforcement Strict de la Langue (IA)"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ§  Enforcement Strict de la Langue (IA)\n\n- **Bug** : L'IA d'analyse Deep Analysis retournait parfois le rapport en anglais mÃªme lorsque 'FranÃ§ais' Ã©tait sÃ©lectionnÃ© sur le dashboard.\n- **Cause** : La directive de traduction Ã©tait noyÃ©e dans le prompt utilisateur, aux cÃ´tÃ©s des donnÃ©es de transaction massives qui sont en anglais (clÃ©s JSON, noms de produits). L'IA priorisait la langue majoritaire du contexte.\n- **Correction** : Refonte totale de l'appel Ã  Gemini 3.5 Flash via l'API REST pour exploiter le paramÃ¨tre `system_instruction`. La contrainte linguistique agit dÃ©sormais comme une directive systÃ¨me suprÃªme (System Prompt) que l'IA ne peut plus outrepasser." });
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🧠 Enforcement Strict de la Langue (IA)\n\n- **Bug** : L'IA d'analyse Deep Analysis retournait parfois le rapport en anglais même lorsque 'Français' était sélectionné sur le dashboard.\n- **Cause** : La directive de traduction était noyée dans le prompt utilisateur, aux côtés des données de transaction massives qui sont en anglais (clés JSON, noms de produits). L'IA priorisait la langue majoritaire du contexte.\n- **Correction** : Refonte totale de l'appel à Gemini 3.5 Flash via l'API REST pour exploiter le paramètre `system_instruction`. La contrainte linguistique agit désormais comme une directive système suprême (System Prompt) que l'IA ne peut plus outrepasser." });
                 syncCloud();
             }
 
-            if (!memoryStats.patchnotes.some(p => p.text.includes("Synchronisation Historique ComplÃ¨te"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ“Š Synchronisation Historique ComplÃ¨te (07 Mars 2026)\n\n- **Feature** : IntÃ©gration complÃ¨te et rÃ©troactive de l'intÃ©gralitÃ© des transactions depuis le 7 Mars 2026 dans le Dashboard.\n- **Logique** : Les transactions existantes ont Ã©tÃ© conservÃ©es intactes (avec leurs utilisateurs/produits associÃ©s), tandis que les transactions orphelines dÃ©tectÃ©es ont Ã©tÃ© intÃ©grÃ©es automatiquement sous l'Ã©tiquette 'Manual Entry' et 'Custom Amount'.\n- **Correction** : Le Total Yield et le volume total des transactions ont Ã©tÃ© recalculÃ©s et synchronisÃ©s parfaitement via Upstash pour reflÃ©ter l'historique complet sans aucune limite d'affichage (LevÃ©e de la limite des 1000 requÃªtes)." });
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Synchronisation Historique Complète"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "📊 Synchronisation Historique Complète (07 Mars 2026)\n\n- **Feature** : Intégration complète et rétroactive de l'intégralité des transactions depuis le 7 Mars 2026 dans le Dashboard.\n- **Logique** : Les transactions existantes ont été conservées intactes (avec leurs utilisateurs/produits associés), tandis que les transactions orphelines détectées ont été intégrées automatiquement sous l'étiquette 'Manual Entry' et 'Custom Amount'.\n- **Correction** : Le Total Yield et le volume total des transactions ont été recalculés et synchronisés parfaitement via Upstash pour refléter l'historique complet sans aucune limite d'affichage (Levée de la limite des 1000 requêtes)." });
                 syncCloud();
             }
 
-            if (!memoryStats.patchnotes.some(p => p.text.includes("Nettoyage des Transactions NÃ©gatives"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ§¹ Nettoyage des Transactions NÃ©gatives\n\n- **Feature** : Suppression de toutes les transactions nÃ©gatives (ex: -5) du systÃ¨me.\n- **Correction** : Le Total Yield et le volume global des transactions ont Ã©tÃ© recalculÃ©s sur Upstash en ne conservant strictement que les sommes positives, offrant ainsi un tableau de bord reflÃ©tant exclusivement les revenus entrants." });
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Nettoyage des Transactions Négatives"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🧹 Nettoyage des Transactions Négatives\n\n- **Feature** : Suppression de toutes les transactions négatives (ex: -5) du système.\n- **Correction** : Le Total Yield et le volume global des transactions ont été recalculés sur Upstash en ne conservant strictement que les sommes positives, offrant ainsi un tableau de bord reflétant exclusivement les revenus entrants." });
                 syncCloud();
             }
 
-            if (!memoryStats.patchnotes.some(p => p.text.includes("Purge des Transactions (PrÃ©-4 Juillet)"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ§¹ Purge des Transactions (PrÃ©-4 Juillet)\n\n- **Feature** : Suppression dÃ©finitive de toutes les transactions antÃ©rieures au 4 Juillet 2026 de la base de donnÃ©es.\n- **Correction** : Le Total Yield et le total global des transactions ont Ã©tÃ© recalculÃ©s sur Upstash pour ne reflÃ©ter que l'activitÃ© Ã  partir du 4 Juillet 2026, offrant une vue financiÃ¨re plus rÃ©cente et pertinente sur le Dashboard." });
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Purge des Transactions (Pré-4 Juillet)"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🧹 Purge des Transactions (Pré-4 Juillet)\n\n- **Feature** : Suppression définitive de toutes les transactions antérieures au 4 Juillet 2026 de la base de données.\n- **Correction** : Le Total Yield et le total global des transactions ont été recalculés sur Upstash pour ne refléter que l'activité à partir du 4 Juillet 2026, offrant une vue financière plus récente et pertinente sur le Dashboard." });
                 syncCloud();
             }
 
-            if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Triple CrÃ©ation de Channel"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "ðŸ›¡ï¸ Fix Triple CrÃ©ation de Channel\n\n- **Bug** : Les utilisateurs gÃ©nÃ©raient accidentellement 3 channels (ou plus) en un seul clic lors de ralentissements de l'API Discord.\n- **Cause** : Le gestionnaire REST de Discord.js possÃ©dait une configuration de 'retries' Ã  5 par dÃ©faut, forÃ§ant la recrÃ©ation du ticket si l'API tardait Ã  rÃ©pondre.\n- **Correction** : DÃ©sactivation des retries automatiques (retries: 0) et augmentation du verrou anti-spam (userTicketLocks) de 15s Ã  60s pour assurer une crÃ©ation unique sans duplication." });
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Triple Création de Channel"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ Fix Triple Création de Channel\n\n- **Bug** : Les utilisateurs généraient accidentellement 3 channels (ou plus) en un seul clic lors de ralentissements de l'API Discord.\n- **Cause** : Le gestionnaire REST de Discord.js possédait une configuration de 'retries' à 5 par défaut, forçant la recréation du ticket si l'API tardait à répondre.\n- **Correction** : Désactivation des retries automatiques (retries: 0) et augmentation du verrou anti-spam (userTicketLocks) de 15s à 60s pour assurer une création unique sans duplication." });
                 syncCloud();
             }
 
@@ -926,13 +926,13 @@ function ensureMemoryInitialized() {
             }
 }
 
-    // ðŸš€ [FUNCTION: syncCloud] - DÃ©claration de fonction
+    // 🚀 [FUNCTION: syncCloud] - Déclaration de fonction
 async function syncCloud(isManualForce = false) {
     try { 
         const dataStr = JSON.stringify(memoryStats);
         const tempFile = STATS_FILE + '.' + Math.random().toString(36).substr(2, 9) + '.tmp';
 
-        // 1. Ã‰criture Atomique (Incorruptible)
+        // 1. Écriture Atomique (Incorruptible)
         fs.writeFileSync(tempFile, dataStr);
         fs.renameSync(tempFile, STATS_FILE);
 
@@ -947,11 +947,11 @@ async function syncCloud(isManualForce = false) {
             fs.writeFileSync(path.join(__dirname, manualFile), dataStr);
             systemLog('INFO', 'BACKUP', `Manual physical backup created: ${manualFile}`);
         } else if (!fs.existsSync(backupFilePath)) {
-            // S'il n'y a pas encore de sauvegarde pour aujourd'hui, on la crÃ©e
+            // S'il n'y a pas encore de sauvegarde pour aujourd'hui, on la crée
             fs.writeFileSync(backupFilePath, dataStr);
             systemLog('INFO', 'BACKUP', `Daily physical backup created: ${backupFileName}`);
             
-            // Nettoyage des anciennes sauvegardes pour ne garder que les 7 plus rÃ©centes
+            // Nettoyage des anciennes sauvegardes pour ne garder que les 7 plus récentes
             const files = fs.readdirSync(__dirname);
             const backups = files.filter(f => f.startsWith('stats_backup_') && !f.includes('_manual_')).sort();
             
@@ -1047,7 +1047,7 @@ async function performCloudSync(url, token) {
     }
 }
 
-    // ðŸš€ [FUNCTION: checkSubscriptions] - DÃ©claration de fonction
+    // 🚀 [FUNCTION: checkSubscriptions] - Déclaration de fonction
 async function checkSubscriptions() {
     const now = Date.now();
     const guild = client.guilds.cache.first();
@@ -1063,7 +1063,7 @@ async function checkSubscriptions() {
                     if (!memoryStats.promo_codes) memoryStats.promo_codes = {};
                     memoryStats.promo_codes[codeName] = { discount: 50, limit: 1, used: 0, createdAt: new Date().toLocaleDateString('en-US') };
                     
-                    await member.send(`ðŸ›‘ **Your VIP Pass has expired.** You lost access to exclusive content. To thank you for your past support, here is a **-50% OFF** promo code valid for 1 use: \`${codeName}\`. Renew your pass in the shop!`).catch(() => {});
+                    await member.send(`🛑 **Your VIP Pass has expired.** You lost access to exclusive content. To thank you for your past support, here is a **-50% OFF** promo code valid for 1 use: \`${codeName}\`. Renew your pass in the shop!`).catch(() => {});
                     systemLog('INFO', 'VIP', `VIP pass expired for user ${userId}. Comeback promo sent.`);
                 }
             } catch(e) {}
@@ -1073,7 +1073,7 @@ async function checkSubscriptions() {
         else if (subData.expiresAt - now < 3 * 24 * 60 * 60 * 1000 && !subData.notified) {
             try {
                 const member = await guild.members.fetch(userId).catch(() => null);
-                if (member) await member.send("â³ **Your VIP Pass expires in 3 days!** Don't forget to renew it to keep your 20% discount and perks.").catch(() => {});
+                if (member) await member.send("⏳ **Your VIP Pass expires in 3 days!** Don't forget to renew it to keep your 20% discount and perks.").catch(() => {});
             } catch(e) {}
             memoryStats.subscriptions[userId].notified = true;
             syncCloud();
@@ -1082,7 +1082,7 @@ async function checkSubscriptions() {
 }
 
 // === [ANCHOR: BOT_STATISTICS_LOGGER] ===
-    // ðŸš€ [FUNCTION: logStat] - DÃ©claration de fonction
+    // 🚀 [FUNCTION: logStat] - Déclaration de fonction
 function logStat(type, value = 1, extraData = null) {
     const today = getParisDateStr();
     if (type === 'revenue') {
@@ -1102,9 +1102,9 @@ function logStat(type, value = 1, extraData = null) {
             memoryStats.recent_transactions.unshift({ username: extraData.username, product: extraData.productName, price: value, date: new Date().toLocaleString('en-US') });
             
             
-            addActivity('sale', `ðŸ’° Â£${value} Sale: ${extraData.username} bought ${extraData.productName}`);
-            notifyAdminPhone('NOUVELLE VENTE', `ðŸ’° +Â£${value}\nðŸ‘¤ Client: ${extraData.username}\nðŸ“¦ Produit: ${extraData.productName}`);
-            systemLog('INFO', 'STORE', `Sale executed: Â£${value} - ${extraData.username} acquired ${extraData.productName}`);
+            addActivity('sale', `💰 £${value} Sale: ${extraData.username} bought ${extraData.productName}`);
+            notifyAdminPhone('NOUVELLE VENTE', `💰 +£${value}\n👤 Client: ${extraData.username}\n📦 Produit: ${extraData.productName}`);
+            systemLog('INFO', 'STORE', `Sale executed: £${value} - ${extraData.username} acquired ${extraData.productName}`);
         }
     } else if (type === 'joins') {
         memoryStats.joins[today] = (memoryStats.joins[today] || 0) + value;
@@ -1113,7 +1113,7 @@ function logStat(type, value = 1, extraData = null) {
         if (extraData && extraData.username) {
             memoryStats.recent_joins.unshift({ username: extraData.username, date: new Date().toLocaleString('en-US') });
             if (memoryStats.recent_joins.length > 15) memoryStats.recent_joins.pop();
-            addActivity('join', `ðŸ‘‹ ${extraData.username} joined the server`);
+            addActivity('join', `👋 ${extraData.username} joined the server`);
         }
     } else if (type === 'leaves') {
         memoryStats.leaves[today] = (memoryStats.leaves[today] || 0) + value;
@@ -1131,7 +1131,7 @@ function logStat(type, value = 1, extraData = null) {
     } else if (type === 'custom_request') {
         if (!Array.isArray(memoryStats.custom_requests)) memoryStats.custom_requests = [];
         memoryStats.custom_requests.unshift({ id: Date.now().toString(), username: extraData.username, userId: extraData.userId, product: extraData.productName, date: new Date().toLocaleString('en-US'), status: 'pending' });
-        notifyAdminPhone('NOUVELLE CUSTOM REQUEST', `ðŸ’Œ ${extraData.username} a demandÃ©: ${extraData.productName}\nâž¡ï¸ VÃ©rifie le tableau Kanban sur le Dashboard.`);
+        notifyAdminPhone('NOUVELLE CUSTOM REQUEST', `💌 ${extraData.username} a demandé: ${extraData.productName}\n➡️ Vérifie le tableau Kanban sur le Dashboard.`);
         systemLog('INFO', 'CUSTOM_REQ', `Custom request logged for ${extraData.username}: ${extraData.productName}`);
     }
     memoryStats.last_update = Date.now();
@@ -1139,7 +1139,7 @@ function logStat(type, value = 1, extraData = null) {
 }
 
 // === [ANCHOR: DISCORD_SHOP_EMBED_GENERATOR] ===
-    // ðŸš€ [FUNCTION: sendShopSetup] - DÃ©claration de fonction
+    // 🚀 [FUNCTION: sendShopSetup] - Déclaration de fonction
 
 async function generateTranscript(channel) {
     try {
@@ -1213,7 +1213,7 @@ async function generateTranscript(channel) {
             position: relative; flex: 1; min-width: 200px;
         }
         .search-pill-wrapper::before {
-            content: "ðŸ”"; position: absolute; left: 16px; top: 50%; transform: translateY(-50%); font-size: 1rem; opacity: 0.5;
+            content: "🔍"; position: absolute; left: 16px; top: 50%; transform: translateY(-50%); font-size: 1rem; opacity: 0.5;
         }
         .search-pill-input {
             width: 100%; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05);
@@ -1342,26 +1342,26 @@ async function sendShopSetup(channel) {
     buyRows = buyRows.slice(0, 4);
 
     const rowActions = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('open_shop_channel').setLabel('ðŸ“© Redeem Code').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId('get_referral_link').setLabel('ðŸ”— Get Referral Link').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId('open_support_ticket').setLabel('ðŸŽ§ Need Support?').setStyle(ButtonStyle.Secondary)
+        new ButtonBuilder().setCustomId('open_shop_channel').setLabel('📩 Redeem Code').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId('get_referral_link').setLabel('🔗 Get Referral Link').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId('open_support_ticket').setLabel('🎧 Need Support?').setStyle(ButtonStyle.Secondary)
     );
     
     const componentsToSend = [...buyRows, rowActions];
     
     const groupedProducts = {};
     for (const [id, prod] of Object.entries(memoryStats.products)) {
-        if (prod.stock && prod.stock !== "âˆž" && parseInt(prod.stock) <= 0) continue;
+        if (prod.stock && prod.stock !== "∞" && parseInt(prod.stock) <= 0) continue;
         
-        const catName = prod.category || (prod.price === "Custom" ? "ðŸ’Œ PERSONALIZED (On Request)" : `âœ¨ ITEMS (Â£${prod.price})`);
+        const catName = prod.category || (prod.price === "Custom" ? "💌 PERSONALIZED (On Request)" : `✨ ITEMS (£${prod.price})`);
         if (!groupedProducts[catName]) groupedProducts[catName] = [];
         groupedProducts[catName].push(`**${id}.** ${prod.name}`);
     }
 
     const shopEmbed = new EmbedBuilder()
         .setColor('#10b981')
-        .setTitle('ðŸ’Ž VIP EXCLUSIVE MENU & PRICES ðŸ’Ž')
-        .setDescription('> *Instant automatic delivery directly in your DMs!* ðŸš€\n\nâ”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”');
+        .setTitle('💎 VIP EXCLUSIVE MENU & PRICES 💎')
+        .setDescription('> *Instant automatic delivery directly in your DMs!* 🚀\n\n━━━━━━━━━━━━━━━━━━━━━━');
     
     let isFirst = true;
     for (const [catName, items] of Object.entries(groupedProducts)) {
@@ -1370,8 +1370,8 @@ async function sendShopSetup(channel) {
         isFirst = false;
     }
 
-    shopEmbed.addFields({ name: 'â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”\nðŸ’³ HOW TO BUY ?', value: '**STEP 1:** Click a Buy button below to get your voucher.\n**STEP 2:** Click the green **ðŸ“© Redeem Code** button.\n**STEP 3:** Paste your code, choose your item, and check your DMs! ðŸŽ‰\n\nðŸŽ **FREE PRODUCT:** Click **ðŸ”— Get Referral Link**, invite your friends, and get a 100% OFF code automatically!' });
-    shopEmbed.setFooter({ text: 'Powered by Nexus Premium â€¢ Secure & Automatic ðŸ”’' });
+    shopEmbed.addFields({ name: '━━━━━━━━━━━━━━━━━━━━━━\n💳 HOW TO BUY ?', value: '**STEP 1:** Click a Buy button below to get your voucher.\n**STEP 2:** Click the green **📩 Redeem Code** button.\n**STEP 3:** Paste your code, choose your item, and check your DMs! 🎉\n\n🎁 **FREE PRODUCT:** Click **🔗 Get Referral Link**, invite your friends, and get a 100% OFF code automatically!' });
+    shopEmbed.setFooter({ text: 'Powered by Nexus Premium • Secure & Automatic 🔒' });
 
     await channel.send({ embeds: [shopEmbed], components: componentsToSend }).catch(() => {});
     systemLog('INFO', 'DISCORD_UI', 'Shop interface pushed to Discord successfully.');
@@ -1384,21 +1384,21 @@ const client = new Client({
     rest: { timeout: 60000, retries: 0 } 
 });
 
-// ðŸš€ [EVENT_LISTENER: error] - Ã‰couteur d'Ã©vÃ©nement Discord
+// 🚀 [EVENT_LISTENER: error] - Écouteur d'événement Discord
 client.on('error', error => {
     systemLog('ERROR', 'DISCORD_CORE', `Network Error: ${error.message}`);
-    console.error('âš ï¸ Discord Client Network Error:', error.message);
+    console.error('⚠️ Discord Client Network Error:', error.message);
 });
 
-// ðŸš€ [EVENT_LISTENER: shardDisconnect] - Ã‰couteur d'Ã©vÃ©nement Discord
+// 🚀 [EVENT_LISTENER: shardDisconnect] - Écouteur d'événement Discord
 client.on('shardDisconnect', (event, id) => {
     systemLog('WARN', 'DISCORD_CORE', `Shard ${id} disconnected. Attempting auto-reconnect...`);
-    console.log(`âŒ Shard ${id} disconnected from Discord. Attempting automatic reconnection...`);
+    console.log(`❌ Shard ${id} disconnected from Discord. Attempting automatic reconnection...`);
 });
 
 client.once('ready', async () => {
     systemLog('INFO', 'DISCORD_CORE', `Bot logged in successfully as ${client.user.tag}`);
-    console.log(`âœ… Bot logged in as ${client.user.tag}`);
+    console.log(`✅ Bot logged in as ${client.user.tag}`);
     await loadCloudStats();
     setInterval(backupToDiscord, 3600000); // 1 hour
     setTimeout(backupToDiscord, 10000); // First backup 10s after boot
@@ -1440,17 +1440,17 @@ client.once('ready', async () => {
             if (down) {
                 systemLog('WARN', 'REWARBLE_API', 'API appears unreachable during routine heartbeat check.');
                 const admin = await client.users.fetch(ADMIN_DISCORD_ID).catch(()=>null);
-                if (admin) admin.send("ðŸš¨ **SYSTEM ALERT** ðŸš¨\n- The Rewarble API is currently DOWN or unreachable. Purchases might fail.").catch(()=>{});
+                if (admin) admin.send("🚨 **SYSTEM ALERT** 🚨\n- The Rewarble API is currently DOWN or unreachable. Purchases might fail.").catch(()=>{});
             }
         } catch(e) { console.error("Error:", e); fetch("/api/log?msg="+encodeURIComponent(e.stack || e.message)); }
     }, 15 * 60 * 1000);
 });
 
-// ðŸš€ [EVENT_LISTENER: inviteCreate] - Ã‰couteur d'Ã©vÃ©nement Discord
+// 🚀 [EVENT_LISTENER: inviteCreate] - Écouteur d'événement Discord
 client.on('inviteCreate', invite => { try { guildInvites.get(invite.guild.id)?.set(invite.code, invite.uses); } catch (e) {} });
-// ðŸš€ [EVENT_LISTENER: inviteDelete] - Ã‰couteur d'Ã©vÃ©nement Discord
+// 🚀 [EVENT_LISTENER: inviteDelete] - Écouteur d'événement Discord
 client.on('inviteDelete', invite => { try { guildInvites.get(invite.guild.id)?.delete(invite.code); } catch (e) {} });
-// ðŸš€ [EVENT_LISTENER: channelDelete] - Nettoyage des maps en cas de suppression
+// 🚀 [EVENT_LISTENER: channelDelete] - Nettoyage des maps en cas de suppression
 client.on('channelDelete', channel => { try { if (channelStates.has(channel.id)) channelStates.delete(channel.id); } catch(e){} });
 
 // === [ANCHOR: GLOBAL_PROCESS_HANDLERS] ===
@@ -1465,7 +1465,7 @@ process.on('unhandledRejection', (reason, promise) => {
 
 // === [ANCHOR: DISCORD_INTERACTION_HANDLER] ===
 
-    // ðŸš€ [FUNCTION: acquireDistributedLock] - DÃ©claration de fonction
+    // 🚀 [FUNCTION: acquireDistributedLock] - Déclaration de fonction
 async function acquireDistributedLock(lockKey, ttl_ms = 5000) {
     const url = process.env.UPSTASH_REDIS_REST_URL;
     const token = process.env.UPSTASH_REDIS_REST_TOKEN;
@@ -1484,7 +1484,7 @@ async function acquireDistributedLock(lockKey, ttl_ms = 5000) {
 
 const userTicketLocks = new Set();
 const processedInteractions = new Set();
-// ðŸš€ [EVENT_LISTENER: interactionCreate] - Ã‰couteur d'Ã©vÃ©nement Discord
+// 🚀 [EVENT_LISTENER: interactionCreate] - Écouteur d'événement Discord
 client.on('interactionCreate', async (interaction) => {
     try {
         // --- MAINTENANCE SHIELD ---
@@ -1495,7 +1495,7 @@ client.on('interactionCreate', async (interaction) => {
                     const unixTime = Math.floor(mMode.endsAt / 1000);
                     const embed = new EmbedBuilder()
                         .setColor('#10b981')
-                        .setTitle(memoryStats.messages.maintenance_embed_title || 'ðŸš§ Shop Under Maintenance')
+                        .setTitle(memoryStats.messages.maintenance_embed_title || '🚧 Shop Under Maintenance')
                         .setDescription((memoryStats.messages.maintenance_embed_desc || '').replace('{time}', '<t:' + unixTime + ':R>'));
                     systemLog('DEBUG', 'MAINTENANCE', `Blocked interaction from user ${interaction.user.username} due to active lockout.`);
                     return interaction.reply({ embeds: [embed], ephemeral: true }).catch(()=>{});
@@ -1530,12 +1530,12 @@ client.on('interactionCreate', async (interaction) => {
                 text: feedback,
                 date: new Date().toLocaleString('en-US')
             });
-            addActivity('review', `â­ New ${numRating}/5 review submitted by ${interaction.user.username}`);
-            notifyAdminPhone('NOUVELLE REVIEW', `â­ ${numRating}/5 par ${interaction.user.username}\nEn attente de validation sur le dashboard.`);
+            addActivity('review', `⭐ New ${numRating}/5 review submitted by ${interaction.user.username}`);
+            notifyAdminPhone('NOUVELLE REVIEW', `⭐ ${numRating}/5 par ${interaction.user.username}\nEn attente de validation sur le dashboard.`);
             systemLog('INFO', 'REVIEWS', `New review submitted by ${interaction.user.username} [${numRating} Stars]`);
             syncCloud();
 
-            return await interaction.reply({ content: "âœ… **Thank you!** Your review has been submitted to our team for moderation.", ephemeral: true }).catch(()=>{});
+            return await interaction.reply({ content: "✅ **Thank you!** Your review has been submitted to our team for moderation.", ephemeral: true }).catch(()=>{});
         }
         // ------------------------------------
 
@@ -1543,7 +1543,7 @@ client.on('interactionCreate', async (interaction) => {
             if (memoryStats.blacklist && memoryStats.blacklist.includes(interaction.user.id)) {
                 await interaction.deferReply({ flags: 64 }).catch(() => {});
                 systemLog('DEBUG', 'SECURITY', `Blacklisted user ${interaction.user.username} attempted interaction.`);
-                return await interaction.editReply({ content: "âŒ You have been blacklisted from using the shop and support system." }).catch(()=>{});
+                return await interaction.editReply({ content: "❌ You have been blacklisted from using the shop and support system." }).catch(()=>{});
             }
             
             // --- CUSTOMER REVIEW BUTTON CLICK ---
@@ -1571,9 +1571,9 @@ client.on('interactionCreate', async (interaction) => {
                     const threshold = memoryStats.settings?.invite_reward_threshold || 10;
                     const current = refs ? refs.count : 0;
                     const total = refs ? refs.total_rewards : 0;
-                    const refEmbed = new EmbedBuilder().setColor('#10b981').setTitle('ðŸ”— Your Exclusive Referral Link').setDescription(`Here is your permanent link to invite people:\n**${invite.url}**\n\nðŸ“Š **Your Progress:**\n> ðŸŽ¯ **${current} / ${threshold}** invites for a free product.\n> ðŸ† **${total}** rewards claimed.`).setFooter({ text: 'Invitations are automatically tracked!' });
+                    const refEmbed = new EmbedBuilder().setColor('#10b981').setTitle('🔗 Your Exclusive Referral Link').setDescription(`Here is your permanent link to invite people:\n**${invite.url}**\n\n📊 **Your Progress:**\n> 🎯 **${current} / ${threshold}** invites for a free product.\n> 🏆 **${total}** rewards claimed.`).setFooter({ text: 'Invitations are automatically tracked!' });
                     await interaction.editReply({ embeds: [refEmbed] }).catch(() => {});
-                } catch (e) { await interaction.editReply({ content: "âŒ Error generating invite. Tell the admin to check bot permissions." }).catch(() => {}); }
+                } catch (e) { await interaction.editReply({ content: "❌ Error generating invite. Tell the admin to check bot permissions." }).catch(() => {}); }
                 return;
             }
             
@@ -1583,7 +1583,7 @@ client.on('interactionCreate', async (interaction) => {
                 const state = channelStates.get(interaction.channel.id) || {};
                 state.closeRequested = true;
                 channelStates.set(interaction.channel.id, state);
-                await interaction.channel.send({ content: "âœ… Request to close ticket sent to staff. Please wait." }).catch(()=>{});
+                await interaction.channel.send({ content: "✅ Request to close ticket sent to staff. Please wait." }).catch(()=>{});
                 
                 // Broadcast to dashboard
                 global.broadcastToDashboard('close_request', {
@@ -1606,7 +1606,7 @@ client.on('interactionCreate', async (interaction) => {
                 userTicketLocks.add(interaction.user.id);
                 setTimeout(() => userTicketLocks.delete(interaction.user.id), 60000);
 
-                await interaction.reply({ content: 'â³ Channel is being created, please wait...', ephemeral: true }).catch(() => {});
+                await interaction.reply({ content: '⏳ Channel is being created, please wait...', ephemeral: true }).catch(() => {});
 
                 const rawName = interaction.user.username.toLowerCase().replace(/[^a-z0-9]/g, '');
                 const sanitizedName = rawName.length > 0 ? rawName : interaction.user.id;
@@ -1614,7 +1614,7 @@ client.on('interactionCreate', async (interaction) => {
                 
                 if (existingChannel) {
                     userTicketLocks.delete(interaction.user.id);
-                    return interaction.editReply({ content: `âœ… You already have an open ticket: <#${existingChannel.id}>` }).catch(() => {});
+                    return interaction.editReply({ content: `✅ You already have an open ticket: <#${existingChannel.id}>` }).catch(() => {});
                 }
 
                 if (!memoryStats.analytics) memoryStats.analytics = { tickets_opened: 0, hourly_sales: Array(24).fill(0) };
@@ -1642,24 +1642,24 @@ client.on('interactionCreate', async (interaction) => {
                     systemLog('ERROR', 'TICKET', 'Failed to create channel: ' + createErr.message);
                     console.error('Channel creation failed:', createErr);
                     userTicketLocks.delete(interaction.user.id);
-                    return interaction.editReply({ content: `âŒ Critical Error: The bot failed to create a channel. Please check that I have "Manage Channels" permission and that the server has not reached the 500 channels limit.\nDetails: ${createErr.message}` }).catch(() => {});
+                    return interaction.editReply({ content: `❌ Critical Error: The bot failed to create a channel. Please check that I have "Manage Channels" permission and that the server has not reached the 500 channels limit.\nDetails: ${createErr.message}` }).catch(() => {});
                 }
 
                 if (channel) {
-                    addActivity('ticket', `ðŸŽ« New shop ticket opened by ${interaction.user.username}`);
+                    addActivity('ticket', `🎫 New shop ticket opened by ${interaction.user.username}`);
                     systemLog('INFO', 'TICKET_SYS', `Shop ticket generated for ${interaction.user.username}`);
                     channelStates.set(channel.id, { validated: false, processing: false, promo: null, redeemed: false, cart: [], cartTotal: 0, balance: 0 });
                     
                     let optCount = 0;
                     for (const id in memoryStats.products) {
                         const p = memoryStats.products[id];
-                        if (p.stock && p.stock !== "âˆž" && parseInt(p.stock) <= 0) continue;
+                        if (p.stock && p.stock !== "∞" && parseInt(p.stock) <= 0) continue;
                         optCount++;
                     }
                 if (memoryStats.mystery_box && memoryStats.mystery_box.enabled && optCount < 25) {
                     const mbPrice = memoryStats.mystery_box.price || 10;
                     pmenu.addOptions(new StringSelectMenuOptionBuilder()
-                        .setLabel(`ðŸŽ Mystery Box (Â£${mbPrice})`)
+                        .setLabel(`🎁 Mystery Box (£${mbPrice})`)
                         .setDescription(`Feeling lucky? Win premium random drops!`)
                         .setValue(`mystery_box`));
                     optCount++;
@@ -1668,7 +1668,7 @@ client.on('interactionCreate', async (interaction) => {
                     
                     
                     const closeBtnRow = new ActionRowBuilder().addComponents(
-                        new ButtonBuilder().setCustomId('request_close_ticket').setLabel('ðŸ”’ Request Close').setStyle(ButtonStyle.Danger)
+                        new ButtonBuilder().setCustomId('request_close_ticket').setLabel('🔒 Request Close').setStyle(ButtonStyle.Danger)
                     );
                     if(optCount > 0) {
                         await channel.send({ content: memoryStats.messages.shop_welcome.replace('{user}', '<@' + interaction.user.id + '>'), components: [closeBtnRow] }).catch(() => {});
@@ -1680,7 +1680,7 @@ client.on('interactionCreate', async (interaction) => {
                     userTicketLocks.delete(interaction.user.id);
                 } else {
                     userTicketLocks.delete(interaction.user.id); 
-                    await interaction.editReply({ content: `âŒ Error creating the room.` }).catch(() => {}); 
+                    await interaction.editReply({ content: `❌ Error creating the room.` }).catch(() => {}); 
                 }
             } else if (interaction.customId === 'open_support_ticket') {
                 if (processedInteractions.has(interaction.id)) return;
@@ -1694,7 +1694,7 @@ client.on('interactionCreate', async (interaction) => {
                 userTicketLocks.add(interaction.user.id);
                 setTimeout(() => userTicketLocks.delete(interaction.user.id), 60000);
 
-                await interaction.reply({ content: 'â³ Channel is being created, please wait...', ephemeral: true }).catch(() => {});
+                await interaction.reply({ content: '⏳ Channel is being created, please wait...', ephemeral: true }).catch(() => {});
 
                 const rawName = interaction.user.username.toLowerCase().replace(/[^a-z0-9]/g, '');
                 const sanitizedName = rawName.length > 0 ? rawName : interaction.user.id;
@@ -1702,7 +1702,7 @@ client.on('interactionCreate', async (interaction) => {
                 
                 if (existingChannel) {
                     userTicketLocks.delete(interaction.user.id);
-                    return interaction.editReply({ content: `âœ… You already have an open ticket: <#${existingChannel.id}>` }).catch(() => {});
+                    return interaction.editReply({ content: `✅ You already have an open ticket: <#${existingChannel.id}>` }).catch(() => {});
                 }
 
                 let channelOpts = {
@@ -1726,18 +1726,18 @@ client.on('interactionCreate', async (interaction) => {
                     systemLog('ERROR', 'TICKET', 'Failed to create channel: ' + createErr.message);
                     console.error('Channel creation failed:', createErr);
                     userTicketLocks.delete(interaction.user.id);
-                    return interaction.editReply({ content: `âŒ Critical Error: The bot failed to create a channel. Please check permissions and limits.\nDetails: ${createErr.message}` }).catch(() => {});
+                    return interaction.editReply({ content: `❌ Critical Error: The bot failed to create a channel. Please check permissions and limits.\nDetails: ${createErr.message}` }).catch(() => {});
                 }
 
                 if (channel) {
-                    addActivity('ticket', `ðŸŽ§ New support ticket opened by ${interaction.user.username}`);
+                    addActivity('ticket', `🎧 New support ticket opened by ${interaction.user.username}`);
                     systemLog('INFO', 'TICKET_SYS', `Support ticket generated for ${interaction.user.username}`);
-                    await channel.send(`ðŸŽ§ **Support Ticket for <@${interaction.user.id}>**`).catch(() => {});
+                    await channel.send(`🎧 **Support Ticket for <@${interaction.user.id}>**`).catch(() => {});
                     await interaction.editReply({ content: memoryStats.messages.ticket_ready.replace('{channel}', '<#' + channel.id + '>') }).catch(() => {});
                     userTicketLocks.delete(interaction.user.id);
                 } else {
                     userTicketLocks.delete(interaction.user.id);
-                    await interaction.editReply({ content: `âŒ Error creating the room.` }).catch(() => {});
+                    await interaction.editReply({ content: `❌ Error creating the room.` }).catch(() => {});
                 }
             }
         }
@@ -1746,11 +1746,11 @@ client.on('interactionCreate', async (interaction) => {
             const state = interaction.channel ? channelStates.get(interaction.channel.id) : null;
             
             if (!state) {
-                return await interaction.reply({ content: "âŒ Session expired or invalid channel state. Please close this ticket and open a new one.", ephemeral: true }).catch(()=>{});
+                return await interaction.reply({ content: "❌ Session expired or invalid channel state. Please close this ticket and open a new one.", ephemeral: true }).catch(()=>{});
             }
 
             if (state.validated || state.processing) {
-                return await interaction.reply({ content: "âŒ **SECURITY ALERT:** Order is already being processed or has been redeemed.", ephemeral: true }).catch(()=>{});
+                return await interaction.reply({ content: "❌ **SECURITY ALERT:** Order is already being processed or has been redeemed.", ephemeral: true }).catch(()=>{});
             }
             
             state.processing = true;
@@ -1767,7 +1767,7 @@ client.on('interactionCreate', async (interaction) => {
                     
                     if (selected === 'mystery_box' && memoryStats.mystery_box && memoryStats.mystery_box.enabled) {
                         product = {
-                            name: "ðŸŽ Mystery Box",
+                            name: "🎁 Mystery Box",
                             price: memoryStats.mystery_box.price || 10,
                             category: "MYSTERY"
                         };
@@ -1792,7 +1792,7 @@ client.on('interactionCreate', async (interaction) => {
                         if (appliedDiscount > 0) price = Math.max(0, price - (price * appliedDiscount / 100));
                         
                         total += price;
-                        cartList += `- ${product.name} (Â£${price.toFixed(2)})` + (appliedDiscount > 0 ? ' *(Discount applied)*' : '') + `\n`;
+                        cartList += `- ${product.name} (£${price.toFixed(2)})` + (appliedDiscount > 0 ? ' *(Discount applied)*' : '') + `\n`;
                     }
                 }
                 
@@ -1800,12 +1800,12 @@ client.on('interactionCreate', async (interaction) => {
                 
                 if (state.balance === undefined) {
                     state.processing = false;
-                    return await interaction.reply({ content: `âŒ Error: No balance available. Please enter a code first.`, ephemeral: true }).catch(() => {});
+                    return await interaction.reply({ content: `❌ Error: No balance available. Please enter a code first.`, ephemeral: true }).catch(() => {});
                 }
 
                 if (state.balance < state.cartTotal) {
                     state.processing = false;
-                    return await interaction.reply({ content: `âŒ **Error:** Your cart total (Â£${state.cartTotal.toFixed(2)}) exceeds your available balance (Â£${state.balance.toFixed(2)}). Please select fewer items.`, ephemeral: true }).catch(() => {});
+                    return await interaction.reply({ content: `❌ **Error:** Your cart total (£${state.cartTotal.toFixed(2)}) exceeds your available balance (£${state.balance.toFixed(2)}). Please select fewer items.`, ephemeral: true }).catch(() => {});
                 }
 
                 state.validated = true;
@@ -1813,7 +1813,7 @@ client.on('interactionCreate', async (interaction) => {
                     memoryStats.promo_codes[state.promo.name].used++;
                 }
 
-                await interaction.update({ content: `ðŸ“¦ **Processing your order... The menu has been locked.**\n\n${cartList}\nðŸ’° **Total paid: Â£${state.cartTotal.toFixed(2)}**`, components: [] }).catch(() => {});
+                await interaction.update({ content: `📦 **Processing your order... The menu has been locked.**\n\n${cartList}\n💰 **Total paid: £${state.cartTotal.toFixed(2)}**`, components: [] }).catch(() => {});
                 
                 for(const selected of state.cart) {
                     let product = null;
@@ -1834,7 +1834,7 @@ client.on('interactionCreate', async (interaction) => {
                         
                         if (dropTier && memoryStats.products[dropTier.productId]) {
                             product = memoryStats.products[dropTier.productId];
-                            await interaction.channel.send(`ðŸŽ‰ **MYSTERY BOX OPENED!**\nYou unboxed: **${product.name}** (${dropTier.tierName} Tier)!`).catch(()=>{});
+                            await interaction.channel.send(`🎉 **MYSTERY BOX OPENED!**\nYou unboxed: **${product.name}** (${dropTier.tierName} Tier)!`).catch(()=>{});
                             
                             if (dropTier.announce) {
                                 try {
@@ -1842,7 +1842,7 @@ client.on('interactionCreate', async (interaction) => {
                                     if (shopChan) {
                                         const embed = new EmbedBuilder()
                                             .setColor('#ff9f0a')
-                                            .setTitle('ðŸŽ² MYSTERY BOX DROP!')
+                                            .setTitle('🎲 MYSTERY BOX DROP!')
                                             .setDescription(`<@${interaction.user.id}> just unboxed a **${dropTier.tierName}** item: **${product.name}**!\n\nGet yours now in the shop!`);
                                         await shopChan.send({ embeds: [embed] }).catch(()=>{});
                                     }
@@ -1850,7 +1850,7 @@ client.on('interactionCreate', async (interaction) => {
                             }
                         } else {
                             product = Object.values(memoryStats.products)[0]; 
-                            await interaction.channel.send(`ðŸŽ‰ **MYSTERY BOX OPENED!**\nYou unboxed: **${product?.name}**!`).catch(()=>{});
+                            await interaction.channel.send(`🎉 **MYSTERY BOX OPENED!**\nYou unboxed: **${product?.name}**!`).catch(()=>{});
                         }
                     } else {
                         product = memoryStats.products[selected];
@@ -1863,7 +1863,7 @@ client.on('interactionCreate', async (interaction) => {
                         continue;
                     }
                     
-                    if (product.stock && product.stock !== "âˆž") {
+                    if (product.stock && product.stock !== "∞") {
                         let s = parseInt(product.stock);
                         if (!isNaN(s) && s > 0) memoryStats.products[selected].stock = (s - 1).toString();
                     }
@@ -1882,13 +1882,13 @@ client.on('interactionCreate', async (interaction) => {
                         try {
                             const member = await interaction.guild.members.fetch(interaction.user.id);
                             await member.roles.add(VIP_ROLE_ID).catch(()=>{});
-                            const reviewRowVIP = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`review_${selected}`).setLabel('â­ Leave a Review').setStyle(ButtonStyle.Secondary));
+                            const reviewRowVIP = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`review_${selected}`).setLabel('⭐ Leave a Review').setStyle(ButtonStyle.Secondary));
                             await interaction.user.send({ content: memoryStats.messages.vip_welcome, components: [reviewRowVIP] }).catch(()=>{});
                         } catch(e) {}
                     } else {
-                        const successEmbed = new EmbedBuilder().setColor('#10b981').setTitle((memoryStats.messages.checkout_success_dm || 'âœ¨ Purchase Successful: {product}').replace('{product}', product.name)).setDescription(`ðŸ”— ${product.link || 'Link not configured.'}`);
+                        const successEmbed = new EmbedBuilder().setColor('#10b981').setTitle((memoryStats.messages.checkout_success_dm || '✨ Purchase Successful: {product}').replace('{product}', product.name)).setDescription(`🔗 ${product.link || 'Link not configured.'}`);
                         const reviewRow = new ActionRowBuilder().addComponents(
-                            new ButtonBuilder().setCustomId(`review_${selected}`).setLabel('â­ Leave a Review').setStyle(ButtonStyle.Secondary)
+                            new ButtonBuilder().setCustomId(`review_${selected}`).setLabel('⭐ Leave a Review').setStyle(ButtonStyle.Secondary)
                         );
                         try {
                             await interaction.user.send({ embeds: [successEmbed], components: [reviewRow] });
@@ -1899,9 +1899,9 @@ client.on('interactionCreate', async (interaction) => {
                 }
                 syncCloud();
                 
-                let responseMsg = `âœ… **Products delivered to your DMs!** Closing ticket in 5 seconds...`;
+                let responseMsg = `✅ **Products delivered to your DMs!** Closing ticket in 5 seconds...`;
                 if (hasCustom) {
-                    responseMsg += `\nðŸ“© **Custom item detected.** An admin will contact you shortly to review your request.`;
+                    responseMsg += `\n📩 **Custom item detected.** An admin will contact you shortly to review your request.`;
                 }
                 await interaction.channel.send(responseMsg).catch(()=>{});
                 
@@ -1911,7 +1911,7 @@ client.on('interactionCreate', async (interaction) => {
                 state.processing = false;
                 systemLog('ERROR', 'STORE', 'Checkout crashed: ' + err.message);
                 if (interaction.channel) {
-                    interaction.channel.send("âŒ **Critical Error during checkout:** An error occurred, please contact support.").catch(()=>{});
+                    interaction.channel.send("❌ **Critical Error during checkout:** An error occurred, please contact support.").catch(()=>{});
                 }
             }
         }} catch (globalError) {
@@ -1920,7 +1920,7 @@ client.on('interactionCreate', async (interaction) => {
 });
 
 // === [ANCHOR: DISCORD_MESSAGE_HANDLER] ===
-// ðŸš€ [EVENT_LISTENER: messageCreate] - Ã‰couteur d'Ã©vÃ©nement Discord
+// 🚀 [EVENT_LISTENER: messageCreate] - Écouteur d'événement Discord
 client.on('messageCreate', async (message) => {
     try {
         if (message.author.bot) return;
@@ -1960,7 +1960,7 @@ client.on('messageCreate', async (message) => {
                return;
            }
            try {
-               let catalogStr = Object.values(memoryStats.products).map(p => p.name + " (Â£" + p.price + ")").join(", ");
+               let catalogStr = Object.values(memoryStats.products).map(p => p.name + " (£" + p.price + ")").join(", ");
                let userMsg = message.content.toLowerCase();
                
                let replyText = "Our human team will be with you shortly! In the meantime, could you provide more details?";
@@ -1983,7 +1983,7 @@ client.on('messageCreate', async (message) => {
                const { EmbedBuilder } = require('discord.js');
                const embed = new EmbedBuilder()
                    .setColor('#10b981')
-                   .setTitle('ðŸ¤– Nexus Local Support Agent')
+                   .setTitle('🤖 Nexus Local Support Agent')
                    .setDescription(replyText)
                    .setFooter({ text: 'Powered by Nexus Offline Engine.' });
                await message.reply({ embeds: [embed] }).catch(()=>{});
@@ -2003,7 +2003,7 @@ client.on('messageCreate', async (message) => {
             }
             if (state.validated || state.processing) return;
             if (state.balance > 0 || state.promo) {
-                return message.reply(memoryStats.messages.already_validated || 'âœ… Your code is already validated! Please select your items from the menu.').catch(()=>{});
+                return message.reply(memoryStats.messages.already_validated || '✅ Your code is already validated! Please select your items from the menu.').catch(()=>{});
             }
             
             const input = message.content.trim().toUpperCase();
@@ -2016,13 +2016,13 @@ client.on('messageCreate', async (message) => {
                     if (promo.used < promo.limit) promoApplied = { name: input, discount: promo.discount };
                     else { 
                         state.processing = false; 
-                        return message.reply(memoryStats.messages.code_limit_reached || 'âŒ Sorry, this code has reached its usage limit!').catch(()=>{}); 
+                        return message.reply(memoryStats.messages.code_limit_reached || '❌ Sorry, this code has reached its usage limit!').catch(()=>{}); 
                     }
                 }
 
                 if (!promoApplied && !TEST_VOUCHERS[input] && input.length < 8) {
                     state.processing = false;
-                    return message.reply(memoryStats.messages.invalid_code || 'âŒ Invalid format. Please enter a valid Rewarble code or Promo code.').catch(()=>{});
+                    return message.reply(memoryStats.messages.invalid_code || '❌ Invalid format. Please enter a valid Rewarble code or Promo code.').catch(()=>{});
                 }
 
                 let voucherValue = 0; 
@@ -2030,7 +2030,7 @@ client.on('messageCreate', async (message) => {
 
                 if (!promoApplied && !TEST_VOUCHERS[input]) {
                     if (Date.now() < rewarbleCircuitBreaker.nextTry) {
-                        message.reply("âš ï¸ **System Alert :** Rewarble API is currently unstable. Please try again in a few minutes.").catch(()=>{});
+                        message.reply("⚠️ **System Alert :** Rewarble API is currently unstable. Please try again in a few minutes.").catch(()=>{});
                         state.processing = false;
                         return;
                     }
@@ -2112,16 +2112,16 @@ client.on('messageCreate', async (message) => {
                 
                 const pmenu = new StringSelectMenuBuilder()
                     .setCustomId('product_select')
-                    .setPlaceholder('ðŸ›’ Select the products you want to buy')
+                    .setPlaceholder('🛒 Select the products you want to buy')
                     .setMinValues(1);
                     
                 let optCount = 0;
                 for (const id in memoryStats.products) {
                     if (optCount >= 25) break; 
                     const p = memoryStats.products[id];
-                    if (p.stock && p.stock !== "âˆž" && parseInt(p.stock) <= 0) continue;
+                    if (p.stock && p.stock !== "∞" && parseInt(p.stock) <= 0) continue;
                     pmenu.addOptions(new StringSelectMenuOptionBuilder()
-                        .setLabel(String(p.name + (p.price === "Custom" ? " (Custom)" : " (Â£" + p.price + ")")).substring(0, 100))
+                        .setLabel(String(p.name + (p.price === "Custom" ? " (Custom)" : " (£" + p.price + ")")).substring(0, 100))
                         .setDescription(String(p.category || 'Item').substring(0, 100))
                         .setValue(id));
                     optCount++;
@@ -2130,22 +2130,22 @@ client.on('messageCreate', async (message) => {
                 
                 if(optCount > 0) {
                     const row = new ActionRowBuilder().addComponents(pmenu);
-                    let balText = promoApplied ? `${promoApplied.discount}% OFF (Promo)` : `Â£${state.balance.toFixed(2)}`;
-                    await message.reply({ content: `âœ… **Code validated successfully!**\nðŸ’° **Balance Available:** ${balText}\n\n**ðŸ›’ Step 2: Select items from the menu below.**`, components: [row] }).catch(()=>{});
+                    let balText = promoApplied ? `${promoApplied.discount}% OFF (Promo)` : `£${state.balance.toFixed(2)}`;
+                    await message.reply({ content: `✅ **Code validated successfully!**\n💰 **Balance Available:** ${balText}\n\n**🛒 Step 2: Select items from the menu below.**`, components: [row] }).catch(()=>{});
                 } else {
-                    await message.reply({ content: `âœ… **Code validated successfully!**\nâŒ Unfortunately, the shop is currently empty.` }).catch(()=>{});
+                    await message.reply({ content: `✅ **Code validated successfully!**\n❌ Unfortunately, the shop is currently empty.` }).catch(()=>{});
                 }
 
             } catch (e) { 
                 state.processing = false; 
                 if (e.message === "REWARBLE_402_INSUFFICIENT_FUNDS") {
                     systemLog('ERROR', 'REWARBLE_API', `402 Payment Required - Balance is depleted.`);
-                    message.reply("âš ï¸ **Rewarble Error (402) :** Insufficient API balance.").catch(()=>{});
+                    message.reply("⚠️ **Rewarble Error (402) :** Insufficient API balance.").catch(()=>{});
                     const adminUser = await client.users.fetch(ADMIN_DISCORD_ID).catch(() => null);
-                    if (adminUser) adminUser.send("ðŸš¨ **CRITICAL REWARBLE ALERT:** Insufficient balance!").catch(() => {});
+                    if (adminUser) adminUser.send("🚨 **CRITICAL REWARBLE ALERT:** Insufficient balance!").catch(() => {});
                 } else {
                     systemLog('WARN', 'VALIDATION', `Invalid code or network error for ${message.author.username}: ${e.message}`);
-                    message.reply("âŒ Invalid code or API timeout. Please check your voucher and try again.").catch(()=>{}); 
+                    message.reply("❌ Invalid code or API timeout. Please check your voucher and try again.").catch(()=>{}); 
                 }
             }
         }
@@ -2155,7 +2155,7 @@ client.on('messageCreate', async (message) => {
 });
 
 // === [ANCHOR: DISCORD_GUILD_MEMBER_EVENTS] ===
-// ðŸš€ [EVENT_LISTENER: guildMemberAdd] - Ã‰couteur d'Ã©vÃ©nement Discord
+// 🚀 [EVENT_LISTENER: guildMemberAdd] - Écouteur d'événement Discord
 
 let recentJoins = [];
 client.on('guildMemberAdd', async (member) => { 
@@ -2199,7 +2199,7 @@ client.on('guildMemberAdd', async (member) => {
                 if (!memoryStats.promo_codes) memoryStats.promo_codes = {};
                 memoryStats.promo_codes[codeName] = { discount: 100, limit: 1, used: 0, createdAt: new Date().toLocaleDateString('en-US') };
                 const inviterUser = await client.users.fetch(inviterId).catch(()=>null);
-                if (inviterUser) inviterUser.send(`ðŸŽ‰ **CONGRATULATIONS!** You invited ${threshold} people and unlocked a FREE product!\n\nHere is your personal 100% OFF Promo Code:\n\`${codeName}\``).catch(()=>{});
+                if (inviterUser) inviterUser.send(`🎉 **CONGRATULATIONS!** You invited ${threshold} people and unlocked a FREE product!\n\nHere is your personal 100% OFF Promo Code:\n\`${codeName}\``).catch(()=>{});
                 systemLog('INFO', 'REFERRAL', `User ${inviterUser?.username || inviterId} reached threshold and unlocked 100% code.`);
             }
             syncCloud();
@@ -2207,7 +2207,7 @@ client.on('guildMemberAdd', async (member) => {
     } catch (err) {}
 });
 
-// ðŸš€ [EVENT_LISTENER: guildMemberRemove] - Ã‰couteur d'Ã©vÃ©nement Discord
+// 🚀 [EVENT_LISTENER: guildMemberRemove] - Écouteur d'événement Discord
 client.on('guildMemberRemove', async (member) => { 
     const duration = member.joinedTimestamp ? (Date.now() - member.joinedTimestamp) : 0;
     const avatar = member.user.displayAvatarURL({ size: 64, dynamic: true });
@@ -2251,7 +2251,7 @@ function verifyTOTP(token, secretBase32 = TOTP_SECRET_FALLBACK) {
 const rateLimits = new Map();
 const bruteForceLocks = new Map();
 
-// ðŸ§¹ GARBAGE COLLECTOR : Nettoie la mÃ©moire des IPs inactives toutes les 15 minutes
+// 🧹 GARBAGE COLLECTOR : Nettoie la mémoire des IPs inactives toutes les 15 minutes
 setInterval(() => {
     const now = Date.now();
     rateLimits.forEach((value, key) => {
@@ -2578,13 +2578,13 @@ const server = http.createServer(async (req, res) => {
         return memoryStats.activeSessions && memoryStats.activeSessions.includes(match[1]);
     })();
 
-    // ðŸš€ [API_ROUTE: /download-code] - Route API backend
+    // 🚀 [API_ROUTE: /download-code] - Route API backend
     if (req.url === '/download-code') {
         if (!isAuthenticated && req.url !== '/debug') return res.writeHead(401).end('Unauthorized');
         res.writeHead(200, { 'Content-Type': 'application/javascript', 'Content-Disposition': 'attachment; filename="index.js"' });
         return res.end(fs.readFileSync(__filename));
     }
-    // ðŸš€ [API_ROUTE: /api/logout] - Route API backend
+    // 🚀 [API_ROUTE: /api/logout] - Route API backend
     if (req.url === '/api/logout' && req.method === 'POST') {
         if (req.headers.cookie && req.headers.cookie.includes('auth_session=')) {
             const token = req.headers.cookie.split('auth_session=')[1].split(';')[0];
@@ -2593,7 +2593,7 @@ const server = http.createServer(async (req, res) => {
         res.writeHead(200, { 'Set-Cookie': 'auth_session=; Max-Age=0; HttpOnly; SameSite=Lax; Path=/', 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({ success: true }));
     }
-    // ðŸš€ [API_ROUTE: /api/login] - Route API backend
+    // 🚀 [API_ROUTE: /api/login] - Route API backend
     if (req.url === '/api/login' && req.method === 'POST') {
         let body = ''; let bodySize = 0; req.on('data', chunk => { bodySize += chunk.length; if(bodySize > 5*1024*1024) req.socket.destroy(); else body += chunk; });
         req.on('end', () => {
@@ -2625,7 +2625,7 @@ const server = http.createServer(async (req, res) => {
         }); return;
     }
 
-    // ðŸš€ [API_ROUTE: /dashboard] - Route API backend
+    // 🚀 [API_ROUTE: /dashboard] - Route API backend
     if ((req.url === '/dashboard' || req.url === '/') && !isAuthenticated) {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         return res.end(`<!DOCTYPE html>
@@ -2792,14 +2792,14 @@ const server = http.createServer(async (req, res) => {
     }
 
     // === [ANCHOR: API_ROUTES_GET] ===
-    // ðŸš€ [API_ROUTE: /api/logs] - Route API backend
+    // 🚀 [API_ROUTE: /api/logs] - Route API backend
     if (req.url === '/api/logs' && req.method === 'GET') {
         // bypassed
         res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate' });
         return res.end(JSON.stringify(globalLogs));
     }
 
-    // ðŸš€ [API_ROUTE: /api/init-data] - Route API backend
+    // 🚀 [API_ROUTE: /api/init-data] - Route API backend
     if (req.url.startsWith('/api/log')) { require('fs').appendFileSync('frontend_error.log', req.url + '\n'); return res.end(); }
     if (req.url === '/debug') { res.writeHead(200); return res.end(JSON.stringify(memoryStats));
         if (!isAuthenticated) return res.writeHead(401).end('Unauthorized'); res.writeHead(200); return res.end(JSON.stringify(memoryStats)); }
@@ -2826,7 +2826,7 @@ const server = http.createServer(async (req, res) => {
     } catch (apiErr) { console.error('API /init-data Error:', apiErr); res.writeHead(500); return res.end(JSON.stringify({error: 'Internal Server Error'})); } }
 
     
-    // ðŸš€ [API_ROUTE: /api/backups] - Route API backend
+    // 🚀 [API_ROUTE: /api/backups] - Route API backend
     if (req.url === '/api/backups' && req.method === 'GET') {
         // removed
         const fs = require('fs');
@@ -2839,7 +2839,7 @@ const server = http.createServer(async (req, res) => {
         return res.end(JSON.stringify(backups));
     }
 
-    // ðŸš€ [API_ROUTE_DYNAMIC: /api/backups/download] - Route API dynamique
+    // 🚀 [API_ROUTE_DYNAMIC: /api/backups/download] - Route API dynamique
     if (req.url.startsWith('/api/backups/download') && req.method === 'GET') {
         // removed
         const urlObj = new URL(req.url, `http://${req.headers.host}`);
@@ -2857,21 +2857,21 @@ const server = http.createServer(async (req, res) => {
         return readStream.pipe(res);
     }
 
-    // ðŸš€ [API_ROUTE: /api/export] - Route API backend
+    // 🚀 [API_ROUTE: /api/export] - Route API backend
     if (req.url === '/api/export' && req.method === 'GET') {
         // removed
         systemLog('INFO', 'DASHBOARD', 'Transaction ledger exported to CSV.');
         let csv = "\uFEFFDate,Customer,Product,Price\n"; 
         if (Array.isArray(memoryStats.recent_transactions)) {
             memoryStats.recent_transactions.forEach(tx => {
-                csv += `"${tx.date}","${tx.username}","${tx.product}","Â£${tx.price}"\n`;
+                csv += `"${tx.date}","${tx.username}","${tx.product}","£${tx.price}"\n`;
             });
         }
         res.writeHead(200, { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="nexus_transactions.csv"' });
         return res.end(csv);
     }
 
-    // ðŸš€ [API_ROUTE: /api/live] - Route API backend
+    // 🚀 [API_ROUTE: /api/live] - Route API backend
     if (req.url === '/api/live' && req.method === 'GET') {
         // removed
         const guild = client.guilds.cache.first(); let activeTickets = 0;
@@ -2880,7 +2880,7 @@ const server = http.createServer(async (req, res) => {
         return res.end(JSON.stringify({ txCount: memoryStats.total_transactions, lastTx: Array.isArray(memoryStats.recent_transactions) ? memoryStats.recent_transactions[0] : null, liveTickets: activeTickets }));
     }
 
-    // ðŸš€ [API_ROUTE: /api/tickets] - Route API backend
+    // 🚀 [API_ROUTE: /api/tickets] - Route API backend
     if (req.url === '/api/tickets' && req.method === 'GET') {
         // removed
         const guild = client.guilds.cache.first();
@@ -2900,7 +2900,7 @@ const server = http.createServer(async (req, res) => {
         return res.end(JSON.stringify(tickets));
     }
 
-    // ðŸš€ [API_ROUTE_DYNAMIC: /api/tickets/messages] - Route API dynamique
+    // 🚀 [API_ROUTE_DYNAMIC: /api/tickets/messages] - Route API dynamique
     if (req.url.startsWith('/api/tickets/messages') && req.method === 'GET') {
         // removed
         const urlObj = new URL(req.url, `http://${req.headers.host}`);
@@ -2931,7 +2931,7 @@ const server = http.createServer(async (req, res) => {
         return res.end(JSON.stringify({ msgs: msgs, closeRequested: cState.closeRequested || false }));
     }
 
-    // ðŸš€ [API_ROUTE: /api/monitoring] - Route API backend
+    // 🚀 [API_ROUTE: /api/monitoring] - Route API backend
     if (req.url === '/api/monitoring' && req.method === 'GET') {
         // removed
         
@@ -3006,7 +3006,7 @@ const server = http.createServer(async (req, res) => {
         }));
     }
 
-    // ðŸš€ [API_ROUTE_DYNAMIC: /api/members] - Route API dynamique
+    // 🚀 [API_ROUTE_DYNAMIC: /api/members] - Route API dynamique
     if (req.url.startsWith('/api/members') && req.method === 'GET') {
         // removed
         const guild = client.guilds.cache.first();
@@ -3038,7 +3038,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     // === [ANCHOR: API_ROUTES_POST_ACTIONS] ===
-    // ðŸš€ [API_ROUTE: /api/action] - Route API backend
+    // 🚀 [API_ROUTE: /api/action] - Route API backend
     if (req.url === '/api/action' && req.method === 'POST') {
         // removed
         let body = ''; let bodySize3 = 0; req.on('data', chunk => { bodySize3 += chunk.length; if(bodySize3 > 5*1024*1024) req.socket.destroy(); else body += chunk.toString(); });
@@ -3085,10 +3085,10 @@ const server = http.createServer(async (req, res) => {
                         syncCloud();
                         const reviewChannel = await guild.channels.fetch(REVIEW_CHANNEL_ID).catch(() => null);
                         if (reviewChannel) {
-                            await reviewChannel.send(`> ðŸŒŸ **NEW CUSTOMER REVIEW** ðŸŒŸ\n> â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”\n> ðŸ“¦ Â» **Product:** ${review.product}\n> ðŸ“ Â» **Feedback:** "${review.text}"\n> ðŸ“ˆ Â» **Rating:** ${review.rating}/5 â­\n> ðŸ‘¤ Â» **By:** ${review.username}`).catch(() => {});
+                            await reviewChannel.send(`> 🌟 **NEW CUSTOMER REVIEW** 🌟\n> ━━━━━━━━━━━━━━━━━━━━\n> 📦 » **Product:** ${review.product}\n> 📝 » **Feedback:** "${review.text}"\n> 📈 » **Rating:** ${review.rating}/5 ⭐\n> 👤 » **By:** ${review.username}`).catch(() => {});
                         }
                         const memberToDM = await guild.members.fetch(review.userId).catch(()=>null);
-                        if(memberToDM) await memberToDM.send(`ðŸŽ‰ **Good news!** Your review for **${review.product}** has been approved and published.\nThank you for your feedback!`).catch(()=>{});
+                        if(memberToDM) await memberToDM.send(`🎉 **Good news!** Your review for **${review.product}** has been approved and published.\nThank you for your feedback!`).catch(()=>{});
                         systemLog('INFO', 'REVIEWS', `Review ID ${data.id} approved by admin.`);
                     }
                 }
@@ -3097,7 +3097,7 @@ const server = http.createServer(async (req, res) => {
                         const reviewItem = memoryStats.pending_reviews.find(r => r.id === data.id);
                         if (reviewItem) {
                             const memberToDM = await guild.members.fetch(reviewItem.userId).catch(()=>null);
-                            if(memberToDM) await memberToDM.send(`ðŸ“ **Update on your review for ${reviewItem.product}:**\nUnfortunately, your review was not approved by our moderation team.\n\n**Reason:** ${data.reason || "Not specified."}`).catch(()=>{});
+                            if(memberToDM) await memberToDM.send(`📝 **Update on your review for ${reviewItem.product}:**\nUnfortunately, your review was not approved by our moderation team.\n\n**Reason:** ${data.reason || "Not specified."}`).catch(()=>{});
                         }
                         memoryStats.pending_reviews = memoryStats.pending_reviews.filter(r => r.id !== data.id);
                         syncCloud();
@@ -3138,8 +3138,8 @@ const server = http.createServer(async (req, res) => {
                             const unixTime = Math.floor(memoryStats.settings.maintenance.endsAt / 1000);
                             const mEmbed = new EmbedBuilder()
                                 .setColor('#10b981')
-                                .setTitle('ðŸš§ Maintenance in Progress')
-                                .setDescription(`The shop is temporarily suspended for stock updates or optimization.\n\nâ³ **Estimated return:** <t:${unixTime}:R>\n\nThank you for your patience, your codes and orders are perfectly safe.`);
+                                .setTitle('🚧 Maintenance in Progress')
+                                .setDescription(`The shop is temporarily suspended for stock updates or optimization.\n\n⏳ **Estimated return:** <t:${unixTime}:R>\n\nThank you for your patience, your codes and orders are perfectly safe.`);
                             await announceChannel.send({ embeds: [mEmbed] }).catch(()=>{});
                         }
                     } else {
@@ -3148,7 +3148,7 @@ const server = http.createServer(async (req, res) => {
                         if (announceChannel) {
                             const mEmbed = new EmbedBuilder()
                                 .setColor('#10b981')
-                                .setTitle('âœ… Maintenance Completed')
+                                .setTitle('✅ Maintenance Completed')
                                 .setDescription(`The system is operational again!\nThe shop is open and ready to take your orders.`);
                             await announceChannel.send({ embeds: [mEmbed] }).catch(()=>{});
                         }
@@ -3168,7 +3168,7 @@ const server = http.createServer(async (req, res) => {
                     const channel = guild.channels.cache.get(data.channelId);
                     if (channel) {
                         let payload = {};
-                        if (data.message) payload.content = `ðŸ’¬ **[Support Admin]** : ${data.message}`;
+                        if (data.message) payload.content = `💬 **[Support Admin]** : ${data.message}`;
                         if (data.imageBase64) {
                             const base64Data = data.imageBase64.replace(/^data:image\/\w+;base64,/, "");
                             const buffer = Buffer.from(base64Data, 'base64');
@@ -3286,12 +3286,12 @@ const server = http.createServer(async (req, res) => {
                     }
 
                     if (!memoryStats.activity_feed) memoryStats.activity_feed = [];
-                    memoryStats.activity_feed.unshift({ type: 'sale', message: `ðŸ’° Â£${price} Manual Sale: ${username} bought ${product}`, time: Date.now() });
+                    memoryStats.activity_feed.unshift({ type: 'sale', message: `💰 £${price} Manual Sale: ${username} bought ${product}`, time: Date.now() });
                     if (memoryStats.activity_feed.length > 30) memoryStats.activity_feed.pop();
 
                     syncCloud();
                     backupToDiscord().catch(e => console.error(e));
-                    systemLog('INFO', 'STORE', `Manual transaction logged for ${username} - Â£${price}`);
+                    systemLog('INFO', 'STORE', `Manual transaction logged for ${username} - £${price}`);
                 }
                 else if (data.action === 'refund_tx') {
                     if (Array.isArray(memoryStats.recent_transactions)) {
@@ -3315,7 +3315,7 @@ const server = http.createServer(async (req, res) => {
                             }
                             
                             if (Array.isArray(memoryStats.activity_feed)) {
-                                const feedMsg = `ðŸ’° Â£${tx.price} Sale: ${tx.username} bought ${tx.product}`;
+                                const feedMsg = `💰 £${tx.price} Sale: ${tx.username} bought ${tx.product}`;
                                 const feedIdx = memoryStats.activity_feed.findIndex(f => f.type === 'sale' && f.message === feedMsg);
                                 if (feedIdx > -1) {
                                     memoryStats.activity_feed.splice(feedIdx, 1);
@@ -3323,14 +3323,14 @@ const server = http.createServer(async (req, res) => {
                             }
 
                             syncCloud();
-                            systemLog('WARN', 'STORE', `Transaction refunded for ${tx.username} - Â£${tx.price}`);
+                            systemLog('WARN', 'STORE', `Transaction refunded for ${tx.username} - £${tx.price}`);
                         } else throw new Error("Transaction not found");
                     }
                 }
                 else if (data.action === 'edit_product') {
                     if (memoryStats.products && memoryStats.products[data.id]) {
-                        const newCat = data.category || memoryStats.products[data.id].category || "âœ¨ ITEMS";
-                        memoryStats.products[data.id] = { name: data.name, price: data.price, link: data.link, category: newCat, stock: data.stock || "âˆž", desc: data.desc, upsellId: data.upsellId, upsellDiscount: data.upsellDiscount };
+                        const newCat = data.category || memoryStats.products[data.id].category || "✨ ITEMS";
+                        memoryStats.products[data.id] = { name: data.name, price: data.price, link: data.link, category: newCat, stock: data.stock || "∞", desc: data.desc, upsellId: data.upsellId, upsellDiscount: data.upsellDiscount };
                         syncCloud();
                         systemLog('INFO', 'CATALOG', `Product matrix updated: Asset ID ${data.id}`);
                     }
@@ -3339,7 +3339,7 @@ const server = http.createServer(async (req, res) => {
                     if (!memoryStats.products) memoryStats.products = {};
                     if (!memoryStats.next_product_id) memoryStats.next_product_id = Date.now();
                         const newId = (memoryStats.next_product_id++).toString();
-                    memoryStats.products[newId] = { name: data.name, price: data.price, link: data.link, category: data.category || "âœ¨ NEW ITEMS", stock: data.stock || "âˆž", desc: data.desc, upsellId: data.upsellId, upsellDiscount: data.upsellDiscount };
+                    memoryStats.products[newId] = { name: data.name, price: data.price, link: data.link, category: data.category || "✨ NEW ITEMS", stock: data.stock || "∞", desc: data.desc, upsellId: data.upsellId, upsellDiscount: data.upsellDiscount };
                     syncCloud();
                     systemLog('INFO', 'CATALOG', `New asset injected into matrix: ${data.name}`);
                 }
@@ -3367,7 +3367,7 @@ const server = http.createServer(async (req, res) => {
                 else if (data.action === 'post_review') {
                     const reviewChannel = await client.channels.fetch(REVIEW_CHANNEL_ID).catch(() => null);
                     if (!reviewChannel) throw new Error("Review channel not found.");
-                    await reviewChannel.send(`> ðŸŒŸ **NEW FEEDBACK** ðŸŒŸ\n> â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”\n> ðŸ“ Â» **Feedback:** "${data.text}"\n> ðŸ“ˆ Â» **Rating:** ${data.rating}/5 â­\n> ðŸ‘¤ Â» **By:** ${data.author}`).catch(() => { throw new Error("Missing permissions to send messages in the channel."); });
+                    await reviewChannel.send(`> 🌟 **NEW FEEDBACK** 🌟\n> ━━━━━━━━━━━━━━━━━━━━\n> 📝 » **Feedback:** "${data.text}"\n> 📈 » **Rating:** ${data.rating}/5 ⭐\n> 👤 » **By:** ${data.author}`).catch(() => { throw new Error("Missing permissions to send messages in the channel."); });
                 }
                 else if (data.action === 'update_ref_threshold') {
                     if (!memoryStats.settings) memoryStats.settings = {};
@@ -3399,7 +3399,7 @@ const server = http.createServer(async (req, res) => {
                     systemLog('WARN', 'MODERATION', `Warning logged for User ${data.userId}.`);
                     const targetUser = await client.users.fetch(data.userId).catch(() => null);
                     if (targetUser) {
-                        await targetUser.send(`âš ï¸ **Warning:**\n\n**Reason:** ${data.reason || "Not specified"}`).catch(() => {});
+                        await targetUser.send(`⚠️ **Warning:**\n\n**Reason:** ${data.reason || "Not specified"}`).catch(() => {});
                     }
                 }
                 else if (data.action === 'clear_warns') {
@@ -3444,8 +3444,8 @@ const server = http.createServer(async (req, res) => {
                             try {
                                 const targetUser = await client.users.fetch(reqItem.userId).catch(() => null);
                                 if (targetUser && data.status !== 'pending') {
-                                    let statusEn = data.status === 'recording' ? 'ðŸŽ¥ Recording in progress' : data.status === 'editing' ? 'âœ‚ï¸ Editing in progress' : 'âœ… Order Completed';
-                                    await targetUser.send(`ðŸ”” **Update on your custom order (${reqItem.product}):**\nNew status: **${statusEn}** !`).catch(()=>{});
+                                    let statusEn = data.status === 'recording' ? '🎥 Recording in progress' : data.status === 'editing' ? '✂️ Editing in progress' : '✅ Order Completed';
+                                    await targetUser.send(`🔔 **Update on your custom order (${reqItem.product}):**\nNew status: **${statusEn}** !`).catch(()=>{});
                                 }
                             } catch(e) { console.error("Error:", e); }
                         }
@@ -3453,7 +3453,7 @@ const server = http.createServer(async (req, res) => {
                 }
                 else if (data.action === 'announce') {
                     const channel = guild.channels.cache.get(data.channelId);
-                    if(channel) await channel.send(`ðŸ“¢ **Announcement**\n\n${data.message}`).catch(()=>{});
+                    if(channel) await channel.send(`📢 **Announcement**\n\n${data.message}`).catch(()=>{});
                 }
                 else if (data.action === 'close_all') {
                     guild.channels.cache.forEach(c => {
@@ -3482,7 +3482,7 @@ const server = http.createServer(async (req, res) => {
                 }
                 else if (data.action === 'send_dm') {
                     const targetUser = await client.users.fetch(data.userId).catch(() => null);
-                    if (targetUser) await targetUser.send(`ðŸ“© **Message from Admin:**\n\n${data.message}`).catch(()=>{});
+                    if (targetUser) await targetUser.send(`📩 **Message from Admin:**\n\n${data.message}`).catch(()=>{});
                 }
                 else if (data.action === 'add_vip_days') {
                     if (!memoryStats.subscriptions) memoryStats.subscriptions = {};
@@ -3540,7 +3540,7 @@ const server = http.createServer(async (req, res) => {
                         const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY, httpOptions: { headers: { 'User-Agent': 'aistudio-build' } } });
                         const response = await ai.models.generateContent({
                             model: 'gemini-3.1-pro-preview',
-                            contents: (data.lang === 'fr' ? "Analyse ces transactions rÃ©centes et gÃ©nÃ¨re un rapport financier complet. TU DOIS IMPÃ‰RATIVEMENT TOUT Ã‰CRIRE EN FRANÃ‡AIS (y compris les labels, titres et descriptions) au format HTML: " : "Analyze these recent transactions and provide a short financial analysis report in HTML format: ") + JSON.stringify(recent),
+                            contents: (data.lang === 'fr' ? "Analyse ces transactions récentes et génère un rapport financier complet. TU DOIS IMPÉRATIVEMENT TOUT ÉCRIRE EN FRANÇAIS (y compris les labels, titres et descriptions) au format HTML: " : "Analyze these recent transactions and provide a short financial analysis report in HTML format: ") + JSON.stringify(recent),
                             config: {
                                 systemInstruction: `You are an expert financial analyst. ${data.lang === 'fr' ? 'You MUST write your entire response, including all HTML text, labels, and analysis, strictly in FRENCH.' : 'You MUST write your entire response strictly in ENGLISH.'} IMPORTANT: Output ONLY safe HTML fragments (like <div>, <table>, <h2>). Do NOT output global tags like <html>, <head>, <body>, or <style>.`,
                                 thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH }
@@ -3662,7 +3662,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     // === [ANCHOR: DASHBOARD_HTML_INJECTION] ===
-    // ðŸš€ [API_ROUTE: /dashboard] - Route API backend
+    // 🚀 [API_ROUTE: /dashboard] - Route API backend
     if (req.url === '/dashboard' || req.url === '/') {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         const dashboardHTML = `<!DOCTYPE html>
@@ -4509,12 +4509,12 @@ const server = http.createServer(async (req, res) => {
                         </h2>
                         <div style='display:flex; gap:15px; align-items:center; flex-wrap:wrap; margin-top:auto;'>
                             <div style='flex:1; min-width:120px;'>
-                                <label class='text-muted' style='font-size:0.8em; margin-bottom:8px; display:block; font-weight:600;'>British Pounds (Â£)</label>
+                                <label class='text-muted' style='font-size:0.8em; margin-bottom:8px; display:block; font-weight:600;'>British Pounds (£)</label>
                                 <input type='number' id='conv-gbp' placeholder='0.00' oninput='window.calcCurrency("gbp")' style='font-size:1.2em; font-weight:bold; color:var(--accent-green); background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; padding: 12px; width: 100%; box-sizing: border-box; outline: none; transition: 0.3s;' onfocus='this.style.borderColor="#10b981"; this.style.background="rgba(0,0,0,0.5)"' onblur='this.style.borderColor="rgba(255,255,255,0.05)"; this.style.background="rgba(0,0,0,0.3)"'>
                             </div>
-                            <div style='font-size:2em; color:var(--text-muted); opacity: 0.5;'>â‡„</div>
+                            <div style='font-size:2em; color:var(--text-muted); opacity: 0.5;'>⇄</div>
                             <div style='flex:1; min-width:120px;'>
-                                <label class='text-muted' style='font-size:0.8em; margin-bottom:8px; display:block; font-weight:600;'>Euros (â‚¬)</label>
+                                <label class='text-muted' style='font-size:0.8em; margin-bottom:8px; display:block; font-weight:600;'>Euros (€)</label>
                                 <input type='number' id='conv-eur' placeholder='0.00' oninput='window.calcCurrency("eur")' style='font-size:1.2em; font-weight:bold; color:var(--accent-blue); background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; padding: 12px; width: 100%; box-sizing: border-box; outline: none; transition: 0.3s;' onfocus='this.style.borderColor="#0a84ff"; this.style.background="rgba(0,0,0,0.5)"' onblur='this.style.borderColor="rgba(255,255,255,0.05)"; this.style.background="rgba(0,0,0,0.3)"'>
                             </div>
                             <div style='flex:1; min-width:100px;'>
@@ -4528,7 +4528,7 @@ const server = http.createServer(async (req, res) => {
            </div>
            <div id='kanban' class='tab-content'>
                <div class='box'>
-                   <h2>ðŸ“‹ Custom Orders Kanban</h2>
+                   <h2>📋 Custom Orders Kanban</h2>
                    <p class='text-muted'>Manage custom requests states. Moving cards will auto-notify users via DM.</p>
                    <div class='kanban-board' id='target-kanban'>
                        
@@ -4538,7 +4538,7 @@ const server = http.createServer(async (req, res) => {
                 
            <div id='vip' class='tab-content'>
                <div class='box'>
-                   <h2>ðŸ‘‘ VIP Directory</h2>
+                   <h2>👑 VIP Directory</h2>
                    <p class='text-muted'>Active subscriptions. VIPs get an automatic 20% discount on all shop items.</p>
                    <div class='table-responsive' style='margin-top:20px;'>
                        <table><thead><tr><th>Username</th><th>Expires On</th><th>Time Left</th><th>Actions</th></tr></thead><tbody id='target-vips'></tbody></table>
@@ -4557,9 +4557,9 @@ const server = http.createServer(async (req, res) => {
                 <h2 style='margin:0; font-weight:800; letter-spacing:1px;'>Live Support Console</h2>
                 <div style="position:relative; margin-left:10px;">
                     <select id='chat-sort-select' style='margin:0; width:auto; padding: 10px 35px 10px 15px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; appearance:none; font-weight:600; font-size:0.85em; transition: all 0.3s ease; color: white;' onchange='window.loadTicketsForChat()' onmouseover='this.style.borderColor="var(--accent-green)"' onmouseout='this.style.borderColor="rgba(255,255,255,0.1)"'>
-                        <option value='asc'>â±ï¸ Chronological (Oldest â†’ Newest)</option>
-                        <option value='desc'>â±ï¸ Chronological (Newest â†’ Oldest)</option>
-                        <option value='importance'>â­ Importance (Support First)</option>
+                        <option value='asc'>⏱️ Chronological (Oldest → Newest)</option>
+                        <option value='desc'>⏱️ Chronological (Newest → Oldest)</option>
+                        <option value='importance'>⭐ Importance (Support First)</option>
                     </select>
                     <svg style='position:absolute; right:10px; top:50%; transform:translateY(-50%); pointer-events:none; opacity:0.5;' width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
                 </div>
@@ -4647,12 +4647,12 @@ const server = http.createServer(async (req, res) => {
 </div>
 <div id='analytics' class='tab-content'>
                <div class='box' style='margin-bottom:25px; animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: 0.1s;'>
-                   <h2>ðŸ•’ Peak Execution Hours</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Observe the time of day with the highest transaction volume.</p><div style='height:280px; position:relative;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='hourlyChart' style='position:relative; z-index:10;'></canvas></div></div>
+                   <h2>🕒 Peak Execution Hours</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Observe the time of day with the highest transaction volume.</p><div style='height:280px; position:relative;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='hourlyChart' style='position:relative; z-index:10;'></canvas></div></div>
                <div style='display:grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap:25px;'>
-                   <div class='box' style='animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: 0.2s; position: relative; overflow: hidden;'><div class='ambient-glow' style='--glow-color: rgba(var(--accent-green-rgb), 0.5); top: -20px; left: -20px;'></div><h2>ðŸ† Top Performing Assets</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Which products generate the most sales quantity.</p><div style='height:260px; position:relative;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='topProductsBarChart' style='position:relative; z-index:10;'></canvas></div></div>
-                   <div class='box' style='animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: 0.3s; position: relative; overflow: hidden;'><div class='ambient-glow' style='--glow-color: rgba(var(--accent-green-rgb), 0.5); top: -20px; left: -20px;'></div><h2>ðŸ·ï¸ Sector Revenue</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Revenue grouped by product category.</p><div style='height:260px; position:relative;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='categoryRevenueChart' style='position:relative; z-index:10;'></canvas></div></div>
-                   <div class='box' style='animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: 0.4s; position: relative; overflow: hidden;'><div class='ambient-glow' style='--glow-color: rgba(var(--accent-green-rgb), 0.5); top: -20px; left: -20px;'></div><h2>ðŸ“… Sales by Day of Week</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Identify your most profitable days to plan promotions.</p><div style='height:260px; position:relative;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='dowChart' style='position:relative; z-index:10;'></canvas></div></div>
-                   <div class='box' style='animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: 0.5s; position: relative; overflow: hidden;'><div class='ambient-glow' style='--glow-color: rgba(var(--accent-green-rgb), 0.5); top: -20px; left: -20px;'></div><h2>ðŸ“Š Conversion Funnel</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Ratio of total tickets opened versus successful transactions.</p><div style='height:260px; position:relative;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='funnelChart' style='position:relative; z-index:10;'></canvas></div></div>
+                   <div class='box' style='animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: 0.2s; position: relative; overflow: hidden;'><div class='ambient-glow' style='--glow-color: rgba(var(--accent-green-rgb), 0.5); top: -20px; left: -20px;'></div><h2>🏆 Top Performing Assets</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Which products generate the most sales quantity.</p><div style='height:260px; position:relative;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='topProductsBarChart' style='position:relative; z-index:10;'></canvas></div></div>
+                   <div class='box' style='animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: 0.3s; position: relative; overflow: hidden;'><div class='ambient-glow' style='--glow-color: rgba(var(--accent-green-rgb), 0.5); top: -20px; left: -20px;'></div><h2>🏷️ Sector Revenue</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Revenue grouped by product category.</p><div style='height:260px; position:relative;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='categoryRevenueChart' style='position:relative; z-index:10;'></canvas></div></div>
+                   <div class='box' style='animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: 0.4s; position: relative; overflow: hidden;'><div class='ambient-glow' style='--glow-color: rgba(var(--accent-green-rgb), 0.5); top: -20px; left: -20px;'></div><h2>📅 Sales by Day of Week</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Identify your most profitable days to plan promotions.</p><div style='height:260px; position:relative;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='dowChart' style='position:relative; z-index:10;'></canvas></div></div>
+                   <div class='box' style='animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: 0.5s; position: relative; overflow: hidden;'><div class='ambient-glow' style='--glow-color: rgba(var(--accent-green-rgb), 0.5); top: -20px; left: -20px;'></div><h2>📊 Conversion Funnel</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Ratio of total tickets opened versus successful transactions.</p><div style='height:260px; position:relative;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='funnelChart' style='position:relative; z-index:10;'></canvas></div></div>
                </div>
            </div>
 
@@ -4684,7 +4684,7 @@ const server = http.createServer(async (req, res) => {
                          <div style='display:flex; align-items:center; background:rgba(0,0,0,0.5); border-radius:12px; border:1px solid rgba(255,255,255,0.1); padding:0 5px;'>
                              <select id='aiLangSelect' style='background:transparent; color:var(--text-muted); border:none; padding:10px 5px; font-size:0.9em; outline:none; cursor:pointer;'>
                                  <option value='en'>English</option>
-                                 <option value='fr'>FranÃ§ais</option>
+                                 <option value='fr'>Français</option>
                              </select>
                          </div>
                          <button class='admin-btn' style='margin:0; background:rgba(139,92,246,0.1); color:#c4b5fd; border:1px solid rgba(139,92,246,0.3); backdrop-filter:blur(10px); display:flex; align-items:center; gap:8px; transition:all 0.3s ease;' onmouseover="this.style.background='rgba(139,92,246,0.2)'; this.style.transform='translateY(-2px)';" onmouseout="this.style.background='rgba(139,92,246,0.1)'; this.style.transform='translateY(0)';" onclick='window.analyzeTransactionsAI()'>
@@ -4709,7 +4709,7 @@ const server = http.createServer(async (req, res) => {
                              <span style='font-size:0.85em; text-transform:uppercase; color:var(--accent-green); letter-spacing:1.5px; font-weight:600;'>Total Volume</span>
                              <div style='padding:8px; background:rgba(16,185,129,0.1); border-radius:12px;'><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent-green)" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
                          </div>
-                         <div class='value text-green' id='tx-total-vol' style='font-size:2.8em; font-weight:800; text-shadow:0 0 20px rgba(16,185,129,0.3);'>Â£0.00</div>
+                         <div class='value text-green' id='tx-total-vol' style='font-size:2.8em; font-weight:800; text-shadow:0 0 20px rgba(16,185,129,0.3);'>£0.00</div>
                      </div>
                      
                      <div class='card' style='background:rgba(20,20,22,0.6); backdrop-filter:blur(12px); border:1px solid rgba(59,130,246,0.2); border-radius:20px; padding:25px; position:relative; overflow:hidden;'>
@@ -4718,7 +4718,7 @@ const server = http.createServer(async (req, res) => {
                              <span style='font-size:0.85em; text-transform:uppercase; color:var(--accent-blue); letter-spacing:1.5px; font-weight:600;'>Avg Order Value</span>
                              <div style='padding:8px; background:rgba(59,130,246,0.1); border-radius:12px;'><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent-blue)" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg></div>
                          </div>
-                         <div class='value' id='tx-avg-order' style='color:#fff; font-size:2.8em; font-weight:800; text-shadow:0 0 20px rgba(255,255,255,0.1);'>Â£0.00</div>
+                         <div class='value' id='tx-avg-order' style='color:#fff; font-size:2.8em; font-weight:800; text-shadow:0 0 20px rgba(255,255,255,0.1);'>£0.00</div>
                      </div>
                      
                      <div class='card' style='background:rgba(20,20,22,0.6); backdrop-filter:blur(12px); border:1px solid rgba(139,92,246,0.2); border-radius:20px; padding:25px; position:relative; overflow:hidden;'>
@@ -4744,7 +4744,7 @@ const server = http.createServer(async (req, res) => {
                             <input type='text' id='manTxProd' placeholder='e.g. VIP Subscription' style='width:100%; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:15px; color:#fff; font-size:1em; transition:border-color 0.3s;' onfocus="this.style.borderColor='var(--accent-green)'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
                         </div>
                         <div style='width:150px;'>
-                            <label style='display:block; margin-bottom:8px; color:var(--text-muted); font-size:0.85em; text-transform:uppercase; letter-spacing:1px;'>Value (Â£)</label>
+                            <label style='display:block; margin-bottom:8px; color:var(--text-muted); font-size:0.85em; text-transform:uppercase; letter-spacing:1px;'>Value (£)</label>
                             <input type='number' id='manTxPrice' placeholder='0.00' style='width:100%; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:15px; color:#fff; font-size:1em; transition:border-color 0.3s;' onfocus="this.style.borderColor='var(--accent-green)'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
                         </div>
                         <div style='width:220px;'>
@@ -4818,27 +4818,27 @@ const server = http.createServer(async (req, res) => {
             <div id='products' class='tab-content'>
 
                <div class='box'>
-                   <h2>ðŸ“ Asset Configuration</h2>
+                   <h2>📝 Asset Configuration</h2>
                    <div style='display:flex; gap:20px; flex-wrap:wrap; margin-bottom:15px;'>
                        <input type='hidden' id='editProdId'>
                        <input type='text' id='newProdName' placeholder='Asset Designation (e.g. VIP Pack)' style='flex:1; min-width:200px;'>
-                       <input type='text' id='newProdPrice' placeholder='Value (Â£)' style='width:100px;'>
-                       <input type='text' id='newProdStock' placeholder='Inventory (âˆž)' style='width:100px;'>
+                       <input type='text' id='newProdPrice' placeholder='Value (£)' style='width:100px;'>
+                       <input type='text' id='newProdStock' placeholder='Inventory (∞)' style='width:100px;'>
                    </div>
                    <div style='display:flex; gap:20px; flex-wrap:wrap; margin-bottom:15px;'>
                        <input type='text' id='newProdDesc' placeholder='Asset Description (e.g. Bot features...)' style='flex:1; min-width:250px;'>
                        <input type='text' id='newProdLink' placeholder='Secure Delivery Node (GitHub, Drive...)' style='flex:1; min-width:250px;'>
                        <select id='newProdCategory' style='width:180px; padding: 12px; background: rgba(0,0,0,0.3); border: 0.5px solid rgba(255,255,255,0.05); color: #fff; border-radius: 12px;'>
-                           <option value='ðŸ’¬ DISCORD'>ðŸ’¬ DISCORD</option>
-                           <option value='ðŸ“± TELEGRAM'>ðŸ“± TELEGRAM</option>
-                           <option value='ðŸŒ WEB'>ðŸŒ WEB</option>
-                           <option value='ðŸ› ï¸ UTILITY'>ðŸ› ï¸ UTILITY</option>
-                           <option value='ðŸŽ® GAMING'>ðŸŽ® GAMING</option>
-                           <option value='ðŸ‘‘ SUBSCRIPTION'>ðŸ‘‘ SUBSCRIPTION</option>
+                           <option value='💬 DISCORD'>💬 DISCORD</option>
+                           <option value='📱 TELEGRAM'>📱 TELEGRAM</option>
+                           <option value='🌐 WEB'>🌐 WEB</option>
+                           <option value='🛠️ UTILITY'>🛠️ UTILITY</option>
+                           <option value='🎮 GAMING'>🎮 GAMING</option>
+                           <option value='👑 SUBSCRIPTION'>👑 SUBSCRIPTION</option>
                        </select>
                    </div>
                    <div style='display:flex; gap:20px; flex-wrap:wrap; margin-bottom:15px; padding:15px; border-radius:16px; background:rgba(255,255,255,0.02); border:0.5px solid rgba(255,255,255,0.05);'>
-                       <strong style='display:flex; align-items:center;'>ðŸš€ Auto-Upsell :</strong>
+                       <strong style='display:flex; align-items:center;'>🚀 Auto-Upsell :</strong>
                        <input type='text' id='newProdUpsellId' placeholder='Upsell ID (e.g. 6)' style='width:180px;'>
                        <input type='number' id='newProdUpsellDiscount' placeholder='% Discount' style='width:150px;'>
                    </div>
@@ -4850,18 +4850,18 @@ const server = http.createServer(async (req, res) => {
                
                <div class='box'>
                    <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-wrap:wrap; gap:15px;'>
-                       <h2 style='margin:0;'>ðŸ“¦ Active Catalog</h2>
+                       <h2 style='margin:0;'>📦 Active Catalog</h2>
                        <div style="display:flex; gap:10px; flex-wrap:wrap;">
                            <select id='product-category-filter' style='padding:8px 12px; background:rgba(0,0,0,0.5); border:0.5px solid rgba(255,255,255,0.1); color:#fff; border-radius:12px; cursor:pointer;' onchange='window.buildStaticTables()'>
                                <option value='all'>All Categories</option>
-                               <option value='DISCORD'>ðŸ’¬ DISCORD</option>
-                               <option value='TELEGRAM'>ðŸ“± TELEGRAM</option>
-                               <option value='WEB'>ðŸŒ WEB</option>
-                               <option value='UTILITY'>ðŸ› ï¸ UTILITY</option>
-                               <option value='GAMING'>ðŸŽ® GAMING</option>
-                               <option value='SUBSCRIPTION'>ðŸ‘‘ SUBSCRIPTION</option>
-                               <option value='PHOTOS'>âœ¨ PHOTOS</option>
-                               <option value='VIDEOS'>ðŸ”¥ VIDEOS</option>
+                               <option value='DISCORD'>💬 DISCORD</option>
+                               <option value='TELEGRAM'>📱 TELEGRAM</option>
+                               <option value='WEB'>🌐 WEB</option>
+                               <option value='UTILITY'>🛠️ UTILITY</option>
+                               <option value='GAMING'>🎮 GAMING</option>
+                               <option value='SUBSCRIPTION'>👑 SUBSCRIPTION</option>
+                               <option value='PHOTOS'>✨ PHOTOS</option>
+                               <option value='VIDEOS'>🔥 VIDEOS</option>
                            </select>
                            <button class='admin-btn' style='margin:0;' onclick='window.triggerShopRefresh()'>Push Menu to Discord</button>
                        </div>
@@ -4870,11 +4870,11 @@ const server = http.createServer(async (req, res) => {
                </div>
 
                <div class='box'>
-                   <h2>ðŸ”— Payment Gateways</h2>
+                   <h2>🔗 Payment Gateways</h2>
                    <p class='text-muted'>Define the external voucher endpoints embedded in the shop UI.</p>
                    <div style='display:flex; gap:20px; flex-wrap:wrap; margin-bottom:15px; margin-top:20px;'>
                        <input type='hidden' id='editLinkId'>
-                       <input type='text' id='newLinkLabel' placeholder='Button Label (e.g. Buy Â£5)' style='flex:1; min-width:150px;'>
+                       <input type='text' id='newLinkLabel' placeholder='Button Label (e.g. Buy £5)' style='flex:1; min-width:150px;'>
                        <input type='text' id='newLinkUrl' placeholder='Endpoint URL (https://...)' style='flex:2; min-width:250px;'>
                        <button class='admin-btn btn-green' style='margin:0;' onclick='window.saveBuyLink()' id='saveLinkBtn'>Save Link</button>
                        <button class='admin-btn' style='margin:0; color:var(--accent-red); display:none;' onclick='window.cancelEditLink()' id='cancelEditLinkBtn'>Cancel</button>
@@ -4885,25 +4885,25 @@ const server = http.createServer(async (req, res) => {
                 
             <div id='audience' class='tab-content'>
                 <div style='display:grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap:25px;'>
-                    <div class='box'><h2>ðŸ“¥ Inbound Traffic</h2><div style='overflow-x:auto; margin-top:15px;'><table><thead><tr><th>Client ID</th><th>Timestamp</th></tr></thead><tbody id='target-joins'></tbody></table></div></div>
-                    <div class='box'><h2>ðŸ‘‹ Outbound Traffic</h2><div style='overflow-x:auto; margin-top:15px;'><table><thead><tr><th>Client ID</th><th>Session Duration</th><th>Timestamp</th></tr></thead><tbody id='target-leaves'></tbody></table></div></div>
+                    <div class='box'><h2>📥 Inbound Traffic</h2><div style='overflow-x:auto; margin-top:15px;'><table><thead><tr><th>Client ID</th><th>Timestamp</th></tr></thead><tbody id='target-joins'></tbody></table></div></div>
+                    <div class='box'><h2>👋 Outbound Traffic</h2><div style='overflow-x:auto; margin-top:15px;'><table><thead><tr><th>Client ID</th><th>Session Duration</th><th>Timestamp</th></tr></thead><tbody id='target-leaves'></tbody></table></div></div>
                 </div>
             </div>
 
             <div id='referrals' class='tab-content'>
                 <div class='box'>
-                    <h2>ðŸŽŸï¸ Custom Vouchers & Promo Codes</h2>
+                    <h2>🎟️ Custom Vouchers & Promo Codes</h2>
                     <div style='display:flex; gap:15px; flex-wrap:wrap; margin-top:20px;'><input type='text' id='promoName' placeholder='VOUCHER_CODE' style='flex:1; min-width:200px;'><input type='number' id='promoDiscount' placeholder='Discount %' style='width:150px;'><input type='number' id='promoLimit' placeholder='Max Uses' style='width:150px;'><button class='admin-btn btn-green' style='margin:0; padding:15px 30px;' onclick='window.createPromo()'>Generate</button></div>
                     <div style='overflow-x:auto; margin-top:25px;'><table><thead><tr><th>Voucher</th><th>Discount</th><th>Integrity</th><th>Action</th></tr></thead><tbody id='target-promos'></tbody></table></div>
                 </div>
                 
                 <div class='box'>
-                    <h2>ðŸ”— Referral Architecture</h2>
+                    <h2>🔗 Referral Architecture</h2>
                     <p class='text-muted'>Define the required invite threshold to unlock a 100% discount node.</p>
                     <div style='display:flex; gap:15px; align-items:center; margin-top:20px;'><input type='number' id='ref-threshold' style='width:120px; text-align:center;'><button class='admin-btn btn-green' style='margin:0;' onclick='window.updateRefThreshold()'>Save Threshold</button></div>
                 </div>
                 <div class='box'>
-                    <h2>ðŸ† Top Affiliates</h2>
+                    <h2>🏆 Top Affiliates</h2>
                     <div class='table-responsive' style='margin-top:20px;'><table><thead><tr><th>Affiliate ID</th><th>Nodes Captured</th><th>Payouts</th><th>Recent Targets</th><th>Action</th></tr></thead><tbody id='target-referrals'></tbody></table></div>
                 </div>
             </div>
@@ -5008,7 +5008,7 @@ const server = http.createServer(async (req, res) => {
                 }
                 
                 .mod-input-wrapper { position: relative; flex: 1; min-width: 250px; }
-                .mod-input-wrapper::before { content: "ðŸ”"; position: absolute; left: 16px; top: 50%; transform: translateY(-50%); font-size: 1rem; opacity: 0.5; transition: opacity 0.3s; pointer-events: none; }
+                .mod-input-wrapper::before { content: "🔍"; position: absolute; left: 16px; top: 50%; transform: translateY(-50%); font-size: 1rem; opacity: 0.5; transition: opacity 0.3s; pointer-events: none; }
                 .mod-input-wrapper:focus-within::before { opacity: 1; }
                 
                 .mod-select-wrapper { position: relative; }
@@ -5059,7 +5059,7 @@ const server = http.createServer(async (req, res) => {
                 .mod-sync-btn:hover svg { transform: rotate(180deg); }
                 </style>
                 <div class='box' style='background:transparent; border:none; padding:0;'>
-                    <h2 style='font-size:2rem; margin-bottom:5px;'><span style='font-size:1.2em; vertical-align:-3px;'>ðŸ”Ž</span> Client Directory</h2>
+                    <h2 style='font-size:2rem; margin-bottom:5px;'><span style='font-size:1.2em; vertical-align:-3px;'>🔎</span> Client Directory</h2>
                     <p class='text-muted'>Global surveillance and access control matrix.</p>
                     
                     <div class='mod-top-bar' style='background:rgba(10,10,12,0.4); backdrop-filter:blur(30px); border-radius:100px; padding:12px; display:flex; flex-wrap:wrap; gap:12px; border:1px solid rgba(255,255,255,0.04);'>
@@ -5067,13 +5067,13 @@ const server = http.createServer(async (req, res) => {
                             <input type='text' id='memberSearchInput' class='search-pill-input' placeholder='Query ID or designation...' oninput='window.sortMembersLocally()'>
                         </div>
                         <div class='filter-pill-group' id='status-filters'>
-                            <button class='filter-pill active' onclick='window.setModFilter(&quot;status&quot;, &quot;all&quot;, this)'>ðŸŒ Global</button>
-                            <button class='filter-pill' onclick='window.setModFilter(&quot;status&quot;, &quot;online&quot;, this)'>ðŸŸ¢ Active</button>
+                            <button class='filter-pill active' onclick='window.setModFilter(&quot;status&quot;, &quot;all&quot;, this)'>🌍 Global</button>
+                            <button class='filter-pill' onclick='window.setModFilter(&quot;status&quot;, &quot;online&quot;, this)'>🟢 Active</button>
                         </div>
                         <div class='filter-pill-group' id='sort-filters'>
-                            <button class='filter-pill active' onclick='window.setModFilter(&quot;sort&quot;, &quot;recent&quot;, this)'>ðŸ”½ Newest</button>
-                            <button class='filter-pill' onclick='window.setModFilter(&quot;sort&quot;, &quot;spent_desc&quot;, this)'>ðŸ’° High Value</button>
-                            <button class='filter-pill' onclick='window.setModFilter(&quot;sort&quot;, &quot;warns&quot;, this)'>âš ï¸ High Risk</button>
+                            <button class='filter-pill active' onclick='window.setModFilter(&quot;sort&quot;, &quot;recent&quot;, this)'>🔽 Newest</button>
+                            <button class='filter-pill' onclick='window.setModFilter(&quot;sort&quot;, &quot;spent_desc&quot;, this)'>💰 High Value</button>
+                            <button class='filter-pill' onclick='window.setModFilter(&quot;sort&quot;, &quot;warns&quot;, this)'>⚠️ High Risk</button>
                         </div>
                         <button class='mod-sync-btn' style='border-radius:100px; margin-left:auto;' onclick='window.loadAllMembers()'>
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.92-10.27l-3.27-3.27"/></svg>
@@ -5104,7 +5104,7 @@ const server = http.createServer(async (req, res) => {
                     
                     <div class='stats-grid' style='position:relative; z-index:1;'>
                         <div class='card' style='border:none; background:rgba(255,255,255,0.02); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.05); border-radius:16px;'>
-                            <h3 style='display:flex; align-items:center; justify-content:space-between;'>ðŸ–¥ï¸ Core Compute <span style='font-size:0.65em; padding:3px 8px; border-radius:8px; background:rgba(255,255,255,0.1); font-family:monospace;' id='ui-os-plat'><div class="skeleton skeleton-text" style="width: 60px; display: inline-block;"></div></span></h3>
+                            <h3 style='display:flex; align-items:center; justify-content:space-between;'>🖥️ Core Compute <span style='font-size:0.65em; padding:3px 8px; border-radius:8px; background:rgba(255,255,255,0.1); font-family:monospace;' id='ui-os-plat'><div class="skeleton skeleton-text" style="width: 60px; display: inline-block;"></div></span></h3>
                             <div style='margin-top:25px;'>
                                 <div style='display:flex; justify-content:space-between; font-size:0.8em; text-transform:uppercase; font-weight:bold; color:var(--text-muted);'>
                                     <span>CPU Load</span> <span id='ui-cpu-txt'><div class="skeleton skeleton-text" style="width: 40px; display: inline-block;"></div></span>
@@ -5128,7 +5128,7 @@ const server = http.createServer(async (req, res) => {
                         </div>
                         
                         <div class='card' style='border:none; background:rgba(255,255,255,0.02); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.05); border-radius:16px;'>
-                            <h3 style='display:flex; align-items:center; justify-content:space-between;'>âš™ï¸ V8 Runtime <span style='font-size:0.65em; padding:3px 8px; border-radius:8px; background:rgba(168,85,247,0.1); color:#a855f7; font-family:monospace;' id='ui-proc-up'><div class="skeleton skeleton-text" style="width: 60px; display: inline-block;"></div></span></h3>
+                            <h3 style='display:flex; align-items:center; justify-content:space-between;'>⚙️ V8 Runtime <span style='font-size:0.65em; padding:3px 8px; border-radius:8px; background:rgba(168,85,247,0.1); color:#a855f7; font-family:monospace;' id='ui-proc-up'><div class="skeleton skeleton-text" style="width: 60px; display: inline-block;"></div></span></h3>
                             <div style='margin-top:20px; font-size:0.9em; line-height:2.2;'>
                                 <div style='display:flex; justify-content:space-between; align-items:center;'>
                                     <span class='text-muted' style='display:flex; align-items:center; gap:8px;'><div class='status-pulse' style='background:var(--accent-purple); width:6px; height:6px;'></div> Memory (RSS)</span> 
@@ -5146,7 +5146,7 @@ const server = http.createServer(async (req, res) => {
                         </div>
 
                         <div class='card' style='border:none; background:rgba(255,255,255,0.02); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.05); border-radius:16px;'>
-                            <h3 style='display:flex; align-items:center; justify-content:space-between;'>ðŸ›¡ï¸ Defense Matrix <span style='font-size:0.65em; padding:3px 8px; border-radius:8px; background:rgba(16,185,129,0.1); color:var(--accent-green); font-family:monospace;' id='ui-fw-status'><div class="skeleton skeleton-text" style="width: 60px; display: inline-block;"></div></span></h3>
+                            <h3 style='display:flex; align-items:center; justify-content:space-between;'>🛡️ Defense Matrix <span style='font-size:0.65em; padding:3px 8px; border-radius:8px; background:rgba(16,185,129,0.1); color:var(--accent-green); font-family:monospace;' id='ui-fw-status'><div class="skeleton skeleton-text" style="width: 60px; display: inline-block;"></div></span></h3>
                             <div style='margin-top:20px; font-size:0.9em; line-height:2.2;'>
                                 <div style='display:flex; justify-content:space-between; align-items:center;'>
                                     <span class='text-muted'>IPs Rate-Limited</span> 
@@ -5166,7 +5166,7 @@ const server = http.createServer(async (req, res) => {
                         </div>
 
                         <div class='card' style='border:none; background:rgba(255,255,255,0.02); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.05); border-radius:16px; display:flex; flex-direction:column;'>
-                            <h3 style='display:flex; align-items:center; justify-content:space-between; margin-top:0;'>ðŸŒ Bandwidth <span style='font-size:0.65em; padding:3px 8px; border-radius:8px; background:rgba(59,130,246,0.1); color:var(--accent-blue); font-family:monospace;' id='ui-bw-status'><div class="skeleton skeleton-text" style="width: 60px; display: inline-block;"></div></span></h3>
+                            <h3 style='display:flex; align-items:center; justify-content:space-between; margin-top:0;'>🌐 Bandwidth <span style='font-size:0.65em; padding:3px 8px; border-radius:8px; background:rgba(59,130,246,0.1); color:var(--accent-blue); font-family:monospace;' id='ui-bw-status'><div class="skeleton skeleton-text" style="width: 60px; display: inline-block;"></div></span></h3>
                             <div style='display:flex; justify-content:center; align-items:center; flex-direction:column; flex:1; margin-top: 10px;'>
                                 <div style="position:relative; width: 120px; height: 120px;">
                                     <svg width="120" height="120" viewBox="0 0 120 120" style="transform: rotate(-90deg);">
@@ -5187,7 +5187,7 @@ const server = http.createServer(async (req, res) => {
                     <div class='stats-grid' style='position:relative; z-index:1;'>
                         <div class='card' id='card-discord' style='border:none; background:rgba(255,255,255,0.02); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.05); border-radius:16px; position:relative; overflow:hidden;'>
                             <div id='glow-discord' style='position:absolute; top:0; left:0; width:100%; height:4px; background:var(--text-muted); transition:1s;'></div>
-                            <h3 style='margin-top:5px;'>ðŸ”µ Discord WS</h3>
+                            <h3 style='margin-top:5px;'>🔵 Discord WS</h3>
                             <div class='value' id='ui-discord-ws' style='font-size:1.8em; margin: 15px 0; font-family:monospace;'><div class="skeleton" style="width: 80px; height: 24px; border-radius: 6px; display: inline-block;"></div></div>
                             <div style='font-size:0.85em; line-height:2;'>
                                 <div style='display:flex; justify-content:space-between;'><span class='text-muted'>Status:</span> <strong id='ui-discord-status'><div class="skeleton skeleton-text" style="width: 40px; display: inline-block;"></div></strong></div>
@@ -5198,14 +5198,14 @@ const server = http.createServer(async (req, res) => {
 
                         <div class='card' id='card-upstash' style='border:none; background:rgba(255,255,255,0.02); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.05); border-radius:16px; position:relative; overflow:hidden;'>
                             <div id='glow-upstash' style='position:absolute; top:0; left:0; width:100%; height:4px; background:var(--text-muted); transition:1s;'></div>
-                            <h3 style='margin-top:5px;'>ðŸ”´ Upstash DB</h3>
+                            <h3 style='margin-top:5px;'>🔴 Upstash DB</h3>
                             <div class='value' id='ui-upstash-status' style='font-size:1.5em; margin: 15px 0;'><div class="skeleton" style="width: 100px; height: 24px; border-radius: 6px; display: inline-block;"></div></div>
                             <p class='text-muted' style='margin:0; font-size:0.85em; display:flex; justify-content:space-between;'><span>Response Latency:</span> <strong id='ui-upstash-ping' style='font-family:monospace;'><div class="skeleton skeleton-text" style="width: 40px; display: inline-block;"></div></strong></p>
                         </div>
                         
                         <div class='card' id='card-rewarble' style='border:none; background:rgba(255,255,255,0.02); box-shadow:inset 0 0 0 1px rgba(255,255,255,0.05); border-radius:16px; position:relative; overflow:hidden;'>
                             <div id='glow-rewarble' style='position:absolute; top:0; left:0; width:100%; height:4px; background:var(--text-muted); transition:1s;'></div>
-                            <h3 style='margin-top:5px;'>ðŸŸ¢ Rewarble API</h3>
+                            <h3 style='margin-top:5px;'>🟢 Rewarble API</h3>
                             <div class='value' id='ui-rewarble-status' style='font-size:1.5em; margin: 15px 0;'><div class="skeleton" style="width: 100px; height: 24px; border-radius: 6px; display: inline-block;"></div></div>
                             <p class='text-muted' style='margin:0; font-size:0.85em; display:flex; justify-content:space-between;'><span>Response Latency:</span> <strong id='ui-rewarble-ping' style='font-family:monospace;'><div class="skeleton skeleton-text" style="width: 40px; display: inline-block;"></div></strong></p>
                         </div>
@@ -5217,7 +5217,7 @@ const server = http.createServer(async (req, res) => {
                 <div class='box' style='background:#050505;'>
                     <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;'>
                         <h2 style='margin:0; font-family:monospace; color:var(--accent-green);'>root@nexus:~# system_logs</h2>
-                        <button class='admin-btn' onclick='window.fetchLogs()'>ðŸ”„ Refresh</button>
+                        <button class='admin-btn' onclick='window.fetchLogs()'>🔄 Refresh</button>
                     </div>
                     <div class='terminal-box' id='terminal-output'>
                         <div style='color:var(--accent-green);'>Establishing secure connection to core logging engine...</div>
@@ -5229,7 +5229,7 @@ const server = http.createServer(async (req, res) => {
             <div id='messages' class='tab-content'>
                 <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:30px;'>
                     <div>
-                        <h2>ðŸ’¬ Bot Messages Configuration</h2>
+                        <h2>💬 Bot Messages Configuration</h2>
                         <p class='text-muted'>Customize all automated messages sent by the bot across your server and DMs.</p>
                     </div>
                     <button class='admin-btn' onclick='window.saveAllMessages()' style='background: linear-gradient(135deg, #10b981 0%, #059669 100%); color:#fff; border:none; padding:12px 24px; font-weight:600; box-shadow:0 4px 15px rgba(16,185,129,0.3); border-radius:12px; cursor:pointer;'>
@@ -5263,7 +5263,7 @@ const server = http.createServer(async (req, res) => {
                                 <p class="msg-desc">First message sent when a user opens a shop ticket.</p>
                             </div>
                         </div>
-                        <button class="ai-generate-btn" onclick="window.generateMessageAI('shop_welcome')">âœ¨ AI Rewrite</button>
+                        <button class="ai-generate-btn" onclick="window.generateMessageAI('shop_welcome')">✨ AI Rewrite</button>
                         <textarea id="msg_shop_welcome" class="msg-input" placeholder="Loading..."></textarea>
                         <div><span class="msg-vars">Variables: {user}</span></div>
                     </div>
@@ -5276,7 +5276,7 @@ const server = http.createServer(async (req, res) => {
                                 <p class="msg-desc">Message sent if the shop has no products.</p>
                             </div>
                         </div>
-                        <button class="ai-generate-btn" onclick="window.generateMessageAI('shop_empty')">âœ¨ AI Rewrite</button>
+                        <button class="ai-generate-btn" onclick="window.generateMessageAI('shop_empty')">✨ AI Rewrite</button>
                         <textarea id="msg_shop_empty" class="msg-input" placeholder="Loading..."></textarea>
                         <div><span class="msg-vars">Variables: {user}</span></div>
                     </div>
@@ -5289,7 +5289,7 @@ const server = http.createServer(async (req, res) => {
                                 <p class="msg-desc">Ephemeral reply when the user clicks the shop menu.</p>
                             </div>
                         </div>
-                        <button class="ai-generate-btn" onclick="window.generateMessageAI('ticket_ready')">âœ¨ AI Rewrite</button>
+                        <button class="ai-generate-btn" onclick="window.generateMessageAI('ticket_ready')">✨ AI Rewrite</button>
                         <textarea id="msg_ticket_ready" class="msg-input" placeholder="Loading..."></textarea>
                         <div><span class="msg-vars">Variables: {channel}</span></div>
                     </div>
@@ -5302,7 +5302,7 @@ const server = http.createServer(async (req, res) => {
                                 <p class="msg-desc">DM sent when a user purchases the VIP pass.</p>
                             </div>
                         </div>
-                        <button class="ai-generate-btn" onclick="window.generateMessageAI('vip_welcome')">âœ¨ AI Rewrite</button>
+                        <button class="ai-generate-btn" onclick="window.generateMessageAI('vip_welcome')">✨ AI Rewrite</button>
                         <textarea id="msg_vip_welcome" class="msg-input" placeholder="Loading..."></textarea>
                         <div><span class="msg-vars">Variables: None</span></div>
                     </div>
@@ -5315,7 +5315,7 @@ const server = http.createServer(async (req, res) => {
                                 <p class="msg-desc">Embed title shown during maintenance mode.</p>
                             </div>
                         </div>
-                        <button class="ai-generate-btn" onclick="window.generateMessageAI('maintenance_embed_title')">âœ¨ AI Rewrite</button>
+                        <button class="ai-generate-btn" onclick="window.generateMessageAI('maintenance_embed_title')">✨ AI Rewrite</button>
                         <textarea id="msg_maintenance_embed_title" class="msg-input" style="min-height:50px;" placeholder="Loading..."></textarea>
                         <div><span class="msg-vars">Variables: None</span></div>
                     </div>
@@ -5328,7 +5328,7 @@ const server = http.createServer(async (req, res) => {
                                 <p class="msg-desc">Embed description shown during maintenance mode.</p>
                             </div>
                         </div>
-                        <button class="ai-generate-btn" onclick="window.generateMessageAI('maintenance_embed_desc')">âœ¨ AI Rewrite</button>
+                        <button class="ai-generate-btn" onclick="window.generateMessageAI('maintenance_embed_desc')">✨ AI Rewrite</button>
                         <textarea id="msg_maintenance_embed_desc" class="msg-input" placeholder="Loading..."></textarea>
                         <div><span class="msg-vars">Variables: {time}</span></div>
                     </div>
@@ -5341,7 +5341,7 @@ const server = http.createServer(async (req, res) => {
                                 <p class="msg-desc">Message sent in DMs upon successful purchase.</p>
                             </div>
                         </div>
-                        <button class="ai-generate-btn" onclick="window.generateMessageAI('checkout_success_dm')">âœ¨ AI Rewrite</button>
+                        <button class="ai-generate-btn" onclick="window.generateMessageAI('checkout_success_dm')">✨ AI Rewrite</button>
                         <textarea id="msg_checkout_success_dm" class="msg-input" placeholder="Loading..."></textarea>
                         <div><span class="msg-vars">Variables: {product}</span></div>
                     </div>
@@ -5354,7 +5354,7 @@ const server = http.createServer(async (req, res) => {
                                 <p class="msg-desc">Channel warning if DM delivery fails.</p>
                             </div>
                         </div>
-                        <button class="ai-generate-btn" onclick="window.generateMessageAI('checkout_failed_dm')">âœ¨ AI Rewrite</button>
+                        <button class="ai-generate-btn" onclick="window.generateMessageAI('checkout_failed_dm')">✨ AI Rewrite</button>
                         <textarea id="msg_checkout_failed_dm" class="msg-input" placeholder="Loading..."></textarea>
                         <div><span class="msg-vars">Variables: {product}</span></div>
                     </div>
@@ -5367,7 +5367,7 @@ const server = http.createServer(async (req, res) => {
                                 <p class="msg-desc">Sent in the ticket right before it closes automatically.</p>
                             </div>
                         </div>
-                        <button class="ai-generate-btn" onclick="window.generateMessageAI('checkout_complete_channel')">âœ¨ AI Rewrite</button>
+                        <button class="ai-generate-btn" onclick="window.generateMessageAI('checkout_complete_channel')">✨ AI Rewrite</button>
                         <textarea id="msg_checkout_complete_channel" class="msg-input" style="min-height:70px;" placeholder="Loading..."></textarea>
                         <div><span class="msg-vars">Variables: None</span></div>
                     </div>
@@ -5380,7 +5380,7 @@ const server = http.createServer(async (req, res) => {
                                 <p class="msg-desc">Reply when user enters a wrong format.</p>
                             </div>
                         </div>
-                        <button class="ai-generate-btn" onclick="window.generateMessageAI('invalid_code')">âœ¨ AI Rewrite</button>
+                        <button class="ai-generate-btn" onclick="window.generateMessageAI('invalid_code')">✨ AI Rewrite</button>
                         <textarea id="msg_invalid_code" class="msg-input" style="min-height:70px;" placeholder="Loading..."></textarea>
                         <div><span class="msg-vars">Variables: None</span></div>
                     </div>
@@ -5393,7 +5393,7 @@ const server = http.createServer(async (req, res) => {
                                 <p class="msg-desc">Reply when user tries to enter multiple codes.</p>
                             </div>
                         </div>
-                        <button class="ai-generate-btn" onclick="window.generateMessageAI('already_validated')">âœ¨ AI Rewrite</button>
+                        <button class="ai-generate-btn" onclick="window.generateMessageAI('already_validated')">✨ AI Rewrite</button>
                         <textarea id="msg_already_validated" class="msg-input" style="min-height:70px;" placeholder="Loading..."></textarea>
                         <div><span class="msg-vars">Variables: None</span></div>
                     </div>
@@ -5406,7 +5406,7 @@ const server = http.createServer(async (req, res) => {
                                 <p class="msg-desc">Reply when a promo code is exhausted.</p>
                             </div>
                         </div>
-                        <button class="ai-generate-btn" onclick="window.generateMessageAI('code_limit_reached')">âœ¨ AI Rewrite</button>
+                        <button class="ai-generate-btn" onclick="window.generateMessageAI('code_limit_reached')">✨ AI Rewrite</button>
                         <textarea id="msg_code_limit_reached" class="msg-input" style="min-height:70px;" placeholder="Loading..."></textarea>
                         <div><span class="msg-vars">Variables: None</span></div>
                     </div>
@@ -5418,7 +5418,7 @@ const server = http.createServer(async (req, res) => {
             <div id='mysterybox' class='tab-content'>
                 <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:30px;'>
                     <div>
-                        <h2>ðŸŽ Mystery Box Manager</h2>
+                        <h2>🎁 Mystery Box Manager</h2>
                         <p class='text-muted'>Drive sales by offering a randomized drop box with customizable tiers and probabilities.</p>
                     </div>
                     <div>
@@ -5436,7 +5436,7 @@ const server = http.createServer(async (req, res) => {
                     </div>
                     <div style='display:grid; grid-template-columns: 1fr 1fr; gap:15px;'>
                         <div>
-                            <label style='display:block; margin-bottom:5px; color:#8e8e93;'>Box Price (Â£)</label>
+                            <label style='display:block; margin-bottom:5px; color:#8e8e93;'>Box Price (£)</label>
                             <input type='number' id='mb-price' class='admin-input' value='10' step='0.01'>
                         </div>
                     </div>
@@ -5455,7 +5455,7 @@ const server = http.createServer(async (req, res) => {
             <div id='botcontrol' class='tab-content'>
                 <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:30px;'>
                     <div>
-                        <h2>ðŸ¤– Bot Control Center</h2>
+                        <h2>🤖 Bot Control Center</h2>
                         <p class='text-muted'>Manage your bot's core systems, presence, and security protocols in real-time.</p>
                     </div>
                     <button class='admin-btn' onclick='window.saveBotControl(event)' style='background: linear-gradient(135deg, #10b981 0%, #059669 100%); color:#fff; border:none; padding:12px 24px; font-weight:600; box-shadow:0 4px 15px rgba(16,185,129,0.3); border-radius:12px; cursor:pointer;'>
@@ -5543,7 +5543,7 @@ const server = http.createServer(async (req, res) => {
             <div id='admin' class='tab-content'>
 
                 <div class='box' style='border:1px solid rgba(16,185,129,0.2); background:rgba(16,185,129,0.05); margin-bottom:20px;'>
-    <h2 style='color:var(--accent-green); margin-top:0;'>ðŸ”” Push Notifications Setup</h2>
+    <h2 style='color:var(--accent-green); margin-top:0;'>🔔 Push Notifications Setup</h2>
     <p class='text-muted'>Test your browser push notifications to ensure they are working properly.</p>
     <div style='display:flex; gap:15px; margin-top:20px;'>
         <button class='admin-btn' onclick='window.testNotification()'>Test Notification (5s delay)</button>
@@ -5551,7 +5551,7 @@ const server = http.createServer(async (req, res) => {
 </div>
 
 <div class='box' style='border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.02); margin-bottom:20px;'>
-    <h2>ðŸ–¼ï¸ Visual Embed Generator</h2>
+    <h2>🖼️ Visual Embed Generator</h2>
     <p class='text-muted'>Create and push a custom embed to a specific Discord channel.</p>
     <div style='display:flex; flex-direction:column; gap:15px; margin-top:20px;'>
         <input type='text' id='embedChannel' placeholder='Target Channel ID'>
@@ -5561,12 +5561,12 @@ const server = http.createServer(async (req, res) => {
             <input type='text' id='embedColor' placeholder='Hex Color Code (e.g. #10b981)' style='flex:1;'>
             <input type='text' id='embedImg' placeholder='Image URL (Optional)' style='flex:2;'>
         </div>
-        <button class='admin-btn btn-green' onclick='window.sendEmbed()' style='width:100%;'>ðŸ“¤ Publish Embed</button>
+        <button class='admin-btn btn-green' onclick='window.sendEmbed()' style='width:100%;'>📤 Publish Embed</button>
     </div>
 </div>
 
 <div class='box'>
-                    <h2>ðŸŽ¨ Dashboard Theme</h2>
+                    <h2>🎨 Dashboard Theme</h2>
                     <p class='text-muted'>Customize the dashboard accent color. Changes apply locally.</p>
                     <div style='display:flex; gap:15px; margin-top:20px; align-items:center;'>
                         <button class='theme-btn' style='background:#10b981; width:40px; height:40px; border-radius:50%; border:2px solid transparent; cursor:pointer; box-shadow:0 0 10px rgba(16,185,129,0.5);' onclick='window.setTheme("green")'></button>
@@ -5577,7 +5577,7 @@ const server = http.createServer(async (req, res) => {
                 </div>
 
                 <div class='box'>
-                    <h2 style='color:var(--accent-green);'>ðŸ“¢ Global Broadcast</h2>
+                    <h2 style='color:var(--accent-green);'>📢 Global Broadcast</h2>
                     <p class='text-muted'>Send an admin message from the bot to any specific channel.</p>
                     <div style='display:flex; gap:15px; margin-top:20px; align-items:center;'>
                         <div style="display:flex; flex-direction:column; gap:5px;">
@@ -5591,10 +5591,10 @@ const server = http.createServer(async (req, res) => {
 </div>
                     </div>
                     <textarea id='broadcast-msg' placeholder='Type your message payload here...' style='margin-top:15px; min-height:100px;'></textarea>
-                    <button class='admin-btn btn-green' style='width:100%; margin-top:15px;' onclick='window.sendBroadcast()'>ðŸ“¤ Broadcast Message</button>
+                    <button class='admin-btn btn-green' style='width:100%; margin-top:15px;' onclick='window.sendBroadcast()'>📤 Broadcast Message</button>
                 </div>
                 <div class='box'>
-                    <h2>â³ Review Queue</h2>
+                    <h2>⏳ Review Queue</h2>
                     <p class='text-muted'>Client feedback awaiting validation before public broadcast.</p>
                     <div class='table-responsive' style='margin-top:20px;'>
                         <table><thead><tr><th>Timestamp</th><th>Client ID</th><th>Asset</th><th>Score</th><th>Data</th><th>Execute</th></tr></thead><tbody id='target-pending-reviews'><tr><td colspan="6"><div class="skeleton skeleton-table-row"></div><div class="skeleton skeleton-table-row"></div><div class="skeleton skeleton-table-row"></div></td></tr></tbody></table>
@@ -5602,7 +5602,7 @@ const server = http.createServer(async (req, res) => {
                 </div>
                 
                 <div class='box' style='border:1px solid rgba(16,185,129,0.2); background:rgba(16,185,129,0.05); margin-bottom:20px;'>
-                    <h2 style='color:var(--accent-green); margin-top:0; border-bottom-color:rgba(16,185,129,0.1);'>ðŸ¤– AI Support Agent</h2>
+                    <h2 style='color:var(--accent-green); margin-top:0; border-bottom-color:rgba(16,185,129,0.1);'>🤖 AI Support Agent</h2>
                     <p class='text-muted'>Enable or disable the Gemini AI agent in support tickets.</p>
                     <div style='display:flex; gap:15px; flex-wrap:wrap; margin-top:20px; align-items:center;'>
                         <button class='admin-btn' id='btn-ai-enable' style='margin:0; background:rgba(16,185,129,0.2); color:var(--accent-green); border-color:var(--accent-green);' onclick='window.toggleAI(true)'>Enable AI</button>
@@ -5611,7 +5611,7 @@ const server = http.createServer(async (req, res) => {
                 </div>
                 
                 <div class='box' style='border:1px solid rgba(249,115,22,0.2); background:rgba(249,115,22,0.05);'>
-                    <h2 style='color:var(--accent-orange); margin-top:0; border-bottom-color:rgba(249,115,22,0.1);'>ðŸš§ Lockout Protocol (Maintenance)</h2>
+                    <h2 style='color:var(--accent-orange); margin-top:0; border-bottom-color:rgba(249,115,22,0.1);'>🚧 Lockout Protocol (Maintenance)</h2>
                     <p class='text-muted'>Suspend all inbound commercial transactions globally.</p>
                     <div style='display:flex; gap:15px; flex-wrap:wrap; margin-top:20px; align-items:center;'>
                         <input type='number' id='maint-duration' placeholder='T-Minus (Mins)' value='60' style='width:180px; border-color:rgba(249,115,22,0.3);'>
@@ -5630,26 +5630,26 @@ const server = http.createServer(async (req, res) => {
                 </div>
                
                 <div class='box'>
-                    <h2>ðŸŒŸ Manual Injection (Reviews)</h2>
-                    <div style='display:flex; gap:15px; margin-bottom:15px; margin-top:20px;'><input type='text' id='rev-author' placeholder='Client Designation' style='flex:1;'><select id='rev-rating' style='flex:1;'><option value='5'>5/5 â­ - Optimal</option><option value='4'>4/5 â­ - Sub-optimal</option><option value='3'>3/5 â­ - Acceptable</option><option value='2'>2/5 â­ - Flawed</option><option value='1'>1/5 â­ - Critical</option></select></div>
+                    <h2>🌟 Manual Injection (Reviews)</h2>
+                    <div style='display:flex; gap:15px; margin-bottom:15px; margin-top:20px;'><input type='text' id='rev-author' placeholder='Client Designation' style='flex:1;'><select id='rev-rating' style='flex:1;'><option value='5'>5/5 ⭐ - Optimal</option><option value='4'>4/5 ⭐ - Sub-optimal</option><option value='3'>3/5 ⭐ - Acceptable</option><option value='2'>2/5 ⭐ - Flawed</option><option value='1'>1/5 ⭐ - Critical</option></select></div>
                     <textarea id='rev-msg' placeholder='Inject feedback string...' style='margin-bottom:15px; min-height:100px;'></textarea>
-                    <button class='admin-btn' style='width:100%; padding:15px;' onclick='window.sendReview()'>ðŸ“¤ Broadcast Review</button>
+                    <button class='admin-btn' style='width:100%; padding:15px;' onclick='window.sendReview()'>📤 Broadcast Review</button>
                 </div>
             </div>
            <div id='backups' class='tab-content'>
                <div class='box'>
-                   <h2>ðŸ’¾ Daily Cloud Backup</h2>
+                   <h2>💾 Daily Cloud Backup</h2>
                    <p class='text-muted'>Your system automatically backs up your database locally every day. Upstash sync is real-time.</p>
                    <button class='admin-btn btn-green' onclick='window.forceBackup()'>Force Backup Now</button>
                </div>
                <div class='box'>
-                   <h2>ðŸ“¥ Import Backup</h2>
+                   <h2>📥 Import Backup</h2>
                    <p class='text-muted'>Restore your database from a local JSON file. This will override current data.</p>
                    <input type='file' id='import-backup-file' accept='.json' style='display:none;' onchange='window.importBackupFile(event)'>
-                   <button class='admin-btn' style='color:var(--accent-orange); border-color:var(--accent-orange);' onclick='document.getElementById("import-backup-file").click()'>ðŸ“‚ Upload JSON Backup</button>
+                   <button class='admin-btn' style='color:var(--accent-orange); border-color:var(--accent-orange);' onclick='document.getElementById("import-backup-file").click()'>📂 Upload JSON Backup</button>
                </div>
                <div class='box'>
-                   <h2>ðŸ“‚ Local Backup Files</h2>
+                   <h2>📂 Local Backup Files</h2>
                    <div style='overflow-x:auto;'><table><thead><tr><th>File Name</th><th>Size</th><th>Action</th></tr></thead><tbody id='target-backups'></tbody></table></div>
                </div>
            </div>
@@ -5674,7 +5674,7 @@ const server = http.createServer(async (req, res) => {
     </div>
 </div>
         <script>
-                        // ðŸš€ [FUNCTION: withErrorBoundary] - Centralized Error Boundary
+                        // 🚀 [FUNCTION: withErrorBoundary] - Centralized Error Boundary
         function withErrorBoundary(elementIds, widgetName, renderFn) {
             try {
                 renderFn();
@@ -5691,7 +5691,7 @@ const server = http.createServer(async (req, res) => {
             }
         }
 
-                // ðŸš€ [UI_ACTION: setTheme] - Action d'interface Dashboard
+                // 🚀 [UI_ACTION: setTheme] - Action d'interface Dashboard
         window.setTheme = function(color) {
             const themes = {
                 green: { hex: '#10b981', rgb: '16, 185, 129', hover: '#34d399' },
@@ -5723,7 +5723,7 @@ if(savedTheme) window.setTheme(savedTheme);
 else window.setTheme('green');
 
 
-    // ðŸš€ [FUNCTION: getThemeVal] - DÃ©claration de fonction
+    // 🚀 [FUNCTION: getThemeVal] - Déclaration de fonction
         function getThemeVal(key) {
     const color = localStorage.getItem('nexus_theme') || 'green';
     const themes = {
@@ -5739,7 +5739,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         let allMembersData = []; let isMembersLoaded = false; let activeChatChannel = null; let chatPollInterval = null; let terminalInterval = null; let ws = null;
         let trackedTickets = 0, trackedReviews = 0, trackedSales = 0;
         
-        // ðŸš€ [UI_ACTION: calcCurrency] - Action d'interface Dashboard
+        // 🚀 [UI_ACTION: calcCurrency] - Action d'interface Dashboard
         window.calcCurrency = function(source) {
             const rate = parseFloat(document.getElementById('conv-rate').value) || 1.18;
             if(source === 'gbp') {
@@ -5751,7 +5751,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             }
         };
         
-        // ðŸš€ [UI_ACTION: customPrompt] - Action d'interface Dashboard
+        // 🚀 [UI_ACTION: customPrompt] - Action d'interface Dashboard
         window.customPrompt = function(title, message, placeholder = '', defaultValue = '') {
             return new Promise((resolve) => {
                 const dialog = document.getElementById('premium-dialog');
@@ -5773,7 +5773,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                 inputEl.onkeypress = (e) => { if(e.key === 'Enter') btnConfirm.click(); };
             });
         };
-        // ðŸš€ [UI_ACTION: customConfirm] - Action d'interface Dashboard
+        // 🚀 [UI_ACTION: customConfirm] - Action d'interface Dashboard
         window.customConfirm = function(title, message) {
             return new Promise((resolve) => {
                 const dialog = document.getElementById('premium-dialog');
@@ -5792,12 +5792,12 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             });
         };
         
-        // ðŸŒŸ AUDIO ENGINE (Premium Chord Generation)
+        // 🌟 AUDIO ENGINE (Premium Chord Generation)
         let isMuted = false;
-        // ðŸš€ [UI_ACTION: toggleMute] - Action d'interface Dashboard
-        window.toggleMute = function() { isMuted = !isMuted; if(document.getElementById('audioBtn')) document.getElementById('audioBtn').innerText = isMuted ? 'ðŸ”‡' : 'ðŸ”Š'; };
+        // 🚀 [UI_ACTION: toggleMute] - Action d'interface Dashboard
+        window.toggleMute = function() { isMuted = !isMuted; if(document.getElementById('audioBtn')) document.getElementById('audioBtn').innerText = isMuted ? '🔇' : '🔊'; };
         let audioCtx = null;
-    // ðŸš€ [FUNCTION: initAudio] - DÃ©claration de fonction
+    // 🚀 [FUNCTION: initAudio] - Déclaration de fonction
         function initAudio() {
            try {
                if(!audioCtx && (window.AudioContext || window.webkitAudioContext)) {
@@ -5808,7 +5808,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         }
         document.body.addEventListener('click', initAudio, { once: true });
         
-    // ðŸš€ [FUNCTION: playSound] - DÃ©claration de fonction
+    // 🚀 [FUNCTION: playSound] - Déclaration de fonction
         function playSound(type) {
            if(isMuted) return;
            try {
@@ -5828,7 +5828,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
            } catch(e) {}
         }
 
-    // ðŸš€ [FUNCTION: initDashboard] - DÃ©claration de fonction
+    // 🚀 [FUNCTION: initDashboard] - Déclaration de fonction
         async function initDashboard() { if(document.getElementById('ui-today-rev')) document.getElementById('ui-today-rev').innerText = 'DEBUG REACHED';
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             ws = new WebSocket(protocol + '//' + window.location.host + '/ws');
@@ -5865,13 +5865,13 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
            if (splash) { splash.style.display = 'none'; splash.remove(); }
            if(typeof window.renderSalesChart === 'function') window.renderSalesChart(7); }
         
-    // ðŸš€ [FUNCTION: processInitData] - DÃ©claration de fonction
+    // 🚀 [FUNCTION: processInitData] - Déclaration de fonction
         
                       
            window.saveBotControl = function(event) {
                const btn = event.currentTarget;
                const originalHTML = btn.innerHTML;
-               btn.innerHTML = 'âš™ï¸ Saving...';
+               btn.innerHTML = '⚙️ Saving...';
                
                let payload = {
                    activity_type: document.getElementById('bot_activity_type').value,
@@ -5888,12 +5888,12 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                    body: JSON.stringify({ action: 'save_bot_control', config: payload })
                }).then(res => {
                    if (res.ok) {
-                       showToast('âœ… Bot control settings updated!');
+                       showToast('✅ Bot control settings updated!');
                    }
-                   else showToast('âŒ Error saving config.', 'error');
+                   else showToast('❌ Error saving config.', 'error');
                    btn.innerHTML = originalHTML;
                }).catch(e => {
-                   showToast('âŒ Network error.', 'error');
+                   showToast('❌ Network error.', 'error');
                    btn.innerHTML = originalHTML;
                });
            };
@@ -5916,8 +5916,8 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                    headers: { 'Content-Type': 'application/json' },
                    body: JSON.stringify({ action: 'save_messages', messages: payload })
                }).then(res => {
-                   if (res.ok) alert('âœ… Messages saved successfully!');
-                   else alert('âŒ Error saving messages.');
+                   if (res.ok) alert('✅ Messages saved successfully!');
+                   else alert('❌ Error saving messages.');
                });
            };
 
@@ -5925,7 +5925,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                const el = document.getElementById('msg_' + fieldKey);
                if(!el) return;
                const originalText = el.value;
-               el.value = "ðŸ¤– Thinking... Generating premium message...";
+               el.value = "🤖 Thinking... Generating premium message...";
                
                fetch('/api/action', {
                    method: 'POST',
@@ -5980,8 +5980,8 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
 
 
             console.log("REACHED overrides"); let overrides = rawStats.overrides || {};
-            console.log("REACHED UI UPDATES"); if(document.getElementById("ui-today-rev")) document.getElementById('ui-today-rev').innerText = overrides['today_rev'] || ('Â£'+(data.todayRevenue || 0));
-            if(document.getElementById('ui-total-rev')) document.getElementById('ui-total-rev').innerText = overrides['total_rev'] || ('Â£'+(rawStats.total_revenue || 0));
+            console.log("REACHED UI UPDATES"); if(document.getElementById("ui-today-rev")) document.getElementById('ui-today-rev').innerText = overrides['today_rev'] || ('£'+(data.todayRevenue || 0));
+            if(document.getElementById('ui-total-rev')) document.getElementById('ui-total-rev').innerText = overrides['total_rev'] || ('£'+(rawStats.total_revenue || 0));
             if(document.getElementById('ui-conv-rate')) document.getElementById('ui-conv-rate').innerText = overrides['conv_rate'] || ((data.conversionRate||0)+'%');
             if(document.getElementById('ui-online-total')) document.getElementById('ui-online-total').innerHTML = overrides['online_total'] || ((data.onlineCount||0) + ' <span style="font-size:0.5em;color:var(--text-muted);">/ ' + (data.memberCount||0) + '</span>');
             if(document.getElementById('ui-active-subs')) document.getElementById('ui-active-subs').innerText = overrides['active_subs'] || 0;
@@ -6040,7 +6040,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         .replace(/\\r/g, '\\\\r');
 }
         
-    // ðŸš€ [FUNCTION: updateMaintenanceBadge] - DÃ©claration de fonction
+    // 🚀 [FUNCTION: updateMaintenanceBadge] - Déclaration de fonction
         function updateMaintenanceBadge(m) { 
             const botStatus = document.querySelector('.bot-status'); 
             if(m && m.active && Date.now() < m.endsAt) { 
@@ -6053,7 +6053,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             } 
         }
 
-    // ðŸš€ [FUNCTION: updateBadgesAndFeed] - DÃ©claration de fonction
+    // 🚀 [FUNCTION: updateBadgesAndFeed] - Déclaration de fonction
         function updateBadgesAndFeed(data) { 
             const bChat = document.getElementById('badge-chat'); const bAdmin = document.getElementById('badge-admin'); 
             if(data.activeTickets > 0) { bChat.innerText = data.activeTickets; bChat.style.display = 'inline-block'; } else { bChat.style.display = 'none'; } 
@@ -6069,7 +6069,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             if(document.getElementById('target-feed')) document.getElementById('target-feed').innerHTML = feedHtml; 
         }
 
-    // ðŸš€ [FUNCTION: buildStaticTables] - DÃ©claration de fonction
+    // 🚀 [FUNCTION: buildStaticTables] - Déclaration de fonction
         function buildStaticTables(){
           let txHtml=''; 
           if (typeof window.renderTransactionsList === 'function') window.renderTransactionsList();
@@ -6126,26 +6126,26 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
 
           if(rawStats.products){ 
               Object.entries(rawStats.products).forEach(([id,p])=>{ 
-                  let icon='ðŸ“¦'; let cat = p.category||''; 
+                  let icon='📦'; let cat = p.category||''; 
                   
                   if (filterValue !== 'all' && !cat.includes(filterValue)) return;
 
-                  if(cat.includes('PHOTOS')) icon='ðŸ“¸'; 
-                  else if(cat.includes('VIDEOS')) icon='ðŸŽ¥'; 
-                  else if(cat.includes('SPECIAL')) icon='ðŸ’¦'; 
-                  else if(cat.includes('PERSONALIZED')) icon='ðŸ’Œ'; 
-                  else if(cat.includes('SUBSCRIPTION')) icon='ðŸ‘‘'; 
-                  else if(cat.includes('DISCORD')) icon='ðŸ’¬';
-                  else if(cat.includes('TELEGRAM')) icon='ðŸ“±';
-                  else if(cat.includes('WEB')) icon='ðŸŒ';
-                  else if(cat.includes('UTILITY')) icon='ðŸ› ï¸';
-                  else if(cat.includes('GAMING')) icon='ðŸŽ®';
-                  let pPrice = p.price==='Custom'?'Custom':'Â£'+p.price; 
-                  let pLink = p.link ? '<a href="' + escapeHTML(p.link) + '" target="_blank" style="color:var(--accent-green);text-decoration:none;">[ðŸ”— Open Node]</a>' : '<span class="text-muted">Unlinked</span>'; 
-                  let stockDisplay = p.stock === 'âˆž' || !p.stock ? 'âˆž' : p.stock; 
-                  let upsellDisplay = p.upsellId ? \`<br><span style='color:var(--accent-purple);font-size:0.8em;'>ðŸš€ Upsell: #\${p.upsellId} (-\${p.upsellDiscount||20}%)</span>\` : '';
+                  if(cat.includes('PHOTOS')) icon='📸'; 
+                  else if(cat.includes('VIDEOS')) icon='🎥'; 
+                  else if(cat.includes('SPECIAL')) icon='💦'; 
+                  else if(cat.includes('PERSONALIZED')) icon='💌'; 
+                  else if(cat.includes('SUBSCRIPTION')) icon='👑'; 
+                  else if(cat.includes('DISCORD')) icon='💬';
+                  else if(cat.includes('TELEGRAM')) icon='📱';
+                  else if(cat.includes('WEB')) icon='🌐';
+                  else if(cat.includes('UTILITY')) icon='🛠️';
+                  else if(cat.includes('GAMING')) icon='🎮';
+                  let pPrice = p.price==='Custom'?'Custom':'£'+p.price; 
+                  let pLink = p.link ? '<a href="' + escapeHTML(p.link) + '" target="_blank" style="color:var(--accent-green);text-decoration:none;">[🔗 Open Node]</a>' : '<span class="text-muted">Unlinked</span>'; 
+                  let stockDisplay = p.stock === '∞' || !p.stock ? '∞' : p.stock; 
+                  let upsellDisplay = p.upsellId ? \`<br><span style='color:var(--accent-purple);font-size:0.8em;'>🚀 Upsell: #\${p.upsellId} (-\${p.upsellDiscount||20}%)</span>\` : '';
                   let pDesc = p.desc ? '<div class="prod-desc">' + escapeHTML(p.desc) + upsellDisplay + '</div>' : '<div class="prod-desc" style="font-style:italic; opacity:0.5;">Awaiting parameters...'+upsellDisplay+'</div>';
-                  prodHtml+= '<div class="product-card"><div class="prod-header"><div class="prod-title">' + icon + ' ' + escapeHTML(p.name) + '</div><div class="prod-id">ID: ' + id + '</div></div><div class="prod-price">' + pPrice + ' <span class="prod-stock">INV: ' + escapeHTML(stockDisplay) + '</span></div>' + pDesc + '<div class="prod-link">' + pLink + '</div><div class="prod-actions"><button class="admin-btn" onclick="window.editProduct(\\'' + escapeInlineJS(id) + '\\')">âœï¸ Edit</button><button class="admin-btn" style="color:var(--accent-red);" onclick="window.deleteProduct(\\'' + escapeInlineJS(id) + '\\')">ðŸ—‘ï¸ Purge</button></div></div>'; 
+                  prodHtml+= '<div class="product-card"><div class="prod-header"><div class="prod-title">' + icon + ' ' + escapeHTML(p.name) + '</div><div class="prod-id">ID: ' + id + '</div></div><div class="prod-price">' + pPrice + ' <span class="prod-stock">INV: ' + escapeHTML(stockDisplay) + '</span></div>' + pDesc + '<div class="prod-link">' + pLink + '</div><div class="prod-actions"><button class="admin-btn" onclick="window.editProduct(\\'' + escapeInlineJS(id) + '\\')">✏️ Edit</button><button class="admin-btn" style="color:var(--accent-red);" onclick="window.deleteProduct(\\'' + escapeInlineJS(id) + '\\')">🗑️ Purge</button></div></div>'; 
               }); 
           } 
           if(document.getElementById('target-products')) document.getElementById('target-products').innerHTML = prodHtml;
@@ -6167,8 +6167,8 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             transHtml += '<td><strong>' + escapeHTML(t.name) + '</strong></td>';
             transHtml += '<td class="text-muted">' + new Date(t.date).toLocaleString() + '</td>';
             transHtml += '<td>';
-            transHtml += '<button class="admin-btn btn-green" style="margin:0; font-size:0.75em; padding:6px 12px;" onclick="window.downloadTranscript(&quot;' + escapeInlineJS(t.id) + '&quot;, &quot;' + escapeInlineJS(t.name) + '&quot;)">ðŸ“¥ Download</button> ';
-            transHtml += '<button class="admin-btn" style="margin:0; font-size:0.75em; padding:6px 12px; color:var(--accent-red);" onclick="window.deleteTranscript(&quot;' + escapeInlineJS(t.id) + '&quot;)">ðŸ—‘ï¸ Delete</button>';
+            transHtml += '<button class="admin-btn btn-green" style="margin:0; font-size:0.75em; padding:6px 12px;" onclick="window.downloadTranscript(&quot;' + escapeInlineJS(t.id) + '&quot;, &quot;' + escapeInlineJS(t.name) + '&quot;)">📥 Download</button> ';
+            transHtml += '<button class="admin-btn" style="margin:0; font-size:0.75em; padding:6px 12px; color:var(--accent-red);" onclick="window.deleteTranscript(&quot;' + escapeInlineJS(t.id) + '&quot;)">🗑️ Delete</button>';
             transHtml += '</td>';
             transHtml += '</tr>';
         });
@@ -6193,12 +6193,12 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                       let pnHtml = '';
            if(rawStats.patchnotes && rawStats.patchnotes.length > 0) {
                [...rawStats.patchnotes].sort((a, b) => new Date(b.date) - new Date(a.date)).forEach((pn, index) => {
-                   let emoji = "âœ¨";
-                   if(pn.text.includes("DESIGN")) emoji = "ðŸ’Ž";
-                   else if(pn.text.includes("AI")) emoji = "ðŸ§ ";
-                   else if(pn.text.includes("UX")) emoji = "ðŸ’«";
-                   else if(pn.text.includes("FIX")) emoji = "ðŸ”§";
-                   else if(pn.text.includes("SEC")) emoji = "ðŸ›¡ï¸";
+                   let emoji = "✨";
+                   if(pn.text.includes("DESIGN")) emoji = "💎";
+                   else if(pn.text.includes("AI")) emoji = "🧠";
+                   else if(pn.text.includes("UX")) emoji = "💫";
+                   else if(pn.text.includes("FIX")) emoji = "🔧";
+                   else if(pn.text.includes("SEC")) emoji = "🛡️";
                    
                    // Highlight tags inside the text (e.g. "DESIGN UPGRADE:")
                    let highlightedText = escapeHTML(pn.text).replace(/^([^:]+):/g, '<span class="pn-highlight">$1:</span>');
@@ -6223,7 +6223,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                   const info=rawStats.promo_codes[code]; 
                   const isExhausted = info.used >= info.limit; 
                   const statusColor = isExhausted ? 'var(--accent-red)' : getThemeVal('hex'); 
-                  promHtml+= '<tr style="opacity:' + (isExhausted?'0.5':'1') + '"><td><strong style="letter-spacing:1px; color:#fff;">' + escapeHTML(code) + '</strong></td><td style="color:' + statusColor + '; font-weight:700;">-' + info.discount + '%</td><td>' + info.used + ' / ' + info.limit + '</td><td><button class="admin-btn" style="margin:0; padding:6px 12px; color:var(--accent-red);" onclick="window.deletePromo(&quot;' + escapeInlineJS(code) + '&quot;)">ðŸ—‘ï¸</button></td></tr>'; 
+                  promHtml+= '<tr style="opacity:' + (isExhausted?'0.5':'1') + '"><td><strong style="letter-spacing:1px; color:#fff;">' + escapeHTML(code) + '</strong></td><td style="color:' + statusColor + '; font-weight:700;">-' + info.discount + '%</td><td>' + info.used + ' / ' + info.limit + '</td><td><button class="admin-btn" style="margin:0; padding:6px 12px; color:var(--accent-red);" onclick="window.deletePromo(&quot;' + escapeInlineJS(code) + '&quot;)">🗑️</button></td></tr>'; 
               } 
           } 
           if(document.getElementById('target-promos')) document.getElementById('target-promos').innerHTML = promHtml;
@@ -6235,7 +6235,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
               Object.entries(rawStats.referrals).forEach(([id,r])=>{ 
                   let list=r.invited.slice(0,3).map(u=>escapeHTML(u.username)).join(', '); 
                   if(r.invited.length>3) list+='...'; 
-                  refHtml+= '<tr><td>' + escapeHTML(r.username||id) + '<br><span class="text-muted" style="font-size:0.8em; letter-spacing:1px;">' + id + '</span></td><td class="text-green font-bold" style="font-size:1.2em;">' + r.count + '</td><td><span style="background:rgba(255,255,255,0.1); padding:4px 8px; border-radius:8px;">' + r.total_rewards + '</span></td><td class="text-muted" style="font-size:0.9em;">' + (list||'None') + '</td><td><button class="admin-btn" style="padding:6px 12px; margin:0;" onclick="window.editReferralCount(&quot;' + escapeInlineJS(id) + '&quot;, ' + r.count + ')">âœï¸ Mod</button></td></tr>'; 
+                  refHtml+= '<tr><td>' + escapeHTML(r.username||id) + '<br><span class="text-muted" style="font-size:0.8em; letter-spacing:1px;">' + id + '</span></td><td class="text-green font-bold" style="font-size:1.2em;">' + r.count + '</td><td><span style="background:rgba(255,255,255,0.1); padding:4px 8px; border-radius:8px;">' + r.total_rewards + '</span></td><td class="text-muted" style="font-size:0.9em;">' + (list||'None') + '</td><td><button class="admin-btn" style="padding:6px 12px; margin:0;" onclick="window.editReferralCount(&quot;' + escapeInlineJS(id) + '&quot;, ' + r.count + ')">✏️ Mod</button></td></tr>'; 
               }); 
           } 
           if(document.getElementById('target-referrals')) document.getElementById('target-referrals').innerHTML = refHtml; 
@@ -6246,7 +6246,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                   const dEnd = new Date(sub.expiresAt); 
                   const diffDays = Math.max(0, Math.ceil((sub.expiresAt - now)/(1000*60*60*24))); 
                   const pct = Math.min(100, Math.max(0, (diffDays/30)*100)); 
-                  vipHtml += '<tr><td><strong>' + escapeHTML(sub.username) + '</strong><br><span class="text-muted" style="font-size:0.8em; letter-spacing:1px;">' + id + '</span></td><td>' + dEnd.toLocaleDateString('en-US') + '</td><td><div style="font-weight:700; color:var(--accent-green); margin-bottom:5px;">' + diffDays + ' Days</div><div style="background:rgba(255,255,255,0.1); border-radius:4px; height:6px; overflow:hidden;"><div style="height:100%; background:var(--accent-green); width:' + pct + '%;"></div></div></td><td><button class="admin-btn" style="padding:6px 12px; margin-right:8px;" onclick="window.manageVip(' + escapeInlineJS(id) + ', &quot;add&quot;)">ðŸŽ +7D</button><button class="admin-btn" style="padding:6px 12px; color:var(--accent-red);" onclick="window.manageVip(' + escapeInlineJS(id) + ', &quot;revoke&quot;)">ðŸ›‘ Revoke</button></td></tr>'; 
+                  vipHtml += '<tr><td><strong>' + escapeHTML(sub.username) + '</strong><br><span class="text-muted" style="font-size:0.8em; letter-spacing:1px;">' + id + '</span></td><td>' + dEnd.toLocaleDateString('en-US') + '</td><td><div style="font-weight:700; color:var(--accent-green); margin-bottom:5px;">' + diffDays + ' Days</div><div style="background:rgba(255,255,255,0.1); border-radius:4px; height:6px; overflow:hidden;"><div style="height:100%; background:var(--accent-green); width:' + pct + '%;"></div></div></td><td><button class="admin-btn" style="padding:6px 12px; margin-right:8px;" onclick="window.manageVip(' + escapeInlineJS(id) + ', &quot;add&quot;)">🎁 +7D</button><button class="admin-btn" style="padding:6px 12px; color:var(--accent-red);" onclick="window.manageVip(' + escapeInlineJS(id) + ', &quot;revoke&quot;)">🛑 Revoke</button></td></tr>'; 
               }); 
           } 
           if(document.getElementById('target-vips')) document.getElementById('target-vips').innerHTML = vipHtml || '<tr><td colspan="4" class="text-muted text-center">No active assignments.</td></tr>';
@@ -6254,7 +6254,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
           let blHtml=''; 
           if(rawStats.buy_links){ 
               Object.entries(rawStats.buy_links).forEach(([id, l]) => { 
-                  blHtml += '<tr><td><strong>' + escapeHTML(l.label) + '</strong></td><td><a href="' + escapeHTML(l.url) + '" target="_blank" style="color:var(--accent-green); text-decoration:none;">Verify Gateway â†—</a></td><td><button class="admin-btn" style="padding:6px 12px; margin:0 8px 0 0;" onclick="window.editBuyLink(&quot;' + escapeInlineJS(id) + '&quot;)">âœï¸ Mod</button><button class="admin-btn" style="padding:6px 12px; color:var(--accent-red); margin:0;" onclick="window.deleteBuyLink(&quot;' + escapeInlineJS(id) + '&quot;)">ðŸ—‘ï¸ Purge</button></td></tr>'; 
+                  blHtml += '<tr><td><strong>' + escapeHTML(l.label) + '</strong></td><td><a href="' + escapeHTML(l.url) + '" target="_blank" style="color:var(--accent-green); text-decoration:none;">Verify Gateway ↗</a></td><td><button class="admin-btn" style="padding:6px 12px; margin:0 8px 0 0;" onclick="window.editBuyLink(&quot;' + escapeInlineJS(id) + '&quot;)">✏️ Mod</button><button class="admin-btn" style="padding:6px 12px; color:var(--accent-red); margin:0;" onclick="window.deleteBuyLink(&quot;' + escapeInlineJS(id) + '&quot;)">🗑️ Purge</button></td></tr>'; 
               }); 
           } 
           if(document.getElementById('target-buy-links')) document.getElementById('target-buy-links').innerHTML = blHtml || '<tr><td colspan="3" class="text-muted">Gateways missing.</td></tr>'; 
@@ -6262,7 +6262,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
           let prHtml=''; 
           if(rawStats.pending_reviews && rawStats.pending_reviews.length>0){ 
               rawStats.pending_reviews.forEach(r=>{ 
-                  prHtml+= '<tr><td class="text-muted" style="font-size:0.9em;">' + r.date + '</td><td><strong style="color:#fff;">' + escapeHTML(r.username) + '</strong></td><td>' + escapeHTML(r.product) + '</td><td style="color:var(--accent-orange); font-weight:700;">' + r.rating + '/5 â­</td><td style="max-width:250px; white-space:normal; font-style:italic;">"' + escapeHTML(r.text) + '"</td><td style="display:flex; gap:8px;"><button class="admin-btn" style="padding:6px 12px; margin:0; color:var(--accent-green);" onclick="window.approveReview(&quot;' + escapeInlineJS(r.id) + '&quot;)">âœ… Accept</button><button class="admin-btn" style="padding:6px 12px; margin:0; color:var(--accent-red);" onclick="window.rejectReview(&quot;' + escapeInlineJS(r.id) + '&quot;)">âŒ Reject</button></td></tr>'; 
+                  prHtml+= '<tr><td class="text-muted" style="font-size:0.9em;">' + r.date + '</td><td><strong style="color:#fff;">' + escapeHTML(r.username) + '</strong></td><td>' + escapeHTML(r.product) + '</td><td style="color:var(--accent-orange); font-weight:700;">' + r.rating + '/5 ⭐</td><td style="max-width:250px; white-space:normal; font-style:italic;">"' + escapeHTML(r.text) + '"</td><td style="display:flex; gap:8px;"><button class="admin-btn" style="padding:6px 12px; margin:0; color:var(--accent-green);" onclick="window.approveReview(&quot;' + escapeInlineJS(r.id) + '&quot;)">✅ Accept</button><button class="admin-btn" style="padding:6px 12px; margin:0; color:var(--accent-red);" onclick="window.rejectReview(&quot;' + escapeInlineJS(r.id) + '&quot;)">❌ Reject</button></td></tr>'; 
               }); 
           } else { 
               prHtml='<tr><td colspan="6" class="text-muted text-center">Queue clear.</td></tr>'; 
@@ -6277,9 +6277,9 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                       <strong style='color:var(--accent-green);font-size:1.1em'>\${escapeHTML(req.username)}</strong>
                       <div style='color:#fff;margin-bottom:10px'>\${escapeHTML(req.product)}</div>
                       <div class='kanban-actions'>\`;
-                  if(req.status === 'pending') { html += \`<button class='admin-btn' style='color:var(--accent-orange)' onclick='window.moveReq(\"\${escapeInlineJS(req.id)}\",\"recording\")'>ðŸŽ¥ Record</button>\`; }
-                  else if(req.status === 'recording') { html += \`<button class='admin-btn' style='color:var(--accent-purple)' onclick='window.moveReq(\"\${escapeInlineJS(req.id)}\",\"editing\")'>âœ‚ï¸ Edit</button>\`; }
-                  else if(req.status === 'editing') { html += \`<button class='admin-btn' style='color:var(--accent-green)' onclick='window.moveReq(\"\${escapeInlineJS(req.id)}\",\"done\")'>âœ… Finish</button>\`; }
+                  if(req.status === 'pending') { html += \`<button class='admin-btn' style='color:var(--accent-orange)' onclick='window.moveReq(\"\${escapeInlineJS(req.id)}\",\"recording\")'>🎥 Record</button>\`; }
+                  else if(req.status === 'recording') { html += \`<button class='admin-btn' style='color:var(--accent-purple)' onclick='window.moveReq(\"\${escapeInlineJS(req.id)}\",\"editing\")'>✂️ Edit</button>\`; }
+                  else if(req.status === 'editing') { html += \`<button class='admin-btn' style='color:var(--accent-green)' onclick='window.moveReq(\"\${escapeInlineJS(req.id)}\",\"done\")'>✅ Finish</button>\`; }
                   html += \`</div></div>\`;
                   if(req.status === 'pending') kPending += html;
                   else if(req.status === 'recording') kRec += html;
@@ -6288,43 +6288,43 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
               });
           }
           if(document.getElementById('target-kanban')) document.getElementById('target-kanban').innerHTML = \`
-              <div class='kanban-col'><div class='kanban-header' style='color:var(--accent-blue)'>ðŸ“¬ NEW REQUESTS</div>\${kPending||'<p class="text-muted">Empty</p>'}</div>
-              <div class='kanban-col'><div class='kanban-header' style='color:var(--accent-orange)'>ðŸŽ¥ RECORDING</div>\${kRec||'<p class="text-muted">Empty</p>'}</div>
-              <div class='kanban-col'><div class='kanban-header' style='color:var(--accent-purple)'>âœ‚ï¸ EDITING</div>\${kEdit||'<p class="text-muted">Empty</p>'}</div>
-              <div class='kanban-col'><div class='kanban-header' style='color:var(--accent-green)'>âœ… COMPLETED</div>\${kDone||'<p class="text-muted">Empty</p>'}</div>
+              <div class='kanban-col'><div class='kanban-header' style='color:var(--accent-blue)'>📬 NEW REQUESTS</div>\${kPending||'<p class="text-muted">Empty</p>'}</div>
+              <div class='kanban-col'><div class='kanban-header' style='color:var(--accent-orange)'>🎥 RECORDING</div>\${kRec||'<p class="text-muted">Empty</p>'}</div>
+              <div class='kanban-col'><div class='kanban-header' style='color:var(--accent-purple)'>✂️ EDITING</div>\${kEdit||'<p class="text-muted">Empty</p>'}</div>
+              <div class='kanban-col'><div class='kanban-header' style='color:var(--accent-green)'>✅ COMPLETED</div>\${kDone||'<p class="text-muted">Empty</p>'}</div>
           \`;
         }
             
-        // ðŸš€ [UI_ACTION_ASYNC: moveReq] - Action asynchrone d'interface Dashboard
+        // 🚀 [UI_ACTION_ASYNC: moveReq] - Action asynchrone d'interface Dashboard
         window.moveReq = async function(id, status) { await window.executeAction({action:'move_custom_req', id: id, status: status}, false); };
         
-        // ðŸš€ [UI_ACTION_ASYNC: editStat] - Action asynchrone d'interface Dashboard
+        // 🚀 [UI_ACTION_ASYNC: editStat] - Action asynchrone d'interface Dashboard
         window.editStat = async function(key) {
             const val = await window.customPrompt('OVERRIDE STAT', 'Enter new value (leave empty to revert to auto):', '', '');
             if (val !== null) { await window.executeAction({action:'edit_stat', key: key, value: val}); }
         };
-        // ðŸš€ [UI_ACTION: editTodayEarnings] - Action d'interface Dashboard
+        // 🚀 [UI_ACTION: editTodayEarnings] - Action d'interface Dashboard
         window.editTodayEarnings = function() { window.editStat('today_rev'); };
 
-        // ðŸš€ [UI_ACTION_ASYNC: approveReview] - Action asynchrone d'interface Dashboard
+        // 🚀 [UI_ACTION_ASYNC: approveReview] - Action asynchrone d'interface Dashboard
         window.approveReview = async function(id) { await window.executeAction({action:'approve_review', id:id}); };
-        // ðŸš€ [UI_ACTION_ASYNC: rejectReview] - Action asynchrone d'interface Dashboard
+        // 🚀 [UI_ACTION_ASYNC: rejectReview] - Action asynchrone d'interface Dashboard
         window.rejectReview = async function(id) { const reason = await window.customPrompt('REVIEW REJECTION', 'Specify reason for user log:'); if(reason !== null) await window.executeAction({action:'reject_review', id:id, reason:reason}); };
 
-        // ðŸš€ [UI_ACTION_ASYNC: toggleAI] - Action asynchrone d'interface Dashboard
+        // 🚀 [UI_ACTION_ASYNC: toggleAI] - Action asynchrone d'interface Dashboard
         window.toggleAI = async function(state) { await window.executeAction({action:'toggle_ai', state:state}, false); if(state){ document.getElementById('btn-ai-enable').style.background = 'rgba(16,185,129,0.2)'; document.getElementById('btn-ai-disable').style.background = 'transparent'; } else { document.getElementById('btn-ai-enable').style.background = 'transparent'; document.getElementById('btn-ai-disable').style.background = 'rgba(255,69,58,0.2)'; } showToast(state ? 'AI Enabled' : 'AI Disabled'); };
-        // ðŸš€ [UI_ACTION_ASYNC: toggleMaintenance] - Action asynchrone d'interface Dashboard
+        // 🚀 [UI_ACTION_ASYNC: toggleMaintenance] - Action asynchrone d'interface Dashboard
         window.toggleMaintenance = async function(state) { const dur = document.getElementById('maint-duration').value; const ch = document.getElementById('maint-channel').value; if(state && !dur) return showToast('T-Minus missing', 'error'); await window.executeAction({action:'toggle_maintenance', state:state, duration:dur, channelId:ch}); };
-        // ðŸš€ [UI_ACTION_ASYNC: editReferralCount] - Action asynchrone d'interface Dashboard
+        // 🚀 [UI_ACTION_ASYNC: editReferralCount] - Action asynchrone d'interface Dashboard
         window.editReferralCount = async function(id, current) { const n = await window.customPrompt('NODE OVERWRITE', 'Overwrite referral node integer:', '0', current); if(n !== null) { const parsed = parseInt(n); if(!isNaN(parsed)) { await window.executeAction({action:'edit_referral_count', userId:id, newCount: parsed}); } } };
         
-        // ðŸš€ [UI_ACTION: editProduct] - Action d'interface Dashboard
+        // 🚀 [UI_ACTION: editProduct] - Action d'interface Dashboard
         window.editProduct = function(id) { 
             const p = rawStats.products[id]; if(!p) return; 
             document.getElementById('editProdId').value = id; 
             document.getElementById('newProdName').value = p.name; 
             document.getElementById('newProdPrice').value = p.price; 
-            document.getElementById('newProdStock').value = p.stock || 'âˆž'; 
+            document.getElementById('newProdStock').value = p.stock || '∞'; 
             document.getElementById('newProdLink').value = p.link; 
             document.getElementById('newProdDesc').value = p.desc || ''; 
             
@@ -6362,7 +6362,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             window.scrollTo({top:0, behavior:'smooth'}); 
         };
         
-        // ðŸš€ [UI_ACTION: cancelEdit] - Action d'interface Dashboard
+        // 🚀 [UI_ACTION: cancelEdit] - Action d'interface Dashboard
         window.cancelEdit = function() { 
             document.getElementById('editProdId').value = ''; 
             document.getElementById('newProdName').value = ''; 
@@ -6377,15 +6377,15 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             document.getElementById('cancelEditBtn').style.display = 'none'; 
         };
         
-        // ðŸš€ [UI_ACTION_ASYNC: saveProduct] - Action asynchrone d'interface Dashboard
+        // 🚀 [UI_ACTION_ASYNC: saveProduct] - Action asynchrone d'interface Dashboard
         window.saveProduct = async function() { 
             const id = document.getElementById('editProdId').value; 
             const n = document.getElementById('newProdName').value; 
             const p = document.getElementById('newProdPrice').value; 
-            const s = document.getElementById('newProdStock').value || 'âˆž'; 
+            const s = document.getElementById('newProdStock').value || '∞'; 
             const l = document.getElementById('newProdLink').value; 
             const d = document.getElementById('newProdDesc').value; 
-            const c = document.getElementById('newProdCategory') ? document.getElementById('newProdCategory').value : 'âœ¨ ITEMS';
+            const c = document.getElementById('newProdCategory') ? document.getElementById('newProdCategory').value : '✨ ITEMS';
             const uid = document.getElementById('newProdUpsellId').value; 
             const udisc = document.getElementById('newProdUpsellDiscount').value; 
             if(!n||!p) return showToast('Designation & Value required', 'error'); 
@@ -6393,19 +6393,19 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             else { await window.executeAction({action:'add_product', name:n, price:p, stock:s, link:l, desc:d, category:c, upsellId:uid, upsellDiscount:udisc}, false); } 
         };
         
-        // ðŸš€ [UI_ACTION_ASYNC: deleteProduct] - Action asynchrone d'interface Dashboard
+        // 🚀 [UI_ACTION_ASYNC: deleteProduct] - Action asynchrone d'interface Dashboard
         window.deleteProduct = async function(id) { if(await window.customConfirm('ASSET PURGE', 'Purge asset from network?')) await window.executeAction({action:'delete_product', id:id}, false); };
         
-        // ðŸš€ [UI_ACTION: editBuyLink] - Action d'interface Dashboard
+        // 🚀 [UI_ACTION: editBuyLink] - Action d'interface Dashboard
         window.editBuyLink = function(id) { const l = rawStats.buy_links[id]; if(!l) return; document.getElementById('editLinkId').value = id; document.getElementById('newLinkLabel').value = l.label; document.getElementById('newLinkUrl').value = l.url; if(document.getElementById('saveLinkBtn')) document.getElementById('saveLinkBtn').innerText = 'Save Gateway'; document.getElementById('cancelEditLinkBtn').style.display = 'inline-flex'; };
-        // ðŸš€ [UI_ACTION: cancelEditLink] - Action d'interface Dashboard
+        // 🚀 [UI_ACTION: cancelEditLink] - Action d'interface Dashboard
         window.cancelEditLink = function() { document.getElementById('editLinkId').value = ''; document.getElementById('newLinkLabel').value = ''; document.getElementById('newLinkUrl').value = ''; if(document.getElementById('saveLinkBtn')) document.getElementById('saveLinkBtn').innerText = 'Link Gateway'; document.getElementById('cancelEditLinkBtn').style.display = 'none'; };
-        // ðŸš€ [UI_ACTION_ASYNC: saveBuyLink] - Action asynchrone d'interface Dashboard
+        // 🚀 [UI_ACTION_ASYNC: saveBuyLink] - Action asynchrone d'interface Dashboard
         window.saveBuyLink = async function() { const id = document.getElementById('editLinkId').value; const label = document.getElementById('newLinkLabel').value; const url = document.getElementById('newLinkUrl').value; if(!label || !url) return showToast('Label & URL required', 'error'); if(id) { await window.executeAction({action:'edit_buy_link', id:id, label:label, url:url}, false); } else { await window.executeAction({action:'add_buy_link', label:label, url:url}, false); } };
-        // ðŸš€ [UI_ACTION_ASYNC: deleteBuyLink] - Action asynchrone d'interface Dashboard
+        // 🚀 [UI_ACTION_ASYNC: deleteBuyLink] - Action asynchrone d'interface Dashboard
         window.deleteBuyLink = async function(id) { if(await window.customConfirm('GATEWAY SEVER', 'Sever this gateway link?')) await window.executeAction({action:'delete_buy_link', id:id}, false); };
 
-        // ðŸš€ [UI_ACTION_ASYNC: createManualTx] - Action asynchrone d'interface Dashboard
+        // 🚀 [UI_ACTION_ASYNC: createManualTx] - Action asynchrone d'interface Dashboard
         
         window.sendEmbed = async function() {
             const channelId = document.getElementById('embedChannel').value;
@@ -6458,7 +6458,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             document.getElementById('manTxDate').value = '';
         };
 
-        // ðŸš€ [UI_ACTION_ASYNC: sendBroadcast] - Action asynchrone d'interface Dashboard
+        // 🚀 [UI_ACTION_ASYNC: sendBroadcast] - Action asynchrone d'interface Dashboard
         window.sendBroadcast = async function() {
             const ch = document.getElementById('broadcast-channel').value.trim();
             const msg = document.getElementById('broadcast-msg').value.trim();
@@ -6467,10 +6467,10 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             document.getElementById('broadcast-msg').value = '';
         };
 
-        // ðŸš€ [UI_ACTION_ASYNC: triggerShopRefresh] - Action asynchrone d'interface Dashboard
+        // 🚀 [UI_ACTION_ASYNC: triggerShopRefresh] - Action asynchrone d'interface Dashboard
         window.triggerShopRefresh = async function() { await window.executeAction({action:'refresh_setup'}, false); };
         
-        // ðŸš€ [UI_ACTION_ASYNC: fetchLogs] - Action asynchrone d'interface Dashboard
+        // 🚀 [UI_ACTION_ASYNC: fetchLogs] - Action asynchrone d'interface Dashboard
         window.fetchLogs = async function() {
             try {
                 const res = await fetch('/api/logs');
@@ -6488,10 +6488,10 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             } catch(e) {}
         };
         
-        // ðŸš€ [UI_ACTION_ASYNC: runDiagnostics] - Action asynchrone d'interface Dashboard
+        // 🚀 [UI_ACTION_ASYNC: runDiagnostics] - Action asynchrone d'interface Dashboard
         window.runDiagnostics = async function() {
-            if(document.getElementById('ui-upstash-status')) document.getElementById('ui-upstash-status').innerHTML = '<span style="animation:pulse 1s infinite">â³</span> Ping...';
-            if(document.getElementById('ui-rewarble-status')) document.getElementById('ui-rewarble-status').innerHTML = '<span style="animation:pulse 1s infinite">â³</span> Ping...';
+            if(document.getElementById('ui-upstash-status')) document.getElementById('ui-upstash-status').innerHTML = '<span style="animation:pulse 1s infinite">⏳</span> Ping...';
+            if(document.getElementById('ui-rewarble-status')) document.getElementById('ui-rewarble-status').innerHTML = '<span style="animation:pulse 1s infinite">⏳</span> Ping...';
             if(document.getElementById('ui-discord-ws')) document.getElementById('ui-discord-ws').innerText = '...';
             
             try {
@@ -6507,10 +6507,10 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                 
                 if (data?.upstash) {
                     if (data.upstash.status === 'online') {
-                        if(document.getElementById('ui-upstash-status')) document.getElementById('ui-upstash-status').innerHTML = 'ðŸŸ¢ Optimal';
+                        if(document.getElementById('ui-upstash-status')) document.getElementById('ui-upstash-status').innerHTML = '🟢 Optimal';
                         setGlow('glow-upstash', 'var(--accent-green)');
                     } else {
-                        if(document.getElementById('ui-upstash-status')) document.getElementById('ui-upstash-status').innerHTML = 'ðŸ”´ Down';
+                        if(document.getElementById('ui-upstash-status')) document.getElementById('ui-upstash-status').innerHTML = '🔴 Down';
                         setGlow('glow-upstash', 'var(--accent-red)');
                     }
                     if(document.getElementById('ui-upstash-ping')) document.getElementById('ui-upstash-ping').innerText = (data.upstash.latency || 0) + ' ms';
@@ -6518,10 +6518,10 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                 
                 if (data?.rewarble) {
                     if (data.rewarble.status === 'online') {
-                        if(document.getElementById('ui-rewarble-status')) document.getElementById('ui-rewarble-status').innerHTML = 'ðŸŸ¢ Optimal';
+                        if(document.getElementById('ui-rewarble-status')) document.getElementById('ui-rewarble-status').innerHTML = '🟢 Optimal';
                         setGlow('glow-rewarble', 'var(--accent-green)');
                     } else {
-                        if(document.getElementById('ui-rewarble-status')) document.getElementById('ui-rewarble-status').innerHTML = 'ðŸ”´ Error';
+                        if(document.getElementById('ui-rewarble-status')) document.getElementById('ui-rewarble-status').innerHTML = '🔴 Error';
                         setGlow('glow-rewarble', 'var(--accent-red)');
                     }
                     if(document.getElementById('ui-rewarble-ping')) document.getElementById('ui-rewarble-ping').innerText = (data.rewarble.latency || 0) + ' ms';
@@ -6611,7 +6611,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         };
         
         
-        // ðŸš€ [UI_ACTION: toggleSidebar] - Action d'interface Dashboard
+        // 🚀 [UI_ACTION: toggleSidebar] - Action d'interface Dashboard
         window.toggleSidebar = function() {
             const sidebar = document.getElementById('sidebar');
             const overlay = document.getElementById('mobile-overlay');
@@ -6681,7 +6681,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                 console.error("Tab switch error", e);
             }
         };
-// ðŸš€ [FUNCTION: showToast] - DÃ©claration de fonction
+// 🚀 [FUNCTION: showToast] - Déclaration de fonction
         function showToast(msg, type='success') { 
             const t = document.getElementById('toast'); 
             
@@ -6718,13 +6718,13 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             }, 3000);
         }
         
-        // ðŸš€ [UI_ACTION_ASYNC: manualRefresh] - Action asynchrone d'interface Dashboard
+        // 🚀 [UI_ACTION_ASYNC: manualRefresh] - Action asynchrone d'interface Dashboard
         window.manualRefresh = async function() { const btn = document.getElementById('refreshBtn'); btn.classList.add('spinning'); await window.refreshDataSilently(); setTimeout(()=>btn.classList.remove('spinning'), 1000); showToast('Matrix Synced'); };
 
-        // ðŸš€ [UI_ACTION_ASYNC: refreshDataSilently] - Action asynchrone d'interface Dashboard
+        // 🚀 [UI_ACTION_ASYNC: refreshDataSilently] - Action asynchrone d'interface Dashboard
         window.refreshDataSilently = async function(isAutoSync = false) { try{ const res=await fetch('/api/init-data?t=' + Date.now()); if(res.status === 401) { window.location.href = '/dashboard'; return; } if(res.ok){ const data=await res.json(); processInitData(data); if(!isAutoSync){ try { window.cancelEdit(); window.cancelEditLink(); document.getElementById('promoName').value=''; document.getElementById('promoDiscount').value=''; document.getElementById('promoLimit').value=''; } catch(e) {} } } }catch(e) { console.error("Error:", e); } };
         
-        // ðŸš€ [UI_ACTION_ASYNC: logoutUser] - Action asynchrone d'interface Dashboard
+        // 🚀 [UI_ACTION_ASYNC: logoutUser] - Action asynchrone d'interface Dashboard
         window.logoutUser = async function(btnElement) {
             if (!btnElement) btnElement = document.getElementById('logout-btn');
             if (btnElement) {
@@ -6820,14 +6820,14 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
 
             }, 1800);
         };
-        // ðŸš€ [UI_ACTION_ASYNC: executeAction] - Action asynchrone d'interface Dashboard
+        // 🚀 [UI_ACTION_ASYNC: executeAction] - Action asynchrone d'interface Dashboard
         window.executeAction = async function(p, showModal=false) { /* pin removed */ const res=await fetch('/api/action',{method:'POST',body:JSON.stringify(p)}); if(res.ok) { window.refreshDataSilently(); showToast('Action Successful'); } else { showToast('Action Failed', 'error'); } };
         
-        // ðŸš€ [UI_ACTION_ASYNC: sendReview] - Action asynchrone d'interface Dashboard
+        // 🚀 [UI_ACTION_ASYNC: sendReview] - Action asynchrone d'interface Dashboard
         window.sendReview = async function() { const author = document.getElementById('rev-author').value; const rating = document.getElementById('rev-rating').value; const text = document.getElementById('rev-msg').value; if(!author || !text) return showToast('Parameters missing', 'error'); await window.executeAction({ action: 'post_review', author: author, rating: rating, text: text }); document.getElementById('rev-author').value = ''; document.getElementById('rev-msg').value = ''; };
-        // ðŸš€ [UI_ACTION_ASYNC: loadAllMembers] - Action asynchrone d'interface Dashboard
+        // 🚀 [UI_ACTION_ASYNC: loadAllMembers] - Action asynchrone d'interface Dashboard
         window.loadAllMembers = async function() { if(document.getElementById('memberResults')) document.getElementById('memberResults').innerHTML = '<p class="text-muted" style="font-family:monospace;">Syncing directory...</p>'; try { const res = await fetch('/api/members'); if (!res.ok) throw new Error('Error'); allMembersData = await res.json(); isMembersLoaded = true; window.sortMembersLocally(); } catch (e) { if(document.getElementById('memberResults')) document.getElementById('memberResults').innerHTML = '<p class="text-pink">Network failure.</p>'; } };
-        // ðŸš€ [UI_ACTION: sortMembersLocally] - Action d'interface Dashboard
+        // 🚀 [UI_ACTION: sortMembersLocally] - Action d'interface Dashboard
         
         window.modStatusFilter = 'all';
         window.modSortFilter = 'recent';
@@ -6842,9 +6842,9 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
 
         window.sortMembersLocally = function() { const sortType = window.modSortFilter || 'recent'; const statusFilter = window.modStatusFilter || 'all'; let filtered = [...allMembersData]; if (statusFilter === 'online') { filtered = filtered.filter(m => m.status !== 'offline'); } if (sortType === 'recent') filtered.sort(function(a, b) { return b.joinedTimestamp - a.joinedTimestamp; }); else if (sortType === 'oldest') filtered.sort(function(a, b) { return a.joinedTimestamp - b.joinedTimestamp; }); else if (sortType === 'spent_desc') filtered.sort(function(a, b) { return b.totalSpent - a.totalSpent; }); else if (sortType === 'spent_asc') filtered.sort(function(a, b) { return a.totalSpent - b.totalSpent; }); else if (sortType === 'warns') filtered.sort(function(a, b) { return b.warns.length - a.warns.length; }); const searchEl = document.getElementById('memberSearchInput'); const q = searchEl ? searchEl.value.toLowerCase() : ''; if (q) { filtered = filtered.filter(function(m) { return m.username.toLowerCase().includes(q) || m.id.includes(q); }); } renderMembers(filtered); };
         window.filterMembersLocally = window.sortMembersLocally;
-    // ðŸš€ [FUNCTION: renderMembers] - DÃ©claration de fonction
+    // 🚀 [FUNCTION: renderMembers] - Déclaration de fonction
         function renderMembers(members) { 
-            if (members.length === 0) { if(document.getElementById('memberResults')) document.getElementById('memberResults').innerHTML = '<div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: var(--text-muted);"><div style="font-size: 3rem; margin-bottom: 10px; animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1);">ðŸ‘»</div><p style="font-family:monospace; font-size: 1.1em;">0 Nodes Discovered.</p></div>'; return; } 
+            if (members.length === 0) { if(document.getElementById('memberResults')) document.getElementById('memberResults').innerHTML = '<div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: var(--text-muted);"><div style="font-size: 3rem; margin-bottom: 10px; animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1);">👻</div><p style="font-family:monospace; font-size: 1.1em;">0 Nodes Discovered.</p></div>'; return; } 
             let html = ''; 
             members.forEach(function(m, idx) { 
                 let trustColor = m.isBlacklisted ? 'var(--accent-red)' : (m.totalSpent > 0 ? getThemeVal('hex') : 'var(--accent-orange)'); 
@@ -6863,14 +6863,14 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                 let warnsHtml = ''; 
                 if (m.warns && m.warns.length > 0) { 
                     m.warns.forEach(function(w, i) { 
-                        warnsHtml += '<div style="font-size:0.85em; color:var(--accent-orange); margin-bottom:6px; background:rgba(245,158,11,0.1); padding:6px 10px; border-radius:8px; display:flex; justify-content:space-between;"><span>âš ï¸ ' + escapeHTML(w.reason) + '</span><span style="opacity:0.5;">' + w.date + '</span></div>'; 
+                        warnsHtml += '<div style="font-size:0.85em; color:var(--accent-orange); margin-bottom:6px; background:rgba(245,158,11,0.1); padding:6px 10px; border-radius:8px; display:flex; justify-content:space-between;"><span>⚠️ ' + escapeHTML(w.reason) + '</span><span style="opacity:0.5;">' + w.date + '</span></div>'; 
                     }); 
                 } else warnsHtml = '<div style="text-align:center; padding: 10px; color: var(--text-muted); opacity: 0.5;">Clean record</div>'; 
                 
                 let historyHtml = ''; 
                 if (m.history && m.history.length > 0) { 
                     m.history.forEach(function(h) { 
-                        historyHtml += '<div style="font-size:0.85em; margin-bottom:6px; border-bottom:0.5px solid rgba(255,255,255,0.05); padding-bottom:6px; display:flex; justify-content:space-between;"><span style="color:var(--text-main); font-weight:500;">ðŸ›’ ' + escapeHTML(h.product) + '</span> <span><span style="color:var(--accent-green);">Â£' + h.price + '</span> <span style="opacity:0.5; font-size:0.8em; margin-left:10px;">' + h.date + '</span></span></div>'; 
+                        historyHtml += '<div style="font-size:0.85em; margin-bottom:6px; border-bottom:0.5px solid rgba(255,255,255,0.05); padding-bottom:6px; display:flex; justify-content:space-between;"><span style="color:var(--text-main); font-weight:500;">🛒 ' + escapeHTML(h.product) + '</span> <span><span style="color:var(--accent-green);">£' + h.price + '</span> <span style="opacity:0.5; font-size:0.8em; margin-left:10px;">' + h.date + '</span></span></div>'; 
                     }); 
                 } else historyHtml = '<div style="text-align:center; padding: 10px; color: var(--text-muted); opacity: 0.5;">No purchases</div>'; 
                 
@@ -6887,7 +6887,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                             
                             '<div class="mod-stats">' +
                                 '<div class="mod-stat-box"><div class="mod-stat-value" style="color:' + trustColor + ';">' + trustLabel + '</div><div class="mod-stat-label">Status</div></div>' +
-                                '<div class="mod-stat-box"><div class="mod-stat-value" style="color:var(--accent-green);">Â£' + m.totalSpent + '</div><div class="mod-stat-label">Yield</div></div>' +
+                                '<div class="mod-stat-box"><div class="mod-stat-value" style="color:var(--accent-green);">£' + m.totalSpent + '</div><div class="mod-stat-label">Yield</div></div>' +
                             '</div>' +
                             
                             '<div style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); margin-bottom: 8px;">Active Links</div>' +
@@ -6909,19 +6909,19 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                             '</div>' +
                             
                             '<div class="mod-actions">' +
-                                '<button class="mod-btn warning" onclick="window.modAction(&quot;mute&quot;, &quot;' + escapeInlineJS(m.id) + '&quot;, {duration: 1440})">ðŸ”‡ 24H</button>' +
-                                '<button class="mod-btn warning" onclick="window.modAction(&quot;mute&quot;, &quot;' + escapeInlineJS(m.id) + '&quot;, {duration: 10080})">ðŸ”‡ 7D</button>' +
-                                '<button class="mod-btn warning" onclick="window.modAction(&quot;warn&quot;, &quot;' + escapeInlineJS(m.id) + '&quot;)">âš ï¸ Warn</button>' +
-                                '<button class="mod-btn danger" onclick="window.modAction(&quot;ban&quot;, &quot;' + escapeInlineJS(m.id) + '&quot;)">ðŸ”¨ Ban</button>' +
-                                '<button class="mod-btn ' + (m.isBlacklisted ? 'success' : 'danger') + '" style="flex-basis:100%;" onclick="window.modAction(&quot;toggle_blacklist&quot;, &quot;' + escapeInlineJS(m.id) + '&quot;)">' + (m.isBlacklisted ? 'âœ… Restore Access' : 'ðŸš« Sever Access') + '</button>' +
+                                '<button class="mod-btn warning" onclick="window.modAction(&quot;mute&quot;, &quot;' + escapeInlineJS(m.id) + '&quot;, {duration: 1440})">🔇 24H</button>' +
+                                '<button class="mod-btn warning" onclick="window.modAction(&quot;mute&quot;, &quot;' + escapeInlineJS(m.id) + '&quot;, {duration: 10080})">🔇 7D</button>' +
+                                '<button class="mod-btn warning" onclick="window.modAction(&quot;warn&quot;, &quot;' + escapeInlineJS(m.id) + '&quot;)">⚠️ Warn</button>' +
+                                '<button class="mod-btn danger" onclick="window.modAction(&quot;ban&quot;, &quot;' + escapeInlineJS(m.id) + '&quot;)">🔨 Ban</button>' +
+                                '<button class="mod-btn ' + (m.isBlacklisted ? 'success' : 'danger') + '" style="flex-basis:100%;" onclick="window.modAction(&quot;toggle_blacklist&quot;, &quot;' + escapeInlineJS(m.id) + '&quot;)">' + (m.isBlacklisted ? '✅ Restore Access' : '🚫 Sever Access') + '</button>' +
                             '</div>' +
                         '</div>';
             }); 
             if(document.getElementById('memberResults')) document.getElementById('memberResults').innerHTML = html; 
         }
-        // ðŸš€ [UI_ACTION_ASYNC: modAction] - Action asynchrone d'interface Dashboard
+        // 🚀 [UI_ACTION_ASYNC: modAction] - Action asynchrone d'interface Dashboard
         window.modAction = async function(action, userId, extra) { extra = extra || {}; let payload = { action: action, userId: userId, pin: PIN }; if (extra.channelId) payload.channelId = extra.channelId; if (extra.duration) payload.duration = extra.duration; if (action === 'warn') { payload.reason = await window.customPrompt('WARNING', 'Input warning parameter (User will be DM\\'d)'); if (!payload.reason) return; } else if (action === 'clear_warns') { if (!(await window.customConfirm('PURGE', 'Purge all risk logs for this node?'))) return; } else if (action === 'mute') { if(!payload.duration) payload.duration = await window.customPrompt('TIMEOUT', 'Timeout duration (minutes)?', '60', '60'); if(!payload.duration) return; payload.reason = await window.customPrompt('TIMEOUT', 'Reason for timeout?'); if (!payload.reason) return; } else if (action === 'kick' || action === 'ban') { payload.reason = await window.customPrompt('EXPULSION', 'Reason for ' + action + '?'); if (!payload.reason || !(await window.customConfirm('CONFIRM', 'Execute ' + action + '?'))) return; } else if (action === 'toggle_blacklist') { if (!(await window.customConfirm('ACCESS', 'Toggle shop access for this node?'))) return; } else if (action === 'close_channel') { if (!(await window.customConfirm('SEVER', 'Sever this link?'))) return; } try { const res = await fetch('/api/action', { method: 'POST', body: JSON.stringify(payload) }); if (res.ok) { showToast('Action Successful'); setTimeout(function() { window.loadAllMembers(); }, 1000); } else showToast('Action Failed', 'error'); } catch(e) { showToast('Network Error', 'error'); } };
-        // ðŸš€ [UI_ACTION_ASYNC: refundTx] - Action asynchrone d'interface Dashboard
+        // 🚀 [UI_ACTION_ASYNC: refundTx] - Action asynchrone d'interface Dashboard
 
 
         window.closeTxModal = function() {
@@ -6997,9 +6997,9 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                 // If standard view, display the TRUE total revenue
                 totalVol = rawStats.total_revenue || 0;
             }
-            if(document.getElementById('tx-total-vol')) document.getElementById('tx-total-vol').innerText = 'Â£' + totalVol.toFixed(2);
+            if(document.getElementById('tx-total-vol')) document.getElementById('tx-total-vol').innerText = '£' + totalVol.toFixed(2);
             if(document.getElementById('tx-count')) document.getElementById('tx-count').innerText = txs.length;
-            if(document.getElementById('tx-avg-order')) document.getElementById('tx-avg-order').innerText = 'Â£' + (txs.length ? (totalVol/txs.length).toFixed(2) : '0.00');
+            if(document.getElementById('tx-avg-order')) document.getElementById('tx-avg-order').innerText = '£' + (txs.length ? (totalVol/txs.length).toFixed(2) : '0.00');
 
             let html = '';
             if (txs.length === 0) {
@@ -7021,7 +7021,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                         "</td>" +
                         "<td style='padding:20px 30px;'>" +
                             "<div style='display:inline-flex; align-items:center; gap:8px; color:var(--accent-green); font-weight:800; font-size:1.1em; background:rgba(16,185,129,0.1); padding:6px 12px; border-radius:8px; border:1px solid rgba(16,185,129,0.2);'>" +
-                                "Â£" + parseFloat(tx.price).toFixed(2) +
+                                "£" + parseFloat(tx.price).toFixed(2) +
                             "</div>" +
                         "</td>" +
                         "<td style='padding:20px 30px; color:var(--text-muted); font-size:0.95em;'>" +
@@ -7243,59 +7243,59 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         };
 
         window.refundTx = async function(date, username) { if(await window.customConfirm('REVERSE TX', 'Reverse this transaction? Yield will be adjusted.')) { await window.executeAction({action: 'refund_tx', date: date, username: username}); } };
-        // ðŸš€ [UI_ACTION_ASYNC: testActionLatency] - Action asynchrone d'interface Dashboard
+        // 🚀 [UI_ACTION_ASYNC: testActionLatency] - Action asynchrone d'interface Dashboard
         
         const availableWidgets = [
-            { id: 'w_mrr', title: 'Monthly Recurring Rev', icon: 'ðŸ’°', color: '#10b981', glow: 'rgba(16,185,129,1)', defaultVal: 'Â£12.4K', trend: '+5.2%' },
-            { id: 'w_arr', title: 'Annual Recurring Rev', icon: 'ðŸ“ˆ', color: '#10b981', glow: 'rgba(16,185,129,1)', defaultVal: 'Â£148K', trend: '+12%' },
-            { id: 'w_churn', title: 'User Churn Rate', icon: 'ðŸ“‰', color: '#ef4444', glow: 'rgba(239,68,68,1)', defaultVal: '2.4%', trend: '-0.3%' },
-            { id: 'w_ltv', title: 'Lifetime Value (LTV)', icon: 'ðŸ’Ž', color: '#8b5cf6', glow: 'rgba(139,92,246,1)', defaultVal: 'Â£84', trend: '+Â£2' },
-            { id: 'w_cac', title: 'Customer Acq. Cost', icon: 'ðŸ’¸', color: '#f59e0b', glow: 'rgba(245,158,11,1)', defaultVal: 'Â£15', trend: '-Â£1' },
-            { id: 'w_arpu', title: 'Avg Rev Per User', icon: 'ðŸ“Š', color: '#3b82f6', glow: 'rgba(59,130,246,1)', defaultVal: 'Â£22', trend: '+Â£1.5' },
-            { id: 'w_nps', title: 'Net Promoter Score', icon: 'â­', color: '#10b981', glow: 'rgba(16,185,129,1)', defaultVal: '72', trend: '+4' },
-            { id: 'w_csat', title: 'Customer Satisfaction', icon: 'ðŸ˜Š', color: '#10b981', glow: 'rgba(16,185,129,1)', defaultVal: '94%', trend: '+1%' },
-            { id: 'w_tickets_open', title: 'Open Tickets', icon: 'ðŸŽ«', color: '#f59e0b', glow: 'rgba(245,158,11,1)', defaultVal: '14', trend: '-3' },
-            { id: 'w_tickets_resolved', title: 'Resolved Tickets', icon: 'âœ…', color: '#10b981', glow: 'rgba(16,185,129,1)', defaultVal: '89', trend: '+12' },
-            { id: 'w_avg_response', title: 'Avg Response Time', icon: 'â±ï¸', color: '#3b82f6', glow: 'rgba(59,130,246,1)', defaultVal: '1.2h', trend: '-0.5h' },
-            { id: 'w_avg_resolution', title: 'Avg Resolution Time', icon: 'â³', color: '#3b82f6', glow: 'rgba(59,130,246,1)', defaultVal: '4.5h', trend: '-1.2h' },
-            { id: 'w_active_users', title: 'Daily Active Users', icon: 'ðŸ‘¥', color: '#8b5cf6', glow: 'rgba(139,92,246,1)', defaultVal: '1,204', trend: '+8%' },
-            { id: 'w_mau', title: 'Monthly Active Users', icon: 'ðŸ‘¥', color: '#8b5cf6', glow: 'rgba(139,92,246,1)', defaultVal: '28.5K', trend: '+14%' },
-            { id: 'w_sessions', title: 'Total Sessions', icon: 'ðŸ–¥ï¸', color: '#06b6d4', glow: 'rgba(6,182,212,1)', defaultVal: '4,520', trend: '+3%' },
-            { id: 'w_avg_session', title: 'Avg Session Length', icon: 'â±ï¸', color: '#06b6d4', glow: 'rgba(6,182,212,1)', defaultVal: '4m 12s', trend: '+15s' },
-            { id: 'w_bounce_rate', title: 'Bounce Rate', icon: 'ðŸšª', color: '#ef4444', glow: 'rgba(239,68,68,1)', defaultVal: '42%', trend: '-2%' },
-            { id: 'w_pageviews', title: 'Pageviews', icon: 'ðŸ‘ï¸', color: '#06b6d4', glow: 'rgba(6,182,212,1)', defaultVal: '12.4K', trend: '+5%' },
-            { id: 'w_unique_visitors', title: 'Unique Visitors', icon: 'ðŸ‘¤', color: '#06b6d4', glow: 'rgba(6,182,212,1)', defaultVal: '3,840', trend: '+8%' },
-            { id: 'w_returning_visitors', title: 'Returning Visitors', icon: 'ðŸ”„', color: '#3b82f6', glow: 'rgba(59,130,246,1)', defaultVal: '68%', trend: '+4%' },
-            { id: 'w_new_signups', title: 'New Signups', icon: 'ðŸ“', color: '#10b981', glow: 'rgba(16,185,129,1)', defaultVal: '124', trend: '+12' },
-            { id: 'w_conversion_rate', title: 'Conversion Rate', icon: 'ðŸŽ¯', color: '#10b981', glow: 'rgba(16,185,129,1)', defaultVal: '3.8%', trend: '+0.4%' },
-            { id: 'w_cart_abandonment', title: 'Cart Abandonment', icon: 'ðŸ›’', color: '#ef4444', glow: 'rgba(239,68,68,1)', defaultVal: '64%', trend: '-2%' },
-            { id: 'w_avg_order_value', title: 'Avg Order Value', icon: 'ðŸ›ï¸', color: '#8b5cf6', glow: 'rgba(139,92,246,1)', defaultVal: 'Â£48', trend: '+Â£3' },
-            { id: 'w_total_orders', title: 'Total Orders', icon: 'ðŸ“¦', color: '#3b82f6', glow: 'rgba(59,130,246,1)', defaultVal: '342', trend: '+28' },
-            { id: 'w_refunds', title: 'Refunds', icon: 'ðŸ’¸', color: '#ef4444', glow: 'rgba(239,68,68,1)', defaultVal: '4', trend: '-1' },
-            { id: 'w_disputes', title: 'Chargebacks', icon: 'âš–ï¸', color: '#ef4444', glow: 'rgba(239,68,68,1)', defaultVal: '0', trend: '0' },
-            { id: 'w_affiliate_rev', title: 'Affiliate Revenue', icon: 'ðŸ¤', color: '#10b981', glow: 'rgba(16,185,129,1)', defaultVal: 'Â£1.2K', trend: '+15%' },
-            { id: 'w_active_affiliates', title: 'Active Affiliates', icon: 'ðŸ”—', color: '#3b82f6', glow: 'rgba(59,130,246,1)', defaultVal: '45', trend: '+3' },
-            { id: 'w_clicks', title: 'Affiliate Clicks', icon: 'ðŸ–±ï¸', color: '#f59e0b', glow: 'rgba(245,158,11,1)', defaultVal: '3,420', trend: '+12%' },
-            { id: 'w_impressions', title: 'Ad Impressions', icon: 'ðŸ“¢', color: '#8b5cf6', glow: 'rgba(139,92,246,1)', defaultVal: '45.2K', trend: '+8%' },
-            { id: 'w_ctr', title: 'Click-Through Rate', icon: 'ðŸ–±ï¸', color: '#3b82f6', glow: 'rgba(59,130,246,1)', defaultVal: '2.4%', trend: '+0.2%' },
-            { id: 'w_cpc', title: 'Cost Per Click', icon: 'ðŸ’°', color: '#ef4444', glow: 'rgba(239,68,68,1)', defaultVal: 'Â£0.45', trend: '-Â£0.05' },
-            { id: 'w_roas', title: 'ROAS', icon: 'ðŸ“ˆ', color: '#10b981', glow: 'rgba(16,185,129,1)', defaultVal: '3.2x', trend: '+0.4x' },
-            { id: 'w_cpu', title: 'Server CPU Usage', icon: 'ðŸ–¥ï¸', color: '#3b82f6', glow: 'rgba(59,130,246,1)', defaultVal: '24%', trend: '-2%' },
-            { id: 'w_ram', title: 'Server RAM Usage', icon: 'ðŸ§ ', color: '#8b5cf6', glow: 'rgba(139,92,246,1)', defaultVal: '4.2GB', trend: '+0.1GB' },
-            { id: 'w_disk', title: 'Disk Space', icon: 'ðŸ’¾', color: '#f59e0b', glow: 'rgba(245,158,11,1)', defaultVal: '68%', trend: '+1%' },
+            { id: 'w_mrr', title: 'Monthly Recurring Rev', icon: '💰', color: '#10b981', glow: 'rgba(16,185,129,1)', defaultVal: '£12.4K', trend: '+5.2%' },
+            { id: 'w_arr', title: 'Annual Recurring Rev', icon: '📈', color: '#10b981', glow: 'rgba(16,185,129,1)', defaultVal: '£148K', trend: '+12%' },
+            { id: 'w_churn', title: 'User Churn Rate', icon: '📉', color: '#ef4444', glow: 'rgba(239,68,68,1)', defaultVal: '2.4%', trend: '-0.3%' },
+            { id: 'w_ltv', title: 'Lifetime Value (LTV)', icon: '💎', color: '#8b5cf6', glow: 'rgba(139,92,246,1)', defaultVal: '£84', trend: '+£2' },
+            { id: 'w_cac', title: 'Customer Acq. Cost', icon: '💸', color: '#f59e0b', glow: 'rgba(245,158,11,1)', defaultVal: '£15', trend: '-£1' },
+            { id: 'w_arpu', title: 'Avg Rev Per User', icon: '📊', color: '#3b82f6', glow: 'rgba(59,130,246,1)', defaultVal: '£22', trend: '+£1.5' },
+            { id: 'w_nps', title: 'Net Promoter Score', icon: '⭐', color: '#10b981', glow: 'rgba(16,185,129,1)', defaultVal: '72', trend: '+4' },
+            { id: 'w_csat', title: 'Customer Satisfaction', icon: '😊', color: '#10b981', glow: 'rgba(16,185,129,1)', defaultVal: '94%', trend: '+1%' },
+            { id: 'w_tickets_open', title: 'Open Tickets', icon: '🎫', color: '#f59e0b', glow: 'rgba(245,158,11,1)', defaultVal: '14', trend: '-3' },
+            { id: 'w_tickets_resolved', title: 'Resolved Tickets', icon: '✅', color: '#10b981', glow: 'rgba(16,185,129,1)', defaultVal: '89', trend: '+12' },
+            { id: 'w_avg_response', title: 'Avg Response Time', icon: '⏱️', color: '#3b82f6', glow: 'rgba(59,130,246,1)', defaultVal: '1.2h', trend: '-0.5h' },
+            { id: 'w_avg_resolution', title: 'Avg Resolution Time', icon: '⏳', color: '#3b82f6', glow: 'rgba(59,130,246,1)', defaultVal: '4.5h', trend: '-1.2h' },
+            { id: 'w_active_users', title: 'Daily Active Users', icon: '👥', color: '#8b5cf6', glow: 'rgba(139,92,246,1)', defaultVal: '1,204', trend: '+8%' },
+            { id: 'w_mau', title: 'Monthly Active Users', icon: '👥', color: '#8b5cf6', glow: 'rgba(139,92,246,1)', defaultVal: '28.5K', trend: '+14%' },
+            { id: 'w_sessions', title: 'Total Sessions', icon: '🖥️', color: '#06b6d4', glow: 'rgba(6,182,212,1)', defaultVal: '4,520', trend: '+3%' },
+            { id: 'w_avg_session', title: 'Avg Session Length', icon: '⏱️', color: '#06b6d4', glow: 'rgba(6,182,212,1)', defaultVal: '4m 12s', trend: '+15s' },
+            { id: 'w_bounce_rate', title: 'Bounce Rate', icon: '🚪', color: '#ef4444', glow: 'rgba(239,68,68,1)', defaultVal: '42%', trend: '-2%' },
+            { id: 'w_pageviews', title: 'Pageviews', icon: '👁️', color: '#06b6d4', glow: 'rgba(6,182,212,1)', defaultVal: '12.4K', trend: '+5%' },
+            { id: 'w_unique_visitors', title: 'Unique Visitors', icon: '👤', color: '#06b6d4', glow: 'rgba(6,182,212,1)', defaultVal: '3,840', trend: '+8%' },
+            { id: 'w_returning_visitors', title: 'Returning Visitors', icon: '🔄', color: '#3b82f6', glow: 'rgba(59,130,246,1)', defaultVal: '68%', trend: '+4%' },
+            { id: 'w_new_signups', title: 'New Signups', icon: '📝', color: '#10b981', glow: 'rgba(16,185,129,1)', defaultVal: '124', trend: '+12' },
+            { id: 'w_conversion_rate', title: 'Conversion Rate', icon: '🎯', color: '#10b981', glow: 'rgba(16,185,129,1)', defaultVal: '3.8%', trend: '+0.4%' },
+            { id: 'w_cart_abandonment', title: 'Cart Abandonment', icon: '🛒', color: '#ef4444', glow: 'rgba(239,68,68,1)', defaultVal: '64%', trend: '-2%' },
+            { id: 'w_avg_order_value', title: 'Avg Order Value', icon: '🛍️', color: '#8b5cf6', glow: 'rgba(139,92,246,1)', defaultVal: '£48', trend: '+£3' },
+            { id: 'w_total_orders', title: 'Total Orders', icon: '📦', color: '#3b82f6', glow: 'rgba(59,130,246,1)', defaultVal: '342', trend: '+28' },
+            { id: 'w_refunds', title: 'Refunds', icon: '💸', color: '#ef4444', glow: 'rgba(239,68,68,1)', defaultVal: '4', trend: '-1' },
+            { id: 'w_disputes', title: 'Chargebacks', icon: '⚖️', color: '#ef4444', glow: 'rgba(239,68,68,1)', defaultVal: '0', trend: '0' },
+            { id: 'w_affiliate_rev', title: 'Affiliate Revenue', icon: '🤝', color: '#10b981', glow: 'rgba(16,185,129,1)', defaultVal: '£1.2K', trend: '+15%' },
+            { id: 'w_active_affiliates', title: 'Active Affiliates', icon: '🔗', color: '#3b82f6', glow: 'rgba(59,130,246,1)', defaultVal: '45', trend: '+3' },
+            { id: 'w_clicks', title: 'Affiliate Clicks', icon: '🖱️', color: '#f59e0b', glow: 'rgba(245,158,11,1)', defaultVal: '3,420', trend: '+12%' },
+            { id: 'w_impressions', title: 'Ad Impressions', icon: '📢', color: '#8b5cf6', glow: 'rgba(139,92,246,1)', defaultVal: '45.2K', trend: '+8%' },
+            { id: 'w_ctr', title: 'Click-Through Rate', icon: '🖱️', color: '#3b82f6', glow: 'rgba(59,130,246,1)', defaultVal: '2.4%', trend: '+0.2%' },
+            { id: 'w_cpc', title: 'Cost Per Click', icon: '💰', color: '#ef4444', glow: 'rgba(239,68,68,1)', defaultVal: '£0.45', trend: '-£0.05' },
+            { id: 'w_roas', title: 'ROAS', icon: '📈', color: '#10b981', glow: 'rgba(16,185,129,1)', defaultVal: '3.2x', trend: '+0.4x' },
+            { id: 'w_cpu', title: 'Server CPU Usage', icon: '🖥️', color: '#3b82f6', glow: 'rgba(59,130,246,1)', defaultVal: '24%', trend: '-2%' },
+            { id: 'w_ram', title: 'Server RAM Usage', icon: '🧠', color: '#8b5cf6', glow: 'rgba(139,92,246,1)', defaultVal: '4.2GB', trend: '+0.1GB' },
+            { id: 'w_disk', title: 'Disk Space', icon: '💾', color: '#f59e0b', glow: 'rgba(245,158,11,1)', defaultVal: '68%', trend: '+1%' },
             { id: 'w_uptime', title: 'System Uptime', icon: 'âš¡', color: '#10b981', glow: 'rgba(16,185,129,1)', defaultVal: '99.99%', trend: '+0.01%' },
-            { id: 'w_latency', title: 'API Latency', icon: 'â±ï¸', color: '#06b6d4', glow: 'rgba(6,182,212,1)', defaultVal: '42ms', trend: '-5ms' },
-            { id: 'w_errors', title: 'Error Rate', icon: 'âŒ', color: '#ef4444', glow: 'rgba(239,68,68,1)', defaultVal: '0.1%', trend: '-0.05%' },
-            { id: 'w_db_queries', title: 'DB Queries/s', icon: 'ðŸ—„ï¸', color: '#3b82f6', glow: 'rgba(59,130,246,1)', defaultVal: '340', trend: '+20' },
-            { id: 'w_bandwidth', title: 'Bandwidth Usage', icon: 'ðŸŒ', color: '#8b5cf6', glow: 'rgba(139,92,246,1)', defaultVal: '14.2GB', trend: '+1.5GB' },
-            { id: 'w_active_nodes', title: 'Active Nodes', icon: 'ðŸŒ', color: '#10b981', glow: 'rgba(16,185,129,1)', defaultVal: '8', trend: '0' },
-            { id: 'w_threats', title: 'Blocked Threats', icon: 'ðŸ›¡ï¸', color: '#ef4444', glow: 'rgba(239,68,68,1)', defaultVal: '1,402', trend: '-120' },
-            { id: 'w_bot_traffic', title: 'Bot Traffic', icon: 'ðŸ¤–', color: '#f59e0b', glow: 'rgba(245,158,11,1)', defaultVal: '12%', trend: '-2%' },
-            { id: 'w_api_calls', title: 'Total API Calls', icon: 'ðŸ”Œ', color: '#3b82f6', glow: 'rgba(59,130,246,1)', defaultVal: '1.2M', trend: '+150K' },
+            { id: 'w_latency', title: 'API Latency', icon: '⏱️', color: '#06b6d4', glow: 'rgba(6,182,212,1)', defaultVal: '42ms', trend: '-5ms' },
+            { id: 'w_errors', title: 'Error Rate', icon: '❌', color: '#ef4444', glow: 'rgba(239,68,68,1)', defaultVal: '0.1%', trend: '-0.05%' },
+            { id: 'w_db_queries', title: 'DB Queries/s', icon: '🗄️', color: '#3b82f6', glow: 'rgba(59,130,246,1)', defaultVal: '340', trend: '+20' },
+            { id: 'w_bandwidth', title: 'Bandwidth Usage', icon: '🌐', color: '#8b5cf6', glow: 'rgba(139,92,246,1)', defaultVal: '14.2GB', trend: '+1.5GB' },
+            { id: 'w_active_nodes', title: 'Active Nodes', icon: '🌐', color: '#10b981', glow: 'rgba(16,185,129,1)', defaultVal: '8', trend: '0' },
+            { id: 'w_threats', title: 'Blocked Threats', icon: '🛡️', color: '#ef4444', glow: 'rgba(239,68,68,1)', defaultVal: '1,402', trend: '-120' },
+            { id: 'w_bot_traffic', title: 'Bot Traffic', icon: '🤖', color: '#f59e0b', glow: 'rgba(245,158,11,1)', defaultVal: '12%', trend: '-2%' },
+            { id: 'w_api_calls', title: 'Total API Calls', icon: '🔌', color: '#3b82f6', glow: 'rgba(59,130,246,1)', defaultVal: '1.2M', trend: '+150K' },
             { id: 'w_cache_hits', title: 'Cache Hit Ratio', icon: 'âš¡', color: '#10b981', glow: 'rgba(16,185,129,1)', defaultVal: '94%', trend: '+1%' },
-            { id: 'w_emails_sent', title: 'Emails Sent', icon: 'ðŸ“§', color: '#8b5cf6', glow: 'rgba(139,92,246,1)', defaultVal: '4,520', trend: '+340' },
-            { id: 'w_email_open', title: 'Email Open Rate', icon: 'ðŸ“¬', color: '#10b981', glow: 'rgba(16,185,129,1)', defaultVal: '42%', trend: '+2%' },
-            { id: 'w_sms_sent', title: 'SMS Sent', icon: 'ðŸ“±', color: '#3b82f6', glow: 'rgba(59,130,246,1)', defaultVal: '1,204', trend: '+85' }
+            { id: 'w_emails_sent', title: 'Emails Sent', icon: '📧', color: '#8b5cf6', glow: 'rgba(139,92,246,1)', defaultVal: '4,520', trend: '+340' },
+            { id: 'w_email_open', title: 'Email Open Rate', icon: '📬', color: '#10b981', glow: 'rgba(16,185,129,1)', defaultVal: '42%', trend: '+2%' },
+            { id: 'w_sms_sent', title: 'SMS Sent', icon: '📱', color: '#3b82f6', glow: 'rgba(59,130,246,1)', defaultVal: '1,204', trend: '+85' }
         ];
 
         let activeWidgets = [];
@@ -7380,7 +7380,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
 
         window.testActionLatency = async function() { const resultDiv = document.getElementById('latency-result'); resultDiv.innerText = 'Pinging...'; resultDiv.style.color = 'var(--text-muted)'; const startTime = Date.now(); try { const res = await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'ping_test', pin: PIN }) }); if (res.ok) { const totalTime = Date.now() - startTime; resultDiv.innerText = totalTime + ' ms'; if (totalTime < 500) resultDiv.style.color = getThemeVal('hex'); else if (totalTime < 1500) resultDiv.style.color = 'var(--accent-orange)'; else resultDiv.style.color = 'var(--accent-red)'; } else { resultDiv.innerText = 'Error'; resultDiv.style.color = 'var(--accent-red)'; } } catch(e) { resultDiv.innerText = 'Net Error'; resultDiv.style.color = 'var(--accent-red)'; } };
         
-        // ðŸš€ [UI_ACTION_ASYNC: loadTicketsForChat] - Action asynchrone d'interface Dashboard
+        // 🚀 [UI_ACTION_ASYNC: loadTicketsForChat] - Action asynchrone d'interface Dashboard
         window.loadTicketsForChat = async function() { 
     try { 
         const res = await fetch('/api/tickets'); 
@@ -7410,7 +7410,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                 shopTickets.forEach(t => { 
                     
                     const isActive = activeChatChannel === t.id ? 'active' : '';
-                    let indicator = t.closeRequested ? ' <span style="color:var(--accent-red); font-size:1.1em; vertical-align:middle; float:right; animation: pulse 2s infinite;" title="Close Requested">ðŸ”’</span>' : '';
+                    let indicator = t.closeRequested ? ' <span style="color:var(--accent-red); font-size:1.1em; vertical-align:middle; float:right; animation: pulse 2s infinite;" title="Close Requested">🔒</span>' : '';
                     html += '<div class="ticket-item ' + isActive + '" onclick="window.openTicketChat(&quot;' + escapeInlineJS(t.id) + '&quot;)"><span>' + escapeHTML(t.name) + '</span><span>' + indicator + '</span></div>';
  
                 }); 
@@ -7420,7 +7420,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                 supportTickets.forEach(t => { 
                     
                     const isActive = activeChatChannel === t.id ? 'active' : '';
-                    let indicator = t.closeRequested ? ' <span style="color:var(--accent-red); font-size:1.1em; vertical-align:middle; float:right; animation: pulse 2s infinite;" title="Close Requested">ðŸ”’</span>' : '';
+                    let indicator = t.closeRequested ? ' <span style="color:var(--accent-red); font-size:1.1em; vertical-align:middle; float:right; animation: pulse 2s infinite;" title="Close Requested">🔒</span>' : '';
                     html += '<div class="ticket-item ' + isActive + '" onclick="window.openTicketChat(&quot;' + escapeInlineJS(t.id) + '&quot;)"><span>' + escapeHTML(t.name) + '</span><span>' + indicator + '</span></div>';
  
                 }); 
@@ -7429,31 +7429,31 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         if(document.getElementById('chat-ticket-list')) document.getElementById('chat-ticket-list').innerHTML = html; 
     } catch(e) {} 
 };
-        // ðŸš€ [UI_ACTION: openTicketChat] - Action d'interface Dashboard
+        // 🚀 [UI_ACTION: openTicketChat] - Action d'interface Dashboard
         window.openTicketChat = function(channelId) { activeChatChannel = channelId; window.loadTicketsForChat(); if(document.getElementById('chat-messages-area')) document.getElementById('chat-messages-area').innerHTML = '<div style="margin:auto; display:flex; flex-direction:column; align-items:center; gap:15px; color:var(--accent-green);"><div style="width:40px; height:40px; border:3px solid rgba(var(--accent-green-rgb), 0.1); border-top:3px solid var(--accent-green); border-radius:50%; animation:spin 1s cubic-bezier(0.68, -0.55, 0.265, 1.55) infinite; margin:auto; box-shadow:0 0 15px rgba(var(--accent-green-rgb), 0.5);"></div></div>'; window.fetchChatMessages(); };
-        // ðŸš€ [UI_ACTION_ASYNC: fetchChatMessages] - Action asynchrone d'interface Dashboard
+        // 🚀 [UI_ACTION_ASYNC: fetchChatMessages] - Action asynchrone d'interface Dashboard
         
-        window.fetchChatMessages = async function() { if(!activeChatChannel) return; try { const res = await fetch('/api/tickets/messages?channelId=' + activeChatChannel); const responseData = await res.json(); const msgs = responseData.msgs || []; const closeRequested = responseData.closeRequested || false; let html = ''; if (closeRequested) { html += '<div style="margin:0 15px 15px 15px; padding:12px; background:rgba(255,69,58,0.1); border:1px dashed var(--accent-red); border-radius:12px; color:var(--accent-red); display:flex; justify-content:space-between; align-items:center;"><div><strong>ðŸ”’ Close Requested</strong><br><span style="font-size:0.85em; opacity: 0.8;">User has requested to close this ticket.</span></div><div><button onclick="window.sendQuickResponse(&quot;close&quot;)" style="background:var(--accent-red); color:#fff; border:none; padding:8px 16px; border-radius:8px; cursor:pointer; font-weight:bold;">Close Ticket</button></div></div>'; } if(msgs.length === 0) html += '<div style="margin:auto; display:flex; flex-direction:column; align-items:center; opacity:0.5;"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-bottom:10px;"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg><p class="text-muted text-center" style="font-family:inherit;">Awaiting transmission...</p></div>'; else { msgs.forEach(m => { const bubbleClass = m.isBot ? 'bot' : 'user'; const imgHtml = m.imageUrl ? '<br><img src="' + escapeHTML(m.imageUrl) + '" class="chat-img-preview" style="max-width:100%; border-radius:12px; margin-top:10px; cursor:pointer; border:0.5px solid rgba(255,255,255,0.1); box-shadow: 0 4px 15px rgba(0,0,0,0.3); transition: transform 0.3s;" onmouseover="this.style.transform=&quot;scale(1.02)&quot;;" onmouseout="this.style.transform=&quot;scale(1)&quot;;" onclick="window.open(&quot;' + escapeInlineJS(m.imageUrl) + '&quot;)">' : ''; const actionsHtml = '<div class="chat-bubble-actions" style="display:none; position:absolute; top:-15px; ' + (m.isBot ? 'left:15px;' : 'right:15px;') + ' background:rgba(30,30,35,0.95); backdrop-filter:blur(10px); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:4px 8px; gap:8px; box-shadow:0 5px 15px rgba(0,0,0,0.5);"><button style="background:none; border:none; cursor:pointer; color:var(--accent-green); transition:transform 0.2s;" onmouseover="this.style.transform=&quot;scale(1.2)&quot;;" onmouseout="this.style.transform=&quot;scale(1)&quot;;" onclick="window.reactMessage(' + escapeInlineJS(m.id) + ', &quot;ðŸ‘&quot;)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg></button><button style="background:none; border:none; cursor:pointer; color:var(--accent-red); transition:transform 0.2s;" onmouseover="this.style.transform=&quot;scale(1.2)&quot;;" onmouseout="this.style.transform=&quot;scale(1)&quot;;" onclick="window.reactMessage(' + escapeInlineJS(m.id) + ', &quot;â¤ï¸&quot;)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg></button></div>'; html += '<div class="chat-bubble ' + bubbleClass + '" onmouseover="this.querySelector(&quot; .chat-bubble-actions&quot;).style.display=&quot;flex&quot;" onmouseout="this.querySelector(&quot; .chat-bubble-actions&quot;).style.display=&quot;none&quot;"><div class="chat-author" style="opacity:0.7; font-size:0.85em; font-weight:600; margin-bottom:5px; letter-spacing:0.5px;">' + escapeHTML(m.author) + '</div><div style="line-height:1.6;">' + escapeHTML(m.content) + '</div>' + imgHtml + actionsHtml + '</div>'; }); } const area = document.getElementById('chat-messages-area'); const isAtBottom = area.scrollHeight - area.scrollTop <= area.clientHeight + 100; area.innerHTML = html; if(isAtBottom) area.scrollTop = area.scrollHeight; } catch(e) {} };
+        window.fetchChatMessages = async function() { if(!activeChatChannel) return; try { const res = await fetch('/api/tickets/messages?channelId=' + activeChatChannel); const responseData = await res.json(); const msgs = responseData.msgs || []; const closeRequested = responseData.closeRequested || false; let html = ''; if (closeRequested) { html += '<div style="margin:0 15px 15px 15px; padding:12px; background:rgba(255,69,58,0.1); border:1px dashed var(--accent-red); border-radius:12px; color:var(--accent-red); display:flex; justify-content:space-between; align-items:center;"><div><strong>🔒 Close Requested</strong><br><span style="font-size:0.85em; opacity: 0.8;">User has requested to close this ticket.</span></div><div><button onclick="window.sendQuickResponse(&quot;close&quot;)" style="background:var(--accent-red); color:#fff; border:none; padding:8px 16px; border-radius:8px; cursor:pointer; font-weight:bold;">Close Ticket</button></div></div>'; } if(msgs.length === 0) html += '<div style="margin:auto; display:flex; flex-direction:column; align-items:center; opacity:0.5;"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-bottom:10px;"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg><p class="text-muted text-center" style="font-family:inherit;">Awaiting transmission...</p></div>'; else { msgs.forEach(m => { const bubbleClass = m.isBot ? 'bot' : 'user'; const imgHtml = m.imageUrl ? '<br><img src="' + escapeHTML(m.imageUrl) + '" class="chat-img-preview" style="max-width:100%; border-radius:12px; margin-top:10px; cursor:pointer; border:0.5px solid rgba(255,255,255,0.1); box-shadow: 0 4px 15px rgba(0,0,0,0.3); transition: transform 0.3s;" onmouseover="this.style.transform=&quot;scale(1.02)&quot;;" onmouseout="this.style.transform=&quot;scale(1)&quot;;" onclick="window.open(&quot;' + escapeInlineJS(m.imageUrl) + '&quot;)">' : ''; const actionsHtml = '<div class="chat-bubble-actions" style="display:none; position:absolute; top:-15px; ' + (m.isBot ? 'left:15px;' : 'right:15px;') + ' background:rgba(30,30,35,0.95); backdrop-filter:blur(10px); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:4px 8px; gap:8px; box-shadow:0 5px 15px rgba(0,0,0,0.5);"><button style="background:none; border:none; cursor:pointer; color:var(--accent-green); transition:transform 0.2s;" onmouseover="this.style.transform=&quot;scale(1.2)&quot;;" onmouseout="this.style.transform=&quot;scale(1)&quot;;" onclick="window.reactMessage(' + escapeInlineJS(m.id) + ', &quot;👍&quot;)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg></button><button style="background:none; border:none; cursor:pointer; color:var(--accent-red); transition:transform 0.2s;" onmouseover="this.style.transform=&quot;scale(1.2)&quot;;" onmouseout="this.style.transform=&quot;scale(1)&quot;;" onclick="window.reactMessage(' + escapeInlineJS(m.id) + ', &quot;❤️&quot;)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg></button></div>'; html += '<div class="chat-bubble ' + bubbleClass + '" onmouseover="this.querySelector(&quot; .chat-bubble-actions&quot;).style.display=&quot;flex&quot;" onmouseout="this.querySelector(&quot; .chat-bubble-actions&quot;).style.display=&quot;none&quot;"><div class="chat-author" style="opacity:0.7; font-size:0.85em; font-weight:600; margin-bottom:5px; letter-spacing:0.5px;">' + escapeHTML(m.author) + '</div><div style="line-height:1.6;">' + escapeHTML(m.content) + '</div>' + imgHtml + actionsHtml + '</div>'; }); } const area = document.getElementById('chat-messages-area'); const isAtBottom = area.scrollHeight - area.scrollTop <= area.clientHeight + 100; area.innerHTML = html; if(isAtBottom) area.scrollTop = area.scrollHeight; } catch(e) {} };
 
-        // ðŸš€ [UI_ACTION_ASYNC: sendChatMessage] - Action asynchrone d'interface Dashboard
+        // 🚀 [UI_ACTION_ASYNC: sendChatMessage] - Action asynchrone d'interface Dashboard
         window.sendChatMessage = async function() { if(!activeChatChannel) return showToast('Select line first', 'error'); const input = document.getElementById('chat-input-text'); const fileInput = document.getElementById('chat-file-input'); const text = input.value.trim(); const file = fileInput.files[0]; if(!text && !file) return; input.value = ''; document.getElementById('attach-badge').style.display='none'; let base64 = null; if (file) { const reader = new FileReader(); reader.readAsDataURL(file); await new Promise(r => reader.onload = r); base64 = reader.result; fileInput.value = ''; } try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'send_ticket_message', channelId: activeChatChannel, message: text, imageBase64: base64, pin: PIN }) }); window.fetchChatMessages(); } catch(e) { showToast('Transmission Failed', 'error'); } };
-        // ðŸš€ [UI_ACTION_ASYNC: reactMessage] - Action asynchrone d'interface Dashboard
+        // 🚀 [UI_ACTION_ASYNC: reactMessage] - Action asynchrone d'interface Dashboard
         window.reactMessage = async function(msgId, emoji) { if(!activeChatChannel) return; try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'react_ticket_message', channelId: activeChatChannel, messageId: msgId, emoji: emoji, pin: PIN }) }); showToast('Reaction sent'); } catch (e) { showToast('Failure', 'error'); } };
-        // ðŸš€ [UI_ACTION_ASYNC: sendQuickResponse] - Action asynchrone d'interface Dashboard
-        window.sendQuickResponse = async function(type) { if(!activeChatChannel) return showToast('Select line first', 'error'); let msg = ''; if(type === 'welcome') msg = 'ðŸ‘‹ Hello! How can I help you today?'; else if(type === 'wait') { const mins = await window.customPrompt('TRANSMISSION DELAY', 'Delay in minutes?', '5', '5'); if(!mins) return; msg = 'â³ Please wait for about ' + mins + ' minutes, an admin is looking into it.'; } else if(type === 'resolved') msg = 'âœ… Did this resolve your issue, or do you have any other questions?';
-        else if(type === 'review') msg = 'â­ If you are happy with the service, please consider leaving a review! It helps us a lot.'; else if(type === 'close') { if(!(await window.customConfirm('SEVER COMMS', 'Sever this communication line?'))) return; msg = 'ðŸ”’ Closing this ticket. Have a great day!'; await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'send_ticket_message', channelId: activeChatChannel, message: msg, pin: PIN }) }); window.fetchChatMessages(); setTimeout(async () => { await window.executeAction({ action: 'close_channel', channelId: activeChatChannel }, false); activeChatChannel = null; window.loadTicketsForChat(); if(document.getElementById('chat-messages-area')) document.getElementById('chat-messages-area').innerHTML = '<div style="margin:auto; text-align:center; opacity:0.3; display:flex; flex-direction:column; align-items:center; gap:15px;"><div style="width: 80px; height: 80px; border-radius: 50%; background: rgba(255,255,255,0.05); display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 20px rgba(0,0,0,0.5);"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg></div><div style="font-weight:600; letter-spacing:1px; font-size:1.1em;">Select a conversation</div></div>'; }, 2000); return; } if(msg) { try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'send_ticket_message', channelId: activeChatChannel, message: msg, pin: PIN }) }); window.fetchChatMessages(); } catch(e) { showToast('Transmission Failed', 'error'); } } };
+        // 🚀 [UI_ACTION_ASYNC: sendQuickResponse] - Action asynchrone d'interface Dashboard
+        window.sendQuickResponse = async function(type) { if(!activeChatChannel) return showToast('Select line first', 'error'); let msg = ''; if(type === 'welcome') msg = '👋 Hello! How can I help you today?'; else if(type === 'wait') { const mins = await window.customPrompt('TRANSMISSION DELAY', 'Delay in minutes?', '5', '5'); if(!mins) return; msg = '⏳ Please wait for about ' + mins + ' minutes, an admin is looking into it.'; } else if(type === 'resolved') msg = '✅ Did this resolve your issue, or do you have any other questions?';
+        else if(type === 'review') msg = '⭐ If you are happy with the service, please consider leaving a review! It helps us a lot.'; else if(type === 'close') { if(!(await window.customConfirm('SEVER COMMS', 'Sever this communication line?'))) return; msg = '🔒 Closing this ticket. Have a great day!'; await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'send_ticket_message', channelId: activeChatChannel, message: msg, pin: PIN }) }); window.fetchChatMessages(); setTimeout(async () => { await window.executeAction({ action: 'close_channel', channelId: activeChatChannel }, false); activeChatChannel = null; window.loadTicketsForChat(); if(document.getElementById('chat-messages-area')) document.getElementById('chat-messages-area').innerHTML = '<div style="margin:auto; text-align:center; opacity:0.3; display:flex; flex-direction:column; align-items:center; gap:15px;"><div style="width: 80px; height: 80px; border-radius: 50%; background: rgba(255,255,255,0.05); display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 20px rgba(0,0,0,0.5);"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg></div><div style="font-weight:600; letter-spacing:1px; font-size:1.1em;">Select a conversation</div></div>'; }, 2000); return; } if(msg) { try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'send_ticket_message', channelId: activeChatChannel, message: msg, pin: PIN }) }); window.fetchChatMessages(); } catch(e) { showToast('Transmission Failed', 'error'); } } };
 
-        // ðŸš€ [UI_ACTION_ASYNC: createPromo] - Action asynchrone d'interface Dashboard
+        // 🚀 [UI_ACTION_ASYNC: createPromo] - Action asynchrone d'interface Dashboard
         window.createPromo = async function() { const name = document.getElementById('promoName').value.trim().toUpperCase(); const discount = parseInt(document.getElementById('promoDiscount').value); const limit = parseInt(document.getElementById('promoLimit').value); if(!name || isNaN(discount) || isNaN(limit)) { return showToast('Invalid parameters', 'error'); } if(discount < 1 || discount > 100) return showToast('Discount 1-100', 'error'); await window.executeAction({ action: 'create_promo', name: name, discount: discount, limit: limit }); };
-        // ðŸš€ [UI_ACTION_ASYNC: deletePromo] - Action asynchrone d'interface Dashboard
+        // 🚀 [UI_ACTION_ASYNC: deletePromo] - Action asynchrone d'interface Dashboard
         window.deletePromo = async function(code) { if(await window.customConfirm('VOUCHER PURGE', 'Purge voucher ' + decodeURIComponent(code) + '?')) { await window.executeAction({ action: 'delete_promo', name: decodeURIComponent(code) }); } };
-        // ðŸš€ [UI_ACTION: updateRefThreshold] - Action d'interface Dashboard
+        // 🚀 [UI_ACTION: updateRefThreshold] - Action d'interface Dashboard
         window.updateRefThreshold = function() { const val = document.getElementById('ref-threshold').value; if(val) window.executeAction({action:'update_ref_threshold', threshold: val}); };
-        // ðŸš€ [UI_ACTION_ASYNC: openDirectContact] - Action asynchrone d'interface Dashboard
+        // 🚀 [UI_ACTION_ASYNC: openDirectContact] - Action asynchrone d'interface Dashboard
         window.openDirectContact = async function(id) { const msg = await window.customPrompt('DIRECT MESSAGE', 'Input DM payload:'); if(msg) await window.executeAction({action:'send_dm', userId: id, message: msg}); };
-        // ðŸš€ [UI_ACTION_ASYNC: saveUserNote] - Action asynchrone d'interface Dashboard
+        // 🚀 [UI_ACTION_ASYNC: saveUserNote] - Action asynchrone d'interface Dashboard
         window.saveUserNote = async function(id) { const val = document.getElementById('note-' + id).value; try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'save_note', userId: id, note: val, pin: PIN }) }); showToast('Note saved'); } catch(e) { showToast('Error', 'error'); } };
-        // ðŸš€ [UI_ACTION_ASYNC: manageVip] - Action asynchrone d'interface Dashboard
+        // 🚀 [UI_ACTION_ASYNC: manageVip] - Action asynchrone d'interface Dashboard
         window.manageVip = async function(userId, action) { if(action === 'add') { await window.executeAction({action: 'add_vip_days', userId: userId, days: 7}); } else if(action === 'revoke') { if(await window.customConfirm('VIP REVOKE', 'Revoke VIP status for this node?')) { await window.executeAction({action: 'revoke_vip', userId: userId}); } } };
 
         if(typeof Chart !== 'undefined') {
@@ -7461,7 +7461,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, Inter, sans-serif';
             // Suppress global animation overhead to prevent hover blocking
         }
-        // ðŸš€ [UI_ACTION: renderSalesChart] - Action d'interface Dashboard
+        // 🚀 [UI_ACTION: renderSalesChart] - Action d'interface Dashboard
         window.renderSalesChart = function(days) { 
            document.querySelectorAll('.skeleton-chart-overlay').forEach(el => el.remove());
 
@@ -7555,7 +7555,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                                 displayColors: false,
                                 callbacks: {
                                     label: function(context) {
-                                        return 'Â£' + parseFloat(context.parsed.y).toFixed(2);
+                                        return '£' + parseFloat(context.parsed.y).toFixed(2);
                                     }
                                 }
                             }
@@ -7573,7 +7573,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                                 beginAtZero: true,
                                 ticks: {
                                     color: 'rgba(255,255,255,0.4)',
-                                    callback: function(value) { return 'Â£' + value; }
+                                    callback: function(value) { return '£' + value; }
                                 }
                             }
                         }
@@ -7581,14 +7581,14 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                 });
             } catch(e) { console.error("Chart Render Error:", e); }
         };
-        // ðŸš€ [UI_ACTION: updateSalesChart] - Action d'interface Dashboard
+        // 🚀 [UI_ACTION: updateSalesChart] - Action d'interface Dashboard
         window.updateSalesChart = function(days) { 
             if(document.getElementById('btn-chart-7')) document.getElementById('btn-chart-7').className = days === 7 ? 'admin-btn btn-pill active' : 'admin-btn btn-pill';
             if(document.getElementById('btn-chart-30')) document.getElementById('btn-chart-30').className = days === 30 ? 'admin-btn btn-pill active' : 'admin-btn btn-pill';
             if(document.getElementById('btn-chart-all')) document.getElementById('btn-chart-all').className = days === 0 ? 'admin-btn btn-pill active' : 'admin-btn btn-pill';
             window.renderSalesChart(days); 
         };
-    // ðŸš€ [FUNCTION: renderAnalyticsCharts] - DÃ©claration de fonction
+    // 🚀 [FUNCTION: renderAnalyticsCharts] - Déclaration de fonction
         function renderAnalyticsCharts() {
             document.querySelectorAll('.skeleton-chart-overlay').forEach(el => el.remove());
            if(typeof Chart === 'undefined') return;
@@ -7773,7 +7773,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                         data: { 
                             labels: daysArr, 
                             datasets: [{ 
-                                label: 'Revenue (Â£)', 
+                                label: 'Revenue (£)', 
                                 data: daysArr.map(d=>dowSales[d]), 
                                 backgroundColor: gradient, 
                                 hoverBackgroundColor: '#60a5fa', 
@@ -7851,7 +7851,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             });
         }
 
-        // ðŸš€ [UI_ACTION_ASYNC: loadBackups] - Action asynchrone d'interface Dashboard
+        // 🚀 [UI_ACTION_ASYNC: loadBackups] - Action asynchrone d'interface Dashboard
         
         
         window.loadMysteryBox = function() {
@@ -7978,7 +7978,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             } catch(e) { console.error('Failed to load backups', e); }
         };
         
-        // ðŸš€ [UI_ACTION_ASYNC: forceBackup] - Action asynchrone d'interface Dashboard
+        // 🚀 [UI_ACTION_ASYNC: forceBackup] - Action asynchrone d'interface Dashboard
         window.forceBackup = async function() {
             if(!confirm('Force a manual cloud backup on the server?')) return;
             try {
@@ -7990,7 +7990,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             }
         };
 
-        // ðŸš€ [UI_ACTION_ASYNC: saveRawDb] - Action asynchrone d'interface Dashboard
+        // 🚀 [UI_ACTION_ASYNC: saveRawDb] - Action asynchrone d'interface Dashboard
         window.saveRawDb = async function() {
             if(!confirm('DANGER: Saving raw JSON! Are you absolutely sure the syntax is perfect?')) return;
             const val = document.getElementById('dev-raw-db').value;
@@ -7998,7 +7998,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             await window.executeAction({ action: 'update_raw_db', json: val }, false);
             showToast('Cloud database forcefully overridden!');
         };
-        // ðŸš€ [UI_ACTION: importBackupFile] - Action d'interface Dashboard
+        // 🚀 [UI_ACTION: importBackupFile] - Action d'interface Dashboard
         window.importBackupFile = function(event) {
             const file = event.target.files[0];
             if (!file) return;
@@ -8019,7 +8019,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         };
         initDashboard();
 
-        // ðŸš€ [FRAMER_MOTION] - Animations d'entrÃ©e et de survol
+        // 🚀 [FRAMER_MOTION] - Animations d'entrée et de survol
         const style = document.createElement('style');
         style.textContent = ".card:hover, .admin-btn:hover, .product-card:hover { transform: none !important; box-shadow: none !important; }";
         document.head.appendChild(style);
@@ -8100,7 +8100,7 @@ server.on('upgrade', (request, socket, head) => {
 
 // === [ANCHOR: STARTUP_DEBUG] ===
 systemLog('INFO', 'SYSTEM', 'Starting Nexus Bot instance...');
-console.log('Token:', DISCORD_BOT_TOKEN ? 'âœ… PrÃ©sent' : 'âŒ Manquant');
+console.log('Token:', DISCORD_BOT_TOKEN ? '✅ Présent' : '❌ Manquant');
 
 if (DISCORD_BOT_TOKEN) {
     const loginWithRetry = async (retries = 10, delay = 5000) => {
