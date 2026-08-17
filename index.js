@@ -7766,7 +7766,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                 const ts = v.timestamp ? new Date(v.timestamp).toLocaleString('en-GB', {day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—';
                 const val = v.status === 'success' && v.value ? '<span style="color:#10b981; font-weight:700; font-family:monospace;">£' + parseFloat(v.value).toFixed(2) + '</span>' : '<span style="color:rgba(255,255,255,0.25);">—</span>';
                 const ch = v.channelName ? '<span style="font-family:monospace; font-size:0.85em; color:rgba(255,255,255,0.45);">#' + escapeHTML(v.channelName) + '</span>' : '—';
-                html += "<tr style='border-bottom:1px solid rgba(255,255,255,0.03); transition:background 0.2s;' onmouseover=\"this.style.background='rgba(255,255,255,0.025)'\" onmouseout=\"this.style.background='transparent'\">" +
+                html += "<tr style='border-bottom:1px solid rgba(255,255,255,0.03); transition:background 0.2s;'>" +
                     "<td style='padding:13px 20px; font-family:monospace; font-size:0.88em; letter-spacing:0.5px; color:#d1d5db;'>" + escapeHTML(v.code || '—') + "</td>" +
                     "<td style='padding:13px 20px; color:#f3f4f6; font-weight:500;'>" + escapeHTML(v.username || '—') + "</td>" +
                     "<td style='padding:13px 20px;'>" + ch + "</td>" +
