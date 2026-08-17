@@ -2096,9 +2096,9 @@ client.on('interactionCreate', async (interaction) => {
                 let existingChannel = null;
                 try {
                     await interaction.guild.channels.fetch();
-                    existingChannel = interaction.guild.channels.cache.find(c => c.name === `shop-${sanitizedName}` || c.name === `support-${sanitizedName}`);
+                    existingChannel = interaction.guild.channels.cache.find(c => c.name === `shop-${sanitizedName}`);
                 } catch(e) {
-                    existingChannel = interaction.guild.channels.cache.find(c => c.name === `shop-${sanitizedName}` || c.name === `support-${sanitizedName}`);
+                    existingChannel = interaction.guild.channels.cache.find(c => c.name === `shop-${sanitizedName}`);
                 }
                 
                 if (existingChannel) {
@@ -2192,9 +2192,9 @@ client.on('interactionCreate', async (interaction) => {
                 let existingChannel = null;
                 try {
                     await interaction.guild.channels.fetch();
-                    existingChannel = interaction.guild.channels.cache.find(c => c.name === `shop-${sanitizedName}` || c.name === `support-${sanitizedName}`);
+                    existingChannel = interaction.guild.channels.cache.find(c => c.name === `support-${sanitizedName}`);
                 } catch(e) {
-                    existingChannel = interaction.guild.channels.cache.find(c => c.name === `shop-${sanitizedName}` || c.name === `support-${sanitizedName}`);
+                    existingChannel = interaction.guild.channels.cache.find(c => c.name === `support-${sanitizedName}`);
                 }
                 
                 if (existingChannel) {
