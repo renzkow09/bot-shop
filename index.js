@@ -915,6 +915,36 @@ function ensureMemoryInitialized() {
                 syncCloud();
             }
 
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Hotfix: Iframe Cross-Origin Auth"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Hotfix: Iframe Cross-Origin Auth\n\n- **Description** : Les cookies de session étaient définis avec le flag `SameSite=Lax`, ce qui entraînait leur blocage systématique par les navigateurs modernes lorsque le Dashboard était chargé dans une iframe (comme dans le studio Google AI).\n- **Solution** : Passage des attributs des cookies à `SameSite=None; Secure`, garantissant la transmission inter-domaines sécurisée du token de session et permettant au Dashboard de se charger depuis des iframes tierces." });
+                syncCloud();
+            }
+
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Hotfix: API Route Crash (Voucher Log)"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Hotfix: API Route Crash (Voucher Log)\n\n- **Description** : L appel à `/api/voucher-log` provoquait un crash (Unhandled Rejection) suite à l invocation d une fonction non définie (`setCorsHeaders`).\n- **Solution** : Suppression de l appel invalide. Les requêtes cross-origin ne sont de toute façon pas bloquantes dans la structure d URL actuelle du bot." });
+                syncCloud();
+            }
+
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Currency Toggle & Widget Refactoring"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "💷 Currency Toggle & Widget Refactoring\n\n- **Feature** : Remplacement du module lourd Live Currency Exchange par un bouton switch instantané (GBP/EUR) directement intégré sur les cartes Total Earning et Total Yield.\n- **UX/UI** : Suppression globale de la fonction d override (Click to Edit) sur tous les widgets pour simplifier l interface et éviter les erreurs de manipulation." });
+                syncCloud();
+            }
+
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Hotfix: Devise GBP/EUR"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Hotfix: Devise GBP/EUR\n\n- **Description** : Le bouton de conversion de devises (GBP/EUR) ne s intégrait pas bien à l UI et échouait lors du clic.\n- **Solution** : Amélioration du design du bouton (style premium au survol) et correction de la fonction JS sous-jacente (`toggleCurrency`) qui appelle désormais le bon flux de rafraîchissement (`refreshDataSilently`) au lieu d une fonction inexistante." });
+                syncCloud();
+            }
+
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Currency Toggle: UX & Performance Upgrade"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "💫 Currency Toggle: UX & Performance Upgrade\n\n- **Performance** : Le switch GBP/EUR est désormais instantané côté client et ne requiert plus de requête HTTP vers le serveur, éradiquant toute latence.\n- **Design** : Les boutons ont été transformés en toggles pills animés (style iOS) avec des transitions CSS fluides (opacité et scale) sur le rendu des montants lors du basculement." });
+                syncCloud();
+            }
+
+            if (!memoryStats.patchnotes.some(p => p.text.includes("UI Polishing: Currency Toggle Placement"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🎨 UI Polishing: Currency Toggle Placement\n\n- **Description** : Déplacement du bouton toggle (GBP/EUR) du coin supérieur droit vers le coin inférieur droit des cartes de statistiques financières, évitant ainsi toute superposition disgracieuse avec les icônes vectorielles." });
+                syncCloud();
+            }
+
             if (!memoryStats.overrides) memoryStats.overrides = {};
             if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } };
             if (!memoryStats.settings.maintenance) memoryStats.settings.maintenance = { active: false, endsAt: 0, channelId: "" };
@@ -2986,7 +3016,7 @@ const server = http.createServer(async (req, res) => {
             memoryStats.activeSessions.push(sessionToken);
             if (memoryStats.activeSessions.length > 20) memoryStats.activeSessions.shift();
             syncCloud();
-            res.setHeader('Set-Cookie', `auth_session=${sessionToken}; HttpOnly; SameSite=Lax; Path=/; Max-Age=86400`);
+            res.setHeader('Set-Cookie', `auth_session=${sessionToken}; HttpOnly; SameSite=None; Secure; Path=/; Max-Age=86400`);
             return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ status: 'authenticated' }));
         }
         return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ status: 'pending' }));
@@ -3139,7 +3169,7 @@ const server = http.createServer(async (req, res) => {
             const token = req.headers.cookie.split('auth_session=')[1].split(';')[0];
             if (memoryStats.activeSessions) { memoryStats.activeSessions = memoryStats.activeSessions.filter(t => t !== token); syncCloud(); }
         }
-        res.writeHead(200, { 'Set-Cookie': 'auth_session=; Max-Age=0; HttpOnly; SameSite=Lax; Path=/', 'Content-Type': 'application/json' });
+        res.writeHead(200, { 'Set-Cookie': 'auth_session=; Max-Age=0; HttpOnly; SameSite=None; Secure; Path=/', 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({ success: true }));
     }
     // 🚀 [API_ROUTE: /api/login] - Route API backend
@@ -3161,7 +3191,7 @@ const server = http.createServer(async (req, res) => {
                     memoryStats.activeSessions.push(sessionToken);
                     if (memoryStats.activeSessions.length > 20) memoryStats.activeSessions.shift();
                     syncCloud();
-                    res.writeHead(200, { 'Set-Cookie': `auth_session=${sessionToken}; Max-Age=86400; HttpOnly; SameSite=Lax; Path=/`, 'Content-Type': 'application/json' });
+                    res.writeHead(200, { 'Set-Cookie': `auth_session=${sessionToken}; Max-Age=86400; HttpOnly; SameSite=None; Secure; Path=/`, 'Content-Type': 'application/json' });
                     systemLog('INFO', 'SECURITY', `Successful admin dashboard login from IP: ${clientIp}`);
                     return res.end(JSON.stringify({ success: true }));
                 } else {
@@ -3482,7 +3512,6 @@ const server = http.createServer(async (req, res) => {
 
     // 🚀 [API_ROUTE: /api/voucher-log] - Rewarble voucher log
     if (req.url === '/api/voucher-log' && req.method === 'GET') {
-        setCorsHeaders(res);
         if (!isAuthenticated) { res.writeHead(401); return res.end(JSON.stringify({ error: 'Unauthorized' })); }
         res.writeHead(200, { 'Content-Type': 'application/json' });
         const log = Array.isArray(memoryStats.voucher_log) ? memoryStats.voucher_log : [];
@@ -3627,6 +3656,36 @@ const server = http.createServer(async (req, res) => {
                     else {
             if (!memoryStats.patchnotes.some(p => p.text.includes("Optimisation Dashboard: Patchnotes Fluidité"))) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "⚡ Optimisation Dashboard: Patchnotes Fluidité\n\n- **Performance** : Suppression du filtre CSS couteux `backdrop-filter: blur(22px)` sur les cartes d historique de mise à jour qui saturait le GPU lors du défilement.\n- **Mémoire** : L injection dynamique du DOM limite désormais le rendu aux 30 derniers patchnotes (via `.slice(0, 30)`), divisant drastiquement les calculs de boucles sur le client et rendant l ouverture de la page instantanée." });
+                syncCloud();
+            }
+
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Hotfix: Iframe Cross-Origin Auth"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Hotfix: Iframe Cross-Origin Auth\n\n- **Description** : Les cookies de session étaient définis avec le flag `SameSite=Lax`, ce qui entraînait leur blocage systématique par les navigateurs modernes lorsque le Dashboard était chargé dans une iframe (comme dans le studio Google AI).\n- **Solution** : Passage des attributs des cookies à `SameSite=None; Secure`, garantissant la transmission inter-domaines sécurisée du token de session et permettant au Dashboard de se charger depuis des iframes tierces." });
+                syncCloud();
+            }
+
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Hotfix: API Route Crash (Voucher Log)"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Hotfix: API Route Crash (Voucher Log)\n\n- **Description** : L appel à `/api/voucher-log` provoquait un crash (Unhandled Rejection) suite à l invocation d une fonction non définie (`setCorsHeaders`).\n- **Solution** : Suppression de l appel invalide. Les requêtes cross-origin ne sont de toute façon pas bloquantes dans la structure d URL actuelle du bot." });
+                syncCloud();
+            }
+
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Currency Toggle & Widget Refactoring"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "💷 Currency Toggle & Widget Refactoring\n\n- **Feature** : Remplacement du module lourd Live Currency Exchange par un bouton switch instantané (GBP/EUR) directement intégré sur les cartes Total Earning et Total Yield.\n- **UX/UI** : Suppression globale de la fonction d override (Click to Edit) sur tous les widgets pour simplifier l interface et éviter les erreurs de manipulation." });
+                syncCloud();
+            }
+
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Hotfix: Devise GBP/EUR"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Hotfix: Devise GBP/EUR\n\n- **Description** : Le bouton de conversion de devises (GBP/EUR) ne s intégrait pas bien à l UI et échouait lors du clic.\n- **Solution** : Amélioration du design du bouton (style premium au survol) et correction de la fonction JS sous-jacente (`toggleCurrency`) qui appelle désormais le bon flux de rafraîchissement (`refreshDataSilently`) au lieu d une fonction inexistante." });
+                syncCloud();
+            }
+
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Currency Toggle: UX & Performance Upgrade"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "💫 Currency Toggle: UX & Performance Upgrade\n\n- **Performance** : Le switch GBP/EUR est désormais instantané côté client et ne requiert plus de requête HTTP vers le serveur, éradiquant toute latence.\n- **Design** : Les boutons ont été transformés en toggles pills animés (style iOS) avec des transitions CSS fluides (opacité et scale) sur le rendu des montants lors du basculement." });
+                syncCloud();
+            }
+
+            if (!memoryStats.patchnotes.some(p => p.text.includes("UI Polishing: Currency Toggle Placement"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🎨 UI Polishing: Currency Toggle Placement\n\n- **Description** : Déplacement du bouton toggle (GBP/EUR) du coin supérieur droit vers le coin inférieur droit des cartes de statistiques financières, évitant ainsi toute superposition disgracieuse avec les icônes vectorielles." });
                 syncCloud();
             }
 
@@ -4942,7 +5001,8 @@ const server = http.createServer(async (req, res) => {
                </div>
 
                <div class='stats-grid premium-stats-grid' style='position: relative; z-index: 10;'>
-                   <div class='glass-panel' onclick='window.editStat("today_rev")' style='cursor:pointer; padding: 16px 20px;' title='Click to edit'>
+                   <div class='glass-panel' style='padding: 16px 20px; position: relative;'>
+                       <button onclick='event.stopPropagation(); window.toggleCurrency()' class='btn-curr-toggle' style='position:absolute; bottom:16px; right:20px; top:auto; background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.05); color:var(--text-muted); padding:4px 10px; border-radius:20px; cursor:pointer; font-size:0.85em; font-weight:700; z-index:10; transition:all 0.3s; display:flex; gap:8px; align-items:center; box-shadow: inset 0 2px 10px rgba(0,0,0,0.5);' onmouseover='this.style.background="rgba(0,0,0,0.6)"; this.style.borderColor="rgba(255,255,255,0.15)"' onmouseout='this.style.background="rgba(0,0,0,0.4)"; this.style.borderColor="rgba(255,255,255,0.05)"' id='btn-curr-today'><span style="color:#fff;">£</span> <span style="opacity:0.4;">€</span></button>
                        <div class='ambient-glow' style='--glow-color: rgba(16,185,129,1); top: -100px; right: -100px;'></div>
                        <div class='glass-icon-wrapper' style='color: #10b981;'>
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
@@ -4951,7 +5011,8 @@ const server = http.createServer(async (req, res) => {
                        <div class='glass-stat-value text-green' id='ui-today-rev'></div>
                        <div class='trend positive' style='font-weight: 600; font-size: 0.9em;'>+14% <span style='color:var(--text-muted); font-weight:normal;'>vs yesterday</span></div>
                    </div>
-                   <div class='glass-panel' onclick='window.editStat("total_rev")' style='cursor:pointer; padding: 16px 20px;' title='Click to edit'>
+                   <div class='glass-panel' style='padding: 16px 20px; position: relative;'>
+                       <button onclick='event.stopPropagation(); window.toggleCurrency()' class='btn-curr-toggle' style='position:absolute; bottom:16px; right:20px; top:auto; background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.05); color:var(--text-muted); padding:4px 10px; border-radius:20px; cursor:pointer; font-size:0.85em; font-weight:700; z-index:10; transition:all 0.3s; display:flex; gap:8px; align-items:center; box-shadow: inset 0 2px 10px rgba(0,0,0,0.5);' onmouseover='this.style.background="rgba(0,0,0,0.6)"; this.style.borderColor="rgba(255,255,255,0.15)"' onmouseout='this.style.background="rgba(0,0,0,0.4)"; this.style.borderColor="rgba(255,255,255,0.05)"' id='btn-curr-total'><span style="color:#fff;">£</span> <span style="opacity:0.4;">€</span></button>
                        <div class='ambient-glow' style='--glow-color: rgba(139,92,246,1); top: -100px; right: -100px;'></div>
                        <div class='glass-icon-wrapper' style='color: #8b5cf6;'>
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 8h20M6 16h.01"/></svg>
@@ -4960,7 +5021,7 @@ const server = http.createServer(async (req, res) => {
                        <div class='glass-stat-value' id='ui-total-rev'></div>
                        <div class='trend' style='color:var(--text-muted); font-weight: 500; font-size: 0.9em;'>Lifetime Revenue</div>
                    </div>
-                   <div class='glass-panel' onclick='window.editStat("conv_rate")' style='cursor:pointer; padding: 16px 20px;' title='Click to edit'>
+                   <div class='glass-panel' style='padding: 16px 20px; position: relative;'>
                        <div class='ambient-glow' style='--glow-color: rgba(59,130,246,1); top: -100px; right: -100px;'></div>
                        <div class='glass-icon-wrapper' style='color: #3b82f6;'>
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h4l3-9 5 18 3-9h5"/></svg>
@@ -4969,7 +5030,7 @@ const server = http.createServer(async (req, res) => {
                        <div class='glass-stat-value' id='ui-conv-rate'></div>
                        <div class='trend positive' style='font-weight: 600; font-size: 0.9em;'>High Engagement</div>
                    </div>
-                   <div class='glass-panel' onclick='window.editStat("online_total")' style='cursor:pointer; padding: 16px 20px;' title='Click to edit'>
+                   <div class='glass-panel' style='padding: 16px 20px; position: relative;'>
                        <div class='ambient-glow' style='--glow-color: rgba(245,158,11,1); top: -100px; right: -100px;'></div>
                        <div class='glass-icon-wrapper' style='color: #f59e0b;'>
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
@@ -4978,7 +5039,7 @@ const server = http.createServer(async (req, res) => {
                        <div class='glass-stat-value' id='ui-online-total'></div>
                        <div class='trend' style='color:var(--text-muted); font-weight: 500; font-size: 0.9em;'>Active Members</div>
                    </div>
-                   <div class='glass-panel' onclick='window.editStat("active_subs")' style='cursor:pointer; padding: 16px 20px;' title='Click to edit'>
+                   <div class='glass-panel' style='padding: 16px 20px; position: relative;'>
                        <div class='ambient-glow' style='--glow-color: rgba(236,72,153,1); top: -100px; right: -100px;'></div>
                        <div class='glass-icon-wrapper' style='color: #ec4899;'>
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
@@ -4987,7 +5048,7 @@ const server = http.createServer(async (req, res) => {
                        <div class='glass-stat-value' id='ui-active-subs'></div>
                        <div class='trend positive' style='font-weight: 600; font-size: 0.9em;'>Recurring Yield</div>
                    </div>
-                   <div class='glass-panel' onclick='window.editStat("pending_orders")' style='cursor:pointer; padding: 16px 20px;' title='Click to edit'>
+                   <div class='glass-panel' style='padding: 16px 20px; position: relative;'>
                        <div class='ambient-glow' style='--glow-color: rgba(239,68,68,1); top: -100px; right: -100px;'></div>
                        <div class='glass-icon-wrapper' style='color: #ef4444;'>
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
@@ -5039,7 +5100,7 @@ const server = http.createServer(async (req, res) => {
                </div>
 
                <div class='stats-grid premium-stats-grid' style='position: relative; z-index: 10; margin-top: 25px;'>
-                   <div class='glass-panel' onclick='window.editStat("tickets")' style='cursor:pointer; padding: 16px 20px;' title='Click to edit'>
+                   <div class='glass-panel' style='padding: 16px 20px; position: relative;'>
                        <div class='ambient-glow' style='--glow-color: rgba(239,68,68,1); top: -100px; right: -100px;'></div>
                        <div class='glass-icon-wrapper' style='color: #ef4444;'>
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
@@ -5048,7 +5109,7 @@ const server = http.createServer(async (req, res) => {
                        <div class='glass-stat-value text-red' id='ui-tickets-opened'></div>
                        <div class='trend' style='color:var(--text-muted); font-weight: 500; font-size: 0.9em;'>Support Requests</div>
                    </div>
-                   <div class='glass-panel' onclick='window.editStat("dropoff")' style='cursor:pointer; padding: 16px 20px;' title='Click to edit'>
+                   <div class='glass-panel' style='padding: 16px 20px; position: relative;'>
                        <div class='ambient-glow' style='--glow-color: rgba(245,158,11,1); top: -100px; right: -100px;'></div>
                        <div class='glass-icon-wrapper' style='color: #f59e0b;'>
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
@@ -5057,7 +5118,7 @@ const server = http.createServer(async (req, res) => {
                        <div class='glass-stat-value' id='ui-dropoff'></div>
                        <div class='trend negative' style='font-weight: 600; font-size: 0.9em;'>Funnel Loss</div>
                    </div>
-                   <div class='glass-panel' onclick='window.editStat("peak")' style='cursor:pointer; padding: 16px 20px;' title='Click to edit'>
+                   <div class='glass-panel' style='padding: 16px 20px; position: relative;'>
                        <div class='ambient-glow' style='--glow-color: rgba(59,130,246,1); top: -100px; right: -100px;'></div>
                        <div class='glass-icon-wrapper' style='color: #3b82f6;'>
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
@@ -5068,7 +5129,7 @@ const server = http.createServer(async (req, res) => {
                    </div>
                </div>
                
-               <div style='display:grid; grid-template-columns: 1fr 1fr; gap:25px; align-items:stretch; margin-top:25px; position:relative; z-index:10;' class='overview-grid'>
+               <div style='display:grid; grid-template-columns: 1fr; gap:25px; align-items:stretch; margin-top:25px; position:relative; z-index:10;' class='overview-grid'>
                     <div class='glass-panel' style='padding: 18px 22px; display:flex; flex-direction:column;'>
                         <div class='ambient-glow' style='--glow-color: rgba(255,255,255,1); top: 0; left: 0;'></div>
                         <h2 style='margin:0 0 15px 0; border:none; font-size:1.5em; font-weight:700; letter-spacing:-0.5px; color:#fff; display:flex; align-items:center; gap:10px;'>
@@ -5078,28 +5139,6 @@ const server = http.createServer(async (req, res) => {
                         <textarea id='personal-notes' class='glass-textarea' rows='5' placeholder='Enter your strategic notes here... Auto-sync enabled.' oninput='window.saveNotes()' style='resize:vertical; flex:1; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05); color: #fff; padding: 15px; border-radius: 14px; outline: none; font-family: inherit; font-size: 0.95em; transition: all 0.3s;'>${(memoryStats.notes || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</textarea>
                     </div>
                     
-                    <div class='glass-panel' style='padding: 30px; display:flex; flex-direction:column; background: linear-gradient(135deg, rgba(10,132,255,0.05), rgba(10,132,255,0.1)); border: 1px solid rgba(10,132,255,0.2);'>
-                        <div class='ambient-glow' style='--glow-color: rgba(10,132,255,1); top: 0; right: 0;'></div>
-                        <h2 style='margin:0 0 15px 0; border:none; font-size:1.5em; font-weight:700; letter-spacing:-0.5px; color:var(--accent-blue); display:flex; align-items:center; gap:10px;'>
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> 
-                            Live Currency Exchange
-                        </h2>
-                        <div style='display:flex; gap:15px; align-items:center; flex-wrap:wrap; margin-top:auto;'>
-                            <div style='flex:1; min-width:120px;'>
-                                <label class='text-muted' style='font-size:0.8em; margin-bottom:8px; display:block; font-weight:600;'>British Pounds (£)</label>
-                                <input type='number' id='conv-gbp' placeholder='0.00' oninput='window.calcCurrency("gbp")' style='font-size:1.2em; font-weight:bold; color:var(--accent-green); background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; padding: 12px; width: 100%; box-sizing: border-box; outline: none; transition: 0.3s;' onfocus='this.style.borderColor="#10b981"; this.style.background="rgba(0,0,0,0.5)"' onblur='this.style.borderColor="rgba(255,255,255,0.05)"; this.style.background="rgba(0,0,0,0.3)"'>
-                            </div>
-                            <div style='font-size:2em; color:var(--text-muted); opacity: 0.5;'>⇄</div>
-                            <div style='flex:1; min-width:120px;'>
-                                <label class='text-muted' style='font-size:0.8em; margin-bottom:8px; display:block; font-weight:600;'>Euros (€)</label>
-                                <input type='number' id='conv-eur' placeholder='0.00' oninput='window.calcCurrency("eur")' style='font-size:1.2em; font-weight:bold; color:var(--accent-blue); background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; padding: 12px; width: 100%; box-sizing: border-box; outline: none; transition: 0.3s;' onfocus='this.style.borderColor="#0a84ff"; this.style.background="rgba(0,0,0,0.5)"' onblur='this.style.borderColor="rgba(255,255,255,0.05)"; this.style.background="rgba(0,0,0,0.3)"'>
-                            </div>
-                            <div style='flex:1; min-width:100px;'>
-                                <label class='text-muted' style='font-size:0.8em; margin-bottom:8px; display:block; font-weight:600;'>Exchange Rate</label>
-                                <input type='number' step='0.01' id='conv-rate' value='1.18' oninput='window.calcCurrency("gbp")' style='font-size:1.2em; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; padding: 12px; width: 100%; box-sizing: border-box; outline:none;'>
-                            </div>
-                        </div>
-                    </div>
                </div>
 
            </div>
@@ -6428,6 +6467,51 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         let allMembersData = []; let isMembersLoaded = false; let activeChatChannel = null; let chatPollInterval = null; let terminalInterval = null; let ws = null;
         let trackedTickets = 0, trackedReviews = 0, trackedSales = 0;
         
+        window.displayCurrency = 'GBP';
+        window.toggleCurrency = function() {
+            window.displayCurrency = window.displayCurrency === 'GBP' ? 'EUR' : 'GBP';
+            
+            const els = [document.getElementById('ui-today-rev'), document.getElementById('ui-total-rev')];
+            els.forEach(el => {
+                if(el) {
+                    el.style.transform = 'scale(0.95)';
+                    el.style.opacity = '0.5';
+                    el.style.transition = 'all 0.15s ease-out';
+                }
+            });
+            
+            setTimeout(() => {
+                window.applyCurrencyUI();
+                els.forEach(el => {
+                    if(el) {
+                        el.style.transform = 'scale(1)';
+                        el.style.opacity = '1';
+                        el.style.transition = 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+                    }
+                });
+            }, 150);
+        };
+        
+        window.applyCurrencyUI = function() {
+            let tRev = window.currentTodayRev || 0;
+            let totRev = rawStats.total_revenue || 0;
+            let overrides = rawStats.overrides || {};
+            
+            if (window.displayCurrency === 'EUR') {
+                if(document.getElementById("ui-today-rev")) document.getElementById('ui-today-rev').innerText = overrides['today_rev'] || ('€'+(tRev * 1.18).toFixed(2));
+                if(document.getElementById('ui-total-rev')) document.getElementById('ui-total-rev').innerText = overrides['total_rev'] || ('€'+(totRev * 1.18).toFixed(2));
+                document.querySelectorAll('.btn-curr-toggle').forEach(btn => {
+                    btn.innerHTML = '<span style="opacity:0.4;">£</span> <span style="color:#fff;">€</span>';
+                });
+            } else {
+                if(document.getElementById("ui-today-rev")) document.getElementById('ui-today-rev').innerText = overrides['today_rev'] || ('£'+tRev);
+                if(document.getElementById('ui-total-rev')) document.getElementById('ui-total-rev').innerText = overrides['total_rev'] || ('£'+totRev);
+                document.querySelectorAll('.btn-curr-toggle').forEach(btn => {
+                    btn.innerHTML = '<span style="color:#fff;">£</span> <span style="opacity:0.4;">€</span>';
+                });
+            }
+        };
+        
         // 🚀 [UI_ACTION: calcCurrency] - Action d'interface Dashboard
         window.calcCurrency = function(source) {
             const rate = parseFloat(document.getElementById('conv-rate').value) || 1.18;
@@ -6669,8 +6753,9 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
 
 
             console.log("REACHED overrides"); let overrides = rawStats.overrides || {};
-            console.log("REACHED UI UPDATES"); if(document.getElementById("ui-today-rev")) document.getElementById('ui-today-rev').innerText = overrides['today_rev'] || ('£'+(data.todayRevenue || 0));
-            if(document.getElementById('ui-total-rev')) document.getElementById('ui-total-rev').innerText = overrides['total_rev'] || ('£'+(rawStats.total_revenue || 0));
+            console.log("REACHED UI UPDATES"); 
+            window.currentTodayRev = data.todayRevenue || 0;
+            window.applyCurrencyUI();
             if(document.getElementById('ui-conv-rate')) document.getElementById('ui-conv-rate').innerText = overrides['conv_rate'] || ((data.conversionRate||0)+'%');
             if(document.getElementById('ui-online-total')) document.getElementById('ui-online-total').innerHTML = overrides['online_total'] || ((data.onlineCount||0) + ' <span style="font-size:0.5em;color:var(--text-muted);">/ ' + (data.memberCount||0) + '</span>');
             if(document.getElementById('ui-active-subs')) document.getElementById('ui-active-subs').innerText = overrides['active_subs'] || 0;
