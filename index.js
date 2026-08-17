@@ -905,6 +905,11 @@ function ensureMemoryInitialized() {
                 syncCloud();
             }
 
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Advanced Member Growth Analytics"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "📈 Advanced Member Growth Analytics\n\n- **Feature** : Ajout d une toute nouvelle section statistiques experte sur la page Analytics.\n- **Description** : Visualisation précise de l évolution des membres (Joins) sur une courbe dynamique (Line Chart) s étalant sur les 14 derniers jours avec des dégradés de violet (Néon) en temps réel." });
+                syncCloud();
+            }
+
             if (!memoryStats.overrides) memoryStats.overrides = {};
             if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } };
             if (!memoryStats.settings.maintenance) memoryStats.settings.maintenance = { active: false, endsAt: 0, channelId: "" };
@@ -5218,6 +5223,7 @@ const server = http.createServer(async (req, res) => {
                    <div class='box' style='animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: 0.3s; position: relative; overflow: hidden;'><div class='ambient-glow' style='--glow-color: rgba(var(--accent-green-rgb), 0.5); top: -20px; left: -20px;'></div><h2>🏷️ Sector Revenue</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Revenue grouped by product category.</p><div style='height:260px; position:relative;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='categoryRevenueChart' style='position:relative; z-index:10;'></canvas></div></div>
                    <div class='box' style='animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: 0.4s; position: relative; overflow: hidden;'><div class='ambient-glow' style='--glow-color: rgba(var(--accent-green-rgb), 0.5); top: -20px; left: -20px;'></div><h2>📅 Sales by Day of Week</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Identify your most profitable days to plan promotions.</p><div style='height:260px; position:relative;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='dowChart' style='position:relative; z-index:10;'></canvas></div></div>
                    <div class='box' style='animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: 0.5s; position: relative; overflow: hidden;'><div class='ambient-glow' style='--glow-color: rgba(var(--accent-green-rgb), 0.5); top: -20px; left: -20px;'></div><h2>📊 Conversion Funnel</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Ratio of total tickets opened versus successful transactions.</p><div style='height:260px; position:relative;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='funnelChart' style='position:relative; z-index:10;'></canvas></div></div>
+                   <div class='box' style='animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: 0.6s; position: relative; overflow: hidden;'><div class='ambient-glow' style='--glow-color: rgba(139,92,246, 0.5); top: -20px; left: -20px;'></div><h2>📈 Member Growth</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Evolution of new member joins over the last 14 days.</p><div style='height:260px; position:relative;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='joinsChart' style='position:relative; z-index:10;'></canvas></div></div>
                </div>
            </div>
 
@@ -8602,6 +8608,79 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                     });
                 }
             });
+
+           withErrorBoundary('joinsChart', 'Member Growth Chart', () => {
+               const canvas = document.getElementById('joinsChart'); 
+               if(canvas) {
+                   const ctxJoins = canvas.getContext('2d');
+                   if(!ctxJoins) return;
+                   
+                   let joinLabels = [];
+                   let joinData = [];
+                   if(rawStats.joins) {
+                       const dates = Object.keys(rawStats.joins).sort();
+                       const last14Dates = dates.slice(-14);
+                       joinLabels = last14Dates.map(d => {
+                           const parts = d.split('-');
+                           return parts.length === 3 ? parts[1] + '/' + parts[2] : d;
+                       });
+                       joinData = last14Dates.map(d => rawStats.joins[d] || 0);
+                   }
+                   if(joinLabels.length === 0) {
+                       joinLabels = ['No Data'];
+                       joinData = [0];
+                   }
+                   
+                   if(window.joinsChartInst instanceof Chart) window.joinsChartInst.destroy();
+                   const gradient = createGradient(ctxJoins, 'rgba(139,92,246, 0.6)', 'rgba(139,92,246, 0.05)');
+                   
+                   window.joinsChartInst = new Chart(ctxJoins, { 
+                       type: 'line', 
+                       data: { 
+                           labels: joinLabels, 
+                           datasets: [{ 
+                               label: 'New Members', 
+                               data: joinData, 
+                               backgroundColor: gradient, 
+                               borderColor: '#8b5cf6',
+                               pointBackgroundColor: '#1a1a1f',
+                               pointBorderColor: '#8b5cf6',
+                               pointBorderWidth: 2,
+                               pointRadius: 4,
+                               pointHoverRadius: 6,
+                               fill: true,
+                               tension: 0.4,
+                               borderWidth: 2
+                           }] 
+                       }, 
+                       options: { 
+                           responsive: true, 
+                           maintainAspectRatio: false, 
+                           animation: { 
+                               duration: 2000, 
+                               easing: 'easeOutQuart' 
+                           }, 
+                           interaction: { mode: 'index', intersect: false }, 
+                           plugins: { 
+                               legend: { display: false },
+                               tooltip: {
+                                   backgroundColor: 'rgba(0,0,0,0.8)',
+                                   titleFont: { size: 14, family: 'Inter' },
+                                   bodyFont: { size: 14, family: 'monospace' },
+                                   padding: 12,
+                                   cornerRadius: 8,
+                                   borderColor: 'rgba(139,92,246,0.5)',
+                                   borderWidth: 1
+                               }
+                           },
+                           scales: {
+                               x: { grid: { color: 'rgba(255,255,255,0.03)' } },
+                               y: { grid: { color: 'rgba(255,255,255,0.03)' }, beginAtZero: true, ticks: { precision: 0 } }
+                           }
+                       } 
+                   });
+               }
+           });
         }
 
         // 🚀 [UI_ACTION_ASYNC: loadBackups] - Action asynchrone d'interface Dashboard
