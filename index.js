@@ -3468,7 +3468,7 @@ const server = http.createServer(async (req, res) => {
     // 🚀 [API_ROUTE: /api/voucher-log] - Rewarble voucher log
     if (req.url === '/api/voucher-log' && req.method === 'GET') {
         setCorsHeaders(res);
-        if (!isAuthenticated(req)) { res.writeHead(401); return res.end(JSON.stringify({ error: 'Unauthorized' })); }
+        if (!isAuthenticated) { res.writeHead(401); return res.end(JSON.stringify({ error: 'Unauthorized' })); }
         res.writeHead(200, { 'Content-Type': 'application/json' });
         const log = Array.isArray(memoryStats.voucher_log) ? memoryStats.voucher_log : [];
         return res.end(JSON.stringify({ log, total: log.length }));
