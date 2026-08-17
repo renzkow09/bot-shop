@@ -4904,7 +4904,7 @@ const server = http.createServer(async (req, res) => {
                 </div>
             </header>
             <main class='main-content'>
-           <div id='overview' class='tab-content active' style='display:block;'>
+           <div id='overview' class='tab-content active'>
                <div style='display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 16px; padding: 0; position: relative; z-index: 10;'>
                    <div>
                        <h1 style='font-size: 1.9em; font-weight: 800; letter-spacing: -0.5px; margin: 0; background: linear-gradient(135deg, #ffffff 0%, #a1a1aa 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;'>Nexus Engine</h1>
@@ -6824,7 +6824,6 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
     let transHtml = '';
     if (rawStats.transcripts && rawStats.transcripts.length > 0) {
         rawStats.transcripts.forEach((t) => {
-            
             transHtml += '<tr>';
             transHtml += '<td><strong>' + escapeHTML(t.name) + '</strong></td>';
             transHtml += '<td class="text-muted">' + new Date(t.date).toLocaleString() + '</td>';
@@ -6852,31 +6851,35 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
               }); 
           } 
           if(document.getElementById('target-leaves')) document.getElementById('target-leaves').innerHTML = lHtml||'<tr><td colspan="3" class="text-muted text-center">No drops recorded.</td></tr>';
-                      let pnHtml = '';
-           if(rawStats.patchnotes && rawStats.patchnotes.length > 0) {
-               [...rawStats.patchnotes].sort((a, b) => new Date(b.date) - new Date(a.date)).forEach((pn, index) => {
-                   let emoji = "✨";
-                   if(pn.text.includes("DESIGN")) emoji = "💎";
-                   else if(pn.text.includes("AI")) emoji = "🧠";
-                   else if(pn.text.includes("UX")) emoji = "💫";
-                   else if(pn.text.includes("FIX")) emoji = "🔧";
-                   else if(pn.text.includes("SEC")) emoji = "🛡️";
-                   
-                   // Highlight tags inside the text (e.g. "DESIGN UPGRADE:")
-                   let highlightedText = escapeHTML(pn.text).replace(/^([^:]+):/g, '<span class="pn-highlight">$1:</span>');
 
-                   pnHtml += '<div class="premium-patchnote-item" style="animation-delay: ' + (index * 0.15) + 's;">';
-                   pnHtml += '   <div class="pn-header">';
-                   pnHtml += '       <div class="pn-version-tag">' + emoji + ' SYSTEM UPDATE</div>';
-                   pnHtml += '       <div class="pn-date"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>&nbsp;' + new Date(pn.date).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) + '</div>';
-                   pnHtml += '   </div>';
-                   pnHtml += '   <div class="pn-content">' + highlightedText + '</div>';
-                   pnHtml += '</div>';
-               });
-           } else {
-               pnHtml = "<div style='text-align:center; color:gray; padding: 40px;'>No system logs available yet.</div>";
-           }
-           if(document.getElementById('patchnotesList')) document.getElementById('patchnotesList').innerHTML = pnHtml;
+            if (!window._lastPatchnotesLength || window._lastPatchnotesLength !== rawStats.patchnotes.length) {
+                window._lastPatchnotesLength = rawStats.patchnotes ? rawStats.patchnotes.length : 0;
+                let pnHtml = '';
+                if(rawStats.patchnotes && rawStats.patchnotes.length > 0) {
+                    [...rawStats.patchnotes].sort((a, b) => new Date(b.date) - new Date(a.date)).forEach((pn, index) => {
+                        let emoji = "✨";
+                        if(pn.text.includes("DESIGN")) emoji = "💎";
+                        else if(pn.text.includes("AI")) emoji = "🧠";
+                        else if(pn.text.includes("UX")) emoji = "💫";
+                        else if(pn.text.includes("FIX")) emoji = "🔧";
+                        else if(pn.text.includes("SEC")) emoji = "🛡️";
+                        
+                        let highlightedText = escapeHTML(pn.text).replace(/^([^:]+):/g, '<span class="pn-highlight">$1:</span>');
+
+                        pnHtml += '<div class="premium-patchnote-item" style="animation-delay: ' + (Math.min(index, 10) * 0.1) + 's;">';
+                        pnHtml += '   <div class="pn-header">';
+                        pnHtml += '       <div class="pn-version-tag">' + emoji + ' SYSTEM UPDATE</div>';
+                        pnHtml += '       <div class="pn-date"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>&nbsp;' + new Date(pn.date).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) + '</div>';
+                        pnHtml += '   </div>';
+                        pnHtml += '   <div class="pn-content">' + highlightedText + '</div>';
+                        pnHtml += '</div>';
+                    });
+                } else {
+                    pnHtml = "<div style='text-align:center; color:gray; padding: 40px;'>No system logs available yet.</div>";
+                }
+                if(document.getElementById('patchnotesList')) document.getElementById('patchnotesList').innerHTML = pnHtml;
+            }
+        
         
 
           let promHtml=''; 
