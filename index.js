@@ -910,6 +910,11 @@ function ensureMemoryInitialized() {
                 syncCloud();
             }
 
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Optimisation Dashboard: Patchnotes Fluidité"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "⚡ Optimisation Dashboard: Patchnotes Fluidité\n\n- **Performance** : Suppression du filtre CSS couteux `backdrop-filter: blur(22px)` sur les cartes d historique de mise à jour qui saturait le GPU lors du défilement.\n- **Mémoire** : L injection dynamique du DOM limite désormais le rendu aux 30 derniers patchnotes (via `.slice(0, 30)`), divisant drastiquement les calculs de boucles sur le client et rendant l ouverture de la page instantanée." });
+                syncCloud();
+            }
+
             if (!memoryStats.overrides) memoryStats.overrides = {};
             if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } };
             if (!memoryStats.settings.maintenance) memoryStats.settings.maintenance = { active: false, endsAt: 0, channelId: "" };
@@ -3620,6 +3625,11 @@ const server = http.createServer(async (req, res) => {
                         memoryStats.analytics.tickets_opened = parseInt(val) || 0;
                     } 
                     else {
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Optimisation Dashboard: Patchnotes Fluidité"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "⚡ Optimisation Dashboard: Patchnotes Fluidité\n\n- **Performance** : Suppression du filtre CSS couteux `backdrop-filter: blur(22px)` sur les cartes d historique de mise à jour qui saturait le GPU lors du défilement.\n- **Mémoire** : L injection dynamique du DOM limite désormais le rendu aux 30 derniers patchnotes (via `.slice(0, 30)`), divisant drastiquement les calculs de boucles sur le client et rendant l ouverture de la page instantanée." });
+                syncCloud();
+            }
+
                         if (!memoryStats.overrides) memoryStats.overrides = {};
                         if (val === '') {
                             delete memoryStats.overrides[data.key];
@@ -4787,7 +4797,7 @@ const server = http.createServer(async (req, res) => {
         .patchnotes-container { position:relative; max-width:880px; margin:0 auto; padding:20px 0 60px; }
         .patchnotes-timeline { position:relative; padding-left:38px; }
         .patchnotes-timeline::before { content:''; position:absolute; left:10px; top:10px; bottom:0; width:2px; background:linear-gradient(180deg, rgba(59,130,246,0.45) 0%, rgba(139,92,246,0.45) 50%, transparent 100%); border-radius:2px; }
-        .premium-patchnote-item { position:relative; margin-bottom:38px; background:rgba(12,12,20,0.65); backdrop-filter:blur(22px); border:1px solid rgba(255,255,255,0.05); border-radius:var(--radius-lg); padding:28px; box-shadow:0 10px 28px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.04); transition:all 0.45s var(--spring); animation:fadeUp 0.7s var(--spring) both; }
+        .premium-patchnote-item { position:relative; margin-bottom:38px; background:#111117; border:1px solid rgba(255,255,255,0.05); border-radius:var(--radius-lg); padding:28px; box-shadow:0 10px 28px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.04); transition:all 0.45s var(--spring); animation:fadeUp 0.7s var(--spring) both; }
         .premium-patchnote-item::before { content:''; position:absolute; left:-35px; top:24px; width:14px; height:14px; border-radius:50%; background:#0d0d18; border:2px solid #3b82f6; box-shadow:0 0 14px rgba(59,130,246,0.7); z-index:2; transition:all 0.3s ease; }
         .premium-patchnote-item:hover { transform:translateY(-4px); border-color:rgba(255,255,255,0.1); box-shadow:0 16px 40px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.08); }
         .premium-patchnote-item:hover::before { background:#3b82f6; transform:scale(1.3); box-shadow:0 0 22px rgba(59,130,246,1); }
@@ -6873,7 +6883,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                 window._lastPatchnotesLength = rawStats.patchnotes ? rawStats.patchnotes.length : 0;
                 let pnHtml = '';
                 if(rawStats.patchnotes && rawStats.patchnotes.length > 0) {
-                    [...rawStats.patchnotes].sort((a, b) => new Date(b.date) - new Date(a.date)).forEach((pn, index) => {
+                    [...rawStats.patchnotes].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 30).forEach((pn, index) => {
                         let emoji = "✨";
                         if(pn.text.includes("DESIGN")) emoji = "💎";
                         else if(pn.text.includes("AI")) emoji = "🧠";
