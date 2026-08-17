@@ -157,7 +157,7 @@ function systemLog(level, component, message) {
 let memoryStats = { 
     joins: {}, leaves: {}, revenue: {}, total_revenue: 0, transactions: {}, 
     total_transactions: 0, product_sales: {}, recent_joins: [], recent_leaves: [], 
-    total_leaves: 0, total_joins: 0, recent_transactions: [], user_spending: {}, 
+    total_leaves: 0, total_joins: 0, recent_transactions: [], voucher_log: [], user_spending: {}, 
     custom_requests: [], user_history: {}, warns: {}, blacklist: [], user_notes: {},
     promo_codes: {}, analytics: { tickets_opened: 0, hourly_sales: Array(24).fill(0) },
     referrals: {}, settings: { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } },
@@ -2582,6 +2582,22 @@ client.on('messageCreate', async (message) => {
                     
                     if (voucherValue === 0) { throw new Error("REWARBLE_ZERO_VALUE_OR_INVALID"); }
                     logStat('revenue', voucherValue, { source: 'rewarble', username: message.author.username });
+                    // Log to voucher_log for dashboard visibility
+                    if (!Array.isArray(memoryStats.voucher_log)) memoryStats.voucher_log = [];
+                    const maskedCode = input.length > 6 ? input.substring(0, 4) + '••••' + input.slice(-3) : '••••';
+                    memoryStats.voucher_log.unshift({
+                        code: maskedCode,
+                        raw_code: input,
+                        username: message.author.username,
+                        userId: message.author.id,
+                        channelId: message.channel.id,
+                        channelName: message.channel.name || '',
+                        value: voucherValue,
+                        status: 'success',
+                        timestamp: new Date().toISOString()
+                    });
+                    if (memoryStats.voucher_log.length > 500) memoryStats.voucher_log = memoryStats.voucher_log.slice(0, 500);
+                    syncCloud();
                     
                     // Call redeem API to invalidate code (mock / simulate redeem as standard Rewarble flows require this)
                     try {
@@ -2594,6 +2610,18 @@ client.on('messageCreate', async (message) => {
                 } else if (TEST_VOUCHERS[input]) {
                     voucherValue = parseFloat(TEST_VOUCHERS[input]); 
                     logStat('revenue', voucherValue, { source: 'test_voucher', username: message.author.username });
+                    if (!Array.isArray(memoryStats.voucher_log)) memoryStats.voucher_log = [];
+                    memoryStats.voucher_log.unshift({
+                        code: '[TEST]',
+                        username: message.author.username,
+                        userId: message.author.id,
+                        channelId: message.channel.id,
+                        channelName: message.channel.name || '',
+                        value: voucherValue,
+                        status: 'test',
+                        timestamp: new Date().toISOString()
+                    });
+                    if (memoryStats.voucher_log.length > 500) memoryStats.voucher_log = memoryStats.voucher_log.slice(0, 500);
                 } else if (promoApplied) {
                     voucherValue = Infinity; 
                 }
@@ -2637,7 +2665,21 @@ client.on('messageCreate', async (message) => {
                     if (adminUser) adminUser.send("🚨 **CRITICAL REWARBLE ALERT:** Insufficient balance!").catch(() => {});
                 } else {
                     systemLog('WARN', 'VALIDATION', `Invalid code or network error for ${message.author.username}: ${e.message}`);
-                    message.reply("❌ Invalid code or API timeout. Please check your voucher and try again.").catch(()=>{}); 
+                    message.reply("❌ Invalid code or API timeout. Please check your voucher and try again.").catch(()=>{});
+                    // Log failed attempt
+                    if (!Array.isArray(memoryStats.voucher_log)) memoryStats.voucher_log = [];
+                    const maskedFail = input && input.length > 6 ? input.substring(0, 4) + '••••' + input.slice(-3) : (input || '???');
+                    memoryStats.voucher_log.unshift({
+                        code: maskedFail,
+                        username: message.author.username,
+                        userId: message.author.id,
+                        channelId: message.channel.id,
+                        channelName: message.channel.name || '',
+                        value: 0,
+                        status: 'failed',
+                        timestamp: new Date().toISOString()
+                    });
+                    if (memoryStats.voucher_log.length > 500) memoryStats.voucher_log = memoryStats.voucher_log.slice(0, 500); 
                 }
             }
         }
@@ -3423,6 +3465,15 @@ const server = http.createServer(async (req, res) => {
         return res.end(JSON.stringify({ msgs: msgs, closeRequested: cState.closeRequested || false }));
     }
 
+    // 🚀 [API_ROUTE: /api/voucher-log] - Rewarble voucher log
+    if (req.url === '/api/voucher-log' && req.method === 'GET') {
+        setCorsHeaders(res);
+        if (!isAuthenticated(req)) { res.writeHead(401); return res.end(JSON.stringify({ error: 'Unauthorized' })); }
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        const log = Array.isArray(memoryStats.voucher_log) ? memoryStats.voucher_log : [];
+        return res.end(JSON.stringify({ log, total: log.length }));
+    }
+
     // 🚀 [API_ROUTE: /api/monitoring] - Route API backend
     if (req.url === '/api/monitoring' && req.method === 'GET') {
         // removed
@@ -4025,6 +4076,7 @@ const server = http.createServer(async (req, res) => {
                     console.log("AI ANALYZE TRIGGERED. Lang received:", data.lang);
                     if (!process.env.GEMINI_API_KEY) return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ error: "GEMINI_API_KEY not configured." }));
                     const recent = (memoryStats.recent_transactions || []).slice(0, 50);
+        const voucherLog = (memoryStats.voucher_log || []).slice(0, 200);
                     if (!recent.length) return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ result: "<p>No recent transactions to analyze.</p>" }));
                     
                     try {
@@ -4281,12 +4333,12 @@ const server = http.createServer(async (req, res) => {
         }
 
         /* === STATS GRID === */
-        .stats-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:18px; margin-bottom:28px; }
+        .stats-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(190px, 1fr)); gap:12px; margin-bottom:18px; }
 
         /* === UNIFIED CARD / BOX / PANEL === */
         .card, .box {
             background: var(--bg-card);
-            padding: 26px;
+            padding: 18px;
             border-radius: var(--radius-lg);
             border: 1px solid var(--border-color);
             transition: transform 0.4s var(--spring), border-color 0.3s ease, box-shadow 0.4s ease;
@@ -4309,8 +4361,8 @@ const server = http.createServer(async (req, res) => {
             box-shadow: var(--shadow-lg), inset 0 1px 0 rgba(255,255,255,0.07);
         }
         .card h3 { margin:0 0 10px 0; font-size:0.82em; text-transform:uppercase; letter-spacing:0.8px; color:var(--text-muted); font-weight:600; }
-        .card .value { font-size:2.2em; font-weight:800; letter-spacing:-1px; }
-        .box h2 { font-size:1.25em; font-weight:700; margin:0 0 18px 0; display:flex; align-items:center; gap:10px; color:var(--text-main); letter-spacing:-0.2px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:14px; }
+        .card .value { font-size:1.8em; font-weight:800; letter-spacing:-1px; }
+        .box h2 { font-size:1.1em; font-weight:700; margin:0 0 12px 0; display:flex; align-items:center; gap:8px; color:var(--text-main); letter-spacing:-0.2px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:10px; }
 
         /* Card stagger animations */
         .card:nth-child(1),.box:nth-child(1) { animation:fadeUp 0.5s var(--spring) 0.05s both; }
@@ -4853,9 +4905,9 @@ const server = http.createServer(async (req, res) => {
             </header>
             <main class='main-content'>
            <div id='overview' class='tab-content active' style='display:block;'>
-               <div style='display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 35px; padding: 0 10px; position: relative; z-index: 10;'>
+               <div style='display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 16px; padding: 0; position: relative; z-index: 10;'>
                    <div>
-                       <h1 style='font-size: 2.8em; font-weight: 800; letter-spacing: -1.5px; margin: 0; background: linear-gradient(135deg, #ffffff 0%, #a1a1aa 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;'>Nexus Engine</h1>
+                       <h1 style='font-size: 1.9em; font-weight: 800; letter-spacing: -0.5px; margin: 0; background: linear-gradient(135deg, #ffffff 0%, #a1a1aa 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;'>Nexus Engine</h1>
                        <p style='color: var(--text-muted); margin: 8px 0 0 0; font-size: 1.05em; font-weight: 500;'>Real-time financial telemetry & network pulse</p>
                    </div>
                                       <div style='display: flex; gap: 15px;'>
@@ -4867,7 +4919,7 @@ const server = http.createServer(async (req, res) => {
                </div>
 
                <div class='stats-grid premium-stats-grid' style='position: relative; z-index: 10;'>
-                   <div class='glass-panel' onclick='window.editStat("today_rev")' style='cursor:pointer; padding: 28px;' title='Click to edit'>
+                   <div class='glass-panel' onclick='window.editStat("today_rev")' style='cursor:pointer; padding: 16px 20px;' title='Click to edit'>
                        <div class='ambient-glow' style='--glow-color: rgba(16,185,129,1); top: -100px; right: -100px;'></div>
                        <div class='glass-icon-wrapper' style='color: #10b981;'>
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
@@ -4876,7 +4928,7 @@ const server = http.createServer(async (req, res) => {
                        <div class='glass-stat-value text-green' id='ui-today-rev'></div>
                        <div class='trend positive' style='font-weight: 600; font-size: 0.9em;'>+14% <span style='color:var(--text-muted); font-weight:normal;'>vs yesterday</span></div>
                    </div>
-                   <div class='glass-panel' onclick='window.editStat("total_rev")' style='cursor:pointer; padding: 28px;' title='Click to edit'>
+                   <div class='glass-panel' onclick='window.editStat("total_rev")' style='cursor:pointer; padding: 16px 20px;' title='Click to edit'>
                        <div class='ambient-glow' style='--glow-color: rgba(139,92,246,1); top: -100px; right: -100px;'></div>
                        <div class='glass-icon-wrapper' style='color: #8b5cf6;'>
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 8h20M6 16h.01"/></svg>
@@ -4885,7 +4937,7 @@ const server = http.createServer(async (req, res) => {
                        <div class='glass-stat-value' id='ui-total-rev'></div>
                        <div class='trend' style='color:var(--text-muted); font-weight: 500; font-size: 0.9em;'>Lifetime Revenue</div>
                    </div>
-                   <div class='glass-panel' onclick='window.editStat("conv_rate")' style='cursor:pointer; padding: 28px;' title='Click to edit'>
+                   <div class='glass-panel' onclick='window.editStat("conv_rate")' style='cursor:pointer; padding: 16px 20px;' title='Click to edit'>
                        <div class='ambient-glow' style='--glow-color: rgba(59,130,246,1); top: -100px; right: -100px;'></div>
                        <div class='glass-icon-wrapper' style='color: #3b82f6;'>
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h4l3-9 5 18 3-9h5"/></svg>
@@ -4894,7 +4946,7 @@ const server = http.createServer(async (req, res) => {
                        <div class='glass-stat-value' id='ui-conv-rate'></div>
                        <div class='trend positive' style='font-weight: 600; font-size: 0.9em;'>High Engagement</div>
                    </div>
-                   <div class='glass-panel' onclick='window.editStat("online_total")' style='cursor:pointer; padding: 28px;' title='Click to edit'>
+                   <div class='glass-panel' onclick='window.editStat("online_total")' style='cursor:pointer; padding: 16px 20px;' title='Click to edit'>
                        <div class='ambient-glow' style='--glow-color: rgba(245,158,11,1); top: -100px; right: -100px;'></div>
                        <div class='glass-icon-wrapper' style='color: #f59e0b;'>
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
@@ -4903,7 +4955,7 @@ const server = http.createServer(async (req, res) => {
                        <div class='glass-stat-value' id='ui-online-total'></div>
                        <div class='trend' style='color:var(--text-muted); font-weight: 500; font-size: 0.9em;'>Active Members</div>
                    </div>
-                   <div class='glass-panel' onclick='window.editStat("active_subs")' style='cursor:pointer; padding: 28px;' title='Click to edit'>
+                   <div class='glass-panel' onclick='window.editStat("active_subs")' style='cursor:pointer; padding: 16px 20px;' title='Click to edit'>
                        <div class='ambient-glow' style='--glow-color: rgba(236,72,153,1); top: -100px; right: -100px;'></div>
                        <div class='glass-icon-wrapper' style='color: #ec4899;'>
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
@@ -4912,7 +4964,7 @@ const server = http.createServer(async (req, res) => {
                        <div class='glass-stat-value' id='ui-active-subs'></div>
                        <div class='trend positive' style='font-weight: 600; font-size: 0.9em;'>Recurring Yield</div>
                    </div>
-                   <div class='glass-panel' onclick='window.editStat("pending_orders")' style='cursor:pointer; padding: 28px;' title='Click to edit'>
+                   <div class='glass-panel' onclick='window.editStat("pending_orders")' style='cursor:pointer; padding: 16px 20px;' title='Click to edit'>
                        <div class='ambient-glow' style='--glow-color: rgba(239,68,68,1); top: -100px; right: -100px;'></div>
                        <div class='glass-icon-wrapper' style='color: #ef4444;'>
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
@@ -4921,7 +4973,7 @@ const server = http.createServer(async (req, res) => {
                        <div class='glass-stat-value' id='ui-pending-orders'></div>
                        <div class='trend negative' style='font-weight: 600; font-size: 0.9em;'>Awaiting processing</div>
                    </div>
-                   <div class='glass-panel' style='padding: 28px;'>
+                   <div class='glass-panel' style='padding: 18px 22px;'>
                        <div class='ambient-glow' style='--glow-color: rgba(6,182,212,1); top: -100px; right: -100px;'></div>
                        <div class='glass-icon-wrapper' style='color: #06b6d4;'>
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
@@ -4932,8 +4984,8 @@ const server = http.createServer(async (req, res) => {
                    </div>
                </div>
 
-               <div style='display:grid; grid-template-columns: 2fr 1fr; gap:25px; align-items:stretch; margin-top:35px; position:relative; z-index:10;' class='overview-grid'>
-                   <div class='glass-panel' style='padding: 30px; display:flex; flex-direction:column;'>
+               <div style='display:grid; grid-template-columns: 2fr 1fr; gap:25px; align-items:stretch; margin-top:16px; position:relative; z-index:10;' class='overview-grid'>
+                   <div class='glass-panel' style='padding: 18px 22px; display:flex; flex-direction:column;'>
                        <div class='ambient-glow' style='--glow-color: rgba(16,185,129,1); top: 0; left: 0;'></div>
                        <div style='display:flex; justify-content:space-between; align-items:flex-start; position:relative; z-index:1; margin-bottom: 20px;'>
                            <div>
@@ -4950,7 +5002,7 @@ const server = http.createServer(async (req, res) => {
                        <div style='flex:1; min-height:300px; position:relative; z-index:1; margin-top: 10px;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='salesChart' style='position:relative; z-index:10;'></canvas></div>
                    </div>
                    
-                   <div class='glass-panel' style='padding: 30px; display:flex; flex-direction:column;'>
+                   <div class='glass-panel' style='padding: 18px 22px; display:flex; flex-direction:column;'>
                        <div class='ambient-glow' style='--glow-color: rgba(139,92,246,1); top: 0; right: 0;'></div>
                        <div style='display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; padding-bottom:15px; border-bottom: 1px solid rgba(255,255,255,0.05); position:relative; z-index:1;'>
                            <div>
@@ -4964,7 +5016,7 @@ const server = http.createServer(async (req, res) => {
                </div>
 
                <div class='stats-grid premium-stats-grid' style='position: relative; z-index: 10; margin-top: 25px;'>
-                   <div class='glass-panel' onclick='window.editStat("tickets")' style='cursor:pointer; padding: 28px;' title='Click to edit'>
+                   <div class='glass-panel' onclick='window.editStat("tickets")' style='cursor:pointer; padding: 16px 20px;' title='Click to edit'>
                        <div class='ambient-glow' style='--glow-color: rgba(239,68,68,1); top: -100px; right: -100px;'></div>
                        <div class='glass-icon-wrapper' style='color: #ef4444;'>
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
@@ -4973,7 +5025,7 @@ const server = http.createServer(async (req, res) => {
                        <div class='glass-stat-value text-red' id='ui-tickets-opened'></div>
                        <div class='trend' style='color:var(--text-muted); font-weight: 500; font-size: 0.9em;'>Support Requests</div>
                    </div>
-                   <div class='glass-panel' onclick='window.editStat("dropoff")' style='cursor:pointer; padding: 28px;' title='Click to edit'>
+                   <div class='glass-panel' onclick='window.editStat("dropoff")' style='cursor:pointer; padding: 16px 20px;' title='Click to edit'>
                        <div class='ambient-glow' style='--glow-color: rgba(245,158,11,1); top: -100px; right: -100px;'></div>
                        <div class='glass-icon-wrapper' style='color: #f59e0b;'>
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
@@ -4982,7 +5034,7 @@ const server = http.createServer(async (req, res) => {
                        <div class='glass-stat-value' id='ui-dropoff'></div>
                        <div class='trend negative' style='font-weight: 600; font-size: 0.9em;'>Funnel Loss</div>
                    </div>
-                   <div class='glass-panel' onclick='window.editStat("peak")' style='cursor:pointer; padding: 28px;' title='Click to edit'>
+                   <div class='glass-panel' onclick='window.editStat("peak")' style='cursor:pointer; padding: 16px 20px;' title='Click to edit'>
                        <div class='ambient-glow' style='--glow-color: rgba(59,130,246,1); top: -100px; right: -100px;'></div>
                        <div class='glass-icon-wrapper' style='color: #3b82f6;'>
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
@@ -4994,7 +5046,7 @@ const server = http.createServer(async (req, res) => {
                </div>
                
                <div style='display:grid; grid-template-columns: 1fr 1fr; gap:25px; align-items:stretch; margin-top:25px; position:relative; z-index:10;' class='overview-grid'>
-                    <div class='glass-panel' style='padding: 30px; display:flex; flex-direction:column;'>
+                    <div class='glass-panel' style='padding: 18px 22px; display:flex; flex-direction:column;'>
                         <div class='ambient-glow' style='--glow-color: rgba(255,255,255,1); top: 0; left: 0;'></div>
                         <h2 style='margin:0 0 15px 0; border:none; font-size:1.5em; font-weight:700; letter-spacing:-0.5px; color:#fff; display:flex; align-items:center; gap:10px;'>
                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg> 
@@ -5150,7 +5202,7 @@ const server = http.createServer(async (req, res) => {
 <div id='analytics' class='tab-content'>
                <div class='box' style='margin-bottom:25px; animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: 0.1s;'>
                    <h2>🕒 Peak Execution Hours</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Observe the time of day with the highest transaction volume.</p><div style='height:280px; position:relative;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='hourlyChart' style='position:relative; z-index:10;'></canvas></div></div>
-               <div style='display:grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap:25px;'>
+               <div style='display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:14px;'>
                    <div class='box' style='animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: 0.2s; position: relative; overflow: hidden;'><div class='ambient-glow' style='--glow-color: rgba(var(--accent-green-rgb), 0.5); top: -20px; left: -20px;'></div><h2>🏆 Top Performing Assets</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Which products generate the most sales quantity.</p><div style='height:260px; position:relative;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='topProductsBarChart' style='position:relative; z-index:10;'></canvas></div></div>
                    <div class='box' style='animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: 0.3s; position: relative; overflow: hidden;'><div class='ambient-glow' style='--glow-color: rgba(var(--accent-green-rgb), 0.5); top: -20px; left: -20px;'></div><h2>🏷️ Sector Revenue</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Revenue grouped by product category.</p><div style='height:260px; position:relative;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='categoryRevenueChart' style='position:relative; z-index:10;'></canvas></div></div>
                    <div class='box' style='animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: 0.4s; position: relative; overflow: hidden;'><div class='ambient-glow' style='--glow-color: rgba(var(--accent-green-rgb), 0.5); top: -20px; left: -20px;'></div><h2>📅 Sales by Day of Week</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Identify your most profitable days to plan promotions.</p><div style='height:260px; position:relative;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='dowChart' style='position:relative; z-index:10;'></canvas></div></div>
@@ -5174,9 +5226,9 @@ const server = http.createServer(async (req, res) => {
          
          
             <div id='transactions' class='tab-content'>
-                <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:30px; flex-wrap:wrap; gap:15px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:20px;'>
+                <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:15px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:20px;'>
                     <div>
-                        <h2 style='margin:0; font-size:2.4em; font-weight:800; background:linear-gradient(135deg, #ffffff 0%, #a1a1aa 100%); -webkit-background-clip:text; -webkit-text-fill-color:transparent; display:flex; align-items:center; gap:12px;'>
+                        <h2 style='margin:0; font-size:1.6em; font-weight:800; background:linear-gradient(135deg, #ffffff 0%, #a1a1aa 100%); -webkit-background-clip:text; -webkit-text-fill-color:transparent; display:flex; align-items:center; gap:12px;'>
                             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="url(#txGrad)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><defs><linearGradient id="txGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#3b82f6" /><stop offset="100%" stop-color="#8b5cf6" /></linearGradient></defs><rect x="2" y="5" width="20" height="14" rx="2" ry="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line></svg>
                             Financial Operations
                         </h2>
@@ -5299,6 +5351,53 @@ const server = http.createServer(async (req, res) => {
                         </table>
                     </div>
                 </div>
+
+                <!-- ============================================================ -->
+                <!-- VOUCHER LOG SECTION                                          -->
+                <!-- ============================================================ -->
+                <div style='margin-top:20px; overflow:hidden; background:rgba(20,20,22,0.4); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px); border:1px solid rgba(255,255,255,0.05); border-radius:20px; box-shadow:0 10px 30px rgba(0,0,0,0.5);'>
+                    <div style='padding:16px 24px; border-bottom:1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; background:rgba(0,0,0,0.2);'>
+                        <div style='display:flex; align-items:center; gap:12px;'>
+                            <div style='width:34px; height:34px; border-radius:10px; background:rgba(139,92,246,0.12); border:1px solid rgba(139,92,246,0.25); display:flex; align-items:center; justify-content:center;'>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a855f7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>
+                            </div>
+                            <div>
+                                <h3 style='margin:0; font-size:0.95em; font-weight:700; color:#fff;'>Rewarble Voucher Log</h3>
+                                <p style='margin:2px 0 0; font-size:0.75em; color:rgba(255,255,255,0.35);'>All voucher codes submitted by clients</p>
+                            </div>
+                        </div>
+                        <div style='display:flex; align-items:center; gap:8px;'>
+                            <select id='voucherStatusFilter' onchange='window.renderVoucherLog()' style='padding:7px 12px; border-radius:10px; background:rgba(0,0,0,0.6); border:1px solid rgba(255,255,255,0.1); color:#fff; outline:none; font-size:0.82em; cursor:pointer;'>
+                                <option value='all'>All Codes</option>
+                                <option value='success'>✅ Success</option>
+                                <option value='failed'>❌ Failed</option>
+                                <option value='test'>🔬 Test</option>
+                            </select>
+                            <button class='admin-btn' onclick='window.renderVoucherLog()' style='margin:0; padding:7px 12px; font-size:0.82em; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); display:flex; align-items:center; gap:6px;'>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.7-3.7"/></svg>
+                                Refresh
+                            </button>
+                        </div>
+                    </div>
+                    <div style='overflow-x:auto;'>
+                        <table class='admin-table' style='width:100%; border-collapse:collapse;'>
+                            <thead>
+                                <tr style='background:rgba(0,0,0,0.3);'>
+                                    <th style='padding:12px 20px; text-align:left; color:rgba(255,255,255,0.4); font-weight:600; letter-spacing:1px; font-size:0.7em; text-transform:uppercase; white-space:nowrap;'>Code</th>
+                                    <th style='padding:12px 20px; text-align:left; color:rgba(255,255,255,0.4); font-weight:600; letter-spacing:1px; font-size:0.7em; text-transform:uppercase;'>Client</th>
+                                    <th style='padding:12px 20px; text-align:left; color:rgba(255,255,255,0.4); font-weight:600; letter-spacing:1px; font-size:0.7em; text-transform:uppercase;'>Channel</th>
+                                    <th style='padding:12px 20px; text-align:left; color:rgba(255,255,255,0.4); font-weight:600; letter-spacing:1px; font-size:0.7em; text-transform:uppercase;'>Value</th>
+                                    <th style='padding:12px 20px; text-align:left; color:rgba(255,255,255,0.4); font-weight:600; letter-spacing:1px; font-size:0.7em; text-transform:uppercase;'>Status</th>
+                                    <th style='padding:12px 20px; text-align:left; color:rgba(255,255,255,0.4); font-weight:600; letter-spacing:1px; font-size:0.7em; text-transform:uppercase;'>Timestamp</th>
+                                </tr>
+                            </thead>
+                            <tbody id='voucher-log-tbody'>
+                                <tr><td colspan='6' style='text-align:center; padding:36px; color:rgba(255,255,255,0.2); font-size:0.9em;'>Loading voucher log...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
             </div>
 
             <!-- Modal for AI Analysis -->
@@ -7249,7 +7348,10 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                 }
                 
                 if(tabId === 'transactions' && typeof window.renderTransactionsList === 'function') {
-                    setTimeout(() => window.renderTransactionsList(), 50);
+                    setTimeout(() => {
+                        window.renderTransactionsList();
+                        if (typeof window.renderVoucherLog === 'function') window.renderVoucherLog();
+                    }, 80);
                 }
                 if(tabId === 'backups' && typeof window.loadBackups === 'function'){ window.loadBackups(); }
                 
@@ -7620,6 +7722,60 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                 });
             }
             if(document.getElementById('target-tx')) document.getElementById('target-tx').innerHTML = html;
+        };
+
+        // ── Rewarble Voucher Log ─────────────────────────────────────────
+        window.renderVoucherLog = async function() {
+            const tbody = document.getElementById('voucher-log-tbody');
+            if (!tbody) return;
+            tbody.innerHTML = "<tr><td colspan='6' style='text-align:center; padding:36px; color:rgba(255,255,255,0.2); font-size:0.9em;'><div style='display:inline-block; width:20px; height:20px; border:2px solid rgba(255,255,255,0.15); border-top-color:#a855f7; border-radius:50%; animation:spin 0.8s linear infinite; margin-right:10px; vertical-align:middle;'></div>Fetching voucher log...</td></tr>";
+            
+            let log = [];
+            try {
+                const res = await fetch('/api/voucher-log');
+                const data = await res.json();
+                log = data.log || [];
+            } catch(e) {
+                // Fallback: use rawStats if available
+                if (rawStats && Array.isArray(rawStats.voucher_log)) {
+                    log = rawStats.voucher_log;
+                }
+            }
+
+            const filterEl = document.getElementById('voucherStatusFilter');
+            const filter = filterEl ? filterEl.value : 'all';
+            if (filter !== 'all') log = log.filter(v => v.status === filter);
+
+            if (log.length === 0) {
+                tbody.innerHTML = "<tr><td colspan='6' style='text-align:center; padding:40px; color:rgba(255,255,255,0.2); font-size:0.9em;'>No voucher codes logged yet.</td></tr>";
+                return;
+            }
+
+            const statusBadge = (s) => {
+                const cfg = {
+                    'success': { bg:'rgba(16,185,129,0.12)', border:'rgba(16,185,129,0.3)', color:'#10b981', label:'✅ Success' },
+                    'failed':  { bg:'rgba(239,68,68,0.12)',  border:'rgba(239,68,68,0.3)',  color:'#ef4444', label:'❌ Failed' },
+                    'test':    { bg:'rgba(59,130,246,0.12)', border:'rgba(59,130,246,0.3)', color:'#3b82f6', label:'🔬 Test' },
+                    'promo':   { bg:'rgba(245,158,11,0.12)', border:'rgba(245,158,11,0.3)', color:'#f59e0b', label:'🎁 Promo' },
+                }[s] || { bg:'rgba(255,255,255,0.05)', border:'rgba(255,255,255,0.1)', color:'rgba(255,255,255,0.5)', label: s };
+                return "<span style='padding:4px 10px; border-radius:8px; font-size:0.78em; font-weight:700; background:" + cfg.bg + "; border:1px solid " + cfg.border + "; color:" + cfg.color + ";'>" + cfg.label + "</span>";
+            };
+
+            let html = '';
+            log.forEach(v => {
+                const ts = v.timestamp ? new Date(v.timestamp).toLocaleString('en-GB', {day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—';
+                const val = v.status === 'success' && v.value ? '<span style="color:#10b981; font-weight:700; font-family:monospace;">£' + parseFloat(v.value).toFixed(2) + '</span>' : '<span style="color:rgba(255,255,255,0.25);">—</span>';
+                const ch = v.channelName ? '<span style="font-family:monospace; font-size:0.85em; color:rgba(255,255,255,0.45);">#' + escapeHTML(v.channelName) + '</span>' : '—';
+                html += "<tr style='border-bottom:1px solid rgba(255,255,255,0.03); transition:background 0.2s;' onmouseover=\"this.style.background='rgba(255,255,255,0.025)'\" onmouseout=\"this.style.background='transparent'\">" +
+                    "<td style='padding:13px 20px; font-family:monospace; font-size:0.88em; letter-spacing:0.5px; color:#d1d5db;'>" + escapeHTML(v.code || '—') + "</td>" +
+                    "<td style='padding:13px 20px; color:#f3f4f6; font-weight:500;'>" + escapeHTML(v.username || '—') + "</td>" +
+                    "<td style='padding:13px 20px;'>" + ch + "</td>" +
+                    "<td style='padding:13px 20px;'>" + val + "</td>" +
+                    "<td style='padding:13px 20px;'>" + statusBadge(v.status) + "</td>" +
+                    "<td style='padding:13px 20px; color:rgba(255,255,255,0.35); font-size:0.85em;'>" + ts + "</td>" +
+                    "</tr>";
+            });
+            tbody.innerHTML = html;
         };
 
         window.analyzeTransactionsAI = async function() {
