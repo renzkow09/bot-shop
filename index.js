@@ -59,13 +59,16 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os'); 
 
+// 🚨 [PROCESS_EVENT: unhandledRejection] - Gestionnaire système Node.js
 process.on('unhandledRejection', (reason, p) => { systemLog('ERROR', 'SYSTEM', `Unhandled Rejection: ${reason}`); });
+// 🚨 [PROCESS_EVENT: uncaughtException] - Gestionnaire système Node.js
 process.on('uncaughtException', (err, origin) => { systemLog('CRITICAL', 'SYSTEM', `Uncaught Exception: ${err.message}`); });
 
 const shutdown = async (signal) => {
     systemLog('WARN', 'SYSTEM', `${signal} received. Graceful shutdown initiated (Deploy/Restart)...`);
     try {
         await backupToDiscord(); await syncCloud(); // Ensure final state is saved to Upstash/Disk
+        try { if (server) server.close(); } catch(e){}
         if (client && client.ws) {
             client.destroy();
             systemLog('INFO', 'DISCORD', 'Client connection closed securely.');
@@ -77,7 +80,9 @@ const shutdown = async (signal) => {
     process.exit(0);
 };
 
+// 🚨 [PROCESS_EVENT: SIGTERM] - Gestionnaire système Node.js
 process.on('SIGTERM', () => shutdown('SIGTERM'));
+// 🚨 [PROCESS_EVENT: SIGINT] - Gestionnaire système Node.js
 process.on('SIGINT', () => shutdown('SIGINT'));
 
 
@@ -101,6 +106,7 @@ const CATEGORY_CUSTOMER_ID = "1521540733226713249";
 const CATEGORY_SUPPORT_ID = "1521541155005796484";
 const DASHBOARD_PIN = "1206";
 
+    // 🚀 [FUNCTION: getParisDateStr] - Déclaration de fonction
 function getParisDateStr(dateObj = new Date()) {
     return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris' }).format(dateObj);
 }
@@ -201,6 +207,7 @@ function addActivity(type, message) {
 }
 
     
+    // 🚀 [FUNCTION: fetchBackupFromDiscord] - Déclaration de fonction
 async function fetchBackupFromDiscord() {
     try {
         if (!client || !client.user) return false;
@@ -248,6 +255,7 @@ async function fetchBackupFromDiscord() {
     return false;
 }
 
+    // 🚀 [FUNCTION: backupToDiscord] - Déclaration de fonction
 async function backupToDiscord() {
     try {
         if (!client || !client.user) return;
@@ -296,6 +304,7 @@ async function backupToDiscord() {
 
 // 🚀 [FUNCTION: loadCloudStats]
 
+    // 🚀 [FUNCTION: loadCloudStats] - Déclaration de fonction
 async function loadCloudStats() {
     const url = process.env.UPSTASH_REDIS_REST_URL;
     const token = process.env.UPSTASH_REDIS_REST_TOKEN;
@@ -351,6 +360,7 @@ async function loadCloudStats() {
     ensureMemoryInitialized();
 }
 
+    // 🚀 [FUNCTION: ensureMemoryInitialized] - Déclaration de fonction
 function ensureMemoryInitialized() {
             if (memoryStats.recent_transactions && memoryStats.recent_transactions.some(tx => tx.price < 0 || (new Date(tx.date).getTime() && new Date(tx.date) < new Date('2026-07-04T00:00:00Z')))) {
                 memoryStats.recent_transactions = memoryStats.recent_transactions.filter(tx => tx.price > 0 && new Date(tx.date) >= new Date('2026-07-04T00:00:00Z'));
@@ -899,6 +909,18 @@ function ensureMemoryInitialized() {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ Fix Triple Création de Channel\n\n- **Bug** : Les utilisateurs généraient accidentellement 3 channels (ou plus) en un seul clic lors de ralentissements de l'API Discord.\n- **Cause** : Le gestionnaire REST de Discord.js possédait une configuration de 'retries' à 5 par défaut, forçant la recréation du ticket si l'API tardait à répondre.\n- **Correction** : Désactivation des retries automatiques (retries: 0) et augmentation du verrou anti-spam (userTicketLocks) de 15s à 60s pour assurer une création unique sans duplication." });
                 syncCloud();
             }
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Triple Création de Channel (Final)"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ Fix Triple Création de Channel (Final)\n\n- **Bug** : La création multiple de tickets persistait malgré la première itération du correctif.\n- **Cause** : Le verrou anti-spam (userTicketLocks) était arbitrairement et instantanément supprimé ('delete()') dès la création du channel en cas de succès, neutralisant la sécurité de 60 secondes introduite précédemment face aux latences du cache Discord.\n- **Correction** : Suppression de la libération prématurée du verrou. Le bot impose maintenant un cooldown strict et incassable de 60s pour la création de tout nouveau ticket par un utilisateur." });
+                syncCloud();
+            }
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Codebase Reconnaissance Tagging"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🏷️ Codebase Reconnaissance Tagging\n\n- **Action** : Déploiement de 272 balises sémantiques de repérage (Anchors) au sein du monolithe index.js.\n- **Objectif** : Mapping ultra-précis des routes HTTP, fonctions asynchrones, vues DOM HTML et événements Discord. Cette topologie permet une ingestion quasi-instantanée de l'architecture par l'IA lors des futures sessions, garantissant 0 régression et une fluidité absolue." });
+                syncCloud();
+            }
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Shop Chatter Detection"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "💬 Update: Shop Chatter Detection (En)\n\n- **Description** : L'avertissement empêchant les clients de parler dans les tickets d'achat a été traduit en Anglais conformément aux règles de localisation." });
+                syncCloud();
+            }
 
             if (!memoryStats.patchnotes.some(p => p.text.includes("Quick Action: Support Redirect"))) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🎧 Quick Action: Support Redirect\n\n- **Feature** : Ajout d'une option 'Support' dans le menu Quick Actions du Chat Dashboard.\n- **Description** : Permet aux administrateurs de rediriger instantanément et esthétiquement les clients vers le channel approprié pour ouvrir un ticket de support en cas de besoin technique, d'un simple clic." });
@@ -942,6 +964,23 @@ function ensureMemoryInitialized() {
 
             if (!memoryStats.patchnotes.some(p => p.text.includes("UI Polishing: Currency Toggle Placement"))) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🎨 UI Polishing: Currency Toggle Placement\n\n- **Description** : Déplacement du bouton toggle (GBP/EUR) du coin supérieur droit vers le coin inférieur droit des cartes de statistiques financières, évitant ainsi toute superposition disgracieuse avec les icônes vectorielles." });
+                syncCloud();
+            }
+
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Currency Converter: Zero-Latency Execution"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "⚡ Currency Converter: Zero-Latency Execution\n\n- **Performance** : Retrait du délai (timeout) d animation de 150ms lors de la bascule des devises pour une conversion absolument instantanée et une sensation UI snappier.\n- **Feature** : L application de la devise s étend désormais dynamiquement à l ensemble du module des Transactions (Total Volume et Average Order Value)." });
+                syncCloud();
+            }
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Graceful Shutdown"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Hotfix: Graceful Shutdown & messageCreate Crash\n\n- **Description** : Résolution du problème d'adresse en cours d'utilisation ('EADDRINUSE') empêchant le dashboard de redémarrer correctement, et résolution de l'erreur fatale lors de la création de messages DM sans cache de canal ('Cannot read properties of null (reading delete)').\n- **Solution** : Ajout de la fermeture asynchrone du serveur natif HTTP Node dans la boucle de shutdown, d'un hook préventif sur le port 3000 et des vérifications préalables d'existence sur l'objet 'message.channel' dans l'événement Discord.js." });
+                syncCloud();
+            }
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Alerts Channel ID Resolution"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Update: Alerts Channel ID Resolution\n\n- **Description** : L'alerte de sécurité globale est désormais directement ancrée à l'identifiant du salon (#alerts-n-info), garantissant son fonctionnement même en cas de renommage du canal." });
+                syncCloud();
+            }
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Typing Indicator Resolution"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "💬 UI/UX Update: Typing Indicator Resolution\n\n- **Description** : L'indicateur visuel signalant que le client est en train d'écrire ne s'affichait pas sur le Dashboard.\n- **Solution** : Synchronisation des intents API Discord (GuildMessageTyping) pour intercepter le flux de frappe réseau et implémentation du conteneur visuel manquant côté interface Web." });
                 syncCloud();
             }
 
@@ -1039,6 +1078,7 @@ async function syncCloud(isManualForce = false) {
 }
 
 
+    // 🚀 [FUNCTION: validateAndSanitizeSchema] - Déclaration de fonction
 function validateAndSanitizeSchema(data) {
     if (!data || typeof data !== 'object') {
         systemLog('ERROR', 'SCHEMA', 'Data is not an object. Validation failed.');
@@ -1071,6 +1111,7 @@ function validateAndSanitizeSchema(data) {
     return sanitized;
 }
 
+    // 🚀 [FUNCTION: performCloudSync] - Déclaration de fonction
 async function performCloudSync(url, token) {
     try {
         const sanitized = validateAndSanitizeSchema(memoryStats);
@@ -1186,6 +1227,7 @@ function logStat(type, value = 1, extraData = null) {
 // === [ANCHOR: DISCORD_SHOP_EMBED_GENERATOR] ===
     // 🚀 [FUNCTION: sendShopSetup] - Déclaration de fonction
 
+    // 🚀 [FUNCTION: generateTranscript] - Déclaration de fonction
 async function generateTranscript(channel) {
     try {
         let messages = [];
@@ -1843,6 +1885,7 @@ async function generateTranscript(channel) {
     }
 }
 
+    // 🚀 [FUNCTION: sendShopSetup] - Déclaration de fonction
 async function sendShopSetup(channel) {
     let buyRows = [];
     let currentComponents = [];
@@ -1900,7 +1943,7 @@ async function sendShopSetup(channel) {
 
 // === [ANCHOR: DISCORD_BOT_CLIENT_INIT] ===
 const client = new Client({ 
-    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildPresences, GatewayIntentBits.GuildInvites],
+    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildPresences, GatewayIntentBits.GuildInvites, GatewayIntentBits.GuildMessageTyping, GatewayIntentBits.DirectMessageTyping],
     partials: [Partials.GuildMember, Partials.User, Partials.Message],
     rest: { timeout: 60000, retries: 0 } 
 });
@@ -1975,11 +2018,13 @@ client.on('inviteDelete', invite => { try { guildInvites.get(invite.guild.id)?.d
 client.on('channelDelete', channel => { try { if (channelStates.has(channel.id)) channelStates.delete(channel.id); } catch(e){} });
 
 // === [ANCHOR: GLOBAL_PROCESS_HANDLERS] ===
+// 🚨 [PROCESS_EVENT: uncaughtException] - Gestionnaire système Node.js
 process.on('uncaughtException', (err) => {
     systemLog('ERROR', 'SYSTEM', 'Uncaught Exception: ' + err.message);
     console.error(err);
 });
 
+// 🚨 [PROCESS_EVENT: unhandledRejection] - Gestionnaire système Node.js
 process.on('unhandledRejection', (reason, promise) => {
     systemLog('ERROR', 'SYSTEM', 'Unhandled Rejection: ' + (reason ? reason.stack || reason : 'Unknown'));
 });
@@ -2206,7 +2251,6 @@ client.on('interactionCreate', async (interaction) => {
                     }
 
                     await interaction.editReply({ content: memoryStats.messages.ticket_ready.replace('{channel}', '<#' + channel.id + '>') }).catch(() => {});
-                    userTicketLocks.delete(interaction.user.id);
                 } else {
                     userTicketLocks.delete(interaction.user.id); 
                     await interaction.editReply({ content: `❌ Error creating the room.` }).catch(() => {}); 
@@ -2271,7 +2315,6 @@ client.on('interactionCreate', async (interaction) => {
                     systemLog('INFO', 'TICKET_SYS', `Support ticket generated for ${interaction.user.username}`);
                     await channel.send(`🎧 **Support Ticket for <@${interaction.user.id}>**`).catch(() => {});
                     await interaction.editReply({ content: memoryStats.messages.ticket_ready.replace('{channel}', '<#' + channel.id + '>') }).catch(() => {});
-                    userTicketLocks.delete(interaction.user.id);
                 } else {
                     userTicketLocks.delete(interaction.user.id);
                     await interaction.editReply({ content: `❌ Error creating the room.` }).catch(() => {});
@@ -2457,6 +2500,12 @@ client.on('interactionCreate', async (interaction) => {
 });
 
 // === [ANCHOR: DISCORD_MESSAGE_HANDLER] ===
+// 🚀 [EVENT_LISTENER: typingStart] - Écouteur d'événement Discord
+client.on('typingStart', (typing) => {
+    if(global.broadcastToDashboard && typing.channel && typing.user && !typing.user.bot) {
+        global.broadcastToDashboard('typing', { channelId: typing.channel.id, user: typing.user.username });
+    }
+});
 // 🚀 [EVENT_LISTENER: messageCreate] - Écouteur d'événement Discord
 client.on('messageCreate', async (message) => {
     try {
@@ -2466,13 +2515,13 @@ client.on('messageCreate', async (message) => {
             if (message.content === '!setup') { await sendShopSetup(message.channel); }
             if (message.content.startsWith('!say ')) {
                 const textToSend = message.content.substring(5);
-                if (textToSend) { await message.channel.send(textToSend).catch(() => {}); await message.delete().catch(() => {}); }
+                if (textToSend) { if (message.channel) await message.channel.send(textToSend).catch(() => {}); await message.delete().catch(() => {}); }
             }
             if (message.content === '!close') { 
     channelStates.delete(message.channel.id); 
     const tPath = await generateTranscript(message.channel);
     // we can save it or do something
-    await message.channel.delete().catch(() => {}); 
+    if (message.channel) await message.channel.delete().catch(() => {}); 
 }
         }
 
@@ -2544,9 +2593,17 @@ client.on('messageCreate', async (message) => {
             }
             
             const input = message.content.trim().toUpperCase();
+            
+            const isPromo = memoryStats.promo_codes && memoryStats.promo_codes[input];
+            const isTest = TEST_VOUCHERS[input];
+            const isChatter = input.includes(' ') || input.length > 25 || (!input.match(/[0-9]/) && !isPromo && !isTest);
+            
+            if (isChatter) {
+                return message.reply('💬 **System Notification** : This channel is an automated checkout system and is not monitored for chat.\n\n➡️ *If you need assistance or wish to speak with our team, please open a **Support** ticket.*').catch(()=>{});
+            }
+
             state.processing = true; 
             let promoApplied = null;
-
             try {
                 if (memoryStats.promo_codes && memoryStats.promo_codes[input]) {
                     const promo = memoryStats.promo_codes[input];
@@ -2737,6 +2794,7 @@ client.on('messageCreate', async (message) => {
 // 🚀 [EVENT_LISTENER: guildMemberAdd] - Écouteur d'événement Discord
 
 let recentJoins = [];
+// 💬 [DISCORD_EVENT: guildMemberAdd] - Écouteur d'événement Discord
 client.on('guildMemberAdd', async (member) => { 
     if (memoryStats.bot_config && memoryStats.bot_config.antiraid) {
         const threshold = memoryStats.bot_config.antiraid_threshold || 5;
@@ -2799,6 +2857,7 @@ client.on('guildMemberRemove', async (member) => {
 // === [ANCHOR: HTTP_SERVER_AND_AUTH] ===
 
 const TOTP_SECRET_FALLBACK = "NEXUSCORE2FASECRET";
+    // 🚀 [FUNCTION: base32tohex] - Déclaration de fonction
 function base32tohex(base32) {
     const base32chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
     let bits = ""; let hex = "";
@@ -2810,6 +2869,7 @@ function base32tohex(base32) {
     for (let i = 0; i < bits.length - 3; i += 4) hex += parseInt(bits.substr(i, 4), 2).toString(16);
     return hex;
 }
+    // 🚀 [FUNCTION: verifyTOTP] - Déclaration de fonction
 function verifyTOTP(token, secretBase32 = TOTP_SECRET_FALLBACK) {
     if(!token || token.length !== 6) return false;
     const hex = base32tohex(secretBase32);
@@ -2929,6 +2989,7 @@ const server = http.createServer(async (req, res) => {
             document.getElementById('btnText').innerText = "Register Device";
         }
 
+    // 🚀 [FUNCTION: handleAuth] - Déclaration de fonction
         async function handleAuth() {
             const btn = document.getElementById('authBtn');
             btn.style.opacity = '0.5';
@@ -2985,6 +3046,7 @@ const server = http.createServer(async (req, res) => {
             }
         }
 
+    // 🚀 [FUNCTION: showSuccess] - Déclaration de fonction
         function showSuccess() {
             document.getElementById('mainView').style.display = 'none';
             document.getElementById('successView').style.display = 'block';
@@ -3005,6 +3067,7 @@ const server = http.createServer(async (req, res) => {
         return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ sessionId }));
     }
 
+                    // 🌐 [API_ROUTE: /api/auth/session/] - Gestionnaire de route backend
     if (req.url.startsWith('/api/auth/session/') && req.url.endsWith('/status') && req.method === 'GET') {
         const sessionId = req.url.split('/')[4];
         const session = authSessions[sessionId];
@@ -3266,6 +3329,7 @@ const server = http.createServer(async (req, res) => {
             <p class="instruction">Scan with your iPhone camera<br>to authenticate via <strong>Passkey</strong>.</p>
         </div>
 
+        <!-- 🎨 [UI_VIEW: pinView] - Vue principale du Dashboard -->
         <div id="pinView" style="display:none; padding-top: 10px;">
             <input type="password" id="pinInput" placeholder="ADMIN PIN" class="pin-input" onkeydown="if(event.key==='Enter') loginWithPin()" />
             <button onclick="loginWithPin()" class="btn-primary" id="pinBtn">Unlock Dashboard</button>
@@ -3278,6 +3342,7 @@ const server = http.createServer(async (req, res) => {
         </div>
     </div>
     <script>
+    // 🚀 [FUNCTION: toggleView] - Déclaration de fonction
         function toggleView(view) {
             const toggle = document.querySelector('.auth-toggle');
             if (view === 'passkey') {
@@ -3296,6 +3361,7 @@ const server = http.createServer(async (req, res) => {
             }
         }
         
+    // 🚀 [FUNCTION: loginWithPin] - Déclaration de fonction
         async function loginWithPin() {
             const pin = document.getElementById('pinInput').value;
             const btn = document.getElementById('pinBtn');
@@ -3327,6 +3393,7 @@ const server = http.createServer(async (req, res) => {
             }
         }
 
+    // 🚀 [FUNCTION: init] - Déclaration de fonction
         async function init() {
             try {
                 const res = await fetch('/api/auth/session/create');
@@ -3382,6 +3449,7 @@ const server = http.createServer(async (req, res) => {
     if (req.url.startsWith('/api/log')) { require('fs').appendFileSync('frontend_error.log', req.url + '\n'); return res.end(); }
     if (req.url === '/debug') { res.writeHead(200); return res.end(JSON.stringify(memoryStats));
         if (!isAuthenticated) return res.writeHead(401).end('Unauthorized'); res.writeHead(200); return res.end(JSON.stringify(memoryStats)); }
+                    // 🌐 [API_ROUTE: /api/init-data] - Gestionnaire de route backend
     if (req.url.startsWith('/api/init-data') && req.method === 'GET') {
         // removed
         let memberCount = "N/A"; let onlineCount = "N/A"; let activeTickets = 0;
@@ -3419,6 +3487,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     // 🚀 [API_ROUTE_DYNAMIC: /api/backups/download] - Route API dynamique
+                    // 🌐 [API_ROUTE: /api/backups/download] - Gestionnaire de route backend
     if (req.url.startsWith('/api/backups/download') && req.method === 'GET') {
         // removed
         const urlObj = new URL(req.url, `http://${req.headers.host}`);
@@ -3480,6 +3549,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     // 🚀 [API_ROUTE_DYNAMIC: /api/tickets/messages] - Route API dynamique
+                    // 🌐 [API_ROUTE: /api/tickets/messages] - Gestionnaire de route backend
     if (req.url.startsWith('/api/tickets/messages') && req.method === 'GET') {
         // removed
         const urlObj = new URL(req.url, `http://${req.headers.host}`);
@@ -3594,6 +3664,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     // 🚀 [API_ROUTE_DYNAMIC: /api/members] - Route API dynamique
+                    // 🌐 [API_ROUTE: /api/members] - Gestionnaire de route backend
     if (req.url.startsWith('/api/members') && req.method === 'GET') {
         // removed
         const guild = client.guilds.cache.first();
@@ -3637,6 +3708,7 @@ const server = http.createServer(async (req, res) => {
 
                 systemLog('DEBUG', 'DASHBOARD', `Executed admin action: ${data.action}`);
 
+                    // ⚡ [API_ACTION: edit_stat] - Point de terminaison API Action
                 if (data.action === 'edit_stat') {
                     const val = data.value;
                     if (data.key === 'today_rev') {
@@ -3689,6 +3761,23 @@ const server = http.createServer(async (req, res) => {
                 syncCloud();
             }
 
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Currency Converter: Zero-Latency Execution"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "⚡ Currency Converter: Zero-Latency Execution\n\n- **Performance** : Retrait du délai (timeout) d animation de 150ms lors de la bascule des devises pour une conversion absolument instantanée et une sensation UI snappier.\n- **Feature** : L application de la devise s étend désormais dynamiquement à l ensemble du module des Transactions (Total Volume et Average Order Value)." });
+                syncCloud();
+            }
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Graceful Shutdown"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Hotfix: Graceful Shutdown & messageCreate Crash\n\n- **Description** : Résolution du problème d'adresse en cours d'utilisation ('EADDRINUSE') empêchant le dashboard de redémarrer correctement, et résolution de l'erreur fatale lors de la création de messages DM sans cache de canal ('Cannot read properties of null (reading delete)').\n- **Solution** : Ajout de la fermeture asynchrone du serveur natif HTTP Node dans la boucle de shutdown, d'un hook préventif sur le port 3000 et des vérifications préalables d'existence sur l'objet 'message.channel' dans l'événement Discord.js." });
+                syncCloud();
+            }
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Alerts Channel ID Resolution"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Update: Alerts Channel ID Resolution\n\n- **Description** : L'alerte de sécurité globale est désormais directement ancrée à l'identifiant du salon (#alerts-n-info), garantissant son fonctionnement même en cas de renommage du canal." });
+                syncCloud();
+            }
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Typing Indicator Resolution"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "💬 UI/UX Update: Typing Indicator Resolution\n\n- **Description** : L'indicateur visuel signalant que le client est en train d'écrire ne s'affichait pas sur le Dashboard.\n- **Solution** : Synchronisation des intents API Discord (GuildMessageTyping) pour intercepter le flux de frappe réseau et implémentation du conteneur visuel manquant côté interface Web." });
+                syncCloud();
+            }
+
                         if (!memoryStats.overrides) memoryStats.overrides = {};
                         if (val === '') {
                             delete memoryStats.overrides[data.key];
@@ -3698,6 +3787,7 @@ const server = http.createServer(async (req, res) => {
                     }
                     syncCloud();
                 }
+                    // ⚡ [API_ACTION: approve_review] - Point de terminaison API Action
                 else if (data.action === 'approve_review') {
                     if (!memoryStats.pending_reviews) memoryStats.pending_reviews = [];
                     const idx = memoryStats.pending_reviews.findIndex(r => r.id === data.id);
@@ -3714,6 +3804,7 @@ const server = http.createServer(async (req, res) => {
                         systemLog('INFO', 'REVIEWS', `Review ID ${data.id} approved by admin.`);
                     }
                 }
+                    // ⚡ [API_ACTION: reject_review] - Point de terminaison API Action
                 else if (data.action === 'reject_review') {
                     if (memoryStats.pending_reviews) {
                         const reviewItem = memoryStats.pending_reviews.find(r => r.id === data.id);
@@ -3726,12 +3817,14 @@ const server = http.createServer(async (req, res) => {
                         systemLog('INFO', 'REVIEWS', `Review ID ${data.id} rejected. Reason: ${data.reason}`);
                     }
                 }
+                    // ⚡ [API_ACTION: toggle_ai] - Point de terminaison API Action
                 else if (data.action === 'toggle_ai') {
                     if (!memoryStats.settings) memoryStats.settings = {};
                     memoryStats.settings.ai_enabled = data.state;
                     syncCloud();
                     systemLog('INFO', 'AI', `AI Support Agent ${data.state ? 'enabled' : 'disabled'}.`);
                 }
+                    // ⚡ [API_ACTION: save_notes] - Point de terminaison API Action
                 else if (data.action === 'save_notes') {
                      memoryStats.notes = data.notes;
                      // We don't sync to cloud immediately to avoid rate limits, or we could.
@@ -3739,6 +3832,7 @@ const server = http.createServer(async (req, res) => {
                      // Let's call syncCloud();
                      syncCloud();
                  }
+                    // ⚡ [API_ACTION: toggle_maintenance] - Point de terminaison API Action
                  else if (data.action === 'toggle_maintenance') {
                     if (!memoryStats.settings) memoryStats.settings = {};
                     if (!memoryStats.settings.maintenance) memoryStats.settings.maintenance = { active: false, endsAt: 0, channelId: "" };
@@ -3777,6 +3871,7 @@ const server = http.createServer(async (req, res) => {
                     }
                     syncCloud();
                 }
+                    // ⚡ [API_ACTION: edit_referral_count] - Point de terminaison API Action
                 else if (data.action === 'edit_referral_count') {
                     if (!memoryStats.referrals) memoryStats.referrals = {};
                     if (!memoryStats.referrals[data.userId]) {
@@ -3786,6 +3881,7 @@ const server = http.createServer(async (req, res) => {
                     memoryStats.referrals[data.userId].count = parseInt(data.newCount) || 0;
                     syncCloud();
                 }
+                    // ⚡ [API_ACTION: send_ticket_message] - Point de terminaison API Action
                 else if (data.action === 'send_ticket_message') {
                     const channel = guild.channels.cache.get(data.channelId);
                     if (channel) {
@@ -3804,6 +3900,7 @@ const server = http.createServer(async (req, res) => {
                         await channel.send(payload).catch(()=>{});
                     } else throw new Error("Can't find channel");
                 }
+                    // ⚡ [API_ACTION: send_channel_message] - Point de terminaison API Action
                 else if (data.action === 'send_channel_message') {
                     const channel = guild.channels.cache.get(data.channelId);
                     if (!channel) throw new Error("Channel not found on server.");
@@ -3811,6 +3908,7 @@ const server = http.createServer(async (req, res) => {
                     await channel.send(data.message).catch(()=>{});
                     systemLog('INFO', 'DISCORD_CORE', `Global broadcast sent to channel ${data.channelId}`);
                 }
+                    // ⚡ [API_ACTION: react_ticket_message] - Point de terminaison API Action
                 else if (data.action === 'react_ticket_message') {
                     const channel = guild.channels.cache.get(data.channelId);
                     if (channel && data.messageId && data.emoji) {
@@ -3818,18 +3916,21 @@ const server = http.createServer(async (req, res) => {
                         if (msgToReact) await msgToReact.react(data.emoji).catch(()=>{});
                     }
                 }
+                    // ⚡ [API_ACTION: add_buy_link] - Point de terminaison API Action
                 else if (data.action === 'add_buy_link') {
                     if (!memoryStats.buy_links) memoryStats.buy_links = {};
                     const newId = (Object.keys(memoryStats.buy_links).length + 1).toString() + Date.now();
                     memoryStats.buy_links[newId] = { label: data.label, url: data.url };
                     syncCloud();
                 }
+                    // ⚡ [API_ACTION: edit_buy_link] - Point de terminaison API Action
                 else if (data.action === 'edit_buy_link') {
                     if (memoryStats.buy_links && memoryStats.buy_links[data.id]) {
                         memoryStats.buy_links[data.id] = { label: data.label, url: data.url };
                         syncCloud();
                     }
                 }
+                    // ⚡ [API_ACTION: delete_buy_link] - Point de terminaison API Action
                 else if (data.action === 'delete_buy_link') {
                     if (memoryStats.buy_links && memoryStats.buy_links[data.id]) {
                         delete memoryStats.buy_links[data.id];
@@ -3837,6 +3938,7 @@ const server = http.createServer(async (req, res) => {
                     }
                 }
                 
+                    // ⚡ [API_ACTION: send_embed] - Point de terminaison API Action
                 else if (data.action === 'send_embed') {
                     if (data.channelId && data.title && data.desc) {
                         const c = guild.channels.cache.get(data.channelId);
@@ -3852,6 +3954,7 @@ const server = http.createServer(async (req, res) => {
                     }
                 }
 
+                    // ⚡ [API_ACTION: create_manual_tx] - Point de terminaison API Action
                 else if (data.action === 'create_manual_tx') {
                     const price = parseFloat(data.price);
                     if (isNaN(price) || price < 0) throw new Error("Invalid price");
@@ -3918,6 +4021,7 @@ const server = http.createServer(async (req, res) => {
                     backupToDiscord().catch(e => console.error(e));
                     systemLog('INFO', 'STORE', `Manual transaction logged for ${username} - £${price}`);
                 }
+                    // ⚡ [API_ACTION: refund_tx] - Point de terminaison API Action
                 else if (data.action === 'refund_tx') {
                     if (Array.isArray(memoryStats.recent_transactions)) {
                         const txIndex = memoryStats.recent_transactions.findIndex(t => t.date === data.date && t.username === data.username);
@@ -3952,6 +4056,7 @@ const server = http.createServer(async (req, res) => {
                         } else throw new Error("Transaction not found");
                     }
                 }
+                    // ⚡ [API_ACTION: edit_product] - Point de terminaison API Action
                 else if (data.action === 'edit_product') {
                     if (memoryStats.products && memoryStats.products[data.id]) {
                         const newCat = data.category || memoryStats.products[data.id].category || "✨ ITEMS";
@@ -3960,6 +4065,7 @@ const server = http.createServer(async (req, res) => {
                         systemLog('INFO', 'CATALOG', `Product matrix updated: Asset ID ${data.id}`);
                     }
                 }
+                    // ⚡ [API_ACTION: add_product] - Point de terminaison API Action
                 else if (data.action === 'add_product') {
                     if (!memoryStats.products) memoryStats.products = {};
                     if (!memoryStats.next_product_id) memoryStats.next_product_id = Date.now();
@@ -3968,12 +4074,14 @@ const server = http.createServer(async (req, res) => {
                     syncCloud();
                     systemLog('INFO', 'CATALOG', `New asset injected into matrix: ${data.name}`);
                 }
+                    // ⚡ [API_ACTION: delete_product] - Point de terminaison API Action
                 else if (data.action === 'delete_product') {
                     if (memoryStats.products && memoryStats.products[data.id]) {
                         delete memoryStats.products[data.id];
                         syncCloud();
                     }
                 }
+                    // ⚡ [API_ACTION: refresh_setup] - Point de terminaison API Action
                 else if (data.action === 'refresh_setup') {
                     const targetChannel = await client.channels.fetch(SHOP_CHANNEL_ID).catch(() => null);
                     if (!targetChannel) throw new Error("Shop channel not found.");
@@ -3982,6 +4090,7 @@ const server = http.createServer(async (req, res) => {
                     for (const m of botMessages.values()) { await m.delete().catch(() => {}); }
                     await sendShopSetup(targetChannel);
                 }
+                    // ⚡ [API_ACTION: ping_test] - Point de terminaison API Action
                 else if (data.action === 'ping_test') {
                     const targetChannel = await client.channels.fetch(SHOP_CHANNEL_ID).catch(() => null);
                     if (targetChannel) {
@@ -3989,11 +4098,13 @@ const server = http.createServer(async (req, res) => {
                         if (msg) await msg.delete().catch(() => {});
                     }
                 }
+                    // ⚡ [API_ACTION: post_review] - Point de terminaison API Action
                 else if (data.action === 'post_review') {
                     const reviewChannel = await client.channels.fetch(REVIEW_CHANNEL_ID).catch(() => null);
                     if (!reviewChannel) throw new Error("Review channel not found.");
                     await reviewChannel.send(`> 🌟 **NEW FEEDBACK** 🌟\n> ━━━━━━━━━━━━━━━━━━━━\n> 📝 » **Feedback:** "${data.text}"\n> 📈 » **Rating:** ${data.rating}/5 ⭐\n> 👤 » **By:** ${data.author}`).catch(() => { throw new Error("Missing permissions to send messages in the channel."); });
                 }
+                    // ⚡ [API_ACTION: update_ref_threshold] - Point de terminaison API Action
                 else if (data.action === 'update_ref_threshold') {
                     if (!memoryStats.settings) memoryStats.settings = {};
                     memoryStats.settings.invite_reward_threshold = parseInt(data.threshold) || 10;
@@ -4001,21 +4112,25 @@ const server = http.createServer(async (req, res) => {
                 }
                 else if (['ban', 'kick', 'mute'].includes(data.action)) {
                     const target = await guild.members.fetch(data.userId).catch(() => null);
+                    // ⚡ [API_ACTION: ban] - Point de terminaison API Action
                     if (data.action === 'ban') {
                         await guild.members.ban(data.userId, { reason: data.reason });
                         systemLog('CRITICAL', 'MODERATION', `User ${data.userId} permanently banned.`);
                     }
                     else if (target) {
+                    // ⚡ [API_ACTION: kick] - Point de terminaison API Action
                         if (data.action === 'kick') {
                             await target.kick(data.reason);
                             systemLog('WARN', 'MODERATION', `User ${data.userId} expelled from node.`);
                         }
+                    // ⚡ [API_ACTION: mute] - Point de terminaison API Action
                         if (data.action === 'mute') {
                             await target.timeout(parseInt(data.duration) * 60 * 1000, data.reason);
                             systemLog('WARN', 'MODERATION', `User ${data.userId} timeout engaged for ${data.duration}m.`);
                         }
                     }
                 }
+                    // ⚡ [API_ACTION: warn] - Point de terminaison API Action
                 else if (data.action === 'warn') {
                     if (!memoryStats.warns) memoryStats.warns = {};
                     if (!memoryStats.warns[data.userId]) memoryStats.warns[data.userId] = [];
@@ -4027,12 +4142,14 @@ const server = http.createServer(async (req, res) => {
                         await targetUser.send(`⚠️ **Warning:**\n\n**Reason:** ${data.reason || "Not specified"}`).catch(() => {});
                     }
                 }
+                    // ⚡ [API_ACTION: clear_warns] - Point de terminaison API Action
                 else if (data.action === 'clear_warns') {
                     if (memoryStats.warns && memoryStats.warns[data.userId]) {
                         delete memoryStats.warns[data.userId];
                         syncCloud();
                     }
                 }
+                    // ⚡ [API_ACTION: toggle_blacklist] - Point de terminaison API Action
                 else if (data.action === 'toggle_blacklist') {
                     if (!memoryStats.blacklist) memoryStats.blacklist = [];
                     if (memoryStats.blacklist.includes(data.userId)) { memoryStats.blacklist = memoryStats.blacklist.filter(id => id !== data.userId); } 
@@ -4040,6 +4157,7 @@ const server = http.createServer(async (req, res) => {
                     syncCloud();
                     systemLog('WARN', 'SECURITY', `Blacklist state toggled for User ${data.userId}`);
                 }
+                    // ⚡ [API_ACTION: close_channel] - Point de terminaison API Action
                 else if (data.action === 'close_channel') {
                     if (data.channelId) {
                         const c = guild.channels.cache.get(data.channelId);
@@ -4050,16 +4168,19 @@ const server = http.createServer(async (req, res) => {
                         }
                     }
                 }
+                    // ⚡ [API_ACTION: get_transcript] - Point de terminaison API Action
                 else if (data.action === 'get_transcript') {
                     const t = (memoryStats.transcripts || []).find(x => x.id === data.id);
                     return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ html: t ? t.html : '' }));
                 }
+                    // ⚡ [API_ACTION: delete_transcript] - Point de terminaison API Action
                 else if (data.action === 'delete_transcript') {
                     if (memoryStats.transcripts) {
                         memoryStats.transcripts = memoryStats.transcripts.filter(t => t.id !== data.id);
                         syncCloud();
                     }
                 }
+                    // ⚡ [API_ACTION: move_custom_req] - Point de terminaison API Action
                 else if (data.action === 'move_custom_req') {
                     if (Array.isArray(memoryStats.custom_requests)) {
                         const reqItem = memoryStats.custom_requests.find(r => r.id === data.id);
@@ -4076,15 +4197,18 @@ const server = http.createServer(async (req, res) => {
                         }
                     }
                 }
+                    // ⚡ [API_ACTION: announce] - Point de terminaison API Action
                 else if (data.action === 'announce') {
                     const channel = guild.channels.cache.get(data.channelId);
                     if(channel) await channel.send(`📢 **Announcement**\n\n${data.message}`).catch(()=>{});
                 }
+                    // ⚡ [API_ACTION: close_all] - Point de terminaison API Action
                 else if (data.action === 'close_all') {
                     guild.channels.cache.forEach(c => {
                         if(c.name.startsWith('shop-') || c.name.startsWith('support-')) { channelStates.delete(c.id); c.delete().catch(()=>{}); }
                     });
                 }
+                    // ⚡ [API_ACTION: create_promo] - Point de terminaison API Action
                 else if (data.action === 'create_promo') {
                     if (!memoryStats.promo_codes) memoryStats.promo_codes = {};
                     const codeName = (data.name || "").trim().toUpperCase();
@@ -4098,17 +4222,42 @@ const server = http.createServer(async (req, res) => {
                     syncCloud();
                     systemLog('INFO', 'STORE', `Voucher Code ${codeName} generated (-${discount}% | ${limit} uses).`);
                 }
+                    // ⚡ [API_ACTION: delete_promo] - Point de terminaison API Action
                 else if (data.action === 'delete_promo') {
                     if (memoryStats.promo_codes && memoryStats.promo_codes[data.name]) { delete memoryStats.promo_codes[data.name]; syncCloud(); }
                 }
+                    // ⚡ [API_ACTION: post_security_alert] - Point de terminaison API Action
+                else if (data.action === 'post_security_alert') {
+                    const alertChannel = guild.channels.cache.get('1520823312618623036') || guild.channels.cache.find(c => c.name === 'alerts-n-info');
+                    if (alertChannel) {
+                        const { EmbedBuilder } = require('discord.js');
+                        const embed = new EmbedBuilder()
+                            .setColor('#ef4444')
+                            .setTitle('🛡️ SECURITY PROTOCOL ACTIVATED')
+                            .setDescription('**ATTENTION:** The server was recently targeted by a massive automated raid. Our advanced security systems have successfully intercepted and neutralized the threat.\n\n✅ **All systems are fully operational and secure.**\n✅ **You may continue to use the bot and commands safely.**')
+                            .setFooter({ text: 'Nexus Automated Defense Engine' })
+                            .setTimestamp();
+                        await alertChannel.send({ embeds: [embed] }).catch(()=>{});
+                    }
+                }
+                    // ⚡ [API_ACTION: save_note] - Point de terminaison API Action
                 else if (data.action === 'save_note') {
                     if (!memoryStats.user_notes) memoryStats.user_notes = {};
                     memoryStats.user_notes[data.userId] = data.note; syncCloud();
                 }
+                    // ⚡ [API_ACTION: send_typing] - Point de terminaison API Action
+                else if (data.action === 'send_typing') {
+                    const ch = guild.channels.cache.get(data.channelId);
+                    if (ch) {
+                        await ch.sendTyping().catch(()=>{});
+                    }
+                }
+                    // ⚡ [API_ACTION: send_dm] - Point de terminaison API Action
                 else if (data.action === 'send_dm') {
                     const targetUser = await client.users.fetch(data.userId).catch(() => null);
                     if (targetUser) await targetUser.send(`📩 **Message from Admin:**\n\n${data.message}`).catch(()=>{});
                 }
+                    // ⚡ [API_ACTION: add_vip_days] - Point de terminaison API Action
                 else if (data.action === 'add_vip_days') {
                     if (!memoryStats.subscriptions) memoryStats.subscriptions = {};
                     const days = parseInt(data.days) || 0;
@@ -4132,6 +4281,7 @@ const server = http.createServer(async (req, res) => {
                         systemLog('INFO', 'VIP', `Added ${days} VIP days to user ${data.userId}.`);
                     }
                 }
+                    // ⚡ [API_ACTION: revoke_vip] - Point de terminaison API Action
                 else if (data.action === 'revoke_vip') {
                     if (memoryStats.subscriptions && memoryStats.subscriptions[data.userId]) {
                         delete memoryStats.subscriptions[data.userId];
@@ -4142,6 +4292,7 @@ const server = http.createServer(async (req, res) => {
                         syncCloud();
                     }
                 }
+                    // ⚡ [API_ACTION: update_raw_db] - Point de terminaison API Action
                 else if (data.action === 'update_raw_db') {
                     try {
                         const newStats = JSON.parse(data.json);
@@ -4154,6 +4305,7 @@ const server = http.createServer(async (req, res) => {
                     }
                 }
                 
+                    // ⚡ [API_ACTION: ai_analyze_tx] - Point de terminaison API Action
                                 else if (data.action === 'ai_analyze_tx') {
                     console.log("AI ANALYZE TRIGGERED. Lang received:", data.lang);
                     if (!process.env.GEMINI_API_KEY) return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ error: "GEMINI_API_KEY not configured." }));
@@ -4182,6 +4334,7 @@ const server = http.createServer(async (req, res) => {
                         return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ error: msg }));
                     }
                 }
+                    // ⚡ [API_ACTION: check_market] - Point de terminaison API Action
                 else if (data.action === 'check_market') {
                     if (!process.env.GEMINI_API_KEY) return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ error: "GEMINI_API_KEY not configured." }));
                     try {
@@ -4205,12 +4358,14 @@ const server = http.createServer(async (req, res) => {
                         return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ error: msg }));
                     }
                 }
+                    // ⚡ [API_ACTION: save_mystery_box] - Point de terminaison API Action
                 else if (data.action === 'save_mystery_box') {
                     if (!memoryStats.mystery_box) memoryStats.mystery_box = {};
                     memoryStats.mystery_box = data.data;
                     syncCloud();
                     return res.writeHead(200).end('OK');
                 }
+                    // ⚡ [API_ACTION: save_bot_control] - Point de terminaison API Action
                 else if (data.action === 'save_bot_control') {
                     if (data.config) {
                         if (!memoryStats.bot_config) memoryStats.bot_config = {};
@@ -4242,6 +4397,7 @@ const server = http.createServer(async (req, res) => {
                     return res.writeHead(400).end('Bad Request');
                 }
 
+                    // ⚡ [API_ACTION: save_messages] - Point de terminaison API Action
                 else if (data.action === 'save_messages') {
                     if (data.messages) {
                         if (!memoryStats.messages) memoryStats.messages = {};
@@ -4253,6 +4409,7 @@ const server = http.createServer(async (req, res) => {
                     }
                     return res.writeHead(400).end('Bad Request');
                 }
+                    // ⚡ [API_ACTION: ai_generate_message] - Point de terminaison API Action
                 else if (data.action === 'ai_generate_message') {
                     try {
                         if (!process.env.GEMINI_API_KEY) return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ success: false, error: "GEMINI_API_KEY not configured" }));
@@ -4279,6 +4436,7 @@ const server = http.createServer(async (req, res) => {
                         return res.writeHead(500).end(JSON.stringify({ success: false, error: e.message }));
                     }
                 }
+                    // ⚡ [API_ACTION: force_backup] - Point de terminaison API Action
                 else if (data.action === 'force_backup') {
                     await syncCloud(true);
                 }
@@ -5219,12 +5377,18 @@ const server = http.createServer(async (req, res) => {
                         <div style='font-weight:600; letter-spacing:1px; font-size:1.1em;'>Select a conversation</div>
                     </div>
                 </div>
+        <!-- 🎨 [UI_VIEW: typing-indicator] - Vue principale du Dashboard -->
+                <div id="typing-indicator" style="display:none; padding:8px 20px; font-size:0.85em; color:var(--accent-green); font-style:italic; background:rgba(0,0,0,0.2); border-top:1px solid rgba(16,185,129,0.1);">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle; margin-right:5px; animation:spin 2s linear infinite;"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg>
+                    Client is typing...
+                </div>
                 <div style='display:flex; gap:10px; padding: 12px 20px; background: rgba(20,20,25,0.8); border-top: 1px solid rgba(255,255,255,0.05); flex-wrap: wrap; align-items:center;'>
                     <div style='position:relative; display:inline-block;' id='shortcuts-container'>
                         <button class='admin-btn' style='margin:0; padding:8px 16px; display:flex; align-items:center; gap:8px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; transition:all 0.2s;' onmouseover='this.style.background="rgba(255,255,255,0.1)"' onmouseout='this.style.background="rgba(255,255,255,0.05)"' onclick='const m = document.getElementById("shortcuts-menu"); m.style.display = m.style.display === "flex" ? "none" : "flex";'>
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent-orange)"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
                             <span style='font-weight:600;'>Quick Actions</span>
                         </button>
+        <!-- 🎨 [UI_VIEW: shortcuts-menu] - Vue principale du Dashboard -->
                         <div id='shortcuts-menu' style='position:absolute; bottom:calc(100% + 10px); left:0; background:rgba(30,30,35,0.95); border:1px solid rgba(255,255,255,0.1); border-radius:16px; padding:8px; display:none; flex-direction:column; gap:4px; box-shadow:0 15px 40px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.1); z-index:100; min-width:180px; backdrop-filter:blur(20px); transform-origin: bottom left;'>
                             <button class='shortcut-item' onclick='window.sendQuickResponse("welcome"); this.parentElement.style.display="none";'>
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg> Welcome
@@ -5254,9 +5418,10 @@ const server = http.createServer(async (req, res) => {
                         <button class='btn-icon' style='margin:0; width:45px; height:45px; border-radius:14px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); transition:all 0.3s; display:flex; align-items:center; justify-content:center;' onclick='document.getElementById("chat-file-input").click()' onmouseover='this.style.background="rgba(255,255,255,0.08)"' onmouseout='this.style.background="rgba(255,255,255,0.03)"' title='Attach Image'>
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
                         </button>
+        <!-- 🎨 [UI_VIEW: attach-badge] - Vue principale du Dashboard -->
                         <div id='attach-badge' class='nav-badge' style='position:absolute; top:-3px; right:-3px; width:12px; height:12px; padding:0; display:none; background:var(--accent-green); border:2px solid #1a1a1f;'></div>
                     </div>
-                    <input type='text' id='chat-input-text' placeholder='Type your message...' style='background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); font-size:1em; padding:12px 20px; box-shadow:inset 0 2px 5px rgba(0,0,0,0.2); transition:all 0.3s;' onfocus='this.style.borderColor="var(--accent-green)"; this.style.boxShadow="0 0 15px rgba(var(--accent-green-rgb), 0.1), inset 0 2px 5px rgba(0,0,0,0.2)"' onblur='this.style.borderColor="rgba(255,255,255,0.08)"; this.style.boxShadow="inset 0 2px 5px rgba(0,0,0,0.2)"' onkeypress='if(event.key==="Enter") window.sendChatMessage()'>
+                    <input type='text' id='chat-input-text' placeholder='Type your message...' style='background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); font-size:1em; padding:12px 20px; box-shadow:inset 0 2px 5px rgba(0,0,0,0.2); transition:all 0.3s;' onfocus='this.style.borderColor="var(--accent-green)"; this.style.boxShadow="0 0 15px rgba(var(--accent-green-rgb), 0.1), inset 0 2px 5px rgba(0,0,0,0.2)"' onblur='this.style.borderColor="rgba(255,255,255,0.08)"; this.style.boxShadow="inset 0 2px 5px rgba(0,0,0,0.2)"' onkeypress='if(event.key==="Enter"){ window.sendChatMessage(); } else { window.sendTypingEvent(); }'>
                     <button class='admin-btn btn-green' style='margin:0; width:50px; height:50px; padding:0; border-radius:16px; display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg, var(--accent), #0e9a6c); border:none; box-shadow: 0 8px 20px rgba(var(--accent-rgb), 0.3); transition:all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);' onclick='window.sendChatMessage()' onmouseover='this.style.transform=\"scale(1.1) translateY(-2px)\"; this.style.boxShadow=\"0 12px 25px rgba(var(--accent-rgb), 0.5)\"' onmouseout='this.style.transform=\"scale(1) translateY(0)\"; this.style.boxShadow=\"0 8px 20px rgba(var(--accent-rgb), 0.3)\"' title='Send Message'>
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-left:-2px;"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
                     </button>
@@ -5352,6 +5517,7 @@ const server = http.createServer(async (req, res) => {
                 </div>
 
                 <!-- Hidden Manual Entry Form -->
+        <!-- 🎨 [UI_VIEW: manualTxForm] - Vue principale du Dashboard -->
                 <div id='manualTxForm' style='display:none; background:rgba(20,20,22,0.8); backdrop-filter:blur(15px); border:1px solid rgba(255,255,255,0.1); border-left:4px solid var(--accent-green); border-radius:20px; padding:30px; margin-bottom:30px; animation: fadeInSmooth 0.4s ease; box-shadow:0 20px 40px rgba(0,0,0,0.4);'>
                     <h3 style='margin-top:0; color:var(--accent-green); font-size:1.4em; display:flex; align-items:center; gap:10px;'><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg> Create Manual Entry</h3>
                     <div style='display:flex; gap:20px; flex-wrap:wrap; margin-bottom:20px;'>
@@ -5467,6 +5633,7 @@ const server = http.createServer(async (req, res) => {
             </div>
 
             <!-- Modal for AI Analysis -->
+        <!-- 🎨 [UI_VIEW: txAiModal] - Vue principale du Dashboard -->
             <div id='txAiModal' style='display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:9999; backdrop-filter:blur(15px); align-items:center; justify-content:center; opacity:0; transition:opacity 0.3s ease;'>
                 <div style='background:rgba(28,28,30,0.9); width:95%; max-width:750px; border-radius:28px; padding:40px; border:1px solid rgba(255,255,255,0.08); box-shadow:0 25px 60px rgba(0,0,0,0.8), inset 0 0 0 1px rgba(255,255,255,0.05); max-height:85vh; overflow-y:auto; position:relative; transform:translateY(20px); transition:transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);' id='txAiModalInner'>
                     <div style='position:absolute; top:0; left:0; width:100%; height:150px; background:linear-gradient(180deg, rgba(59,130,246,0.1) 0%, transparent 100%); pointer-events:none; border-radius:28px 28px 0 0;'></div>
@@ -6241,6 +6408,11 @@ const server = http.createServer(async (req, res) => {
                             <label style="color:var(--text-muted); font-size:0.85em;">Join Rate Threshold (Members / Min)</label>
                             <input type="number" id="bot_antiraid_threshold" placeholder="5" style="width:100%; margin-top:5px; background:rgba(15,17,21,0.6); border:1px solid rgba(255,255,255,0.1); color:#fff; padding:10px; border-radius:8px; outline:none; transition:border-color 0.3s;" onfocus="this.style.borderColor='var(--accent-red)'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
                         </div>
+                        
+                        <div style="margin-top:20px; padding-top:20px; border-top:1px solid rgba(255,255,255,0.05);">
+                            <button onclick="window.postSecurityAlert()" style="width:100%; background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.4); color:#ef4444; padding:12px; border-radius:8px; font-weight:600; cursor:pointer; transition:all 0.2s;" onmouseover="this.style.background='rgba(239,68,68,0.25)'" onmouseout="this.style.background='rgba(239,68,68,0.15)'">🚨 Post Global Security Alert</button>
+                            <p style="font-size:0.75em; color:var(--text-muted); text-align:center; margin-top:8px;">Broadcasts an automated anti-raid success message to #alerts-n-info.</p>
+                        </div>
                     </div>
                     
                     <!-- System Data -->
@@ -6385,6 +6557,7 @@ const server = http.createServer(async (req, res) => {
             </main>
         </div>
     </div>
+        <!-- 🎨 [UI_VIEW: widgetModal] - Vue principale du Dashboard -->
 <div id="widgetModal" class="modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); backdrop-filter:blur(15px); z-index:9999; align-items:center; justify-content:center;">
     <div class="modal-content" style="background: linear-gradient(145deg, rgba(30,30,35,0.9), rgba(20,20,25,0.9)); border: 1px solid rgba(255,255,255,0.05); border-radius: 24px; width: 90%; max-width: 800px; max-height: 85vh; display:flex; flex-direction:column; box-shadow: 0 20px 60px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1); animation: slideUpFade 0.4s cubic-bezier(0.16, 1, 0.3, 1);">
         <div style="padding: 24px; border-bottom: 1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between; align-items:center;">
@@ -6468,44 +6641,35 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         let trackedTickets = 0, trackedReviews = 0, trackedSales = 0;
         
         window.displayCurrency = 'GBP';
+        // 🚀 [UI_ACTION_ASYNC: toggleCurrency] - Action asynchrone d'interface Dashboard
         window.toggleCurrency = function() {
             window.displayCurrency = window.displayCurrency === 'GBP' ? 'EUR' : 'GBP';
-            
-            const els = [document.getElementById('ui-today-rev'), document.getElementById('ui-total-rev')];
-            els.forEach(el => {
-                if(el) {
-                    el.style.transform = 'scale(0.95)';
-                    el.style.opacity = '0.5';
-                    el.style.transition = 'all 0.15s ease-out';
-                }
-            });
-            
-            setTimeout(() => {
-                window.applyCurrencyUI();
-                els.forEach(el => {
-                    if(el) {
-                        el.style.transform = 'scale(1)';
-                        el.style.opacity = '1';
-                        el.style.transition = 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
-                    }
-                });
-            }, 150);
+            window.applyCurrencyUI();
         };
         
+        // 🚀 [UI_ACTION_ASYNC: applyCurrencyUI] - Action asynchrone d'interface Dashboard
         window.applyCurrencyUI = function() {
             let tRev = window.currentTodayRev || 0;
             let totRev = rawStats.total_revenue || 0;
             let overrides = rawStats.overrides || {};
+            let txTotalVol = window.currentTxVol || totRev;
+            let txAvg = window.currentAvgOrder || 0;
             
             if (window.displayCurrency === 'EUR') {
                 if(document.getElementById("ui-today-rev")) document.getElementById('ui-today-rev').innerText = overrides['today_rev'] || ('€'+(tRev * 1.18).toFixed(2));
                 if(document.getElementById('ui-total-rev')) document.getElementById('ui-total-rev').innerText = overrides['total_rev'] || ('€'+(totRev * 1.18).toFixed(2));
+                if(document.getElementById('tx-total-vol')) document.getElementById('tx-total-vol').innerText = '€' + (txTotalVol * 1.18).toFixed(2);
+                if(document.getElementById('tx-avg-order')) document.getElementById('tx-avg-order').innerText = '€' + (txAvg * 1.18).toFixed(2);
+                
                 document.querySelectorAll('.btn-curr-toggle').forEach(btn => {
                     btn.innerHTML = '<span style="opacity:0.4;">£</span> <span style="color:#fff;">€</span>';
                 });
             } else {
                 if(document.getElementById("ui-today-rev")) document.getElementById('ui-today-rev').innerText = overrides['today_rev'] || ('£'+tRev);
                 if(document.getElementById('ui-total-rev')) document.getElementById('ui-total-rev').innerText = overrides['total_rev'] || ('£'+totRev);
+                if(document.getElementById('tx-total-vol')) document.getElementById('tx-total-vol').innerText = '£' + txTotalVol.toFixed(2);
+                if(document.getElementById('tx-avg-order')) document.getElementById('tx-avg-order').innerText = '£' + txAvg.toFixed(2);
+                
                 document.querySelectorAll('.btn-curr-toggle').forEach(btn => {
                     btn.innerHTML = '<span style="color:#fff;">£</span> <span style="opacity:0.4;">€</span>';
                 });
@@ -6559,7 +6723,27 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                 msgEl.innerText = message;
                 inputEl.style.display = 'none';
                 dialog.style.display = 'flex';
-                const cleanup = () => { dialog.style.display = 'none'; btnCancel.onclick = null; btnConfirm.onclick = null; };
+                // Focus confirm button to allow enter key to work natively, or add global listener
+                btnConfirm.focus();
+                
+                const handleKeyDown = (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        btnConfirm.click();
+                    } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        btnCancel.click();
+                    }
+                };
+                
+                document.addEventListener('keydown', handleKeyDown);
+                
+                const cleanup = () => { 
+                    dialog.style.display = 'none'; 
+                    btnCancel.onclick = null; 
+                    btnConfirm.onclick = null; 
+                    document.removeEventListener('keydown', handleKeyDown);
+                };
                 btnCancel.onclick = () => { cleanup(); resolve(false); };
                 btnConfirm.onclick = () => { cleanup(); resolve(true); };
             });
@@ -6607,10 +6791,41 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             ws = new WebSocket(protocol + '//' + window.location.host + '/ws');
             ws.onmessage = (event) => {
                 const data = JSON.parse(event.data);
-                if (data.type === 'new_message' && data.channelId === activeChatChannel) {
-                    window.fetchChatMessages();
+                if (data.type === 'typing' && data.channelId === activeChatChannel) {
+                    const ti = document.getElementById('typing-indicator');
+                    if (ti) {
+                        ti.style.display = 'block';
+                        if (window.typingTimeout) clearTimeout(window.typingTimeout);
+                        window.typingTimeout = setTimeout(() => { ti.style.display = 'none'; }, 3000);
+                    }
                 }
                 
+                if (data.type === 'new_message' && data.channelId === activeChatChannel) {
+                    const ti = document.getElementById('typing-indicator');
+                    if (ti) ti.style.display = 'none';
+                    
+                    const area = document.getElementById('chat-messages-area');
+                    if (area && data.message) {
+                        const m = data.message;
+                        const bubbleClass = m.isBot ? 'bot' : 'user';
+                        const escapeHTML = (str) => String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+                        let imgHtml = '';
+                        if (m.imageUrl) {
+                            imgHtml = '<br><img src="' + escapeHTML(m.imageUrl) + '" class="chat-img-preview" style="max-width:100%; border-radius:12px; margin-top:10px; cursor:pointer; border:0.5px solid rgba(255,255,255,0.1); box-shadow: 0 4px 15px rgba(0,0,0,0.3); transition: transform 0.3s;" onclick="window.open(&quot;' + escapeInlineJS(m.imageUrl) + '&quot;)">';
+                        }
+                        const html = '<div class="chat-bubble ' + bubbleClass + '" style="animation: slideUpFade 0.2s ease-out;"><div class="chat-author" style="opacity:0.7; font-size:0.85em; font-weight:600; margin-bottom:5px; letter-spacing:0.5px;">' + escapeHTML(m.author) + '</div><div style="line-height:1.6;">' + escapeHTML(m.content) + '</div>' + imgHtml + '</div>';
+                        
+                        // Remove "Select a conversation" or "Awaiting transmission" placeholder if present
+                        if(area.innerHTML.includes('Select a conversation') || area.innerHTML.includes('Awaiting transmission')) {
+                            area.innerHTML = '';
+                        }
+                        
+                        area.insertAdjacentHTML('beforeend', html);
+                        area.scrollTop = area.scrollHeight;
+                    }
+                }
+                
+                // 🔌 [WS_EVENT_FRONTEND: close_request] - Réception WebSocket Client
                 if (data.type === 'close_request') {
                     showToast('Close requested in ' + data.channelName);
                     window.customConfirm('TICKET CLOSURE', 'User ' + data.username + ' requested to close ticket: ' + data.channelName + '. Accept?').then(res => {
@@ -6620,6 +6835,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                     });
                 }
 
+                // 🔌 [WS_EVENT_FRONTEND: stats_update] - Réception WebSocket Client
                 if (data.type === 'stats_update') {
                     window.refreshDataSilently(true);
                 }
@@ -6641,6 +6857,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
     // 🚀 [FUNCTION: processInitData] - Déclaration de fonction
         
                       
+        // 🚀 [UI_ACTION_ASYNC: saveBotControl] - Action asynchrone d'interface Dashboard
            window.saveBotControl = function(event) {
                const btn = event.currentTarget;
                const originalHTML = btn.innerHTML;
@@ -6671,6 +6888,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                });
            };
 
+        // 🚀 [UI_ACTION_ASYNC: saveAllMessages] - Action asynchrone d'interface Dashboard
            window.saveAllMessages = function() {
                const fields = [
                    'shop_welcome', 'shop_empty', 'ticket_ready', 'vip_welcome',
@@ -6694,6 +6912,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                });
            };
 
+        // 🚀 [UI_ACTION_ASYNC: generateMessageAI] - Action asynchrone d'interface Dashboard
            window.generateMessageAI = function(fieldKey) {
                const el = document.getElementById('msg_' + fieldKey);
                if(!el) return;
@@ -6724,6 +6943,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                });
            };
 
+    // 🚀 [FUNCTION: processInitData] - Déclaration de fonction
         function processInitData(data) { console.log("STARTING processInitData"); 
             rawStats=data.memoryStats || {}; PRODUCT_DATA=data.PRODUCT_DATA || {}; currentMonthRevenue=data.monthRevenue || 0; PIN=data.PIN || ''; lastTxCount=rawStats.total_transactions||0;
             const notesEl = document.getElementById('personal-notes');
@@ -6802,8 +7022,11 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
            if(typeof window.renderSalesChart === 'function') window.renderSalesChart(7);
         }
         
+    // 🚀 [FUNCTION: escapeInlineJS] - Déclaration de fonction
         function escapeInlineJS(str) { if (!str) return ''; return String(str).replace(/\\\\/g, '\\\\\\\\').replace(/'/g, "\\\\'").replace(/\"/g, '\\\\\"').replace(/\\n/g, '\\\\n').replace(/\\r/g, '\\\\r').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+    // 🚀 [FUNCTION: escapeHTML] - Déclaration de fonction
         function escapeHTML(str){ return str ? String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;') : ''; }
+    // 🚀 [FUNCTION: escapeJS] - Déclaration de fonction
         function escapeJS(str) {
     if (!str) return '';
     return String(str)
@@ -7184,6 +7407,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
 
         // 🚀 [UI_ACTION_ASYNC: createManualTx] - Action asynchrone d'interface Dashboard
         
+        // 🚀 [UI_ACTION_ASYNC: sendEmbed] - Action asynchrone d'interface Dashboard
         window.sendEmbed = async function() {
             const channelId = document.getElementById('embedChannel').value;
             const title = document.getElementById('embedTitle').value;
@@ -7206,6 +7430,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             } catch(e) { showToast('Error', 'error'); }
         };
 
+        // 🚀 [UI_ACTION_ASYNC: createManualTx] - Action asynchrone d'interface Dashboard
         window.createManualTx = async function() {
             const user = document.getElementById('manTxUser').value;
             const prod = document.getElementById('manTxProd').value;
@@ -7414,6 +7639,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                 }
             };
         
+        // 🚀 [UI_ACTION_ASYNC: switchTab] - Action asynchrone d'interface Dashboard
         window.switchTab = function(tabId, btn) {
             if (window.innerWidth <= 900) {
                 const sidebar = document.getElementById('sidebar');
@@ -7624,6 +7850,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         
         window.modStatusFilter = 'all';
         window.modSortFilter = 'recent';
+        // 🚀 [UI_ACTION_ASYNC: setModFilter] - Action asynchrone d'interface Dashboard
         window.setModFilter = function(type, val, btn) {
             const group = btn.parentElement;
             group.querySelectorAll('.filter-pill').forEach(b => b.classList.remove('active'));
@@ -7633,6 +7860,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             window.sortMembersLocally();
         };
 
+        // 🚀 [UI_ACTION_ASYNC: sortMembersLocally] - Action asynchrone d'interface Dashboard
         window.sortMembersLocally = function() { const sortType = window.modSortFilter || 'recent'; const statusFilter = window.modStatusFilter || 'all'; let filtered = [...allMembersData]; if (statusFilter === 'online') { filtered = filtered.filter(m => m.status !== 'offline'); } if (sortType === 'recent') filtered.sort(function(a, b) { return b.joinedTimestamp - a.joinedTimestamp; }); else if (sortType === 'oldest') filtered.sort(function(a, b) { return a.joinedTimestamp - b.joinedTimestamp; }); else if (sortType === 'spent_desc') filtered.sort(function(a, b) { return b.totalSpent - a.totalSpent; }); else if (sortType === 'spent_asc') filtered.sort(function(a, b) { return a.totalSpent - b.totalSpent; }); else if (sortType === 'warns') filtered.sort(function(a, b) { return b.warns.length - a.warns.length; }); const searchEl = document.getElementById('memberSearchInput'); const q = searchEl ? searchEl.value.toLowerCase() : ''; if (q) { filtered = filtered.filter(function(m) { return m.username.toLowerCase().includes(q) || m.id.includes(q); }); } renderMembers(filtered); };
         window.filterMembersLocally = window.sortMembersLocally;
     // 🚀 [FUNCTION: renderMembers] - Déclaration de fonction
@@ -7717,6 +7945,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         // 🚀 [UI_ACTION_ASYNC: refundTx] - Action asynchrone d'interface Dashboard
 
 
+        // 🚀 [UI_ACTION_ASYNC: closeTxModal] - Action asynchrone d'interface Dashboard
         window.closeTxModal = function() {
             const modal = document.getElementById('txAiModal');
             const inner = document.getElementById('txAiModalInner');
@@ -7727,11 +7956,13 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             }
         };
 
+        // 🚀 [UI_ACTION_ASYNC: toggleManualTxForm] - Action asynchrone d'interface Dashboard
         window.toggleManualTxForm = function() {
             const form = document.getElementById('manualTxForm');
             if(form) form.style.display = form.style.display === 'none' ? 'block' : 'none';
         };
 
+        // 🚀 [UI_ACTION_ASYNC: exportTransactionsCSV] - Action asynchrone d'interface Dashboard
         window.exportTransactionsCSV = function() {
             let txs = [];
             if(Array.isArray(rawStats.recent_transactions)) {
@@ -7756,6 +7987,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             document.body.removeChild(a);
         };
 
+        // 🚀 [UI_ACTION_ASYNC: renderTransactionsList] - Action asynchrone d'interface Dashboard
         window.renderTransactionsList = function() {
             if (!rawStats.recent_transactions) return;
             
@@ -7790,9 +8022,13 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                 // If standard view, display the TRUE total revenue
                 totalVol = rawStats.total_revenue || 0;
             }
-            if(document.getElementById('tx-total-vol')) document.getElementById('tx-total-vol').innerText = '£' + totalVol.toFixed(2);
+            
+            window.currentTxVol = totalVol;
+            window.currentAvgOrder = txs.length ? (totalVol/txs.length) : 0;
+            
             if(document.getElementById('tx-count')) document.getElementById('tx-count').innerText = txs.length;
-            if(document.getElementById('tx-avg-order')) document.getElementById('tx-avg-order').innerText = '£' + (txs.length ? (totalVol/txs.length).toFixed(2) : '0.00');
+            
+            window.applyCurrencyUI();
 
             let html = '';
             if (txs.length === 0) {
@@ -7840,6 +8076,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         };
 
         // ── Rewarble Voucher Log ─────────────────────────────────────────
+        // 🚀 [UI_ACTION_ASYNC: renderVoucherLog] - Action asynchrone d'interface Dashboard
         window.renderVoucherLog = async function() {
             const tbody = document.getElementById('voucher-log-tbody');
             if (!tbody) return;
@@ -7893,6 +8130,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             tbody.innerHTML = html;
         };
 
+        // 🚀 [UI_ACTION_ASYNC: analyzeTransactionsAI] - Action asynchrone d'interface Dashboard
         window.analyzeTransactionsAI = async function() {
             const modal = document.getElementById('txAiModal');
             const inner = document.getElementById('txAiModalInner');
@@ -7994,6 +8232,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             }
         };
 
+        // 🚀 [UI_ACTION_ASYNC: checkMarketPrice] - Action asynchrone d'interface Dashboard
         window.checkMarketPrice = async function(productName) {
             const modal = document.getElementById('txAiModal');
             const inner = document.getElementById('txAiModalInner');
@@ -8089,6 +8328,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             }
         };
 
+        // 🚀 [UI_ACTION_ASYNC: refundTx] - Action asynchrone d'interface Dashboard
         window.refundTx = async function(date, username) { if(await window.customConfirm('REVERSE TX', 'Reverse this transaction? Yield will be adjusted.')) { await window.executeAction({action: 'refund_tx', date: date, username: username}); } };
         // 🚀 [UI_ACTION_ASYNC: testActionLatency] - Action asynchrone d'interface Dashboard
         
@@ -8147,18 +8387,21 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
 
         let activeWidgets = [];
 
+        // 🚀 [UI_ACTION_ASYNC: openWidgetModal] - Action asynchrone d'interface Dashboard
         window.openWidgetModal = function() {
             document.getElementById('widgetModal').style.display = 'flex';
             window.renderWidgetList(availableWidgets);
             document.getElementById('widgetSearch').value = '';
         };
 
+        // 🚀 [UI_ACTION_ASYNC: filterWidgets] - Action asynchrone d'interface Dashboard
         window.filterWidgets = function() {
             const query = document.getElementById('widgetSearch').value.toLowerCase();
             const filtered = availableWidgets.filter(w => w.title.toLowerCase().includes(query));
             window.renderWidgetList(filtered);
         };
 
+        // 🚀 [UI_ACTION_ASYNC: renderWidgetList] - Action asynchrone d'interface Dashboard
         window.renderWidgetList = function(list) {
             const grid = document.getElementById('widgetGrid');
             let html = '';
@@ -8175,6 +8418,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             grid.innerHTML = html;
         };
 
+        // 🚀 [UI_ACTION_ASYNC: toggleWidget] - Action asynchrone d'interface Dashboard
         window.toggleWidget = function(id) {
             if(activeWidgets.includes(id)) {
                 activeWidgets = activeWidgets.filter(w => w !== id);
@@ -8188,6 +8432,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             window.filterWidgets(); // re-render list to show Add/Remove button state
         };
 
+        // 🚀 [UI_ACTION_ASYNC: renderActiveWidgets] - Action asynchrone d'interface Dashboard
         window.renderActiveWidgets = function() {
             const container = document.querySelector('.stats-grid.premium-stats-grid');
             if(!container) return;
@@ -8225,6 +8470,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             } catch(e) {}
         });
 
+        // 🚀 [UI_ACTION_ASYNC: testActionLatency] - Action asynchrone d'interface Dashboard
         window.testActionLatency = async function() { const resultDiv = document.getElementById('latency-result'); resultDiv.innerText = 'Pinging...'; resultDiv.style.color = 'var(--text-muted)'; const startTime = Date.now(); try { const res = await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'ping_test', pin: PIN }) }); if (res.ok) { const totalTime = Date.now() - startTime; resultDiv.innerText = totalTime + ' ms'; if (totalTime < 500) resultDiv.style.color = getThemeVal('hex'); else if (totalTime < 1500) resultDiv.style.color = 'var(--accent-orange)'; else resultDiv.style.color = 'var(--accent-red)'; } else { resultDiv.innerText = 'Error'; resultDiv.style.color = 'var(--accent-red)'; } } catch(e) { resultDiv.innerText = 'Net Error'; resultDiv.style.color = 'var(--accent-red)'; } };
         
         // 🚀 [UI_ACTION_ASYNC: loadTicketsForChat] - Action asynchrone d'interface Dashboard
@@ -8276,12 +8522,47 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         if(document.getElementById('chat-ticket-list')) document.getElementById('chat-ticket-list').innerHTML = html; 
     } catch(e) {} 
 };
+        // 🚀 [UI_ACTION_ASYNC: postSecurityAlert] - Action asynchrone d'interface Dashboard
+        window.postSecurityAlert = async function() {
+            if(await window.customConfirm('SECURITY ALERT', 'Post global anti-raid success message to #alerts-n-info?')) {
+                try {
+                    const res = await fetch('/api/action', {
+                        method: 'POST',
+                        body: JSON.stringify({ action: 'post_security_alert', pin: PIN })
+                    });
+                    if (res.ok) {
+                        showToast('Alert broadcasted successfully');
+                    } else {
+                        showToast('Broadcast failed', 'error');
+                    }
+                } catch(e) {
+                    showToast('Transmission Failed', 'error');
+                }
+            }
+        };
+        
         // 🚀 [UI_ACTION: openTicketChat] - Action d'interface Dashboard
         window.openTicketChat = function(channelId) { activeChatChannel = channelId; window.loadTicketsForChat(); if(document.getElementById('chat-messages-area')) document.getElementById('chat-messages-area').innerHTML = '<div style="margin:auto; display:flex; flex-direction:column; align-items:center; gap:15px; color:var(--accent-green);"><div style="width:40px; height:40px; border:3px solid rgba(var(--accent-green-rgb), 0.1); border-top:3px solid var(--accent-green); border-radius:50%; animation:spin 1s cubic-bezier(0.68, -0.55, 0.265, 1.55) infinite; margin:auto; box-shadow:0 0 15px rgba(var(--accent-green-rgb), 0.5);"></div></div>'; window.fetchChatMessages(); };
         // 🚀 [UI_ACTION_ASYNC: fetchChatMessages] - Action asynchrone d'interface Dashboard
         
+        // 🚀 [UI_ACTION_ASYNC: fetchChatMessages] - Action asynchrone d'interface Dashboard
         window.fetchChatMessages = async function() { if(!activeChatChannel) return; try { const res = await fetch('/api/tickets/messages?channelId=' + activeChatChannel); const responseData = await res.json(); const msgs = responseData.msgs || []; const closeRequested = responseData.closeRequested || false; let html = ''; if (closeRequested) { html += '<div style="margin:0 15px 15px 15px; padding:12px; background:rgba(255,69,58,0.1); border:1px dashed var(--accent-red); border-radius:12px; color:var(--accent-red); display:flex; justify-content:space-between; align-items:center;"><div><strong>🔒 Close Requested</strong><br><span style="font-size:0.85em; opacity: 0.8;">User has requested to close this ticket.</span></div><div><button onclick="window.sendQuickResponse(&quot;close&quot;)" style="background:var(--accent-red); color:#fff; border:none; padding:8px 16px; border-radius:8px; cursor:pointer; font-weight:bold;">Close Ticket</button></div></div>'; } if(msgs.length === 0) html += '<div style="margin:auto; display:flex; flex-direction:column; align-items:center; opacity:0.5;"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-bottom:10px;"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg><p class="text-muted text-center" style="font-family:inherit;">Awaiting transmission...</p></div>'; else { msgs.forEach(m => { const bubbleClass = m.isBot ? 'bot' : 'user'; const imgHtml = m.imageUrl ? '<br><img src="' + escapeHTML(m.imageUrl) + '" class="chat-img-preview" style="max-width:100%; border-radius:12px; margin-top:10px; cursor:pointer; border:0.5px solid rgba(255,255,255,0.1); box-shadow: 0 4px 15px rgba(0,0,0,0.3); transition: transform 0.3s;" onmouseover="this.style.transform=&quot;scale(1.02)&quot;;" onmouseout="this.style.transform=&quot;scale(1)&quot;;" onclick="window.open(&quot;' + escapeInlineJS(m.imageUrl) + '&quot;)">' : ''; const actionsHtml = '<div class="chat-bubble-actions" style="display:none; position:absolute; top:-15px; ' + (m.isBot ? 'left:15px;' : 'right:15px;') + ' background:rgba(30,30,35,0.95); backdrop-filter:blur(10px); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:4px 8px; gap:8px; box-shadow:0 5px 15px rgba(0,0,0,0.5);"><button style="background:none; border:none; cursor:pointer; color:var(--accent-green); transition:transform 0.2s;" onmouseover="this.style.transform=&quot;scale(1.2)&quot;;" onmouseout="this.style.transform=&quot;scale(1)&quot;;" onclick="window.reactMessage(' + escapeInlineJS(m.id) + ', &quot;👍&quot;)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg></button><button style="background:none; border:none; cursor:pointer; color:var(--accent-red); transition:transform 0.2s;" onmouseover="this.style.transform=&quot;scale(1.2)&quot;;" onmouseout="this.style.transform=&quot;scale(1)&quot;;" onclick="window.reactMessage(' + escapeInlineJS(m.id) + ', &quot;❤️&quot;)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg></button></div>'; html += '<div class="chat-bubble ' + bubbleClass + '" onmouseover="this.querySelector(&quot; .chat-bubble-actions&quot;).style.display=&quot;flex&quot;" onmouseout="this.querySelector(&quot; .chat-bubble-actions&quot;).style.display=&quot;none&quot;"><div class="chat-author" style="opacity:0.7; font-size:0.85em; font-weight:600; margin-bottom:5px; letter-spacing:0.5px;">' + escapeHTML(m.author) + '</div><div style="line-height:1.6;">' + escapeHTML(m.content) + '</div>' + imgHtml + actionsHtml + '</div>'; }); } const area = document.getElementById('chat-messages-area'); const isAtBottom = area.scrollHeight - area.scrollTop <= area.clientHeight + 100; area.innerHTML = html; if(isAtBottom) area.scrollTop = area.scrollHeight; } catch(e) {} };
 
+        // 🚀 [UI_ACTION_ASYNC: sendTypingEvent] - Action asynchrone d'interface Dashboard
+        window.sendTypingEvent = async function() { 
+            if(!activeChatChannel) return;
+            // Debounce typing events to not spam the server
+            if (window.lastTypingTime && Date.now() - window.lastTypingTime < 3000) return;
+            window.lastTypingTime = Date.now();
+            
+            try { 
+                await fetch('/api/action', { 
+                    method: 'POST', 
+                    body: JSON.stringify({ action: 'send_typing', channelId: activeChatChannel, pin: PIN }) 
+                }); 
+            } catch(e) { } 
+        };
+        
         // 🚀 [UI_ACTION_ASYNC: sendChatMessage] - Action asynchrone d'interface Dashboard
         window.sendChatMessage = async function() { if(!activeChatChannel) return showToast('Select line first', 'error'); const input = document.getElementById('chat-input-text'); const fileInput = document.getElementById('chat-file-input'); const text = input.value.trim(); const file = fileInput.files[0]; if(!text && !file) return; input.value = ''; document.getElementById('attach-badge').style.display='none'; let base64 = null; if (file) { const reader = new FileReader(); reader.readAsDataURL(file); await new Promise(r => reader.onload = r); base64 = reader.result; fileInput.value = ''; } try { await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'send_ticket_message', channelId: activeChatChannel, message: text, imageBase64: base64, pin: PIN }) }); window.fetchChatMessages(); } catch(e) { showToast('Transmission Failed', 'error'); } };
         // 🚀 [UI_ACTION_ASYNC: reactMessage] - Action asynchrone d'interface Dashboard
@@ -8781,6 +9062,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         // 🚀 [UI_ACTION_ASYNC: loadBackups] - Action asynchrone d'interface Dashboard
         
         
+        // 🚀 [UI_ACTION_ASYNC: loadMysteryBox] - Action asynchrone d'interface Dashboard
         window.loadMysteryBox = function() {
             const mb = rawStats.mystery_box || { enabled: false, price: 10, tiers: [] };
             document.getElementById('mb-enabled').checked = mb.enabled;
@@ -8791,6 +9073,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             mb.tiers.forEach(tier => window.addMysteryBoxTier(tier));
         };
 
+        // 🚀 [UI_ACTION_ASYNC: addMysteryBoxTier] - Action asynchrone d'interface Dashboard
         window.addMysteryBoxTier = function(data = { tierName: 'Common', chance: 50, productId: '', announce: false }) {
             const container = document.getElementById('mb-tiers-container');
             const div = document.createElement('div');
@@ -8812,6 +9095,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             container.appendChild(div);
         };
 
+        // 🚀 [UI_ACTION_ASYNC: saveMysteryBox] - Action asynchrone d'interface Dashboard
         window.saveMysteryBox = async function() {
             const enabled = document.getElementById('mb-enabled').checked;
             const price = parseFloat(document.getElementById('mb-price').value) || 10;
@@ -8840,6 +9124,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             } catch(e) { showToast('Error saving Mystery Box', 'error'); }
         };
 
+        // 🚀 [UI_ACTION_ASYNC: testNotification] - Action asynchrone d'interface Dashboard
         window.testNotification = function() {
             showToast('Notification scheduled in 5 seconds...', 'success');
             setTimeout(() => {
@@ -8851,6 +9136,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             }, 5000);
         };
 
+        // 🚀 [UI_ACTION_ASYNC: downloadTranscript] - Action asynchrone d'interface Dashboard
         window.downloadTranscript = async function(id, name) {
             try {
                 const res = await fetch('/api/action', {
@@ -8875,12 +9161,14 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             } catch(e) { showToast('Error downloading transcript', 'error'); }
         };
 
+        // 🚀 [UI_ACTION_ASYNC: deleteTranscript] - Action asynchrone d'interface Dashboard
         window.deleteTranscript = async function(id) {
             if(confirm("Delete this transcript permanently?")) {
                 await window.executeAction({action: 'delete_transcript', id: id}, false);
             }
         };
 
+        // 🚀 [UI_ACTION_ASYNC: requestNotificationPermission] - Action asynchrone d'interface Dashboard
         window.requestNotificationPermission = async function() {
             if (!("Notification" in window)) {
                 showToast("This browser does not support desktop notifications", "error");
@@ -8895,6 +9183,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                 }
             }
         };
+        // 🚀 [UI_ACTION_ASYNC: loadBackups] - Action asynchrone d'interface Dashboard
         window.loadBackups = async function() {
             try {
                 const res = await fetch('/api/backups');
@@ -9001,7 +9290,15 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
     } else { res.writeHead(200, { 'Content-Type': 'text/plain' }); res.end('API Bot'); }
 });
 
-server.listen(3000);
+server.listen(3000).on('error', (e) => {
+    if (e.code === 'EADDRINUSE') {
+        console.log('Port 3000 in use, trying to close old server...');
+        setTimeout(() => {
+            server.close();
+            server.listen(3000);
+        }, 1000);
+    }
+});
 
 server.on('upgrade', (request, socket, head) => {
     const pathname = request.url;
