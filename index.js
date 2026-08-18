@@ -987,6 +987,10 @@ function ensureMemoryInitialized() {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ Bugfix: Message Concurrency Lock\n\n- **Description** : Le bot envoyait parfois les messages de refus (chatter ou code invalide) en double si l\'utilisateur envoyait plusieurs messages simultanément.\n- **Solution** : Déplacement du verrou asynchrone (`state.processing = true`) au tout début de l\'évaluation du salon shop, garantissant un traitement séquentiel strict de chaque requête entrante." });
                 syncCloud();
             }
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Double Channel (Ultime)"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ Bugfix: Double Channel (Ultime)\n\n- **Description** : La création multiple de tickets persistait dans de rares cas de grande latence API.\n- **Cause** : Si Discord était lent, la création du channel échouait par timeout. Le bot supprimait alors immédiatement son verrou de sécurité, permettant au client de spam-cliquer, alors même que le premier channel finissait par se créer chez Discord.\n- **Correction** : Le verrou anti-spam (60 secondes) est désormais absolu. Même si Discord renvoie une fausse erreur de timeout, l utilisateur est bloqué pendant 60s, éradiquant définitivement les doublons." });
+                syncCloud();
+            }
 
             if (!memoryStats.overrides) memoryStats.overrides = {};
             if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } };
@@ -2219,7 +2223,6 @@ client.on('interactionCreate', async (interaction) => {
                 } catch (createErr) {
                     systemLog('ERROR', 'TICKET', 'Failed to create channel: ' + createErr.message);
                     console.error('Channel creation failed:', createErr);
-                    userTicketLocks.delete(interaction.user.id);
                     return interaction.editReply({ content: `❌ Critical Error: The bot failed to create a channel. Please check that I have "Manage Channels" permission and that the server has not reached the 500 channels limit.\nDetails: ${createErr.message}` }).catch(() => {});
                 }
 
@@ -2256,7 +2259,6 @@ client.on('interactionCreate', async (interaction) => {
 
                     await interaction.editReply({ content: memoryStats.messages.ticket_ready.replace('{channel}', '<#' + channel.id + '>') }).catch(() => {});
                 } else {
-                    userTicketLocks.delete(interaction.user.id); 
                     await interaction.editReply({ content: `❌ Error creating the room.` }).catch(() => {}); 
                 }
             } else if (interaction.customId === 'open_support_ticket') {
@@ -2310,7 +2312,6 @@ client.on('interactionCreate', async (interaction) => {
                 } catch (createErr) {
                     systemLog('ERROR', 'TICKET', 'Failed to create channel: ' + createErr.message);
                     console.error('Channel creation failed:', createErr);
-                    userTicketLocks.delete(interaction.user.id);
                     return interaction.editReply({ content: `❌ Critical Error: The bot failed to create a channel. Please check permissions and limits.\nDetails: ${createErr.message}` }).catch(() => {});
                 }
 
@@ -2320,7 +2321,6 @@ client.on('interactionCreate', async (interaction) => {
                     await channel.send(`🎧 **Support Ticket for <@${interaction.user.id}>**`).catch(() => {});
                     await interaction.editReply({ content: memoryStats.messages.ticket_ready.replace('{channel}', '<#' + channel.id + '>') }).catch(() => {});
                 } else {
-                    userTicketLocks.delete(interaction.user.id);
                     await interaction.editReply({ content: `❌ Error creating the room.` }).catch(() => {});
                 }
             }
@@ -3788,6 +3788,10 @@ const server = http.createServer(async (req, res) => {
             }
             if (!memoryStats.patchnotes.some(p => p.text.includes("Message Concurrency Lock"))) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ Bugfix: Message Concurrency Lock\n\n- **Description** : Le bot envoyait parfois les messages de refus (chatter ou code invalide) en double si l\'utilisateur envoyait plusieurs messages simultanément.\n- **Solution** : Déplacement du verrou asynchrone (`state.processing = true`) au tout début de l\'évaluation du salon shop, garantissant un traitement séquentiel strict de chaque requête entrante." });
+                syncCloud();
+            }
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Double Channel (Ultime)"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ Bugfix: Double Channel (Ultime)\n\n- **Description** : La création multiple de tickets persistait dans de rares cas de grande latence API.\n- **Cause** : Si Discord était lent, la création du channel échouait par timeout. Le bot supprimait alors immédiatement son verrou de sécurité, permettant au client de spam-cliquer, alors même que le premier channel finissait par se créer chez Discord.\n- **Correction** : Le verrou anti-spam (60 secondes) est désormais absolu. Même si Discord renvoie une fausse erreur de timeout, l utilisateur est bloqué pendant 60s, éradiquant définitivement les doublons." });
                 syncCloud();
             }
 
