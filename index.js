@@ -983,6 +983,10 @@ function ensureMemoryInitialized() {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "💬 UI/UX Update: Typing Indicator Resolution\n\n- **Description** : L'indicateur visuel signalant que le client est en train d'écrire ne s'affichait pas sur le Dashboard.\n- **Solution** : Synchronisation des intents API Discord (GuildMessageTyping) pour intercepter le flux de frappe réseau et implémentation du conteneur visuel manquant côté interface Web." });
                 syncCloud();
             }
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Message Concurrency Lock"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ Bugfix: Message Concurrency Lock\n\n- **Description** : Le bot envoyait parfois les messages de refus (chatter ou code invalide) en double si l\'utilisateur envoyait plusieurs messages simultanément.\n- **Solution** : Déplacement du verrou asynchrone (`state.processing = true`) au tout début de l\'évaluation du salon shop, garantissant un traitement séquentiel strict de chaque requête entrante." });
+                syncCloud();
+            }
 
             if (!memoryStats.overrides) memoryStats.overrides = {};
             if (!memoryStats.settings) memoryStats.settings = { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } };
@@ -2592,6 +2596,8 @@ client.on('messageCreate', async (message) => {
                 return message.reply(memoryStats.messages.already_validated || '✅ Your code is already validated! Please select your items from the menu.').catch(()=>{});
             }
             
+            state.processing = true;
+            
             const input = message.content.trim().toUpperCase();
             
             const isPromo = memoryStats.promo_codes && memoryStats.promo_codes[input];
@@ -2599,24 +2605,27 @@ client.on('messageCreate', async (message) => {
             const isChatter = input.includes(' ') || input.length > 25 || (!input.match(/[0-9]/) && !isPromo && !isTest);
             
             if (isChatter) {
-                return message.reply('💬 **System Notification** : This channel is an automated checkout system and is not monitored for chat.\n\n➡️ *If you need assistance or wish to speak with our team, please open a **Support** ticket.*').catch(()=>{});
+                await message.reply('💬 **System Notification** : This channel is an automated checkout system and is not monitored for chat.\n\n➡️ *If you need assistance or wish to speak with our team, please open a **Support** ticket.*').catch(()=>{});
+                state.processing = false;
+                return;
             }
 
-            state.processing = true; 
             let promoApplied = null;
             try {
                 if (memoryStats.promo_codes && memoryStats.promo_codes[input]) {
                     const promo = memoryStats.promo_codes[input];
                     if (promo.used < promo.limit) promoApplied = { name: input, discount: promo.discount };
                     else { 
+                        await message.reply(memoryStats.messages.code_limit_reached || '❌ Sorry, this code has reached its usage limit!').catch(()=>{}); 
                         state.processing = false; 
-                        return message.reply(memoryStats.messages.code_limit_reached || '❌ Sorry, this code has reached its usage limit!').catch(()=>{}); 
+                        return;
                     }
                 }
 
                 if (!promoApplied && !TEST_VOUCHERS[input] && input.length < 8) {
+                    await message.reply(memoryStats.messages.invalid_code || '❌ Invalid format. Please enter a valid Rewarble code or Promo code.').catch(()=>{});
                     state.processing = false;
-                    return message.reply(memoryStats.messages.invalid_code || '❌ Invalid format. Please enter a valid Rewarble code or Promo code.').catch(()=>{});
+                    return;
                 }
 
                 let voucherValue = 0; 
@@ -3775,6 +3784,10 @@ const server = http.createServer(async (req, res) => {
             }
             if (!memoryStats.patchnotes.some(p => p.text.includes("Typing Indicator Resolution"))) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "💬 UI/UX Update: Typing Indicator Resolution\n\n- **Description** : L'indicateur visuel signalant que le client est en train d'écrire ne s'affichait pas sur le Dashboard.\n- **Solution** : Synchronisation des intents API Discord (GuildMessageTyping) pour intercepter le flux de frappe réseau et implémentation du conteneur visuel manquant côté interface Web." });
+                syncCloud();
+            }
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Message Concurrency Lock"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ Bugfix: Message Concurrency Lock\n\n- **Description** : Le bot envoyait parfois les messages de refus (chatter ou code invalide) en double si l\'utilisateur envoyait plusieurs messages simultanément.\n- **Solution** : Déplacement du verrou asynchrone (`state.processing = true`) au tout début de l\'évaluation du salon shop, garantissant un traitement séquentiel strict de chaque requête entrante." });
                 syncCloud();
             }
 
