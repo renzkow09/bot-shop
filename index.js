@@ -1927,13 +1927,19 @@ async function sendShopSetup(channel) {
         
         const catName = prod.category || (prod.price === "Custom" ? "💌 PERSONALIZED (On Request)" : `✨ ITEMS (£${prod.price})`);
         if (!groupedProducts[catName]) groupedProducts[catName] = [];
-        groupedProducts[catName].push(`**${id}.** ${prod.name}`);
+        groupedProducts[catName].push(`**${id}.** ${prod.name} — **${prod.price === "Custom" ? "Custom" : "£" + prod.price}**`);
     }
+
+    const shopConfig = (memoryStats.settings && memoryStats.settings.shop) || {};
+    const embedTitle = shopConfig.title || '💎 VIP EXCLUSIVE MENU & PRICES 💎';
+    const embedDesc = shopConfig.description || '> *Instant automatic delivery directly in your DMs!* 🚀\n\n━━━━━━━━━━━━━━━━━━━━━━';
+    const embedHowTo = shopConfig.howTo || '**STEP 1:** Click a Buy button below to get your voucher.\n**STEP 2:** Click the green **📩 Redeem Code** button.\n**STEP 3:** Paste your code, choose your item, and check your DMs! 🎉\n\n🎁 **FREE PRODUCT:** Click **🔗 Get Referral Link**, invite your friends, and get a 100% OFF code automatically!';
+    const embedFooter = shopConfig.footer || 'Powered by Nexus Premium • Secure & Automatic 🔒';
 
     const shopEmbed = new EmbedBuilder()
         .setColor('#10b981')
-        .setTitle('💎 VIP EXCLUSIVE MENU & PRICES 💎')
-        .setDescription('> *Instant automatic delivery directly in your DMs!* 🚀\n\n━━━━━━━━━━━━━━━━━━━━━━');
+        .setTitle(embedTitle)
+        .setDescription(embedDesc);
     
     let isFirst = true;
     for (const [catName, items] of Object.entries(groupedProducts)) {
@@ -1942,8 +1948,8 @@ async function sendShopSetup(channel) {
         isFirst = false;
     }
 
-    shopEmbed.addFields({ name: '━━━━━━━━━━━━━━━━━━━━━━\n💳 HOW TO BUY ?', value: '**STEP 1:** Click a Buy button below to get your voucher.\n**STEP 2:** Click the green **📩 Redeem Code** button.\n**STEP 3:** Paste your code, choose your item, and check your DMs! 🎉\n\n🎁 **FREE PRODUCT:** Click **🔗 Get Referral Link**, invite your friends, and get a 100% OFF code automatically!' });
-    shopEmbed.setFooter({ text: 'Powered by Nexus Premium • Secure & Automatic 🔒' });
+    shopEmbed.addFields({ name: '━━━━━━━━━━━━━━━━━━━━━━\n💳 HOW TO BUY ?', value: embedHowTo });
+    shopEmbed.setFooter({ text: embedFooter });
 
     await channel.send({ embeds: [shopEmbed], components: componentsToSend }).catch(() => {});
     systemLog('INFO', 'DISCORD_UI', 'Shop interface pushed to Discord successfully.');
@@ -3795,6 +3801,11 @@ const server = http.createServer(async (req, res) => {
                 syncCloud();
             }
 
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Configuration du Catalogue"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🎨 Configuration du Catalogue\n\n- **Personnalisation Complète** : Modifiez le titre, la description, et les instructions du catalogue directement depuis le Dashboard.\n- **Affichage des Prix** : Les prix sont désormais affichés côte à côte dans le menu Discord.\n- **Catégories Libres** : Créez vos propres catégories (texte libre) pour les produits avec le support d'options existantes." });
+                syncCloud();
+            }
+
                         if (!memoryStats.overrides) memoryStats.overrides = {};
                         if (val === '') {
                             delete memoryStats.overrides[data.key];
@@ -4099,6 +4110,18 @@ const server = http.createServer(async (req, res) => {
                     }
                 }
                     // ⚡ [API_ACTION: refresh_setup] - Point de terminaison API Action
+                    // ⚡ [API_ACTION: update_shop_config] - Point de terminaison API Action
+                else if (data.action === 'update_shop_config') {
+                    if (!memoryStats.settings) memoryStats.settings = {};
+                    memoryStats.settings.shop = {
+                        title: data.title,
+                        description: data.description,
+                        howTo: data.howTo,
+                        footer: data.footer
+                    };
+                    syncCloud();
+                    systemLog('INFO', 'CONFIG', 'Shop display configuration updated.');
+                }
                 else if (data.action === 'refresh_setup') {
                     const targetChannel = await client.channels.fetch(SHOP_CHANNEL_ID).catch(() => null);
                     if (!targetChannel) throw new Error("Shop channel not found.");
@@ -5669,6 +5692,25 @@ const server = http.createServer(async (req, res) => {
             <div id='products' class='tab-content'>
 
                <div class='box'>
+                   <h2>🎨 Shop Display Configuration</h2>
+                   <div style='display:flex; gap:20px; flex-wrap:wrap; margin-bottom:15px;'>
+                       <input type='text' id='shopConfigTitle' placeholder='Embed Title (e.g. 💎 VIP EXCLUSIVE MENU & PRICES 💎)' style='flex:1; min-width:300px;' value='${(memoryStats.settings && memoryStats.settings.shop && memoryStats.settings.shop.title) ? memoryStats.settings.shop.title.replace(/'/g, "&apos;") : ""}'>
+                   </div>
+                   <div style='display:flex; gap:20px; flex-wrap:wrap; margin-bottom:15px;'>
+                       <textarea id='shopConfigDesc' placeholder='Embed Description' style='flex:1; min-width:300px; height: 60px; padding: 12px; background: rgba(0,0,0,0.3); border: 0.5px solid rgba(255,255,255,0.05); color: #fff; border-radius: 12px; resize: vertical;'>${(memoryStats.settings && memoryStats.settings.shop && memoryStats.settings.shop.description) ? memoryStats.settings.shop.description : ""}</textarea>
+                   </div>
+                   <div style='display:flex; gap:20px; flex-wrap:wrap; margin-bottom:15px;'>
+                       <textarea id='shopConfigHowTo' placeholder='How to Buy Instructions' style='flex:1; min-width:300px; height: 80px; padding: 12px; background: rgba(0,0,0,0.3); border: 0.5px solid rgba(255,255,255,0.05); color: #fff; border-radius: 12px; resize: vertical;'>${(memoryStats.settings && memoryStats.settings.shop && memoryStats.settings.shop.howTo) ? memoryStats.settings.shop.howTo : ""}</textarea>
+                   </div>
+                   <div style='display:flex; gap:20px; flex-wrap:wrap; margin-bottom:15px;'>
+                       <input type='text' id='shopConfigFooter' placeholder='Footer Text' style='flex:1; min-width:300px;' value='${(memoryStats.settings && memoryStats.settings.shop && memoryStats.settings.shop.footer) ? memoryStats.settings.shop.footer.replace(/'/g, "&apos;") : ""}'>
+                   </div>
+                   <div style='display:flex; gap:15px; margin-top:10px;'>
+                       <button class='admin-btn btn-green' style='margin:0; padding:12px 30px;' onclick='window.saveShopConfig()'>Save Shop Settings</button>
+                   </div>
+               </div>
+
+               <div class='box'>
                    <h2>📝 Asset Configuration</h2>
                    <div style='display:flex; gap:20px; flex-wrap:wrap; margin-bottom:15px;'>
                        <input type='hidden' id='editProdId'>
@@ -5679,14 +5721,15 @@ const server = http.createServer(async (req, res) => {
                    <div style='display:flex; gap:20px; flex-wrap:wrap; margin-bottom:15px;'>
                        <input type='text' id='newProdDesc' placeholder='Asset Description (e.g. Bot features...)' style='flex:1; min-width:250px;'>
                        <input type='text' id='newProdLink' placeholder='Secure Delivery Node (GitHub, Drive...)' style='flex:1; min-width:250px;'>
-                       <select id='newProdCategory' style='width:180px; padding: 12px; background: rgba(0,0,0,0.3); border: 0.5px solid rgba(255,255,255,0.05); color: #fff; border-radius: 12px;'>
-                           <option value='💬 DISCORD'>💬 DISCORD</option>
-                           <option value='📱 TELEGRAM'>📱 TELEGRAM</option>
-                           <option value='🌐 WEB'>🌐 WEB</option>
-                           <option value='🛠️ UTILITY'>🛠️ UTILITY</option>
-                           <option value='🎮 GAMING'>🎮 GAMING</option>
-                           <option value='👑 SUBSCRIPTION'>👑 SUBSCRIPTION</option>
-                       </select>
+                       <input type='text' id='newProdCategory' list='categoryList' placeholder='Category (e.g. 💬 DISCORD)' style='width:180px; padding: 12px; background: rgba(0,0,0,0.3); border: 0.5px solid rgba(255,255,255,0.05); color: #fff; border-radius: 12px;'>
+                       <datalist id='categoryList'>
+                           <option value='💬 DISCORD'>
+                           <option value='📱 TELEGRAM'>
+                           <option value='🌐 WEB'>
+                           <option value='🛠️ UTILITY'>
+                           <option value='🎮 GAMING'>
+                           <option value='👑 SUBSCRIPTION'>
+                       </datalist>
                    </div>
                    <div style='display:flex; gap:20px; flex-wrap:wrap; margin-bottom:15px; padding:15px; border-radius:16px; background:rgba(255,255,255,0.02); border:0.5px solid rgba(255,255,255,0.05);'>
                        <strong style='display:flex; align-items:center;'>🚀 Auto-Upsell :</strong>
@@ -7359,18 +7402,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                 }
             }
             if(document.getElementById('newProdCategory')) {
-                const catOpts = document.getElementById('newProdCategory').options;
-                let found = false;
-                for(let i=0; i<catOpts.length; i++) {
-                    if(catOpts[i].value === p.category) { document.getElementById('newProdCategory').value = p.category; found = true; break; }
-                }
-                if (!found && p.category) {
-                    const opt = document.createElement('option');
-                    opt.value = p.category;
-                    opt.text = p.category;
-                    document.getElementById('newProdCategory').add(opt);
-                    document.getElementById('newProdCategory').value = p.category;
-                }
+                document.getElementById('newProdCategory').value = p.category || '';
             }
             document.getElementById('newProdUpsellId').value = p.upsellId || ''; 
             document.getElementById('newProdUpsellDiscount').value = p.upsellDiscount || ''; 
@@ -7387,7 +7419,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             document.getElementById('newProdStock').value = ''; 
             document.getElementById('newProdLink').value = ''; 
             document.getElementById('newProdDesc').value = ''; 
-            if(document.getElementById('newProdCategory')) document.getElementById('newProdCategory').selectedIndex = 0;
+            if(document.getElementById('newProdCategory')) document.getElementById('newProdCategory').value = '';
             document.getElementById('newProdUpsellId').value = ''; 
             document.getElementById('newProdUpsellDiscount').value = ''; 
             if(document.getElementById('saveProdBtn')) document.getElementById('saveProdBtn').innerText = 'Inject Asset'; 
@@ -7411,6 +7443,17 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         };
         
         // 🚀 [UI_ACTION_ASYNC: deleteProduct] - Action asynchrone d'interface Dashboard
+        // 🚀 [UI_ACTION_ASYNC: saveShopConfig] - Action asynchrone d'interface Dashboard
+        window.saveShopConfig = async function() {
+            const t = document.getElementById('shopConfigTitle').value;
+            const d = document.getElementById('shopConfigDesc').value;
+            const h = document.getElementById('shopConfigHowTo').value;
+            const f = document.getElementById('shopConfigFooter').value;
+            await window.executeAction({action:'update_shop_config', title:t, description:d, howTo:h, footer:f}, false);
+            await window.executeAction({action:'refresh_setup'}, false);
+            showToast('Shop configuration saved and Discord updated!', 'success');
+        };
+
         window.deleteProduct = async function(id) { if(await window.customConfirm('ASSET PURGE', 'Purge asset from network?')) await window.executeAction({action:'delete_product', id:id}, false); };
         
         // 🚀 [UI_ACTION: editBuyLink] - Action d'interface Dashboard
