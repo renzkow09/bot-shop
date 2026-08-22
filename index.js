@@ -590,8 +590,8 @@ function ensureMemoryInitialized() {
             }
             
             const defaultMessages = {
-                shop_welcome: "👋 Welcome {user}!\n\n**🔐 Step 1: Please paste your Rewarble voucher or promo code in this channel to fund your session.**\nAfter validation, you will be able to select your items.",
-                shop_empty: "👋 Welcome {user}!\n\n❌ The shop is currently empty.",
+                shop_welcome: "👋 Welcome {user}!\n\n**🔒 Secure Checkout**\nTo begin, please paste your Rewarble voucher or Promo code directly in this chat.\n\n✅ *Once verified, the product menu will appear automatically.*",
+                shop_empty: "👋 Welcome {user}!\n\n🛍️ **Shop Status**\nThe shop is currently empty. We are restocking our inventory, please check back later!",
                 ticket_ready: "✅ Your channel is ready: {channel}",
                 vip_welcome: "👑 **WELCOME TO VIP!** Your 30-Day pass is now active. Enjoy your exclusive content and 20% off all future purchases in the shop!",
                 maintenance_embed_title: "🚧 Shop Under Maintenance",
@@ -911,6 +911,30 @@ function ensureMemoryInitialized() {
             }
             if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Triple Création de Channel (Final)"))) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ Fix Triple Création de Channel (Final)\n\n- **Bug** : La création multiple de tickets persistait malgré la première itération du correctif.\n- **Cause** : Le verrou anti-spam (userTicketLocks) était arbitrairement et instantanément supprimé ('delete()') dès la création du channel en cas de succès, neutralisant la sécurité de 60 secondes introduite précédemment face aux latences du cache Discord.\n- **Correction** : Suppression de la libération prématurée du verrou. Le bot impose maintenant un cooldown strict et incassable de 60s pour la création de tout nouveau ticket par un utilisateur." });
+                syncCloud();
+            }
+                        if (!memoryStats.patchnotes.some(p => p.text.includes("Fix Création Double Channel (Verrou Absolu)"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ Fix Création Double Channel (Verrou Absolu)\n\n- **Bug** : Les utilisateurs pouvaient générer deux fois le même channel si la latence API (Discord fetch/create) excédait le temps du verrou anti-spam (60s).\n- **Cause** : Le verrou s'effaçait mathématiquement au bout de 60s. En cas de freeze réseau supérieur à 60s, l'utilisateur cliquait à nouveau, son 2ème clic ne trouvait aucun lock, passait et créait un 2e channel alors que le 1er était encore en construction.\n- **Correction** : Mise en place d'un verrou `channelCreationLocks` basé sur le cycle de vie de la promesse (try/finally). Il est formellement impossible pour un utilisateur de relancer une création tant que la précédente n'est pas résolue ou échouée." });
+                syncCloud();
+            }
+                        if (!memoryStats.patchnotes.some(p => p.text.includes("Voucher Logs : Affichage en clair"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "👁️ Voucher Logs : Affichage en clair\n\n- **Feature** : L'affichage des codes Rewarble saisis par les utilisateurs dans le tableau de bord (Voucher Logs) n'est plus masqué.\n- **Détails** : Auparavant, les codes étaient partiellement masqués par mesure de sécurité (ex: 1234••••567). La demande d'audit nécessitant de voir les codes rejetés en clair, le masquage a été supprimé à la racine pour tous les futurs essais, et les essais antérieurs réussis ont été rétro-activés en clair." });
+                syncCloud();
+            }
+                        if (!memoryStats.patchnotes.some(p => p.text.includes("Voucher Logs : Transparence Intégrale"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "👁️ Voucher Logs : Transparence Intégrale\n\n- **Feature** : L'affichage en clair s'applique désormais formellement à **absolument toutes** les saisies sans exception (Codes Invalides, Tests, et Codes Promo).\n- **Détails** : Auparavant, les saisies de codes Promo n'étaient pas loguées visuellement dans le tableau, et les tests apparaissaient sous l'étiquette [TEST]. Désormais, chaque frappe validée par le bot dans le channel d'achat est gravée telle quelle dans le Dashboard." });
+                syncCloud();
+            }
+                        if (!memoryStats.patchnotes.some(p => p.text.includes("Welcome Messages : Simple & Child-Friendly"))) {
+                memoryStats.messages.shop_welcome = defaultMessages.shop_welcome;
+                memoryStats.messages.shop_empty = defaultMessages.shop_empty;
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🧸 Welcome Messages : Simple & Child-Friendly\n\n- **Feature** : Réécriture des messages de bienvenue du shop (shop_welcome et shop_empty) pour les rendre extrêmement simples, chaleureux et compréhensibles par tous, même un enfant.\n- **Détails** : Ajout d'émojis, vocabulaire très simple ('secret code', 'magic', 'gifts', '🧸'). Les messages ont été forcés en écrasement pour appliquer la mise à jour." });
+                syncCloud();
+            }
+                        if (!memoryStats.patchnotes.some(p => p.text.includes("Welcome Messages : Clair et Rassurant"))) {
+                memoryStats.messages.shop_welcome = defaultMessages.shop_welcome;
+                memoryStats.messages.shop_empty = defaultMessages.shop_empty;
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "💼 Welcome Messages : Clair, Simple et Rassurant\n\n- **Feature** : Réajustement du ton des messages de la boutique. Le ton 'enfantin' nuisait à la confiance client (transaction financière).\n- **Détails** : Retour à un vocabulaire professionnel, sécurisant ('Secure Checkout', 'verified') tout en gardant une structure extrêmement simple à lire (2 étapes claires). L'écrasement des variables a été forcé." });
                 syncCloud();
             }
             if (!memoryStats.patchnotes.some(p => p.text.includes("Codebase Reconnaissance Tagging"))) {
@@ -1894,7 +1918,7 @@ async function generateTranscript(channel) {
 }
 
     // 🚀 [FUNCTION: sendShopSetup] - Déclaration de fonction
-async function sendShopSetup(channel) {
+async function sendShopSetup(channel, templateOverride = null) {
     let buyRows = [];
     let currentComponents = [];
     
@@ -1912,7 +1936,6 @@ async function sendShopSetup(channel) {
     }
     
     buyRows = buyRows.slice(0, 4);
-
     const rowActions = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('open_shop_channel').setLabel('📩 Redeem Code').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId('get_referral_link').setLabel('🔗 Get Referral Link').setStyle(ButtonStyle.Primary),
@@ -1925,36 +1948,93 @@ async function sendShopSetup(channel) {
     for (const [id, prod] of Object.entries(memoryStats.products)) {
         if (prod.stock && prod.stock !== "∞" && parseInt(prod.stock) <= 0) continue;
         
-        const catName = prod.category || (prod.price === "Custom" ? "💌 PERSONALIZED (On Request)" : `✨ ITEMS (£${prod.price})`);
+        const showPrices = memoryStats.settings?.shop?.show_prices !== false;
+        let catName = prod.category;
+        if (!catName) {
+            if (prod.price === "Custom") {
+                catName = "💌 PERSONALIZED (On Request)";
+            } else if (!showPrices) {
+                catName = "✨ ITEMS";
+            } else {
+                catName = `✨ ITEMS (£${prod.price})`;
+            }
+        }
+        
         if (!groupedProducts[catName]) groupedProducts[catName] = [];
-        groupedProducts[catName].push(`**${id}.** ${prod.name} — **${prod.price === "Custom" ? "Custom" : "£" + prod.price}**`);
+        if (showPrices) {
+            groupedProducts[catName].push(`**${id}.** ${prod.name} — **${prod.price === "Custom" ? "Custom" : "£" + prod.price}**`);
+        } else {
+            groupedProducts[catName].push(`**${id}.** ${prod.name}`);
+        }
     }
 
-    const shopConfig = (memoryStats.settings && memoryStats.settings.shop) || {};
-    const embedTitle = shopConfig.title || '💎 VIP EXCLUSIVE MENU & PRICES 💎';
-    const embedDesc = shopConfig.description || '> *Instant automatic delivery directly in your DMs!* 🚀\n\n━━━━━━━━━━━━━━━━━━━━━━';
-    const embedHowTo = shopConfig.howTo || '**STEP 1:** Click a Buy button below to get your voucher.\n**STEP 2:** Click the green **📩 Redeem Code** button.\n**STEP 3:** Paste your code, choose your item, and check your DMs! 🎉\n\n🎁 **FREE PRODUCT:** Click **🔗 Get Referral Link**, invite your friends, and get a 100% OFF code automatically!';
-    const embedFooter = shopConfig.footer || 'Powered by Nexus Premium • Secure & Automatic 🔒';
-
-    const shopEmbed = new EmbedBuilder()
-        .setColor('#10b981')
-        .setTitle(embedTitle)
-        .setDescription(embedDesc);
-    
+    const template = templateOverride || memoryStats.settings?.shop?.template || 'classic';
+    const shopEmbed = new EmbedBuilder();
     let isFirst = true;
-    for (const [catName, items] of Object.entries(groupedProducts)) {
-        if (!isFirst && items.length > 0) shopEmbed.addFields({ name: '\u200B', value: '\u200B' });
-        shopEmbed.addFields({ name: catName, value: '> ' + items.join('\n> '), inline: true });
-        isFirst = false;
+
+    if (template === 'minimalist') {
+        shopEmbed.setColor('#2F3136')
+            .setTitle('STORE CATALOG')
+            .setDescription('Select an item below. Automatic delivery.');
+            
+        for (const [catName, items] of Object.entries(groupedProducts)) {
+            if (!isFirst && items.length > 0) shopEmbed.addFields({ name: '\u200B', value: '\u200B' });
+            shopEmbed.addFields({ name: catName.replace(/[^a-zA-Z0-9 ()£]/g, '').trim(), value: items.join('\n'), inline: false });
+            isFirst = false;
+        }
+        shopEmbed.addFields({ name: 'How to purchase:', value: '1. Click a payment link.\n2. Click Redeem Code.\n3. Receive your item.' });
+    } 
+    else if (template === 'neon') {
+        shopEmbed.setColor('#ff00ff')
+            .setTitle('⚡ NEON DROP - EXCLUSIVE GEAR ⚡')
+            .setDescription('**GET YOUR DROPS INSTANTLY!** 🚀🔥\n\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬');
+            
+        for (const [catName, items] of Object.entries(groupedProducts)) {
+            if (!isFirst && items.length > 0) shopEmbed.addFields({ name: '\u200B', value: '\u200B' });
+            shopEmbed.addFields({ name: `🚀 ${catName}`, value: '> ' + items.join('\n> '), inline: true });
+            isFirst = false;
+        }
+        shopEmbed.addFields({ name: '▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n🔥 QUICK BUY GUIDE:', value: '> 🟣 **GRAB IT** — Payment links below\n> 🟣 **REDEEM** — Use the green button\n> 🟣 **FLEX** — Instant delivery to DMs 🚀' });
+        shopEmbed.setFooter({ text: '⚡ CYBER DELIVERY ⚡' });
+    }
+    else if (template === 'luxury') {
+        shopEmbed.setColor('#ffd700')
+            .setTitle('⚜️ THE LUXURY RESERVE ⚜️')
+            .setDescription('*Premium assets delivered with absolute discretion.*\n\n═════════════════════════');
+            
+        for (const [catName, items] of Object.entries(groupedProducts)) {
+            if (!isFirst && items.length > 0) shopEmbed.addFields({ name: '\u200B', value: '\u200B' });
+            shopEmbed.addFields({ name: `✧ ${catName}`, value: items.map(i => `* ${i}`).join('\n'), inline: false });
+            isFirst = false;
+        }
+        shopEmbed.addFields({ name: '═════════════════════════\n⚜️ ACQUISITION PROTOCOL:', value: 'I. Process payment via the secure links below.\nII. Select **Redeem Code** to validate.\nIII. Your assets will be instantly secured in your DMs.' });
+        shopEmbed.setFooter({ text: 'The Reserve • Secure Delivery' });
+    }
+    else {
+        // Classic
+        shopEmbed.setColor('#10b981')
+            .setTitle('💎 VIP EXCLUSIVE MENU & PRICES 💎')
+            .setDescription('> *Instant automatic delivery directly in your DMs!* 🚀\n\n━━━━━━━━━━━━━━━━━━━━━━');
+            
+        for (const [catName, items] of Object.entries(groupedProducts)) {
+            if (!isFirst && items.length > 0) shopEmbed.addFields({ name: '\u200B', value: '\u200B' });
+            shopEmbed.addFields({ name: catName, value: '> ' + items.join('\n> '), inline: true });
+            isFirst = false;
+        }
+        shopEmbed.addFields({ name: '━━━━━━━━━━━━━━━━━━━━━━\n🛒 HOW TO BUY IN 3 SIMPLE STEPS:', value: '> 1️⃣ **BUY** — Click a payment link below to get a voucher code.\n> 2️⃣ **REDEEM** — Click the green **📩 Redeem Code** button and paste your code.\n> 3️⃣ **RECEIVE** — Select your item and get it instantly in your DMs! 🚀\n\n🎁 **FREE ITEMS:** Use the **🔗 Get Referral Link** button to invite friends and earn rewards!' });
+        shopEmbed.setFooter({ text: 'Powered by Nexus Premium • Secure & Automatic 🔒' });
     }
 
-    shopEmbed.addFields({ name: '━━━━━━━━━━━━━━━━━━━━━━\n💳 HOW TO BUY ?', value: embedHowTo });
-    shopEmbed.setFooter({ text: embedFooter });
-
-    await channel.send({ embeds: [shopEmbed], components: componentsToSend }).catch(() => {});
+    console.log("SENDING PREVIEW TO", channel.id, "EMBEDS:", JSON.stringify(shopEmbed.toJSON()), "COMPONENTS:", JSON.stringify(componentsToSend.map(c => c.toJSON())));
+    
+        await channel.send({ embeds: [shopEmbed], components: componentsToSend }).then(m => {
+            }).catch((err) => {
+        
+        console.error("Shop send error:", err);
+        throw new Error("Failed to send message: " + err.message);
+    });
     systemLog('INFO', 'DISCORD_UI', 'Shop interface pushed to Discord successfully.');
 }
-
 // === [ANCHOR: DISCORD_BOT_CLIENT_INIT] ===
 const client = new Client({ 
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildPresences, GatewayIntentBits.GuildInvites, GatewayIntentBits.GuildMessageTyping, GatewayIntentBits.DirectMessageTyping],
@@ -1963,7 +2043,10 @@ const client = new Client({
 });
 
 // 🚀 [EVENT_LISTENER: error] - Écouteur d'événement Discord
-client.on('error', error => {
+client.rest.on('rateLimited', data => {
+            console.log("RATE LIMITED:", data);
+                    });
+        client.on('error', error => {
     systemLog('ERROR', 'DISCORD_CORE', `Network Error: ${error.message}`);
     console.error('⚠️ Discord Client Network Error:', error.message);
 });
@@ -2180,12 +2263,14 @@ client.on('interactionCreate', async (interaction) => {
                 processedInteractions.add(interaction.id);
                 setTimeout(() => processedInteractions.delete(interaction.id), 60000);
 
-                if (userTicketLocks.has(interaction.user.id)) {
+                if (userTicketLocks.has(interaction.user.id) || channelCreationLocks.has(interaction.user.id)) {
                     await interaction.deferUpdate().catch(()=>{});
                     return;
                 }
                 userTicketLocks.add(interaction.user.id);
                 setTimeout(() => userTicketLocks.delete(interaction.user.id), 60000);
+                channelCreationLocks.set(interaction.user.id, true);
+                try {
 
                 await interaction.reply({ content: '⏳ Channel is being created, please wait...', ephemeral: true }).catch(() => {});
 
@@ -2267,17 +2352,20 @@ client.on('interactionCreate', async (interaction) => {
                 } else {
                     await interaction.editReply({ content: `❌ Error creating the room.` }).catch(() => {}); 
                 }
+                } finally { channelCreationLocks.delete(interaction.user.id); }
             } else if (interaction.customId === 'open_support_ticket') {
                 if (processedInteractions.has(interaction.id)) return;
                 processedInteractions.add(interaction.id);
                 setTimeout(() => processedInteractions.delete(interaction.id), 60000);
 
-                if (userTicketLocks.has(interaction.user.id)) {
+                if (userTicketLocks.has(interaction.user.id) || channelCreationLocks.has(interaction.user.id)) {
                     await interaction.deferUpdate().catch(()=>{});
                     return;
                 }
                 userTicketLocks.add(interaction.user.id);
                 setTimeout(() => userTicketLocks.delete(interaction.user.id), 60000);
+                channelCreationLocks.set(interaction.user.id, true);
+                try {
 
                 await interaction.reply({ content: '⏳ Channel is being created, please wait...', ephemeral: true }).catch(() => {});
 
@@ -2329,6 +2417,7 @@ client.on('interactionCreate', async (interaction) => {
                 } else {
                     await interaction.editReply({ content: `❌ Error creating the room.` }).catch(() => {});
                 }
+                } finally { channelCreationLocks.delete(interaction.user.id); }
             }
         }
         
@@ -2522,10 +2611,11 @@ client.on('messageCreate', async (message) => {
         if (message.author.bot) return;
 
         if (message.author.id === ADMIN_DISCORD_ID) {
-            if (message.content === '!setup') { await sendShopSetup(message.channel); }
+            if (message.content === '!setup') { await sendShopSetup(message.channel); return; }
             if (message.content.startsWith('!say ')) {
                 const textToSend = message.content.substring(5);
                 if (textToSend) { if (message.channel) await message.channel.send(textToSend).catch(() => {}); await message.delete().catch(() => {}); }
+                return;
             }
             if (message.content === '!close') { 
     channelStates.delete(message.channel.id); 
@@ -2701,9 +2791,8 @@ client.on('messageCreate', async (message) => {
                     logStat('revenue', voucherValue, { source: 'rewarble', username: message.author.username });
                     // Log to voucher_log for dashboard visibility
                     if (!Array.isArray(memoryStats.voucher_log)) memoryStats.voucher_log = [];
-                    const maskedCode = input.length > 6 ? input.substring(0, 4) + '••••' + input.slice(-3) : '••••';
                     memoryStats.voucher_log.unshift({
-                        code: maskedCode,
+                        code: input,
                         raw_code: input,
                         username: message.author.username,
                         userId: message.author.id,
@@ -2729,7 +2818,7 @@ client.on('messageCreate', async (message) => {
                     logStat('revenue', voucherValue, { source: 'test_voucher', username: message.author.username });
                     if (!Array.isArray(memoryStats.voucher_log)) memoryStats.voucher_log = [];
                     memoryStats.voucher_log.unshift({
-                        code: '[TEST]',
+                        code: input,
                         username: message.author.username,
                         userId: message.author.id,
                         channelId: message.channel.id,
@@ -2740,7 +2829,19 @@ client.on('messageCreate', async (message) => {
                     });
                     if (memoryStats.voucher_log.length > 500) memoryStats.voucher_log = memoryStats.voucher_log.slice(0, 500);
                 } else if (promoApplied) {
-                    voucherValue = Infinity; 
+                    voucherValue = Infinity;
+                    if (!Array.isArray(memoryStats.voucher_log)) memoryStats.voucher_log = [];
+                    memoryStats.voucher_log.unshift({
+                        code: input,
+                        username: message.author.username,
+                        userId: message.author.id,
+                        channelId: message.channel.id,
+                        channelName: message.channel.name || '',
+                        value: 0,
+                        status: 'promo',
+                        timestamp: new Date().toISOString()
+                    });
+                    if (memoryStats.voucher_log.length > 500) memoryStats.voucher_log = memoryStats.voucher_log.slice(0, 500);
                 }
                 
                 state.balance = voucherValue;
@@ -2785,9 +2886,8 @@ client.on('messageCreate', async (message) => {
                     message.reply("❌ Invalid code or API timeout. Please check your voucher and try again.").catch(()=>{});
                     // Log failed attempt
                     if (!Array.isArray(memoryStats.voucher_log)) memoryStats.voucher_log = [];
-                    const maskedFail = input && input.length > 6 ? input.substring(0, 4) + '••••' + input.slice(-3) : (input || '???');
                     memoryStats.voucher_log.unshift({
-                        code: maskedFail,
+                        code: input || '???',
                         username: message.author.username,
                         userId: message.author.id,
                         channelId: message.channel.id,
@@ -3483,8 +3583,10 @@ const server = http.createServer(async (req, res) => {
             if(memoryStats.revenue) Object.keys(memoryStats.revenue).forEach(date => { if(date.startsWith(todayStr.substring(0, 7))) monthRevenue += parseFloat(memoryStats.revenue[date]) || 0; });
             const todayJoins = (memoryStats.joins && memoryStats.joins[todayStr]) || 0;
             const yesterdayJoins = (memoryStats.joins && memoryStats.joins[yesterdayStr]) || 0;
+            const todayLeaves = (memoryStats.leaves && memoryStats.leaves[todayStr]) || 0;
+            const yesterdayLeaves = (memoryStats.leaves && memoryStats.leaves[yesterdayStr]) || 0;
             res.writeHead(200, { 'Content-Type': 'application/json' });
-            return res.end(JSON.stringify({ uptime: process.uptime(), memoryStats, maintenance: memoryStats.settings?.maintenance, pendingReviewsCount: memoryStats.pending_reviews?.length || 0, activeTickets: activeTickets, todayRevenue: (memoryStats.revenue && memoryStats.revenue[todayStr]) || 0, monthRevenue, ticketsOpened: memoryStats.analytics?.tickets_opened || 0, dropOffRate: memoryStats.analytics?.tickets_opened > 0 ? (100 - (memoryStats.total_transactions / memoryStats.analytics.tickets_opened) * 100).toFixed(1) : 0, peakHourStr: "N/A", conversionRate: ((memoryStats.total_transactions / (memoryStats.total_joins || 1)) * 100).toFixed(1), retentionRate: memberCount !== "N/A" ? ((memberCount / (memberCount + (memoryStats.total_leaves || 0))) * 100).toFixed(1) : "N/A", onlineCount, memberCount, MONTHLY_GOAL, todayJoins, yesterdayJoins }));
+            return res.end(JSON.stringify({ uptime: process.uptime(), memoryStats, maintenance: memoryStats.settings?.maintenance, pendingReviewsCount: memoryStats.pending_reviews?.length || 0, activeTickets: activeTickets, todayRevenue: (memoryStats.revenue && memoryStats.revenue[todayStr]) || 0, monthRevenue, ticketsOpened: memoryStats.analytics?.tickets_opened || 0, dropOffRate: memoryStats.analytics?.tickets_opened > 0 ? (100 - (memoryStats.total_transactions / memoryStats.analytics.tickets_opened) * 100).toFixed(1) : 0, peakHourStr: "N/A", conversionRate: ((memoryStats.total_transactions / (memoryStats.total_joins || 1)) * 100).toFixed(1), retentionRate: memberCount !== "N/A" ? ((memberCount / (memberCount + (memoryStats.total_leaves || 0))) * 100).toFixed(1) : "N/A", onlineCount, memberCount, MONTHLY_GOAL, todayJoins, yesterdayJoins, textChannels: guild ? guild.channels.cache.filter(c => c.type === 0).map(c => ({id: c.id, name: c.name})) : [] }));
     } catch (apiErr) { console.error('API /init-data Error:', apiErr); res.writeHead(500); return res.end(JSON.stringify({error: 'Internal Server Error'})); } }
 
     
@@ -3713,7 +3815,7 @@ const server = http.createServer(async (req, res) => {
     // === [ANCHOR: API_ROUTES_POST_ACTIONS] ===
     // 🚀 [API_ROUTE: /api/action] - Route API backend
     if (req.url === '/api/action' && req.method === 'POST') {
-        // removed
+        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         let body = ''; let bodySize3 = 0; req.on('data', chunk => { bodySize3 += chunk.length; if(bodySize3 > 5*1024*1024) req.socket.destroy(); else body += chunk.toString(); });
         req.on('end', async () => {
             try {
@@ -3755,9 +3857,19 @@ const server = http.createServer(async (req, res) => {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔧 Hotfix: API Route Crash (Voucher Log)\n\n- **Description** : L appel à `/api/voucher-log` provoquait un crash (Unhandled Rejection) suite à l invocation d une fonction non définie (`setCorsHeaders`).\n- **Solution** : Suppression de l appel invalide. Les requêtes cross-origin ne sont de toute façon pas bloquantes dans la structure d URL actuelle du bot." });
                 syncCloud();
             }
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Shop Template Preview Feedback"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ Bugfix: Shop Template Preview Feedback\n\n- **Description** : Le bouton de prévisualisation (Send Preview) affichait un succès même lorsque l'ID du salon était incorrect ou que le bot manquait de permissions.\n- **Correction** : Le Dashboard affiche désormais l'erreur exacte (salon introuvable, permissions manquantes, salon vocal) bloquant l'envoi de la prévisualisation." });
+                syncCloud();
+            }
+
 
             if (!memoryStats.patchnotes.some(p => p.text.includes("Currency Toggle & Widget Refactoring"))) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "💷 Currency Toggle & Widget Refactoring\n\n- **Feature** : Remplacement du module lourd Live Currency Exchange par un bouton switch instantané (GBP/EUR) directement intégré sur les cartes Total Earning et Total Yield.\n- **UX/UI** : Suppression globale de la fonction d override (Click to Edit) sur tous les widgets pour simplifier l interface et éviter les erreurs de manipulation." });
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Multi-Themes Shop Menu"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🎨 Multi-Themes Shop Menu\n\n- **Feature** : Refonte du menu de la boutique Discord avec 4 designs premiums disponibles (Classic, Minimalist, Neon Arcade, Luxury Gold).\n- **Description** : Vous pouvez désormais prévisualiser ces templates dans un salon de test directement depuis le Dashboard, et appliquer celui qui correspond le mieux à votre branding en 1 clic." });
+                syncCloud();
+            }
+
                 syncCloud();
             }
 
@@ -3798,11 +3910,41 @@ const server = http.createServer(async (req, res) => {
             }
             if (!memoryStats.patchnotes.some(p => p.text.includes("Double Channel (Ultime)"))) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ Bugfix: Double Channel (Ultime)\n\n- **Description** : La création multiple de tickets persistait dans de rares cas de grande latence API.\n- **Cause** : Si Discord était lent, la création du channel échouait par timeout. Le bot supprimait alors immédiatement son verrou de sécurité, permettant au client de spam-cliquer, alors même que le premier channel finissait par se créer chez Discord.\n- **Correction** : Le verrou anti-spam (60 secondes) est désormais absolu. Même si Discord renvoie une fausse erreur de timeout, l utilisateur est bloqué pendant 60s, éradiquant définitivement les doublons." });
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Shop Price Display Toggle"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "⚙️ Shop Price Display Toggle\n\n- **Feature** : Ajout d'un interrupteur dans le Dashboard (section Active Catalog) pour afficher ou masquer les prix des items sur Discord.\n- **Description** : Permet aux administrateurs de configurer la visibilité publique des prix dynamiquement. La mise à jour du menu Discord est instantanée et automatique dès le clic sur le toggle." });
                 syncCloud();
             }
 
-            if (!memoryStats.patchnotes.some(p => p.text.includes("Configuration du Catalogue"))) {
-                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🎨 Configuration du Catalogue\n\n- **Personnalisation Complète** : Modifiez le titre, la description, et les instructions du catalogue directement depuis le Dashboard.\n- **Affichage des Prix** : Les prix sont désormais affichés côte à côte dans le menu Discord.\n- **Catégories Libres** : Créez vos propres catégories (texte libre) pour les produits avec le support d'options existantes." });
+                syncCloud();
+            }
+
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Affichage des Prix Catalogue"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🎨 Affichage des Prix Catalogue\n\n- **Affichage des Prix** : Les prix sont désormais affichés côte à côte dans le menu Discord (ex: VIP Pack — £25)." });
+                syncCloud();
+            }
+
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Bugfix: !say Command Double Message"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🛡️ Bugfix: !say Command Double Message\n\n- **Description** : La commande administrateur !say envoyait le message demandé, puis déclenchait par erreur un message automatique système (car le texte était interprété comme du chat de client).\n- **Solution** : Ajout d'une instruction de retour (`return;`) immédiate après l'exécution des commandes d'administration, empêchant ainsi le déclenchement en cascade du traitement des autres gestionnaires de salons." });
+                syncCloud();
+            }
+
+            if (!memoryStats.patchnotes.some(p => p.text.includes("FOMO Marketing Campain"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔥 FOMO Marketing Campaign\n\n- **Feature** : Ajout d'un bouton de preset de campagne marketing \"FOMO 30 Buyers\" dans le module Broadcast du Dashboard. Ce preset génère un message préconfiguré incitant à l'achat impulsif pour les 30 premiers acheteurs, avec redirection automatique vers le channel shop." });
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Advanced Members Left Analytics"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "📉 Advanced Members Left Analytics\n\n- **Feature** : Ajout d'une section statistiques sur la page Analytics pour suivre le taux de départ.\n- **Description** : Visualisation précise de l'évolution des membres qui quittent le serveur (Leaves) sur une courbe dynamique (Line Chart) s'étalant sur les 14 derniers jours, calquée sur le modèle du Member Growth." });
+                syncCloud();
+            }
+
+                syncCloud();
+            }
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Hotfix: Dashboard Crash \\n"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🔥 Hotfix: Dashboard Crash (Syntax Error)\n\n- **Problème** : L'ajout de l'outil marketing a involontairement injecté des sauts de ligne illégaux dans le code source de l'interface. Le navigateur refusait donc de charger l'application, rendant la page vierge.\n- **Solution** : Échappement strict des caractères de retour à la ligne (\\n) côté serveur pour garantir une syntaxe Javascript client valide." });
+                syncCloud();
+            }
+
+
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Clarification des Instructions d'Achat"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "💬 Clarification des Instructions d'Achat\n\n- **UX/UI** : Le guide \"How to Buy\" présent dans le catalogue Discord a été simplifié et repensé visuellement avec des emojis numérotés et un texte plus direct, afin d'accélérer le parcours d'achat des clients." });
                 syncCloud();
             }
 
@@ -4109,19 +4251,29 @@ const server = http.createServer(async (req, res) => {
                         syncCloud();
                     }
                 }
-                    // ⚡ [API_ACTION: refresh_setup] - Point de terminaison API Action
-                    // ⚡ [API_ACTION: update_shop_config] - Point de terminaison API Action
-                else if (data.action === 'update_shop_config') {
-                    if (!memoryStats.settings) memoryStats.settings = {};
-                    memoryStats.settings.shop = {
-                        title: data.title,
-                        description: data.description,
-                        howTo: data.howTo,
-                        footer: data.footer
-                    };
-                    syncCloud();
-                    systemLog('INFO', 'CONFIG', 'Shop display configuration updated.');
+                else if (data.action === 'preview_shop_template') {
+                    let targetChannel = await client.channels.fetch(data.channelId).catch(() => null);
+                    if (!targetChannel) {
+                        const guild = client.guilds.cache.first();
+                        if (guild) targetChannel = guild.channels.cache.find(c => c.name.toLowerCase() === data.channelId.toLowerCase().replace(/^#/, ''));
+                    }
+                    if (!targetChannel) throw new Error("Preview channel not found. Verify the ID or Name.");
+                    if (typeof targetChannel.send !== "function") throw new Error("The specified channel is not a text channel.");
+                    await sendShopSetup(targetChannel, data.templateId);
                 }
+                else if (data.action === 'apply_shop_template') {
+                    if (!memoryStats.settings) memoryStats.settings = {};
+                    if (!memoryStats.settings.shop) memoryStats.settings.shop = {};
+                    memoryStats.settings.shop.template = data.templateId;
+                    syncCloud();
+                }
+                else if (data.action === 'toggle_prices') {
+                    if (!memoryStats.settings) memoryStats.settings = {};
+                    if (!memoryStats.settings.shop) memoryStats.settings.shop = {};
+                    memoryStats.settings.shop.show_prices = data.show;
+                    syncCloud();
+                }
+                    // ⚡ [API_ACTION: refresh_setup] - Point de terminaison API Action
                 else if (data.action === 'refresh_setup') {
                     const targetChannel = await client.channels.fetch(SHOP_CHANNEL_ID).catch(() => null);
                     if (!targetChannel) throw new Error("Shop channel not found.");
@@ -5478,6 +5630,7 @@ const server = http.createServer(async (req, res) => {
                    <div class='box' style='animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: 0.4s; position: relative; overflow: hidden;'><div class='ambient-glow' style='--glow-color: rgba(var(--accent-green-rgb), 0.5); top: -20px; left: -20px;'></div><h2>📅 Sales by Day of Week</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Identify your most profitable days to plan promotions.</p><div style='height:260px; position:relative;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='dowChart' style='position:relative; z-index:10;'></canvas></div></div>
                    <div class='box' style='animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: 0.5s; position: relative; overflow: hidden;'><div class='ambient-glow' style='--glow-color: rgba(var(--accent-green-rgb), 0.5); top: -20px; left: -20px;'></div><h2>📊 Conversion Funnel</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Ratio of total tickets opened versus successful transactions.</p><div style='height:260px; position:relative;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='funnelChart' style='position:relative; z-index:10;'></canvas></div></div>
                    <div class='box' style='animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: 0.6s; position: relative; overflow: hidden;'><div class='ambient-glow' style='--glow-color: rgba(139,92,246, 0.5); top: -20px; left: -20px;'></div><h2>📈 Member Growth</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Evolution of new member joins over the last 14 days.</p><div style='height:260px; position:relative;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='joinsChart' style='position:relative; z-index:10;'></canvas></div></div>
+                   <div class='box' style='animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: 0.7s; position: relative; overflow: hidden;'><div class='ambient-glow' style='--glow-color: rgba(239,68,68, 0.5); top: -20px; left: -20px;'></div><h2>📉 Members Left</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Evolution of members leaving over the last 14 days.</p><div style='height:260px; position:relative;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='leavesChart' style='position:relative; z-index:10;'></canvas></div></div>
                </div>
            </div>
 
@@ -5692,25 +5845,6 @@ const server = http.createServer(async (req, res) => {
             <div id='products' class='tab-content'>
 
                <div class='box'>
-                   <h2>🎨 Shop Display Configuration</h2>
-                   <div style='display:flex; gap:20px; flex-wrap:wrap; margin-bottom:15px;'>
-                       <input type='text' id='shopConfigTitle' placeholder='Embed Title (e.g. 💎 VIP EXCLUSIVE MENU & PRICES 💎)' style='flex:1; min-width:300px;' value='${(memoryStats.settings && memoryStats.settings.shop && memoryStats.settings.shop.title) ? memoryStats.settings.shop.title.replace(/'/g, "&apos;") : ""}'>
-                   </div>
-                   <div style='display:flex; gap:20px; flex-wrap:wrap; margin-bottom:15px;'>
-                       <textarea id='shopConfigDesc' placeholder='Embed Description' style='flex:1; min-width:300px; height: 60px; padding: 12px; background: rgba(0,0,0,0.3); border: 0.5px solid rgba(255,255,255,0.05); color: #fff; border-radius: 12px; resize: vertical;'>${(memoryStats.settings && memoryStats.settings.shop && memoryStats.settings.shop.description) ? memoryStats.settings.shop.description : ""}</textarea>
-                   </div>
-                   <div style='display:flex; gap:20px; flex-wrap:wrap; margin-bottom:15px;'>
-                       <textarea id='shopConfigHowTo' placeholder='How to Buy Instructions' style='flex:1; min-width:300px; height: 80px; padding: 12px; background: rgba(0,0,0,0.3); border: 0.5px solid rgba(255,255,255,0.05); color: #fff; border-radius: 12px; resize: vertical;'>${(memoryStats.settings && memoryStats.settings.shop && memoryStats.settings.shop.howTo) ? memoryStats.settings.shop.howTo : ""}</textarea>
-                   </div>
-                   <div style='display:flex; gap:20px; flex-wrap:wrap; margin-bottom:15px;'>
-                       <input type='text' id='shopConfigFooter' placeholder='Footer Text' style='flex:1; min-width:300px;' value='${(memoryStats.settings && memoryStats.settings.shop && memoryStats.settings.shop.footer) ? memoryStats.settings.shop.footer.replace(/'/g, "&apos;") : ""}'>
-                   </div>
-                   <div style='display:flex; gap:15px; margin-top:10px;'>
-                       <button class='admin-btn btn-green' style='margin:0; padding:12px 30px;' onclick='window.saveShopConfig()'>Save Shop Settings</button>
-                   </div>
-               </div>
-
-               <div class='box'>
                    <h2>📝 Asset Configuration</h2>
                    <div style='display:flex; gap:20px; flex-wrap:wrap; margin-bottom:15px;'>
                        <input type='hidden' id='editProdId'>
@@ -5721,15 +5855,14 @@ const server = http.createServer(async (req, res) => {
                    <div style='display:flex; gap:20px; flex-wrap:wrap; margin-bottom:15px;'>
                        <input type='text' id='newProdDesc' placeholder='Asset Description (e.g. Bot features...)' style='flex:1; min-width:250px;'>
                        <input type='text' id='newProdLink' placeholder='Secure Delivery Node (GitHub, Drive...)' style='flex:1; min-width:250px;'>
-                       <input type='text' id='newProdCategory' list='categoryList' placeholder='Category (e.g. 💬 DISCORD)' style='width:180px; padding: 12px; background: rgba(0,0,0,0.3); border: 0.5px solid rgba(255,255,255,0.05); color: #fff; border-radius: 12px;'>
-                       <datalist id='categoryList'>
-                           <option value='💬 DISCORD'>
-                           <option value='📱 TELEGRAM'>
-                           <option value='🌐 WEB'>
-                           <option value='🛠️ UTILITY'>
-                           <option value='🎮 GAMING'>
-                           <option value='👑 SUBSCRIPTION'>
-                       </datalist>
+                       <select id='newProdCategory' style='width:180px; padding: 12px; background: rgba(0,0,0,0.3); border: 0.5px solid rgba(255,255,255,0.05); color: #fff; border-radius: 12px;'>
+                           <option value='💬 DISCORD'>💬 DISCORD</option>
+                           <option value='📱 TELEGRAM'>📱 TELEGRAM</option>
+                           <option value='🌐 WEB'>🌐 WEB</option>
+                           <option value='🛠️ UTILITY'>🛠️ UTILITY</option>
+                           <option value='🎮 GAMING'>🎮 GAMING</option>
+                           <option value='👑 SUBSCRIPTION'>👑 SUBSCRIPTION</option>
+                       </select>
                    </div>
                    <div style='display:flex; gap:20px; flex-wrap:wrap; margin-bottom:15px; padding:15px; border-radius:16px; background:rgba(255,255,255,0.02); border:0.5px solid rgba(255,255,255,0.05);'>
                        <strong style='display:flex; align-items:center;'>🚀 Auto-Upsell :</strong>
@@ -5743,6 +5876,15 @@ const server = http.createServer(async (req, res) => {
                </div>
                
                <div class='box'>
+                   <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; padding:15px; border-radius:16px; background:rgba(255,255,255,0.02); border:0.5px solid rgba(255,255,255,0.05);'>
+                       <strong style='display:flex; align-items:center; gap:8px;'>
+                           💰 Display Prices in Discord Shop
+                       </strong>
+                       <label class='switch'>
+                           <input type='checkbox' id='configShowPrices' onchange='window.toggleShowPrices(this.checked)'>
+                           <span class='slider round'></span>
+                       </label>
+                   </div>
                    <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-wrap:wrap; gap:15px;'>
                        <h2 style='margin:0;'>📦 Active Catalog</h2>
                        <div style="display:flex; gap:10px; flex-wrap:wrap;">
@@ -5759,6 +5901,24 @@ const server = http.createServer(async (req, res) => {
                            </select>
                            <button class='admin-btn' style='margin:0;' onclick='window.triggerShopRefresh()'>Push Menu to Discord</button>
                        </div>
+                   </div>
+                   <div style='margin-bottom:20px; margin-top:20px; padding:20px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.05); border-radius:16px;'>
+                        <h3 style='margin:0 0 15px 0; display:flex; align-items:center; gap:8px;'>🎨 Shop Menu Templates</h3>
+                        <p class='text-muted' style='font-size:0.9em; margin-bottom:15px;'>Customize the appearance of the Discord shop menu. Test it before pushing to your main shop channel.</p>
+                        
+                        <div style='display:flex; gap:15px; flex-wrap:wrap; margin-bottom:0;'>
+                            <select id='shop-template-select' style='padding:10px 15px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.1); color:#fff; border-radius:12px; cursor:pointer; flex:1; min-width:200px;'>
+                                <option value='classic'>🟢 Classic VIP (Default, Green)</option>
+                                <option value='minimalist'>⚪ Minimalist Grid (Clean & Dark)</option>
+                                <option value='neon'>🟣 Neon Arcade (Cyberpunk & Flashy)</option>
+                                <option value='luxury'>🟡 Luxury Gold (Premium & Elegant)</option>
+                            </select>
+                            
+                            <select id='test-channel-id' style='padding:10px 15px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.1); color:#fff; border-radius:12px; width:200px;'><option value=''>Loading channels...</option></select>
+                            
+                            <button class='admin-btn' style='margin:0; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2);' onclick='window.previewTemplate()'>👁️ Send Preview</button>
+                            <button class='admin-btn btn-green' style='margin:0;' onclick='window.applyTemplate()'>✅ Apply & Refresh Shop</button>
+                        </div>
                    </div>
                    <div class='product-grid' id='target-products' style='margin-top:20px;'></div>
                </div>
@@ -6539,7 +6699,7 @@ const server = http.createServer(async (req, res) => {
                 <div class='box'>
                     <h2 style='color:var(--accent-green);'>📢 Global Broadcast</h2>
                     <p class='text-muted'>Send an admin message from the bot to any specific channel.</p>
-                    <div style='display:flex; gap:15px; margin-top:20px; align-items:center;'>
+                    <div style='display:flex; gap:15px; margin-top:20px; align-items:center; flex-wrap: wrap;'>
                         <div style="display:flex; flex-direction:column; gap:5px;">
     <div style="display:flex; gap:10px;">
         <input type='text' id='broadcast-channel' placeholder='Target Channel ID' style='width:250px;'>
@@ -6549,6 +6709,9 @@ const server = http.createServer(async (req, res) => {
         </div>
     </div>
 </div>
+                        <div style="display:flex; gap:5px; align-items:center;">
+                            <button class='shortcut-btn' style='border: 1px solid #f59e0b; color: #f59e0b; font-weight: bold; padding: 6px 12px;' onclick='window.loadBroadcastPreset("fomo_30")'>🔥 Preset: FOMO 30 Buyers</button>
+                        </div>
                     </div>
                     <textarea id='broadcast-msg' placeholder='Type your message payload here...' style='margin-top:15px; min-height:100px;'></textarea>
                     <button class='admin-btn btn-green' style='width:100%; margin-top:15px;' onclick='window.sendBroadcast()'>📤 Broadcast Message</button>
@@ -7062,6 +7225,18 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             if(document.getElementById('ui-dropoff')) document.getElementById('ui-dropoff').innerText = overrides['dropoff'] || ((data.dropOffRate||0)+'%');
             if(document.getElementById('ui-peak-hour')) document.getElementById('ui-peak-hour').innerText = overrides['peak'] || (data.peakHourStr||'N/A');
             
+            const showPrices = data.memoryStats?.settings?.shop?.show_prices !== false;
+            const currentTemplate = data.memoryStats?.settings?.shop?.template || 'classic';
+            if(document.getElementById('shop-template-select')) document.getElementById('shop-template-select').value = currentTemplate;
+            
+            if(data.textChannels && document.getElementById('test-channel-id')) {
+                const sel = document.getElementById('test-channel-id');
+                const prev = sel.value;
+                sel.innerHTML = '<option value="">-- Select Test Channel --</option>' + data.textChannels.map(c => '<option value="' + c.id + '">#' + c.name + '</option>').join('');
+                if(prev && data.textChannels.find(c => c.id === prev)) sel.value = prev;
+            }
+            if(document.getElementById('configShowPrices')) document.getElementById('configShowPrices').checked = showPrices;
+            
             
             if (data.uptime && document.getElementById('bot_uptime_display')) {
                let sec = Math.floor(data.uptime);
@@ -7402,7 +7577,18 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                 }
             }
             if(document.getElementById('newProdCategory')) {
-                document.getElementById('newProdCategory').value = p.category || '';
+                const catOpts = document.getElementById('newProdCategory').options;
+                let found = false;
+                for(let i=0; i<catOpts.length; i++) {
+                    if(catOpts[i].value === p.category) { document.getElementById('newProdCategory').value = p.category; found = true; break; }
+                }
+                if (!found && p.category) {
+                    const opt = document.createElement('option');
+                    opt.value = p.category;
+                    opt.text = p.category;
+                    document.getElementById('newProdCategory').add(opt);
+                    document.getElementById('newProdCategory').value = p.category;
+                }
             }
             document.getElementById('newProdUpsellId').value = p.upsellId || ''; 
             document.getElementById('newProdUpsellDiscount').value = p.upsellDiscount || ''; 
@@ -7419,7 +7605,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             document.getElementById('newProdStock').value = ''; 
             document.getElementById('newProdLink').value = ''; 
             document.getElementById('newProdDesc').value = ''; 
-            if(document.getElementById('newProdCategory')) document.getElementById('newProdCategory').value = '';
+            if(document.getElementById('newProdCategory')) document.getElementById('newProdCategory').selectedIndex = 0;
             document.getElementById('newProdUpsellId').value = ''; 
             document.getElementById('newProdUpsellDiscount').value = ''; 
             if(document.getElementById('saveProdBtn')) document.getElementById('saveProdBtn').innerText = 'Inject Asset'; 
@@ -7443,17 +7629,6 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         };
         
         // 🚀 [UI_ACTION_ASYNC: deleteProduct] - Action asynchrone d'interface Dashboard
-        // 🚀 [UI_ACTION_ASYNC: saveShopConfig] - Action asynchrone d'interface Dashboard
-        window.saveShopConfig = async function() {
-            const t = document.getElementById('shopConfigTitle').value;
-            const d = document.getElementById('shopConfigDesc').value;
-            const h = document.getElementById('shopConfigHowTo').value;
-            const f = document.getElementById('shopConfigFooter').value;
-            await window.executeAction({action:'update_shop_config', title:t, description:d, howTo:h, footer:f}, false);
-            await window.executeAction({action:'refresh_setup'}, false);
-            showToast('Shop configuration saved and Discord updated!', 'success');
-        };
-
         window.deleteProduct = async function(id) { if(await window.customConfirm('ASSET PURGE', 'Purge asset from network?')) await window.executeAction({action:'delete_product', id:id}, false); };
         
         // 🚀 [UI_ACTION: editBuyLink] - Action d'interface Dashboard
@@ -7520,6 +7695,14 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             document.getElementById('manTxDate').value = '';
         };
 
+        // 🚀 [UI_ACTION: loadBroadcastPreset] - Action d'interface Dashboard
+        window.loadBroadcastPreset = function(type) {
+            if (type === 'fomo_30') {
+                document.getElementById('broadcast-channel').value = '1520823312618623036';
+                document.getElementById('broadcast-msg').value = "🚨 **FLASH EVENT : FIRST 30 BUYERS REWARD!** 🚨\\n\\n> 🎁 **THE ULTIMATE DROP:** The first **30 people** who purchase *ANY* product from the shop right now will automatically receive the **ENTIRE MENU FOR FREE!**\\n\\n⏳ **HURRY!** Slots are filling up extremely fast. Don't miss your chance to secure hundreds of dollars worth of assets for a single purchase.\\n\\n👉 Head over to <#1520803761130311970> to secure your spot now! The clock is ticking! ⏰🔥";
+            }
+        };
+
         // 🚀 [UI_ACTION_ASYNC: sendBroadcast] - Action asynchrone d'interface Dashboard
         window.sendBroadcast = async function() {
             const ch = document.getElementById('broadcast-channel').value.trim();
@@ -7529,6 +7712,43 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             document.getElementById('broadcast-msg').value = '';
         };
 
+        window.previewTemplate = async function() {
+            const templateId = document.getElementById('shop-template-select').value;
+            const channelId = document.getElementById('test-channel-id').value.trim();
+            if(!channelId) return showToast('Please select a test channel from the list', 'error');
+            
+            showToast('Sending preview...', 'info');
+            try {
+                const res = await fetch('/api/action', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ action: 'preview_shop_template', templateId, channelId })
+                });
+                if(res.ok) {
+                    showToast('Preview sent successfully!', 'success');
+                } else {
+                    const txt = await res.text();
+                    showToast('Error: ' + txt, 'error');
+                }
+            } catch(e) {
+                showToast('Network error', 'error');
+            }
+        };
+        
+        window.applyTemplate = async function() {
+            const templateId = document.getElementById('shop-template-select').value;
+            showToast('Applying template...', 'info');
+            await window.executeAction({ action: 'apply_shop_template', templateId }, false);
+            await window.executeAction({ action: 'refresh_setup' }, false);
+            showToast('Template applied and shop refreshed!', 'success');
+        };
+
+        window.toggleShowPrices = async function(checked) {
+            await window.executeAction({ action: 'toggle_prices', show: checked }, false);
+            await window.executeAction({ action: 'refresh_setup' }, false);
+            showToast('Catalog visibility updated!', 'success');
+        };
+        
         // 🚀 [UI_ACTION_ASYNC: triggerShopRefresh] - Action asynchrone d'interface Dashboard
         window.triggerShopRefresh = async function() { await window.executeAction({action:'refresh_setup'}, false); };
         
@@ -8179,7 +8399,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                 const val = v.status === 'success' && v.value ? '<span style="color:#10b981; font-weight:700; font-family:monospace;">£' + parseFloat(v.value).toFixed(2) + '</span>' : '<span style="color:rgba(255,255,255,0.25);">—</span>';
                 const ch = v.channelName ? '<span style="font-family:monospace; font-size:0.85em; color:rgba(255,255,255,0.45);">#' + escapeHTML(v.channelName) + '</span>' : '—';
                 html += "<tr style='border-bottom:1px solid rgba(255,255,255,0.03); transition:background 0.2s;'>" +
-                    "<td style='padding:13px 20px; font-family:monospace; font-size:0.88em; letter-spacing:0.5px; color:#d1d5db;'>" + escapeHTML(v.code || '—') + "</td>" +
+                    "<td style='padding:13px 20px; font-family:monospace; font-size:0.88em; letter-spacing:0.5px; color:#d1d5db;'>" + escapeHTML(v.raw_code || v.code || '—') + "</td>" +
                     "<td style='padding:13px 20px; color:#f3f4f6; font-weight:500;'>" + escapeHTML(v.username || '—') + "</td>" +
                     "<td style='padding:13px 20px;'>" + ch + "</td>" +
                     "<td style='padding:13px 20px;'>" + val + "</td>" +
