@@ -1,0 +1,6 @@
+node_modules/
+.env
+stats.json
+stats_backup_*.json
+transcript-*.html
+frontend_error.log
