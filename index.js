@@ -30,20 +30,13 @@ const axios = require('axios'); // just to anchor it
 
 
 const crypto = require('crypto');
+// Dépendance déclarée dans package.json : pas d'installation à l'exécution (risque supply-chain au démarrage)
 let webauthnServer;
 try {
     webauthnServer = require('@simplewebauthn/server');
 } catch (e) {
-    console.warn("⚠️ @simplewebauthn/server not found. Attempting dynamic installation (Render Hotfix)...");
-    try {
-        require('child_process').execSync('npm install @simplewebauthn/server', { stdio: 'inherit' });
-        const resolvedPath = require('child_process').execSync("node -e \"console.log(require.resolve('@simplewebauthn/server'))\"").toString().trim();
-        webauthnServer = require(resolvedPath);
-        console.log("✅ @simplewebauthn/server installed successfully.");
-    } catch (err) {
-        console.error("❌ Failed to install @simplewebauthn/server:", err.message);
-        process.exit(1);
-    }
+    console.error("❌ @simplewebauthn/server is missing. Run `npm install` before starting the bot.", e.message);
+    process.exit(1);
 }
 
 const {
@@ -92,7 +85,10 @@ const REWARBLE_API_KEY = process.env.REWARBLE_API_KEY;
 const REVIEW_CHANNEL_ID = "1521625370929922078"; 
 const SHOP_CHANNEL_ID = "1520803761130311970"; 
 // 👑 VIP Role ID
-const VIP_ROLE_ID = "REMPLACE_AVEC_ID_ROLE_VIP"; 
+const VIP_ROLE_ID = process.env.VIP_ROLE_ID || ""; // Définir VIP_ROLE_ID dans l'environnement
+if (!VIP_ROLE_ID) {
+    console.warn("⚠️ WARNING: VIP_ROLE_ID is not set. VIP role assignment will be skipped.");
+}
 
 if (!DISCORD_BOT_TOKEN) {
     console.error("⚠️ WARNING: DISCORD_BOT_TOKEN is missing! Bot will not connect to Discord.");
@@ -3911,7 +3907,7 @@ const server = http.createServer(async (req, res) => {
             });
             res.writeHead(200, { 'Content-Type': 'application/json' });
             return res.end(JSON.stringify(list));
-        } catch(e) { res.writeHead(500).end(e.message); }
+        } catch(e) { systemLog('ERROR', 'MEMBERS', `Member list failed: ${e.message}`); res.writeHead(500).end(JSON.stringify({ error: 'Internal Server Error' })); }
         return;
     }
 
@@ -4578,7 +4574,7 @@ const server = http.createServer(async (req, res) => {
                             try {
                                 const member = await guild.members.fetch(data.userId);
                                 await member.roles.add(VIP_ROLE_ID);
-                            } catch(e) {}
+                            } catch(e) { systemLog('WARN', 'VIP', `Could not grant VIP role to ${data.userId}: ${e.message}`); }
                         }
                         syncCloud();
                         systemLog('INFO', 'VIP', `Added ${days} VIP days to user ${data.userId}.`);
@@ -4591,7 +4587,7 @@ const server = http.createServer(async (req, res) => {
                         try {
                             const member = await guild.members.fetch(data.userId);
                             await member.roles.remove(VIP_ROLE_ID);
-                        } catch(e) {}
+                        } catch(e) { systemLog('WARN', 'VIP', `Could not remove VIP role from ${data.userId}: ${e.message}`); }
                         syncCloud();
                     }
                 }
@@ -4600,6 +4596,8 @@ const server = http.createServer(async (req, res) => {
                     try {
                         const newStats = JSON.parse(data.json);
                         if (!newStats.products || !newStats.settings) throw new Error('Structure invalide');
+                        // Sauvegarde de l'état actuel avant écrasement, pour pouvoir revenir en arrière
+                        await backupToDiscord().catch(e => systemLog('ERROR', 'SYSTEM', `Pre-overwrite backup failed: ${e.message}`));
                         memoryStats = newStats;
                         syncCloud();
                         systemLog('CRITICAL', 'SYSTEM', `Core memory matrix overridden by raw JSON upload.`);

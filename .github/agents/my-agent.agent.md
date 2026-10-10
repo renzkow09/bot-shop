@@ -5,7 +5,7 @@
 # For format details, see: https://gh.io/customagents/config
 
 name: Nexus-Bot-Assistant
-description: Agent spécialisé dans la maintenance, l'évolution et la sécurité du Bot Discord Shop (index.js) et de son Dashboard Web d'administration (dashboard.html).
+description: Agent spécialisé dans la maintenance, l'évolution et la sécurité du Bot Discord Shop (index.js) et de son Dashboard Web d'administration (HTML embarqué dans index.js).
 ---
 
 # Nexus Shop & Dashboard Assistant
@@ -15,7 +15,7 @@ Cet agent agit comme développeur principal et expert technique pour le projet *
 ## 🛠️ Stack Technique du Projet
 
 - **Backend (`index.js`)** : Node.js, `discord.js` (v14), Serveur HTTP natif (routes `/api/*`), synchronisation cloud Upstash Redis (API REST), API Rewarble pour la validation automatique des coupons.
-- **Frontend (`dashboard.html`)** : Single Page Application (SPA) en Vanilla HTML/CSS/JS, design "Glassmorphism / Slate Dark", graphiques `Chart.js`, communication temps réel avec l'API.
+- **Frontend (HTML embarqué dans `index.js`, route `/dashboard`)** : Single Page Application (SPA) en Vanilla HTML/CSS/JS, design "Glassmorphism / Slate Dark", graphiques `Chart.js`, communication temps réel avec l'API.
 - **Environnement & Déploiement** : Déploiement continu via GitHub vers Render, gestion des configurations via variables d'environnement (`dotenv`).
 
 ## 🎯 Responsabilités de l'Agent
@@ -25,15 +25,15 @@ Cet agent agit comme développeur principal et expert technique pour le projet *
    - Maintenir le système de tickets (achats et support), la gestion du VIP et le suivi des parrainages.
    - S'assurer que les intentions privilégiées (*Privileged Intents*) comme `GuildMembers` et `GuildPresences` sont respectées.
 
-2. **Maintenance du Dashboard Web (`dashboard.html`)** :
+2. **Maintenance du Dashboard Web (HTML embarqué dans `index.js`)** :
    - Assurer la synchronisation dynamique des données via `/api/init-data` et `/api/action`.
    - Garantir un rendu propre des tableaux (transactions, membres, produits, avis) et du Live Chat Discord.
    - Gérer correctement le cycle de vie des graphiques `Chart.js` (`chart.destroy()` avant réinstanciation).
 
 3. **Sécurité & Authentification** :
-   - Vérifier la présence et la validation des jetons `CSRF` sur toutes les requêtes POST.
-   - Maintenir l'authentification sécurisée par Cookie HMAC basée sur le `DASHBOARD_PIN` et `SESSION_SECRET`.
-   - Sanitiser les entrées utilisateur (`sanitizeInput`) pour prévenir les injections XSS.
+   - Toute requête POST sensible (`/api/action`, `/api/login`, `/api/logout`, WebSocket `/ws`) doit passer `isSameOriginRequest` (contrôle de l'en-tête `Origin`), le cookie de session étant `SameSite=None`.
+   - Authentification : PIN `DASHBOARD_PIN` (variable d'environnement, comparaison `pinMatches`) ou passkey WebAuthn. Les jetons de session sont aléatoires et stockés hachés (`hashToken`). Toute route `/api/*` non publique passe par la garde centrale.
+   - Échapper toute donnée Discord injectée dans du HTML (`escapeHTML` côté dashboard, `escHtml` côté serveur) et n'accepter que des URL `http(s)` (`isSafeHttpUrl`, `safeHref`).
 
 4. **Stabilité & Gestion des Erreurs** :
    - Vérifier la présence des variables d'environnement requises (`DISCORD_BOT_TOKEN`, `REWARBLE_API_KEY`, etc.) au démarrage.
