@@ -5255,8 +5255,49 @@ const server = http.createServer(async (req, res) => {
         /* === NAV BUTTONS HOVER EFFECTS === */
         .nav-btn:hover { background:rgba(255,255,255,0.06); }
 
-        /* === SPLASH SCREEN === */
-        .splash-screen { position:fixed; inset:0; background:#02020a; z-index:9999; display:flex; flex-direction:column; justify-content:center; align-items:center; pointer-events:all; animation:fadeOutSplash 0.55s var(--spring) forwards 1.4s; }
+        /* === SPLASH SCREEN (Nexus Intro) === */
+        .splash-screen { position:fixed; inset:0; z-index:9999; display:flex; justify-content:center; align-items:center; overflow:hidden; background:#03040a; font-family:'Inter',sans-serif; pointer-events:all; transition:opacity 0.7s var(--spring), transform 0.7s var(--spring), filter 0.7s var(--spring); animation:nxSplashSafety 0.6s ease forwards 9s; }
+        .splash-screen.nx-exit { opacity:0; transform:scale(1.04); filter:blur(10px); pointer-events:none; }
+        @keyframes nxSplashSafety { to { opacity:0; visibility:hidden; pointer-events:none; } }
+        .nx-bg-grid { position:absolute; inset:-50%; background-image:linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px); background-size:48px 48px; transform:perspective(700px) rotateX(58deg) translateY(-8%); animation:nxGridMove 5s linear infinite; -webkit-mask-image:radial-gradient(ellipse at center, #000 15%, transparent 62%); mask-image:radial-gradient(ellipse at center, #000 15%, transparent 62%); }
+        @keyframes nxGridMove { to { background-position:0 48px; } }
+        .nx-orb { position:absolute; border-radius:50%; filter:blur(90px); opacity:0.32; pointer-events:none; }
+        .nx-orb.a { width:440px; height:440px; background:rgba(var(--accent-green-rgb),0.6); top:-140px; left:-100px; animation:nxFloat 9s ease-in-out infinite alternate; }
+        .nx-orb.b { width:380px; height:380px; background:rgba(99,102,241,0.5); bottom:-140px; right:-80px; animation:nxFloat 11s ease-in-out infinite alternate-reverse; }
+        @keyframes nxFloat { to { transform:translate(70px,40px) scale(1.15); } }
+        .nx-vignette { position:absolute; inset:0; background:radial-gradient(circle at center, rgba(var(--accent-green-rgb),0.08) 0%, transparent 40%, rgba(0,0,0,0.85) 100%); pointer-events:none; }
+        .nx-core { position:relative; display:flex; flex-direction:column; align-items:center; text-align:center; padding:0 16px; }
+        .nx-logo { width:96px; height:96px; position:relative; margin-bottom:30px; }
+        .nx-logo svg { width:100%; height:100%; overflow:visible; position:relative; z-index:1; }
+        .nx-hex { fill:none; stroke:var(--accent-green); stroke-width:2.5; stroke-linejoin:round; stroke-dasharray:300; stroke-dashoffset:300; animation:nxDraw 1.1s var(--spring) forwards 0.1s; filter:drop-shadow(0 0 8px rgba(var(--accent-green-rgb),0.7)); }
+        .nx-hex.inner { stroke:rgba(255,255,255,0.22); stroke-width:1.2; filter:none; animation-delay:0.3s; }
+        .nx-n { fill:none; stroke:#fff; stroke-width:5; stroke-linecap:round; stroke-linejoin:round; stroke-dasharray:120; stroke-dashoffset:120; animation:nxDraw 0.9s var(--spring) forwards 0.6s; }
+        @keyframes nxDraw { to { stroke-dashoffset:0; } }
+        .nx-ring { position:absolute; inset:-16px; border-radius:50%; border:1px solid rgba(var(--accent-green-rgb),0.14); border-top-color:var(--accent-green); opacity:0; animation:spin 1.6s linear infinite, nxFadeIn 0.6s ease forwards 0.2s; }
+        .nx-ring.r2 { inset:-30px; border-color:rgba(255,255,255,0.05); border-bottom-color:rgba(var(--accent-green-rgb),0.55); animation:nxSpinRev 2.8s linear infinite, nxFadeIn 0.6s ease forwards 0.4s; }
+        .nx-pulse { position:absolute; inset:0; border-radius:50%; border:1px solid rgba(var(--accent-green-rgb),0.5); opacity:0; animation:nxPulse 2.2s ease-out infinite 1.2s; }
+        @keyframes nxPulse { 0% { transform:scale(0.9); opacity:0.6; } 100% { transform:scale(2.2); opacity:0; } }
+        @keyframes nxSpinRev { to { transform:rotate(-360deg); } }
+        @keyframes nxFadeIn { to { opacity:1; } }
+        .nx-word { display:flex; gap:0.16em; margin:0; font-size:2.7em; font-weight:800; letter-spacing:0.1em; line-height:1; }
+        .nx-word span { display:inline-block; opacity:0; transform:translateY(18px); filter:blur(8px); background:linear-gradient(180deg, #ffffff 35%, rgba(255,255,255,0.55)); -webkit-background-clip:text; background-clip:text; color:transparent; animation:nxLetter 0.7s var(--spring) forwards; }
+        .nx-word span:nth-child(1) { animation-delay:0.75s; } .nx-word span:nth-child(2) { animation-delay:0.82s; } .nx-word span:nth-child(3) { animation-delay:0.89s; } .nx-word span:nth-child(4) { animation-delay:0.96s; } .nx-word span:nth-child(5) { animation-delay:1.03s; }
+        @keyframes nxLetter { to { opacity:1; transform:none; filter:blur(0); } }
+        .nx-tag { margin-top:12px; font-size:0.72em; font-weight:500; letter-spacing:0.38em; text-transform:uppercase; color:rgba(255,255,255,0.45); opacity:0; animation:nxRise 0.6s var(--spring) forwards 1.15s; }
+        .nx-tag b { color:var(--accent-green); font-weight:600; }
+        @keyframes nxRise { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+        .nx-progress { margin-top:38px; width:min(290px, 72vw); opacity:0; animation:nxRise 0.6s var(--spring) forwards 1.25s; }
+        .nx-track { height:3px; border-radius:3px; background:rgba(255,255,255,0.07); overflow:hidden; }
+        .nx-fill { position:relative; height:100%; width:0%; border-radius:3px; background:linear-gradient(90deg, rgba(var(--accent-green-rgb),0.35), var(--accent-green)); box-shadow:0 0 14px var(--accent-green); transition:width 0.45s var(--spring); overflow:hidden; }
+        .nx-fill::after { content:''; position:absolute; top:0; bottom:0; width:60px; background:linear-gradient(90deg, transparent, rgba(255,255,255,0.75), transparent); animation:nxSweep 1.3s ease-in-out infinite; }
+        @keyframes nxSweep { from { left:-60px; } to { left:100%; } }
+        .nx-meta { display:flex; justify-content:space-between; gap:12px; margin-top:11px; font-size:0.72em; color:rgba(255,255,255,0.45); letter-spacing:0.04em; font-variant-numeric:tabular-nums; }
+        #nx-step { transition:opacity 0.25s ease; text-align:left; }
+        #nx-pct { color:rgba(255,255,255,0.75); font-weight:600; }
+        .nx-foot { position:absolute; bottom:28px; left:0; right:0; display:flex; justify-content:center; align-items:center; gap:8px; font-size:0.66em; letter-spacing:0.22em; text-transform:uppercase; color:rgba(255,255,255,0.25); opacity:0; animation:nxFadeIn 0.8s ease forwards 1.4s; }
+        .nx-foot i { width:6px; height:6px; border-radius:50%; background:var(--accent-green); box-shadow:0 0 8px var(--accent-green); animation:pulseDot 2s ease infinite; }
+        @media (max-width:480px) { .nx-word { font-size:2.1em; } .nx-logo { width:80px; height:80px; } }
+        @media (prefers-reduced-motion: reduce) { .splash-screen * { animation-duration:0.01ms !important; animation-delay:0s !important; animation-iteration-count:1 !important; transition-duration:0.01ms !important; } }
 
         /* === MOBILE OVERLAY === */
         #mobile-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000; backdrop-filter:blur(4px); }
@@ -5275,15 +5316,64 @@ const server = http.createServer(async (req, res) => {
         .glass-textarea:focus { border-color:rgba(255,255,255,0.18) !important; box-shadow:inset 0 2px 8px rgba(0,0,0,0.45), 0 0 14px rgba(255,255,255,0.04) !important; background:rgba(0,0,0,0.48) !important; }
     </style>
     
-    <div id='loading-screen' class='splash-screen' style='background: radial-gradient(circle at center, rgba(var(--accent-green-rgb), 0.1) 0%, #000 60%);'>
-       <div style='animation: zoomIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; display:flex; flex-direction:column; align-items:center;'>
-           <h1 style='font-size: 2.5em; margin-bottom: 5px; font-weight:800; color:#fff; letter-spacing:4px; text-shadow: 0 0 30px rgba(var(--accent-green-rgb), 0.8);'>NEXUS</h1>
-           <div style='font-size: 0.85em; color:rgba(255,255,255,0.5); letter-spacing:2px; text-transform:uppercase; margin-bottom: 30px;'>Core System Boot</div>
-           <div class='loader-bar-fast' style='width: 250px; height: 3px; background: rgba(255,255,255,0.05); border-radius: 4px; overflow:hidden;'>
-              <div style='width:100%; height:100%; background:var(--accent-green); animation: loadBarAnim 1.2s cubic-bezier(0.8, 0, 0.2, 1) forwards; box-shadow:0 0 15px var(--accent-green);'></div>
+    <div id='loading-screen' class='splash-screen' role='status' aria-live='polite' aria-label='Loading Nexus dashboard'>
+       <div class='nx-bg-grid'></div>
+       <div class='nx-orb a'></div>
+       <div class='nx-orb b'></div>
+       <div class='nx-vignette'></div>
+       <div class='nx-core'>
+           <div class='nx-logo'>
+               <div class='nx-pulse'></div>
+               <div class='nx-ring'></div>
+               <div class='nx-ring r2'></div>
+               <svg viewBox='0 0 100 100' aria-hidden='true'>
+                   <path class='nx-hex' d='M50 4 L90 27 L90 73 L50 96 L10 73 L10 27 Z'/>
+                   <path class='nx-hex inner' d='M50 16 L80 33 L80 67 L50 84 L20 67 L20 33 Z'/>
+                   <path class='nx-n' d='M37 65 L37 35 L63 65 L63 35'/>
+               </svg>
+           </div>
+           <h1 class='nx-word'><span>N</span><span>E</span><span>X</span><span>U</span><span>S</span></h1>
+           <div class='nx-tag'>Premium <b>Control</b> Center</div>
+           <div class='nx-progress'>
+               <div class='nx-track'><div class='nx-fill' id='nx-fill'></div></div>
+               <div class='nx-meta'><span id='nx-step'>Initializing core...</span><span id='nx-pct'>0%</span></div>
            </div>
        </div>
+       <div class='nx-foot'><i></i>Secure session &middot; Encrypted link</div>
     </div>
+    <script>
+    (function() {
+        var start = Date.now(), MIN_MS = 2300, pct = 0, done = false, lastLabel = '';
+        var steps = [[0, 'Initializing core...'], [22, 'Establishing secure link...'], [45, 'Loading modules...'], [68, 'Syncing live data...'], [100, 'Ready']];
+        function render() {
+            var fill = document.getElementById('nx-fill'), pEl = document.getElementById('nx-pct'), sEl = document.getElementById('nx-step');
+            if (!fill) return;
+            fill.style.width = pct.toFixed(1) + '%';
+            if (pEl) pEl.textContent = Math.round(pct) + '%';
+            var label = steps[0][1];
+            for (var i = 0; i < steps.length; i++) { if (pct >= steps[i][0]) label = steps[i][1]; }
+            if (sEl && label !== lastLabel) {
+                lastLabel = label; sEl.style.opacity = '0';
+                setTimeout(function() { sEl.textContent = lastLabel; sEl.style.opacity = '1'; }, 160);
+            }
+        }
+        var timer = setInterval(function() { if (done) return; pct = Math.min(90, pct + Math.max(0.5, (90 - pct) * 0.055)); render(); }, 110);
+        window.hideNexusSplash = function() {
+            if (done) return; done = true;
+            var wait = Math.max(0, MIN_MS - (Date.now() - start));
+            setTimeout(function() {
+                clearInterval(timer); pct = 100; render();
+                setTimeout(function() {
+                    var s = document.getElementById('loading-screen');
+                    if (!s) return;
+                    s.classList.add('nx-exit');
+                    setTimeout(function() { if (s.parentNode) s.parentNode.removeChild(s); }, 750);
+                }, 420);
+            }, wait);
+        };
+        setTimeout(window.hideNexusSplash, 8000);
+    })();
+    </script>
 
     <div class='modal' id='premium-dialog' style='display:none;'>
         <div class='modal-content' style='width:90%; max-width:400px; text-align:left;'>
@@ -7102,8 +7192,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                    processInitData(data);
                }
            } catch(e) { console.error("Error:", e); }
-           const splash = document.getElementById('loading-screen');
-           if (splash) { splash.style.display = 'none'; splash.remove(); }
+           if (window.hideNexusSplash) { window.hideNexusSplash(); } else { const splash = document.getElementById('loading-screen'); if (splash) splash.remove(); }
            if(typeof window.renderSalesChart === 'function') window.renderSalesChart(7); }
         
     // 🚀 [FUNCTION: processInitData] - Déclaration de fonction
@@ -7281,8 +7370,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             try { renderAnalyticsCharts(); } catch(e) { console.error("renderAnalyticsCharts error:", e); }
             console.log("REACHED maintenance badge"); try { updateMaintenanceBadge(data.maintenance); } catch(e) { console.error("updateMaintenanceBadge error:", e); }
             withErrorBoundary(['target-feed', 'target-pending-reviews', 'target-buy-links'], 'Activity Feed & Badges', () => updateBadgesAndFeed(data)); 
-            const splash = document.getElementById('loading-screen');
-           if (splash) { splash.style.display = 'none'; splash.remove(); }
+            if (window.hideNexusSplash) { window.hideNexusSplash(); } else { const splash = document.getElementById('loading-screen'); if (splash) splash.remove(); }
            if(typeof window.renderSalesChart === 'function') window.renderSalesChart(7);
         }
         
