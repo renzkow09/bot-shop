@@ -4698,7 +4698,7 @@ const server = http.createServer(async (req, res) => {
     <meta name='apple-mobile-web-app-status-bar-style' content='black-translucent'>
     <title>Nexus Premium Dashboard</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;0,14..32,800&display=swap" rel="stylesheet">
-    <script src='https://cdn.jsdelivr.net/npm/chart.js'></script>
+    <script src='https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js'></script>
     <style>
         :root {
            /* Accent system */
@@ -5314,6 +5314,199 @@ const server = http.createServer(async (req, res) => {
 
         /* === GLASS TEXTAREA === */
         .glass-textarea:focus { border-color:rgba(255,255,255,0.18) !important; box-shadow:inset 0 2px 8px rgba(0,0,0,0.45), 0 0 14px rgba(255,255,255,0.04) !important; background:rgba(0,0,0,0.48) !important; }
+
+        /* ==========================================================
+           NEXUS UI 2.0 — design layer (overrides legacy styles)
+           ========================================================== */
+        :root {
+           --nx-surface: rgba(16, 17, 26, 0.72);
+           --nx-surface-2: rgba(22, 23, 34, 0.85);
+           --nx-line: rgba(255, 255, 255, 0.07);
+           --nx-line-strong: rgba(255, 255, 255, 0.13);
+           --nx-text: #eef0f6;
+           --nx-text-2: #a3a8b8;
+           --nx-text-3: #6b7080;
+           --text-muted: #8a8fa0;
+           --nx-radius: 18px;
+           --nx-radius-sm: 12px;
+           --nx-ease: cubic-bezier(0.22, 1, 0.36, 1);
+           --nx-focus: 0 0 0 3px rgba(var(--accent-green-rgb), 0.35);
+        }
+        body { background: radial-gradient(1200px 600px at 85% -10%, rgba(var(--accent-green-rgb), 0.07), transparent 60%), radial-gradient(900px 500px at -10% 110%, rgba(99, 102, 241, 0.06), transparent 60%), var(--bg-main); background-attachment: fixed; }
+        ::selection { background: rgba(var(--accent-green-rgb), 0.35); color: #fff; }
+        :focus-visible { outline: none; box-shadow: var(--nx-focus) !important; }
+
+        /* ---------- Top bar ---------- */
+        .top-navbar { backdrop-filter: blur(18px) saturate(140%); -webkit-backdrop-filter: blur(18px) saturate(140%); border-bottom: 1px solid var(--nx-line); }
+        .nx-crumb { display: flex; flex-direction: column; line-height: 1.15; min-width: 0; }
+        .nx-crumb-path { font-size: 0.72em; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--nx-text-3); }
+        .nx-crumb-title { font-size: 1.05em; font-weight: 700; color: var(--nx-text); letter-spacing: -0.2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .nx-crumb.nx-swap .nx-crumb-title, .nx-crumb.nx-swap .nx-crumb-path { animation: nxCrumbIn 0.35s var(--nx-ease) both; }
+        @keyframes nxCrumbIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+        .btn-icon { transition: transform 0.2s var(--nx-ease), background 0.2s ease, border-color 0.2s ease; }
+        .btn-icon:hover { transform: translateY(-1px); }
+        .btn-icon:active { transform: scale(0.94); }
+        #refreshBtn.spinning svg { animation: spin 0.8s linear infinite; }
+
+        /* ---------- Sidebar ---------- */
+        .nav-group { color: var(--nx-text-3); font-size: 0.68em; letter-spacing: 0.14em; }
+        .nav-btn { position: relative; transition: background 0.25s ease, color 0.25s ease, transform 0.25s var(--nx-ease); }
+        .nav-btn:hover { transform: translateX(2px); }
+        .nav-btn:active { transform: scale(0.98); }
+        .nav-btn.active { background: linear-gradient(90deg, rgba(var(--accent-green-rgb), 0.16), rgba(var(--accent-green-rgb), 0.03)); color: #fff; border-color: rgba(var(--accent-green-rgb), 0.22); }
+        .nav-btn.active svg { color: var(--accent-green); }
+        .nav-badge:empty, .nav-badge[data-zero='1'] { display: none; }
+
+        /* ---------- Page transitions ---------- */
+        .tab-content.active { animation: nxPageIn 0.45s var(--nx-ease) both; }
+        @keyframes nxPageIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+        .tab-content.active > *, .tab-content.active .stats-grid > *, .tab-content.active .nx-kpi-row > * { animation: nxRiseIn 0.55s var(--nx-ease) both; }
+        .tab-content.active > *:nth-child(2), .tab-content.active .stats-grid > *:nth-child(2), .tab-content.active .nx-kpi-row > *:nth-child(2) { animation-delay: 0.05s; }
+        .tab-content.active > *:nth-child(3), .tab-content.active .stats-grid > *:nth-child(3), .tab-content.active .nx-kpi-row > *:nth-child(3) { animation-delay: 0.1s; }
+        .tab-content.active > *:nth-child(4), .tab-content.active .stats-grid > *:nth-child(4), .tab-content.active .nx-kpi-row > *:nth-child(4) { animation-delay: 0.15s; }
+        .tab-content.active > *:nth-child(5), .tab-content.active .stats-grid > *:nth-child(5), .tab-content.active .nx-kpi-row > *:nth-child(5) { animation-delay: 0.2s; }
+        .tab-content.active > *:nth-child(n+6) { animation-delay: 0.25s; }
+        @keyframes nxRiseIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+
+        /* ---------- Cards & panels ---------- */
+        .card, .box, .glass-panel { background: linear-gradient(180deg, rgba(255,255,255,0.025), rgba(255,255,255,0) 40%), var(--nx-surface); border: 1px solid var(--nx-line); border-radius: var(--nx-radius); box-shadow: 0 1px 0 rgba(255,255,255,0.04) inset, 0 10px 30px rgba(0,0,0,0.35); }
+        .card:nth-child(n), .box:nth-child(n) { animation: none; }
+        .box:hover, .glass-panel:hover { transform: none; border-color: var(--nx-line-strong); box-shadow: 0 1px 0 rgba(255,255,255,0.06) inset, 0 14px 40px rgba(0,0,0,0.42); }
+        .stats-grid .glass-panel, .stats-grid .card, .nx-kpi { transition: transform 0.35s var(--nx-ease), border-color 0.3s ease, box-shadow 0.35s ease; }
+        .stats-grid .glass-panel:hover, .stats-grid .card:hover, .nx-kpi:hover { transform: translateY(-3px); border-color: rgba(var(--accent-green-rgb), 0.28); box-shadow: 0 1px 0 rgba(255,255,255,0.07) inset, 0 18px 44px rgba(0,0,0,0.5), 0 0 0 1px rgba(var(--accent-green-rgb), 0.06); }
+        .glass-panel:hover .glass-stat-value { transform: none; text-shadow: none; }
+        .glass-panel:hover .glass-icon-wrapper { transform: translateY(-2px) scale(1.04); box-shadow: none; }
+        .glass-panel:hover .trend { transform: none; }
+        .box h2 { font-size: 1.02em; font-weight: 700; letter-spacing: -0.1px; border-bottom-color: var(--nx-line); }
+        .ambient-glow { opacity: 0.55; }
+
+        /* ---------- KPI typography ---------- */
+        .stats-grid { gap: 14px; }
+        .premium-stats-grid { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+        .glass-stat-value { font-size: clamp(1.7em, 2.4vw, 2.3em); letter-spacing: -1px; font-variant-numeric: tabular-nums; padding-right: 54px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .glass-title { font-size: 0.72em; letter-spacing: 0.12em; color: var(--nx-text-3); margin-bottom: 12px; }
+        .glass-icon-wrapper { width: 40px; height: 40px; border-radius: 12px; top: 16px; right: 16px; }
+        .trend { font-size: 0.82em !important; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+        .trend.positive { color: #34d399; }
+        .trend.negative { color: #f87171; }
+        .nx-delta { display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 999px; font-weight: 700; font-size: 0.95em; background: rgba(255,255,255,0.06); }
+        .nx-delta.up { color: #34d399; background: rgba(52, 211, 153, 0.12); }
+        .nx-delta.down { color: #f87171; background: rgba(248, 113, 113, 0.12); }
+        .nx-delta.flat { color: var(--nx-text-2); }
+        .btn-curr-toggle { bottom: auto !important; top: 62px !important; right: 16px !important; transform: scale(0.9); transform-origin: right top; }
+
+        /* ---------- Buttons ---------- */
+        .admin-btn { transition: transform 0.2s var(--nx-ease), background 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease, color 0.2s ease, opacity 0.2s ease; will-change: transform; }
+        .admin-btn:hover { transform: translateY(-1px); }
+        .admin-btn:active { transform: translateY(0) scale(0.97); }
+        .admin-btn:disabled, .admin-btn[disabled] { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .admin-btn.nx-busy { pointer-events: none; opacity: 0.75; }
+        .admin-btn.nx-busy { cursor: progress; }
+        .nx-seg { display: inline-flex; gap: 4px; padding: 4px; border-radius: 12px; background: rgba(0,0,0,0.35); border: 1px solid var(--nx-line); }
+        .nx-seg button { appearance: none; border: 0; background: transparent; color: var(--nx-text-2); font: inherit; font-size: 0.78em; font-weight: 600; padding: 6px 12px; border-radius: 9px; cursor: pointer; transition: background 0.25s ease, color 0.25s ease, box-shadow 0.25s ease; }
+        .nx-seg button:hover { color: #fff; background: rgba(255,255,255,0.05); }
+        .nx-seg button.active { color: #fff; background: rgba(var(--accent-green-rgb), 0.18); box-shadow: inset 0 0 0 1px rgba(var(--accent-green-rgb), 0.35); }
+        .btn-pill.active { background: rgba(var(--accent-green-rgb), 0.18) !important; color: #fff !important; box-shadow: inset 0 0 0 1px rgba(var(--accent-green-rgb), 0.35) !important; }
+
+        /* ---------- Filter pills (moderation) ---------- */
+        .filter-pill-group { display: inline-flex; gap: 4px; padding: 4px; border-radius: 999px; background: rgba(0,0,0,0.35); border: 1px solid var(--nx-line); flex-wrap: wrap; }
+        .filter-pill { appearance: none; border: 0; background: transparent; color: var(--nx-text-2); font: inherit; font-size: 0.8em; font-weight: 600; padding: 7px 14px; border-radius: 999px; cursor: pointer; white-space: nowrap; transition: background 0.25s ease, color 0.25s ease, box-shadow 0.25s ease, transform 0.2s var(--nx-ease); }
+        .filter-pill:hover { color: #fff; background: rgba(255,255,255,0.06); }
+        .filter-pill:active { transform: scale(0.96); }
+        .filter-pill.active { color: #fff; background: rgba(var(--accent-green-rgb), 0.18); box-shadow: inset 0 0 0 1px rgba(var(--accent-green-rgb), 0.4); }
+        .search-pill-wrapper { flex: 1; min-width: 200px; }
+        .search-pill-input { width: 100%; border-radius: 999px !important; padding: 10px 16px !important; }
+        .mod-top-bar { align-items: center; }
+
+        /* ---------- Forms ---------- */
+        input, textarea, select { transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease; }
+        input:focus, textarea:focus, select:focus { border-color: rgba(var(--accent-green-rgb), 0.55) !important; box-shadow: var(--nx-focus) !important; }
+        input[type='checkbox'] { appearance: none; -webkit-appearance: none; width: 40px !important; min-width: 40px; height: 22px !important; padding: 0 !important; margin: 0; border-radius: 999px !important; background: rgba(255,255,255,0.1) !important; border: 1px solid var(--nx-line-strong) !important; position: relative; cursor: pointer; flex: 0 0 auto; transition: background 0.25s ease, border-color 0.25s ease; vertical-align: middle; }
+        input[type='checkbox']::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.4); transition: transform 0.3s var(--nx-ease); }
+        input[type='checkbox']:checked { background: var(--accent-green) !important; border-color: var(--accent-green) !important; }
+        input[type='checkbox']:checked::after { transform: translateX(18px); }
+
+        /* ---------- Tables ---------- */
+        table { border-collapse: separate; border-spacing: 0; }
+        th { position: sticky; top: 0; z-index: 1; background: rgba(14, 15, 22, 0.96); font-size: 0.7em !important; letter-spacing: 0.1em; color: var(--nx-text-3) !important; }
+        tbody tr { transition: background 0.2s ease; }
+        tbody tr:hover { background: rgba(255,255,255,0.03); }
+
+        /* ---------- Charts ---------- */
+        .nx-chart-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; position: relative; z-index: 1; }
+        .nx-chart-title { margin: 0; font-size: 1.15em; font-weight: 700; color: #fff; letter-spacing: -0.2px; }
+        .nx-chart-sub { color: var(--nx-text-3); font-size: 0.85em; margin-top: 4px; }
+        .nx-chart-summary { display: flex; align-items: baseline; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+        .nx-chart-summary b { font-size: 1.6em; font-weight: 800; color: #fff; letter-spacing: -0.5px; font-variant-numeric: tabular-nums; }
+        .nx-chart-summary span { color: var(--nx-text-3); font-size: 0.85em; }
+        .nx-chart-box { position: relative; height: 280px; }
+        .nx-chart-box.tall { height: 320px; }
+        .nx-chart-empty { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; flex-direction: column; gap: 6px; color: var(--nx-text-3); font-size: 0.88em; pointer-events: none; }
+        .nx-chart-empty.show { display: flex; }
+        .nx-chart-empty svg { opacity: 0.5; }
+
+        /* ---------- Analytics page ---------- */
+        .nx-page-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+        .nx-page-title { margin: 0; font-size: 1.75em; font-weight: 800; letter-spacing: -0.6px; background: linear-gradient(135deg, #fff 0%, #a1a1aa 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+        .nx-page-sub { color: var(--nx-text-3); margin-top: 6px; font-size: 0.95em; }
+        .nx-kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 18px; }
+        .nx-kpi { background: linear-gradient(180deg, rgba(255,255,255,0.03), transparent 50%), var(--nx-surface); border: 1px solid var(--nx-line); border-radius: var(--nx-radius); padding: 16px 18px; position: relative; overflow: hidden; }
+        .nx-kpi::before { content: ''; position: absolute; left: 0; top: 0; right: 0; height: 2px; background: linear-gradient(90deg, var(--kpi-c, var(--accent-green)), transparent); opacity: 0.8; }
+        .nx-kpi-label { font-size: 0.7em; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--nx-text-3); }
+        .nx-kpi-value { font-size: 1.75em; font-weight: 800; letter-spacing: -0.8px; color: #fff; margin: 8px 0 6px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .nx-kpi-foot { font-size: 0.78em; color: var(--nx-text-3); display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+        .nx-grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 14px; margin-bottom: 14px; }
+        .nx-grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; margin-bottom: 14px; }
+
+        .nx-cust { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--nx-line); }
+        .nx-cust:last-child { border-bottom: 0; }
+        .nx-cust-rank { width: 26px; height: 26px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 0.78em; font-weight: 700; color: var(--nx-text-2); background: rgba(255,255,255,0.05); flex: 0 0 auto; }
+        .nx-cust:first-child .nx-cust-rank { color: #111; background: var(--accent-gold); }
+        .nx-cust-main { flex: 1; min-width: 0; }
+        .nx-cust-row { display: flex; justify-content: space-between; gap: 10px; font-size: 0.9em; }
+        .nx-cust-name { font-weight: 600; color: var(--nx-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .nx-cust-val { font-weight: 700; color: #fff; font-variant-numeric: tabular-nums; }
+        .nx-cust-bar { height: 4px; border-radius: 4px; background: rgba(255,255,255,0.06); margin-top: 7px; overflow: hidden; }
+        .nx-cust-bar i { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, rgba(var(--accent-green-rgb), 0.5), var(--accent-green)); transition: width 0.8s var(--nx-ease); }
+        .nx-notes-status { font-size: 0.75em; font-weight: 600; color: var(--nx-text-3); margin-left: auto; letter-spacing: 0.02em; }
+
+        /* ---------- Toast ---------- */
+        #toast { max-width: calc(100vw - 32px); }
+
+        @media (min-width: 1200px) { #overview .premium-stats-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+        /* ---------- Responsive ---------- */
+        @media (max-width: 900px) {
+            .glass-stat-value { font-size: 1.9em; }
+            .overview-grid { grid-template-columns: 1fr !important; }
+        }
+        @media (max-width: 700px) {
+            .main-content div[style*='grid-template-columns'] { grid-template-columns: 1fr !important; }
+            .nx-grid-2, .nx-grid-3 { grid-template-columns: 1fr; }
+            .nx-page-title { font-size: 1.4em; }
+            .nx-chart-box, .nx-chart-box.tall { height: 240px; }
+            .nx-crumb-path { display: none; }
+            #overview > div:first-child { flex-direction: column; align-items: flex-start !important; gap: 12px; }
+            #overview > div:first-child h1 { font-size: 1.5em !important; }
+            #overview > div:first-child p { font-size: 0.9em !important; }
+            .premium-stats-grid, .nx-kpi-row { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px; }
+            .premium-stats-grid .glass-panel { padding: 14px !important; }
+            .premium-stats-grid .glass-icon-wrapper { display: none; }
+            .glass-stat-value { font-size: 1.5em; padding-right: 0; }
+            .glass-title { font-size: 0.64em; letter-spacing: 0.08em; }
+            .btn-curr-toggle { top: 10px !important; right: 10px !important; }
+            .nx-kpi { padding: 14px; }
+            .nx-kpi-value { font-size: 1.35em; }
+            .bot-status { white-space: nowrap; }
+            .overview-grid > .glass-panel > div:nth-child(2) { flex-direction: column; gap: 12px; }
+            .overview-grid h2 { font-size: 1.25em !important; }
+            .premium-stats-grid .glass-panel:has(.btn-curr-toggle) .glass-title { padding-right: 46px; }
+            .nx-chart-summary b { font-size: 1.35em; }
+        }
+        @media (max-width: 420px) { .bot-status { display: none; } }
+        @media (prefers-reduced-motion: reduce) {
+            .tab-content.active, .tab-content.active > *, .tab-content.active .stats-grid > *, .tab-content.active .nx-kpi-row > * { animation: none !important; }
+            .admin-btn, .nav-btn, .stats-grid .glass-panel, .nx-kpi { transition: none !important; }
+        }
     </style>
     
     <div id='loading-screen' class='splash-screen' role='status' aria-live='polite' aria-label='Loading Nexus dashboard'>
@@ -5375,6 +5568,8 @@ const server = http.createServer(async (req, res) => {
     })();
     </script>
 
+    <div id='toast' role='status' aria-live='polite'></div>
+
     <div class='modal' id='premium-dialog' style='display:none;'>
         <div class='modal-content' style='width:90%; max-width:400px; text-align:left;'>
             <h2 id='dialog-title' style='margin:0 0 10px 0; font-size:1.2em; font-weight:600;'>Title</h2>
@@ -5403,28 +5598,28 @@ const server = http.createServer(async (req, res) => {
                 <div class='nav-group'>DASHBOARD</div>
                 <button class='nav-btn active' onclick='window.switchTab("overview", this)'><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg> Overview</button>
                 <button class='nav-btn' onclick='window.switchTab("analytics", this)'><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg> Analytics</button>
-                <button class='nav-btn' onclick='window.switchTab("patchnotes", this)'><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg> Patchnotes</button>
                 
                 <div class='nav-group'>STORE</div>
                 <button class='nav-btn' onclick='window.switchTab("transactions", this)'><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg> Transactions</button>
                 <button class='nav-btn' onclick='window.switchTab("products", this)'><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg> Catalog</button>
-                <button class='nav-btn' onclick='window.switchTab("mysterybox", this)'><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"></polyline><rect x="1" y="3" width="22" height="5"></rect><line x1="10" y1="12" x2="14" y2="12"></line></svg> Mystery Box</button>
-                <button class='nav-btn' onclick='window.switchTab("kanban", this)'><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line><line x1="15" y1="3" x2="15" y2="21"></line></svg> Kanban</button>
+                <button class='nav-btn' onclick='window.switchTab("referrals", this)'><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg> Promos & Referrals</button>
                 <button class='nav-btn' onclick='window.switchTab("vip", this)'><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg> VIP Pass</button>
-                <button class='nav-btn' onclick='window.switchTab("referrals", this)'><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg> Promos</button>
+                <button class='nav-btn' onclick='window.switchTab("mysterybox", this)'><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"></polyline><rect x="1" y="3" width="22" height="5"></rect><line x1="10" y1="12" x2="14" y2="12"></line></svg> Mystery Box</button>
+                <button class='nav-btn' onclick='window.switchTab("kanban", this)'><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line><line x1="15" y1="3" x2="15" y2="21"></line></svg> Custom Orders</button>
                 
                 <div class='nav-group'>COMMUNITY</div>
                 <button class='nav-btn' onclick='window.switchTab("livechat", this)'><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg> Chat <span class='nav-badge' id='badge-chat'>0</span></button>
                 <button class='nav-btn' onclick='window.switchTab("audience", this)'><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg> Audience</button>
                 <button class='nav-btn' onclick='window.switchTab("moderation", this)'><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg> Moderation</button>
+                <button class='nav-btn' onclick='window.switchTab("messages", this)'><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg> Bot Messages</button>
                 
                 <div class='nav-group'>SYSTEM</div>
+                <button class='nav-btn' onclick='window.switchTab("botcontrol", this)'><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"></rect><circle cx="12" cy="5" r="2"></circle><path d="M12 7v4"></path><line x1="8" y1="16" x2="8" y2="16"></line><line x1="16" y1="16" x2="16" y2="16"></line></svg> Bot Control</button>
                 <button class='nav-btn' onclick='window.switchTab("monitoring", this)'><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg> Diagnostics</button>
                 <button class='nav-btn' onclick='window.switchTab("terminal", this)'><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg> Terminal</button>
                 <button class='nav-btn' onclick='window.switchTab("backups", this)'><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg> Backups</button>
                 <button class='nav-btn' onclick='window.switchTab("admin", this)'><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg> Settings <span class='nav-badge' id='badge-admin'>0</span></button>
-                <button class='nav-btn' onclick='window.switchTab("messages", this)'><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg> Messages</button>
-                <button class='nav-btn' onclick='window.switchTab("botcontrol", this)'><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"></rect><circle cx="12" cy="5" r="2"></circle><path d="M12 7v4"></path><line x1="8" y1="16" x2="8" y2="16"></line><line x1="16" y1="16" x2="16" y2="16"></line></svg> Bot Control</button>
+                <button class='nav-btn' onclick='window.switchTab("patchnotes", this)'><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg> Patchnotes</button>
                 
             </nav>
             <div class='sidebar-footer'>
@@ -5443,7 +5638,7 @@ const server = http.createServer(async (req, res) => {
             <header class='top-navbar'>
                 <div style='display:flex; align-items:center; gap:12px;'>
                     <button class='burger-btn' onclick='window.toggleSidebar()'>&#9776;</button>
-                    <div style='font-size:0.95em; font-weight:600; color:var(--text-muted);' id='topbar-breadcrumb'>Overview</div>
+                    <div class='nx-crumb' id='topbar-breadcrumb'><span class='nx-crumb-path'>Dashboard</span><span class='nx-crumb-title'>Overview</span></div>
                 </div>
                 <div style='display:flex; align-items:center; gap:8px;'>
                     <button class='btn-icon' onclick='window.requestNotificationPermission()' id='notifBtn' title='Notifications'>&#128276;</button>
@@ -5476,9 +5671,9 @@ const server = http.createServer(async (req, res) => {
                        <div class='glass-icon-wrapper' style='color: #10b981;'>
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
                        </div>
-                       <h3 class='glass-title'>Total Earning</h3>
+                       <h3 class='glass-title'>Today's Revenue</h3>
                        <div class='glass-stat-value text-green' id='ui-today-rev'></div>
-                       <div class='trend positive' style='font-weight: 600; font-size: 0.9em;'>+14% <span style='color:var(--text-muted); font-weight:normal;'>vs yesterday</span></div>
+                       <div class='trend' id='ui-rev-trend' style='font-weight: 600; font-size: 0.9em;'><span style='color:var(--text-muted); font-weight:normal;'>vs yesterday</span></div>
                    </div>
                    <div class='glass-panel' style='padding: 16px 20px; position: relative;'>
                        <button onclick='event.stopPropagation(); window.toggleCurrency()' class='btn-curr-toggle' style='position:absolute; bottom:16px; right:20px; top:auto; background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.05); color:var(--text-muted); padding:4px 10px; border-radius:20px; cursor:pointer; font-size:0.85em; font-weight:700; z-index:10; transition:all 0.3s; display:flex; gap:8px; align-items:center; box-shadow: inset 0 2px 10px rgba(0,0,0,0.5);' onmouseover='this.style.background="rgba(0,0,0,0.6)"; this.style.borderColor="rgba(255,255,255,0.15)"' onmouseout='this.style.background="rgba(0,0,0,0.4)"; this.style.borderColor="rgba(255,255,255,0.05)"' id='btn-curr-total'><span style="color:#fff;">£</span> <span style="opacity:0.4;">€</span></button>
@@ -5486,9 +5681,9 @@ const server = http.createServer(async (req, res) => {
                        <div class='glass-icon-wrapper' style='color: #8b5cf6;'>
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 8h20M6 16h.01"/></svg>
                        </div>
-                       <h3 class='glass-title'>Total Yield</h3>
+                       <h3 class='glass-title'>Lifetime Revenue</h3>
                        <div class='glass-stat-value' id='ui-total-rev'></div>
-                       <div class='trend' style='color:var(--text-muted); font-weight: 500; font-size: 0.9em;'>Lifetime Revenue</div>
+                       <div class='trend' style='color:var(--text-muted); font-weight: 500; font-size: 0.9em;'>All-time gross sales</div>
                    </div>
                    <div class='glass-panel' style='padding: 16px 20px; position: relative;'>
                        <div class='ambient-glow' style='--glow-color: rgba(59,130,246,1); top: -100px; right: -100px;'></div>
@@ -5497,16 +5692,16 @@ const server = http.createServer(async (req, res) => {
                        </div>
                        <h3 class='glass-title'>Conversion</h3>
                        <div class='glass-stat-value' id='ui-conv-rate'></div>
-                       <div class='trend positive' style='font-weight: 600; font-size: 0.9em;'>High Engagement</div>
+                       <div class='trend' id='ui-conv-trend' style='font-weight: 600; font-size: 0.9em;'>Sales per member joined</div>
                    </div>
                    <div class='glass-panel' style='padding: 16px 20px; position: relative;'>
                        <div class='ambient-glow' style='--glow-color: rgba(245,158,11,1); top: -100px; right: -100px;'></div>
                        <div class='glass-icon-wrapper' style='color: #f59e0b;'>
                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                        </div>
-                       <h3 class='glass-title'>Live Pulse</h3>
+                       <h3 class='glass-title'>Members Online</h3>
                        <div class='glass-stat-value' id='ui-online-total'></div>
-                       <div class='trend' style='color:var(--text-muted); font-weight: 500; font-size: 0.9em;'>Active Members</div>
+                       <div class='trend' id='ui-online-trend' style='color:var(--text-muted); font-weight: 500; font-size: 0.9em;'>online / total members</div>
                    </div>
                    <div class='glass-panel' style='padding: 16px 20px; position: relative;'>
                        <div class='ambient-glow' style='--glow-color: rgba(236,72,153,1); top: -100px; right: -100px;'></div>
@@ -5515,25 +5710,7 @@ const server = http.createServer(async (req, res) => {
                        </div>
                        <h3 class='glass-title'>Active Subs</h3>
                        <div class='glass-stat-value' id='ui-active-subs'></div>
-                       <div class='trend positive' style='font-weight: 600; font-size: 0.9em;'>Recurring Yield</div>
-                   </div>
-                   <div class='glass-panel' style='padding: 16px 20px; position: relative;'>
-                       <div class='ambient-glow' style='--glow-color: rgba(239,68,68,1); top: -100px; right: -100px;'></div>
-                       <div class='glass-icon-wrapper' style='color: #ef4444;'>
-                           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                       </div>
-                       <h3 class='glass-title'>Pending Orders</h3>
-                       <div class='glass-stat-value' id='ui-pending-orders'></div>
-                       <div class='trend negative' style='font-weight: 600; font-size: 0.9em;'>Awaiting processing</div>
-                   </div>
-                   <div class='glass-panel' style='padding: 18px 22px;'>
-                       <div class='ambient-glow' style='--glow-color: rgba(6,182,212,1); top: -100px; right: -100px;'></div>
-                       <div class='glass-icon-wrapper' style='color: #06b6d4;'>
-                           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
-                       </div>
-                       <h3 class='glass-title'>Today's Joins</h3>
-                       <div class='glass-stat-value' id='ui-today-joins'></div>
-                       <div class='trend' id='ui-joins-trend' style='font-weight: 600; font-size: 0.9em;'>Calcul <span style='color:var(--text-muted); font-weight:normal;'>vs yesterday</span></div>
+                       <div class='trend' id='ui-subs-trend' style='font-weight: 600; font-size: 0.9em;'>VIP passes running</div>
                    </div>
                </div>
 
@@ -5543,14 +5720,9 @@ const server = http.createServer(async (req, res) => {
                        <div style='display:flex; justify-content:space-between; align-items:flex-start; position:relative; z-index:1; margin-bottom: 20px;'>
                            <div>
                                <h2 style='margin:0; border:none; font-size:1.5em; font-weight:700; letter-spacing:-0.5px; color:#fff;'>Revenue Trajectory</h2>
-                               <p style='color:var(--text-muted); font-size:0.95em; margin:8px 0 0 0;'>Financial throughput over time</p>
+                               <p style='color:var(--text-muted); font-size:0.95em; margin:8px 0 0 0;'>Daily revenue compared with the previous period</p><div class='nx-chart-summary'><b id='nx-sales-total'>—</b><span id='nx-sales-delta'></span><span id='nx-sales-avg'></span></div>
                            </div>
-                           <div style='display:flex; gap:8px; background:rgba(0,0,0,0.5); padding:6px; border-radius:14px; border:1px solid rgba(255,255,255,0.05);'>
-                               <button class='admin-btn btn-pill' style='margin:0; font-size: 0.8em; padding: 6px 16px;' onclick='window.location.href="/api/export"'>Export</button>
-                               <button class='admin-btn btn-pill active' id='btn-chart-7' style='margin:0; font-size: 0.8em; padding: 6px 16px;' onclick='window.updateSalesChart(7)'>7D</button>
-                               <button class='admin-btn btn-pill' id='btn-chart-30' style='margin:0; font-size: 0.8em; padding: 6px 16px;' onclick='window.updateSalesChart(30)'>30D</button>
-                               <button class='admin-btn btn-pill' id='btn-chart-all' style='margin:0; font-size: 0.8em; padding: 6px 16px;' onclick='window.updateSalesChart(0)'>ALL</button>
-                           </div>
+                           <div style='display:flex; gap:8px; align-items:center; flex-wrap:wrap;'><a class='admin-btn' href='/api/export' style='margin:0; padding:7px 14px; font-size:0.78em; text-decoration:none; display:inline-flex; align-items:center; gap:6px;'><svg width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><path d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4'/><polyline points='7 10 12 15 17 10'/><line x1='12' y1='15' x2='12' y2='3'/></svg>Export</a><div class='nx-seg' id='nx-sales-range' role='tablist'><button data-range='7'>7D</button><button data-range='30' class='active'>30D</button><button data-range='90'>90D</button><button data-range='0'>All</button></div></div>
                        </div>
                        <div style='flex:1; min-height:300px; position:relative; z-index:1; margin-top: 10px;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='salesChart' style='position:relative; z-index:10;'></canvas></div>
                    </div>
@@ -5569,6 +5741,24 @@ const server = http.createServer(async (req, res) => {
                </div>
 
                <div class='stats-grid premium-stats-grid' style='position: relative; z-index: 10; margin-top: 25px;'>
+                   <div class='glass-panel' style='padding: 16px 20px; position: relative;'>
+                       <div class='ambient-glow' style='--glow-color: rgba(239,68,68,1); top: -100px; right: -100px;'></div>
+                       <div class='glass-icon-wrapper' style='color: #ef4444;'>
+                           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                       </div>
+                       <h3 class='glass-title'>Pending Reviews</h3>
+                       <div class='glass-stat-value' id='ui-pending-orders'></div>
+                       <div class='trend' style='color:var(--text-muted); font-weight: 500; font-size: 0.9em;'>Reviews awaiting approval</div>
+                   </div>
+                   <div class='glass-panel' style='padding: 18px 22px;'>
+                       <div class='ambient-glow' style='--glow-color: rgba(6,182,212,1); top: -100px; right: -100px;'></div>
+                       <div class='glass-icon-wrapper' style='color: #06b6d4;'>
+                           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+                       </div>
+                       <h3 class='glass-title'>Today's Joins</h3>
+                       <div class='glass-stat-value' id='ui-today-joins'></div>
+                       <div class='trend' id='ui-joins-trend' style='font-weight: 600; font-size: 0.9em;'>Calcul <span style='color:var(--text-muted); font-weight:normal;'>vs yesterday</span></div>
+                   </div>
                    <div class='glass-panel' style='padding: 16px 20px; position: relative;'>
                        <div class='ambient-glow' style='--glow-color: rgba(239,68,68,1); top: -100px; right: -100px;'></div>
                        <div class='glass-icon-wrapper' style='color: #ef4444;'>
@@ -5600,10 +5790,10 @@ const server = http.createServer(async (req, res) => {
                
                <div style='display:grid; grid-template-columns: 1fr; gap:25px; align-items:stretch; margin-top:25px; position:relative; z-index:10;' class='overview-grid'>
                     <div class='glass-panel' style='padding: 18px 22px; display:flex; flex-direction:column;'>
-                        <div class='ambient-glow' style='--glow-color: rgba(255,255,255,1); top: 0; left: 0;'></div>
+                        
                         <h2 style='margin:0 0 15px 0; border:none; font-size:1.5em; font-weight:700; letter-spacing:-0.5px; color:#fff; display:flex; align-items:center; gap:10px;'>
                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg> 
-                            Executive Notes
+                            Executive Notes<span class='nx-notes-status' id='nx-notes-status'>Auto-saved</span>
                         </h2>
                         <textarea id='personal-notes' class='glass-textarea' rows='5' placeholder='Enter your strategic notes here... Auto-sync enabled.' oninput='window.saveNotes()' style='resize:vertical; flex:1; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05); color: #fff; padding: 15px; border-radius: 14px; outline: none; font-family: inherit; font-size: 0.95em; transition: all 0.3s;'>${(memoryStats.notes || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</textarea>
                     </div>
@@ -5741,16 +5931,12 @@ const server = http.createServer(async (req, res) => {
         </div>
 </div>
 <div id='analytics' class='tab-content'>
-               <div class='box' style='margin-bottom:25px; animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: 0.1s;'>
-                   <h2>🕒 Peak Execution Hours</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Observe the time of day with the highest transaction volume.</p><div style='height:280px; position:relative;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='hourlyChart' style='position:relative; z-index:10;'></canvas></div></div>
-               <div style='display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:14px;'>
-                   <div class='box' style='animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: 0.2s; position: relative; overflow: hidden;'><div class='ambient-glow' style='--glow-color: rgba(var(--accent-green-rgb), 0.5); top: -20px; left: -20px;'></div><h2>🏆 Top Performing Assets</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Which products generate the most sales quantity.</p><div style='height:260px; position:relative;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='topProductsBarChart' style='position:relative; z-index:10;'></canvas></div></div>
-                   <div class='box' style='animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: 0.3s; position: relative; overflow: hidden;'><div class='ambient-glow' style='--glow-color: rgba(var(--accent-green-rgb), 0.5); top: -20px; left: -20px;'></div><h2>🏷️ Sector Revenue</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Revenue grouped by product category.</p><div style='height:260px; position:relative;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='categoryRevenueChart' style='position:relative; z-index:10;'></canvas></div></div>
-                   <div class='box' style='animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: 0.4s; position: relative; overflow: hidden;'><div class='ambient-glow' style='--glow-color: rgba(var(--accent-green-rgb), 0.5); top: -20px; left: -20px;'></div><h2>📅 Sales by Day of Week</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Identify your most profitable days to plan promotions.</p><div style='height:260px; position:relative;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='dowChart' style='position:relative; z-index:10;'></canvas></div></div>
-                   <div class='box' style='animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: 0.5s; position: relative; overflow: hidden;'><div class='ambient-glow' style='--glow-color: rgba(var(--accent-green-rgb), 0.5); top: -20px; left: -20px;'></div><h2>📊 Conversion Funnel</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Ratio of total tickets opened versus successful transactions.</p><div style='height:260px; position:relative;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='funnelChart' style='position:relative; z-index:10;'></canvas></div></div>
-                   <div class='box' style='animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: 0.6s; position: relative; overflow: hidden;'><div class='ambient-glow' style='--glow-color: rgba(139,92,246, 0.5); top: -20px; left: -20px;'></div><h2>📈 Member Growth</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Evolution of new member joins over the last 14 days.</p><div style='height:260px; position:relative;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='joinsChart' style='position:relative; z-index:10;'></canvas></div></div>
-                   <div class='box' style='animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: 0.7s; position: relative; overflow: hidden;'><div class='ambient-glow' style='--glow-color: rgba(239,68,68, 0.5); top: -20px; left: -20px;'></div><h2>📉 Members Left</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Evolution of members leaving over the last 14 days.</p><div style='height:260px; position:relative;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='leavesChart' style='position:relative; z-index:10;'></canvas></div></div>
-               </div>
+               <div class='nx-page-head'><div><h1 class='nx-page-title'>Analytics</h1><p class='nx-page-sub'>Sales performance, buying patterns and community growth.</p></div><div class='nx-seg' id='nx-an-range'><button data-range='7'>7D</button><button data-range='30' class='active'>30D</button><button data-range='90'>90D</button><button data-range='0'>All</button></div></div>
+               <div class='nx-kpi-row'><div class='nx-kpi' style='--kpi-c:var(--accent-green)'><div class='nx-kpi-label'>Revenue</div><div class='nx-kpi-value' id='nx-kpi-rev'>—</div><div class='nx-kpi-foot' id='nx-kpi-rev-foot'>&nbsp;</div></div><div class='nx-kpi' style='--kpi-c:#818cf8'><div class='nx-kpi-label'>Orders</div><div class='nx-kpi-value' id='nx-kpi-orders'>—</div><div class='nx-kpi-foot' id='nx-kpi-orders-foot'>&nbsp;</div></div><div class='nx-kpi' style='--kpi-c:#f59e0b'><div class='nx-kpi-label'>Avg. order value</div><div class='nx-kpi-value' id='nx-kpi-aov'>—</div><div class='nx-kpi-foot' id='nx-kpi-aov-foot'>&nbsp;</div></div><div class='nx-kpi' style='--kpi-c:#ec4899'><div class='nx-kpi-label'>Best day</div><div class='nx-kpi-value' id='nx-kpi-best'>—</div><div class='nx-kpi-foot' id='nx-kpi-best-foot'>&nbsp;</div></div><div class='nx-kpi' style='--kpi-c:#06b6d4'><div class='nx-kpi-label'>Net members</div><div class='nx-kpi-value' id='nx-kpi-net'>—</div><div class='nx-kpi-foot' id='nx-kpi-net-foot'>&nbsp;</div></div></div>
+               <div style='margin-bottom:14px;'><div class='box'><div class='nx-chart-head'><div><h3 class='nx-chart-title'>Revenue &amp; orders</h3><div class='nx-chart-sub'>Daily revenue (line) and number of orders (bars)</div></div></div><div class='nx-chart-box tall'><canvas id='nxRevOrdersChart'></canvas></div></div></div>
+               <div class='nx-grid-2'><div class='box'><div class='nx-chart-head'><div><h3 class='nx-chart-title'>Peak sales hours</h3><div class='nx-chart-sub'>All-time sales by hour of day (server time)</div></div><span class='nx-chart-sub' id='nx-peak-note' style='margin:0;'></span></div><div class='nx-chart-box'><canvas id='hourlyChart'></canvas></div></div><div class='box'><div class='nx-chart-head'><div><h3 class='nx-chart-title'>Revenue by weekday</h3><div class='nx-chart-sub'>Which days perform best in the selected period</div></div></div><div class='nx-chart-box'><canvas id='dowChart'></canvas></div></div></div>
+               <div class='nx-grid-3'><div class='box'><div class='nx-chart-head'><div><h3 class='nx-chart-title'>Top products</h3><div class='nx-chart-sub'>Units sold, all-time</div></div></div><div class='nx-chart-box'><canvas id='topProductsBarChart'></canvas></div></div><div class='box'><div class='nx-chart-head'><div><h3 class='nx-chart-title'>Revenue by category</h3><div class='nx-chart-sub'>Estimated from catalogue prices</div></div></div><div class='nx-chart-box'><canvas id='categoryRevenueChart'></canvas></div></div><div class='box'><div class='nx-chart-head'><div><h3 class='nx-chart-title'>Ticket conversion</h3><div class='nx-chart-sub'>Shop tickets that ended in a sale</div></div><span class='nx-chart-sub' id='nx-funnel-note' style='margin:0;'></span></div><div class='nx-chart-box'><canvas id='funnelChart'></canvas></div></div></div>
+               <div class='nx-grid-2'><div class='box'><div class='nx-chart-head'><div><h3 class='nx-chart-title'>Member flow</h3><div class='nx-chart-sub'>Joins vs leaves per day, with net growth</div></div></div><div class='nx-chart-box'><canvas id='joinsChart'></canvas></div></div><div class='box'><div class='nx-chart-head'><div><h3 class='nx-chart-title'>Top customers</h3><div class='nx-chart-sub'>Lifetime spend</div></div></div><div id='nx-top-customers'></div></div></div>
            </div>
 
                       <div id='patchnotes' class='tab-content'>
@@ -6240,13 +6426,13 @@ const server = http.createServer(async (req, res) => {
                             <input type='text' id='memberSearchInput' class='search-pill-input' placeholder='Query ID or designation...' oninput='window.sortMembersLocally()'>
                         </div>
                         <div class='filter-pill-group' id='status-filters'>
-                            <button class='filter-pill active' onclick='window.setModFilter(&quot;status&quot;, &quot;all&quot;, this)'>🌍 Global</button>
-                            <button class='filter-pill' onclick='window.setModFilter(&quot;status&quot;, &quot;online&quot;, this)'>🟢 Active</button>
+                            <button class='filter-pill active' onclick='window.setModFilter(&quot;status&quot;, &quot;all&quot;, this)'>All</button>
+                            <button class='filter-pill' onclick='window.setModFilter(&quot;status&quot;, &quot;online&quot;, this)'>Online</button>
                         </div>
                         <div class='filter-pill-group' id='sort-filters'>
-                            <button class='filter-pill active' onclick='window.setModFilter(&quot;sort&quot;, &quot;recent&quot;, this)'>🔽 Newest</button>
-                            <button class='filter-pill' onclick='window.setModFilter(&quot;sort&quot;, &quot;spent_desc&quot;, this)'>💰 High Value</button>
-                            <button class='filter-pill' onclick='window.setModFilter(&quot;sort&quot;, &quot;warns&quot;, this)'>⚠️ High Risk</button>
+                            <button class='filter-pill active' onclick='window.setModFilter(&quot;sort&quot;, &quot;recent&quot;, this)'>Newest</button>
+                            <button class='filter-pill' onclick='window.setModFilter(&quot;sort&quot;, &quot;spent_desc&quot;, this)'>Top spenders</button>
+                            <button class='filter-pill' onclick='window.setModFilter(&quot;sort&quot;, &quot;warns&quot;, this)'>Most warned</button>
                         </div>
                         <button class='mod-sync-btn' style='border-radius:100px; margin-left:auto;' onclick='window.loadAllMembers()'>
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.92-10.27l-3.27-3.27"/></svg>
@@ -6957,7 +7143,7 @@ const server = http.createServer(async (req, res) => {
                 }
             });
             // Update charts if they exist
-            if(window.salesChart && typeof window.updateSalesChart === 'function') window.updateSalesChart(window.lastChartDays || 7);
+            if (window.NX && typeof window.NX.rerender === 'function') window.NX.rerender();
         };
         
         // Auto-load theme
@@ -7193,7 +7379,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                }
            } catch(e) { console.error("Error:", e); }
            if (window.hideNexusSplash) { window.hideNexusSplash(); } else { const splash = document.getElementById('loading-screen'); if (splash) splash.remove(); }
-           if(typeof window.renderSalesChart === 'function') window.renderSalesChart(7); }
+           if(typeof window.renderSalesChart === 'function') window.renderSalesChart(); }
         
     // 🚀 [FUNCTION: processInitData] - Déclaration de fonction
         
@@ -7371,7 +7557,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             console.log("REACHED maintenance badge"); try { updateMaintenanceBadge(data.maintenance); } catch(e) { console.error("updateMaintenanceBadge error:", e); }
             withErrorBoundary(['target-feed', 'target-pending-reviews', 'target-buy-links'], 'Activity Feed & Badges', () => updateBadgesAndFeed(data)); 
             if (window.hideNexusSplash) { window.hideNexusSplash(); } else { const splash = document.getElementById('loading-screen'); if (splash) splash.remove(); }
-           if(typeof window.renderSalesChart === 'function') window.renderSalesChart(7);
+           if(typeof window.renderSalesChart === 'function') window.renderSalesChart();
         }
         
     // 🚀 [FUNCTION: escapeInlineJS] - Déclaration de fonction
@@ -8071,7 +8257,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                 if(tabId === 'livechat' && typeof window.loadTicketsForChat === 'function') window.loadTicketsForChat();
 
                 if(tabId === 'overview') {
-                    if(window.renderSalesChart) setTimeout(() => window.renderSalesChart(7), 50);
+                    if(window.renderSalesChart) setTimeout(() => window.renderSalesChart(), 50);
                 }
                 if(tabId === 'analytics') {
                     if(typeof renderAnalyticsCharts === 'function') setTimeout(() => renderAnalyticsCharts(), 50);
@@ -8216,25 +8402,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                 await fetch('/api/logout', { method: 'POST' });
             } catch(e) {}
             
-            setTimeout(() => {
-                
-                        spawnParticles();
-                        document.getElementById('btn').innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:8px"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg> AUTHENTICATED';
-                        document.getElementById('btn').style.background = 'var(--accent)';
-                        document.getElementById('btn').style.color = '#000';
-                        document.getElementById('btn').style.transform = 'scale(1.05)';
-                        document.getElementById('btn').style.boxShadow = '0 0 40px var(--accent)';
-                        
-                        let overlay = document.createElement('div');
-                        overlay.className = 'success-overlay';
-                        document.body.appendChild(overlay);
-                        setTimeout(() => overlay.style.opacity = '1', 50);
-                        
-                        setTimeout(() => {
-                            window.location.reload();
-                        }, 800);
-
-            }, 1800);
+            setTimeout(() => { window.location.href = '/dashboard'; }, 900);
         };
         // 🚀 [UI_ACTION_ASYNC: executeAction] - Action asynchrone d'interface Dashboard
         window.executeAction = async function(p, showModal=false) { /* pin removed */ const res=await fetch('/api/action',{method:'POST',body:JSON.stringify(p)}); if(res.ok) { window.refreshDataSilently(); showToast('Action Successful'); } else { showToast('Action Failed', 'error'); } };
@@ -9632,53 +9800,490 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         };
         initDashboard();
 
-        // 🚀 [FRAMER_MOTION] - Animations d'entrée et de survol
-        const style = document.createElement('style');
-        style.textContent = ".card:hover, .admin-btn:hover, .product-card:hover { transform: none !important; box-shadow: none !important; }";
-        document.head.appendChild(style);
+        // ==========================================================
+        // NEXUS UI 2.0 — navigation, KPIs, chart engine, UX fixes
+        // (no external animation library: everything is CSS/Chart.js)
+        // ==========================================================
+        (function() {
+            var NX = window.NX = window.NX || {};
+            var DAY = 86400000;
+            var PAGES = {
+                overview: ['Dashboard', 'Overview'], analytics: ['Dashboard', 'Analytics'],
+                transactions: ['Store', 'Transactions'], products: ['Store', 'Catalog'], referrals: ['Store', 'Promos & Referrals'],
+                vip: ['Store', 'VIP Pass'], mysterybox: ['Store', 'Mystery Box'], kanban: ['Store', 'Custom Orders'],
+                livechat: ['Community', 'Live Chat'], audience: ['Community', 'Audience'], moderation: ['Community', 'Moderation'], messages: ['Community', 'Bot Messages'],
+                botcontrol: ['System', 'Bot Control'], monitoring: ['System', 'Diagnostics'], terminal: ['System', 'Terminal'],
+                backups: ['System', 'Backups'], admin: ['System', 'Settings'], patchnotes: ['System', 'Patchnotes']
+            };
 
-        import("https://cdn.jsdelivr.net/npm/motion@11.11.13/+esm").then(({ animate, stagger, inView }) => {
-            // Entry Animations for Cards
-            inView(".card, .product-card", (info) => {
-                animate(info.target, { opacity: [0, 1], y: [40, 0], scale: [0.95, 1] }, { duration: 0.6, easing: [0.16, 1, 0.3, 1] });
-            });
-
-            // Entry Animations for Buttons
-            inView(".admin-btn", (info) => {
-                animate(info.target, { opacity: [0, 1], scale: [0.9, 1] }, { duration: 0.5, easing: [0.16, 1, 0.3, 1] });
-            });
-
-            // Live Hover Animations via Event Delegation
-            document.body.addEventListener("mouseover", (e) => {
-                const card = e.target.closest(".card, .product-card");
-                if (card && !card.dataset.hovering) {
-                    card.dataset.hovering = "true";
-                    animate(card, { scale: 1.02, y: -4, boxShadow: "0 15px 35px rgba(0,0,0,0.3)" }, { duration: 0.2, easing: "easeOut" });
+            // ---------- helpers ----------
+            function $(id) { return document.getElementById(id); }
+            function stats() { return (typeof rawStats !== 'undefined' && rawStats) ? rawStats : {}; }
+            function hasChart() { return typeof Chart !== 'undefined'; }
+            function theme(k) { try { return getThemeVal(k); } catch (e) { return k === 'hex' ? '#10b981' : '16, 185, 129'; } }
+            function isEUR() { return window.displayCurrency === 'EUR'; }
+            NX.money = function(v, short) {
+                v = (parseFloat(v) || 0) * (isEUR() ? 1.18 : 1);
+                var sym = isEUR() ? '€' : '£';
+                if (short && Math.abs(v) >= 1000) return sym + (v / 1000).toFixed(v >= 10000 ? 0 : 1) + 'k';
+                var dec = Math.abs(v - Math.round(v)) > 0.004 ? 2 : 0;
+                return sym + v.toLocaleString('en-GB', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+            };
+            function fmtInt(v) { return (Math.round(v) || 0).toLocaleString('en-GB'); }
+            function dayKey(t) { return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris' }).format(new Date(t)); }
+            function keyToUTC(key) { var p = String(key).split('-'); return Date.UTC(+p[0], (+p[1]) - 1, +p[2], 12); }
+            function shiftKey(key, d) { return new Date(keyToUTC(key) + d * DAY).toISOString().slice(0, 10); }
+            function labelOf(key, long) { return new Date(keyToUTC(key)).toLocaleDateString('en-GB', long ? { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' } : { day: 'numeric', month: 'short', timeZone: 'UTC' }); }
+            function validKeys(obj) { return Object.keys(obj || {}).filter(function(k) { return k.length === 10 && k.charAt(4) === '-' && !isNaN(keyToUTC(k)); }).sort(); }
+            // Continuous list of day keys ending today (n = 0 means since the first recorded day)
+            NX.days = function(n, sources) {
+                var today = dayKey(Date.now()), start;
+                if (n > 0) start = shiftKey(today, -(n - 1));
+                else {
+                    var first = null;
+                    (sources || []).forEach(function(o) { var k = validKeys(o)[0]; if (k && (!first || k < first)) first = k; });
+                    start = first || shiftKey(today, -6);
+                    if (start > today) start = today;
                 }
-                const btn = e.target.closest(".admin-btn");
-                if (btn && !btn.dataset.hovering) {
-                    btn.dataset.hovering = "true";
-                    animate(btn, { scale: 1.04, y: -2, boxShadow: "0 8px 25px rgba(0,0,0,0.3)" }, { duration: 0.2, easing: "easeOut" });
-                }
-            });
+                var out = [], k = start, guard = 0;
+                while (k <= today && guard++ < 3000) { out.push(k); k = shiftKey(k, 1); }
+                return out;
+            };
+            function sumKeys(obj, keys) { var s = 0; keys.forEach(function(k) { s += parseFloat((obj || {})[k]) || 0; }); return s; }
+            function deltaBadge(cur, prev, invert) {
+                if (!prev && !cur) return '<span class="nx-delta flat">0%</span>';
+                if (!prev) return '<span class="nx-delta ' + (invert ? 'down' : 'up') + '">new</span>';
+                var pct = Math.round(((cur - prev) / Math.abs(prev)) * 100);
+                var good = invert ? pct <= 0 : pct >= 0;
+                var cls = pct === 0 ? 'flat' : (good ? 'up' : 'down');
+                return '<span class="nx-delta ' + cls + '">' + (pct > 0 ? '▲ ' : (pct < 0 ? '▼ ' : '')) + Math.abs(pct) + '%</span>';
+            }
+            // Orders per day, rebuilt from the transaction ledger
+            function ordersByDay() {
+                var out = {}, rev = {};
+                (stats().recent_transactions || []).forEach(function(tx) {
+                    var t = new Date(tx.date).getTime();
+                    if (isNaN(t)) return;
+                    var k = dayKey(t);
+                    out[k] = (out[k] || 0) + 1;
+                    rev[k] = (rev[k] || 0) + (parseFloat(tx.price) || 0);
+                });
+                return { count: out, revenue: rev };
+            }
+            function isActive(tab) { var el = $(tab); return !!(el && el.classList.contains('active')); }
 
-            document.body.addEventListener("mouseout", (e) => {
-                const card = e.target.closest(".card, .product-card");
-                if (card && card.dataset.hovering) {
-                    if (!e.relatedTarget || !card.contains(e.relatedTarget)) {
-                        delete card.dataset.hovering;
-                        animate(card, { scale: 1, y: 0, boxShadow: "0 8px 32px rgba(0,0,0,0.2)" }, { duration: 0.4, easing: "easeOut" });
+            // ---------- Chart.js theme ----------
+            function setupChartDefaults() {
+                if (!hasChart() || NX._defaults) return;
+                NX._defaults = true;
+                Chart.defaults.font.family = "'Inter', -apple-system, BlinkMacSystemFont, sans-serif";
+                Chart.defaults.font.size = 11.5;
+                Chart.defaults.color = '#7d8294';
+                Chart.defaults.animation.duration = 900;
+                Chart.defaults.animation.easing = 'easeOutQuart';
+                Chart.defaults.plugins.legend.labels.usePointStyle = true;
+                Chart.defaults.plugins.legend.labels.pointStyle = 'circle';
+                Chart.defaults.plugins.legend.labels.boxWidth = 8;
+                Chart.defaults.plugins.legend.labels.boxHeight = 8;
+                Chart.defaults.plugins.legend.labels.padding = 14;
+                Chart.defaults.plugins.legend.labels.color = '#a3a8b8';
+            }
+            function tooltip(extra) {
+                var t = { backgroundColor: 'rgba(12, 13, 20, 0.96)', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1, padding: 12, cornerRadius: 12,
+                    titleColor: '#a3a8b8', bodyColor: '#ffffff', titleFont: { size: 12, weight: '600' }, bodyFont: { size: 13, weight: '700' },
+                    usePointStyle: true, boxPadding: 6, caretSize: 6 };
+                for (var k in (extra || {})) t[k] = extra[k];
+                return t;
+            }
+            function vGrad(rgb, a1, a2) {
+                return function(c) {
+                    var ch = c.chart, ar = ch.chartArea;
+                    if (!ar) return 'rgba(' + rgb + ',' + a1 + ')';
+                    var g = ch.ctx.createLinearGradient(0, ar.top, 0, ar.bottom);
+                    g.addColorStop(0, 'rgba(' + rgb + ',' + a1 + ')'); g.addColorStop(1, 'rgba(' + rgb + ',' + a2 + ')');
+                    return g;
+                };
+            }
+            function hGrad(rgb, a1, a2) {
+                return function(c) {
+                    var ch = c.chart, ar = ch.chartArea;
+                    if (!ar) return 'rgba(' + rgb + ',' + a1 + ')';
+                    var g = ch.ctx.createLinearGradient(ar.left, 0, ar.right, 0);
+                    g.addColorStop(0, 'rgba(' + rgb + ',' + a2 + ')'); g.addColorStop(1, 'rgba(' + rgb + ',' + a1 + ')');
+                    return g;
+                };
+            }
+            function axisX(maxTicks) { return { grid: { display: false }, border: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: maxTicks || 8, padding: 6 } }; }
+            function axisY(money, extra) {
+                var a = { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)', drawTicks: false }, border: { display: false }, ticks: { padding: 10, maxTicksLimit: 6, precision: money ? undefined : 0 } };
+                if (money) a.ticks.callback = function(v) { return NX.money(v, true); };
+                for (var k in (extra || {})) a[k] = extra[k];
+                return a;
+            }
+            var centerText = {
+                id: 'nxCenter',
+                afterDraw: function(chart) {
+                    var o = chart.options.plugins && chart.options.plugins.nxCenter;
+                    if (!o || !o.text) return;
+                    var m = chart.getDatasetMeta(0); if (!m || !m.data || !m.data[0]) return;
+                    var x = m.data[0].x, y = m.data[0].y, ctx = chart.ctx;
+                    ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                    ctx.fillStyle = '#ffffff'; ctx.font = "800 20px 'Inter', sans-serif"; ctx.fillText(o.text, x, y - 8);
+                    ctx.fillStyle = '#7d8294'; ctx.font = "600 10.5px 'Inter', sans-serif"; ctx.fillText(o.sub || '', x, y + 13);
+                    ctx.restore();
+                }
+            };
+            // Create or update in place (smooth morph instead of destroy/re-animate on every refresh)
+            NX.charts = {};
+            NX.chart = function(id, cfg) {
+                if (!hasChart()) return null;
+                var canvas = $(id); if (!canvas) return null;
+                setupChartDefaults();
+                var ch = NX.charts[id];
+                if (ch && ch.canvas === canvas && ch.config.type === cfg.type) {
+                    ch.data.labels = cfg.data.labels;
+                    cfg.data.datasets.forEach(function(ds, i) {
+                        if (ch.data.datasets[i] && ch.data.datasets[i].type === ds.type) { var t = ch.data.datasets[i]; for (var k in ds) t[k] = ds[k]; }
+                        else ch.data.datasets[i] = ds;
+                    });
+                    ch.data.datasets.length = cfg.data.datasets.length;
+                    ch.options = cfg.options;
+                    ch.update();
+                    return ch;
+                }
+                if (ch) { try { ch.destroy(); } catch (e) {} }
+                var existing = Chart.getChart ? Chart.getChart(canvas) : null;
+                if (existing) { try { existing.destroy(); } catch (e) {} }
+                ch = NX.charts[id] = new Chart(canvas.getContext('2d'), cfg);
+                return ch;
+            };
+            NX.empty = function(id, isEmpty, msg) {
+                var c = $(id); if (!c || !c.parentNode) return;
+                var box = c.parentNode, ov = box.querySelector('.nx-chart-empty');
+                if (!ov) {
+                    ov = document.createElement('div'); ov.className = 'nx-chart-empty';
+                    ov.innerHTML = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg><span></span>';
+                    if (getComputedStyle(box).position === 'static') box.style.position = 'relative';
+                    box.appendChild(ov);
+                }
+                ov.querySelector('span').textContent = msg || 'No data for this period yet';
+                ov.classList.toggle('show', !!isEmpty);
+            };
+            function clearSkeletons(scope) { (scope || document).querySelectorAll('.skeleton-chart-overlay').forEach(function(el) { el.remove(); }); }
+
+            // ---------- Overview: revenue trajectory ----------
+            NX.salesRange = 30;
+            NX.renderSales = function() {
+                if (!hasChart() || !$('salesChart')) return;
+                if (!isActive('overview')) { NX._salesDirty = true; return; }
+                NX._salesDirty = false;
+                clearSkeletons($('overview'));
+                var s = stats(), rev = s.revenue || {}, n = NX.salesRange;
+                var keys = NX.days(n, [rev]);
+                var vals = keys.map(function(k) { return parseFloat(rev[k]) || 0; });
+                var total = vals.reduce(function(a, b) { return a + b; }, 0);
+                var prevKeys = n > 0 ? keys.map(function(k) { return shiftKey(k, -n); }) : [];
+                var prevVals = prevKeys.map(function(k) { return parseFloat(rev[k]) || 0; });
+                var prevTotal = prevVals.reduce(function(a, b) { return a + b; }, 0);
+                if ($('nx-sales-total')) $('nx-sales-total').textContent = NX.money(total);
+                if ($('nx-sales-delta')) $('nx-sales-delta').innerHTML = n > 0 ? deltaBadge(total, prevTotal) + ' vs previous ' + n + ' days' : 'all-time';
+                if ($('nx-sales-avg')) $('nx-sales-avg').textContent = '· ' + NX.money(keys.length ? total / keys.length : 0) + ' / day';
+                document.querySelectorAll('#nx-sales-range button').forEach(function(b) { b.classList.toggle('active', +b.getAttribute('data-range') === n); });
+                var hex = theme('hex'), rgb = theme('rgb');
+                var datasets = [{
+                    type: 'line', label: 'Revenue', data: vals, borderColor: hex, borderWidth: 2.5, fill: true,
+                    backgroundColor: vGrad(rgb, 0.32, 0), tension: 0.35, cubicInterpolationMode: 'monotone',
+                    pointRadius: keys.length <= 31 ? 2.5 : 0, pointBackgroundColor: hex, pointBorderWidth: 0,
+                    pointHoverRadius: 6, pointHoverBackgroundColor: hex, pointHoverBorderColor: '#fff', pointHoverBorderWidth: 2, pointHitRadius: 20, order: 1
+                }];
+                if (n > 0) datasets.push({ type: 'line', label: 'Previous period', data: prevVals, borderColor: 'rgba(255,255,255,0.22)', borderDash: [5, 5], borderWidth: 1.5, fill: false, tension: 0.35, pointRadius: 0, pointHoverRadius: 0, order: 2 });
+                NX.chart('salesChart', {
+                    type: 'line',
+                    data: { labels: keys.map(function(k) { return labelOf(k); }), datasets: datasets },
+                    options: {
+                        responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+                        plugins: { legend: { display: n > 0, position: 'top', align: 'end' }, tooltip: tooltip({ callbacks: {
+                            title: function(items) { return items.length ? labelOf(keys[items[0].dataIndex], true) : ''; },
+                            label: function(c) { return ' ' + c.dataset.label + ': ' + NX.money(c.parsed.y); } } }) },
+                        scales: { x: axisX(keys.length > 60 ? 10 : 8), y: axisY(true) }
                     }
-                }
-                const btn = e.target.closest(".admin-btn");
-                if (btn && btn.dataset.hovering) {
-                    if (!e.relatedTarget || !btn.contains(e.relatedTarget)) {
-                        delete btn.dataset.hovering;
-                        animate(btn, { scale: 1, y: 0, boxShadow: "0 4px 15px rgba(0,0,0,0.2)" }, { duration: 0.3, easing: "easeOut" });
+                });
+                NX.empty('salesChart', total === 0, n > 0 ? 'No revenue in the last ' + n + ' days' : 'No revenue recorded yet');
+            };
+            window.renderSalesChart = function(days) { if (typeof days === 'number') NX.salesRange = days; NX.renderSales(); };
+            window.updateSalesChart = function(days) { NX.salesRange = days; try { localStorage.setItem('nx_sales_range', String(days)); } catch (e) {} NX.renderSales(); };
+            try { var sr = parseInt(localStorage.getItem('nx_sales_range'), 10); if (!isNaN(sr)) NX.salesRange = sr; } catch (e) {}
+
+            // ---------- Analytics ----------
+            NX.anRange = 30;
+            try { var ar = parseInt(localStorage.getItem('nx_an_range'), 10); if (!isNaN(ar)) NX.anRange = ar; } catch (e) {}
+            NX.setAnalyticsRange = function(d) { NX.anRange = d; try { localStorage.setItem('nx_an_range', String(d)); } catch (e) {} NX.renderAnalytics(); };
+            function setKpi(id, value, foot) { if ($(id)) $(id).innerHTML = value; if ($(id + '-foot')) $(id + '-foot').innerHTML = foot; }
+            NX.renderAnalytics = function() {
+                if (!isActive('analytics')) { NX._anDirty = true; return; }
+                NX._anDirty = false;
+                clearSkeletons($('analytics'));
+                var s = stats(), rev = s.revenue || {}, n = NX.anRange, ob = ordersByDay();
+                var keys = NX.days(n, [rev, ob.count, s.joins]);
+                var prevKeys = n > 0 ? keys.map(function(k) { return shiftKey(k, -n); }) : [];
+                var hex = theme('hex'), rgb = theme('rgb');
+                document.querySelectorAll('#nx-an-range button').forEach(function(b) { b.classList.toggle('active', +b.getAttribute('data-range') === n); });
+                var rangeTxt = n > 0 ? 'vs previous ' + n + 'd' : 'all-time';
+
+                // KPIs
+                var revT = sumKeys(rev, keys), revP = sumKeys(rev, prevKeys);
+                var ordT = sumKeys(ob.count, keys), ordP = sumKeys(ob.count, prevKeys);
+                var txRevT = sumKeys(ob.revenue, keys), txRevP = sumKeys(ob.revenue, prevKeys);
+                var aov = ordT ? txRevT / ordT : 0, aovP = ordP ? txRevP / ordP : 0;
+                var best = null; keys.forEach(function(k) { var v = parseFloat(rev[k]) || 0; if (v > 0 && (!best || v > best.v)) best = { k: k, v: v }; });
+                var jT = sumKeys(s.joins, keys), lT = sumKeys(s.leaves, keys), jP = sumKeys(s.joins, prevKeys), lP = sumKeys(s.leaves, prevKeys);
+                setKpi('nx-kpi-rev', NX.money(revT), n > 0 ? deltaBadge(revT, revP) + rangeTxt : rangeTxt);
+                setKpi('nx-kpi-orders', fmtInt(ordT), n > 0 ? deltaBadge(ordT, ordP) + rangeTxt : rangeTxt);
+                setKpi('nx-kpi-aov', NX.money(aov), n > 0 ? deltaBadge(aov, aovP) + rangeTxt : 'per order');
+                setKpi('nx-kpi-best', best ? NX.money(best.v) : '—', best ? labelOf(best.k, true) : 'no sales yet');
+                setKpi('nx-kpi-net', (jT - lT >= 0 ? '+' : '') + fmtInt(jT - lT), '<span style="color:#34d399">+' + fmtInt(jT) + ' joins</span> · <span style="color:#f87171">−' + fmtInt(lT) + ' left</span>' + (n > 0 ? ' ' + deltaBadge(jT - lT, jP - lP) : ''));
+
+                // Revenue & orders
+                var revVals = keys.map(function(k) { return parseFloat(rev[k]) || 0; });
+                var ordVals = keys.map(function(k) { return ob.count[k] || 0; });
+                NX.chart('nxRevOrdersChart', {
+                    type: 'bar',
+                    data: { labels: keys.map(function(k) { return labelOf(k); }), datasets: [
+                        { type: 'line', label: 'Revenue', data: revVals, yAxisID: 'y', borderColor: hex, backgroundColor: vGrad(rgb, 0.25, 0), fill: true, borderWidth: 2.5, tension: 0.35, cubicInterpolationMode: 'monotone', pointRadius: 0, pointHoverRadius: 5, pointHoverBackgroundColor: hex, pointHoverBorderColor: '#fff', pointHoverBorderWidth: 2, order: 1 },
+                        { type: 'bar', label: 'Orders', data: ordVals, yAxisID: 'y1', backgroundColor: 'rgba(129, 140, 248, 0.45)', hoverBackgroundColor: 'rgba(129, 140, 248, 0.85)', borderRadius: 4, borderSkipped: false, maxBarThickness: 18, order: 2 }
+                    ] },
+                    options: {
+                        responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+                        plugins: { legend: { position: 'top', align: 'end' }, tooltip: tooltip({ callbacks: {
+                            title: function(items) { return items.length ? labelOf(keys[items[0].dataIndex], true) : ''; },
+                            label: function(c) { return ' ' + c.dataset.label + ': ' + (c.dataset.yAxisID === 'y' ? NX.money(c.parsed.y) : fmtInt(c.parsed.y)); } } }) },
+                        scales: { x: axisX(keys.length > 60 ? 10 : 8), y: axisY(true), y1: axisY(false, { position: 'right', grid: { display: false } }) }
                     }
+                });
+                NX.empty('nxRevOrdersChart', revT === 0 && ordT === 0);
+
+                // Peak hours (all-time, server clock)
+                var hourly = ((s.analytics || {}).hourly_sales || []).slice(0, 24); while (hourly.length < 24) hourly.push(0);
+                var hMax = Math.max.apply(null, hourly);
+                NX.chart('hourlyChart', {
+                    type: 'bar',
+                    data: { labels: hourly.map(function(_, i) { return (i < 10 ? '0' : '') + i + 'h'; }), datasets: [{ label: 'Sales', data: hourly, borderRadius: 6, borderSkipped: false, maxBarThickness: 26,
+                        backgroundColor: hourly.map(function(v) { return v === hMax && v > 0 ? hex : 'rgba(' + rgb + ', 0.35)'; }), hoverBackgroundColor: hex }] },
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: tooltip({ callbacks: {
+                        title: function(items) { var h = items[0].dataIndex; return h + ':00 – ' + (h + 1) + ':00'; },
+                        label: function(c) { return ' ' + fmtInt(c.parsed.y) + ' sales'; } } }) }, scales: { x: axisX(12), y: axisY(false) } }
+                });
+                NX.empty('hourlyChart', hMax === 0);
+                if ($('nx-peak-note')) $('nx-peak-note').textContent = hMax > 0 ? 'Peak: ' + hourly.indexOf(hMax) + ':00 – ' + (hourly.indexOf(hMax) + 1) + ':00' : '';
+
+                // Day of week (Mon → Sun) for the selected period
+                var dowNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], dow = [0, 0, 0, 0, 0, 0, 0];
+                keys.forEach(function(k) { var d = new Date(keyToUTC(k)).getUTCDay(); dow[(d + 6) % 7] += parseFloat(rev[k]) || 0; });
+                var dMax = Math.max.apply(null, dow);
+                NX.chart('dowChart', {
+                    type: 'bar',
+                    data: { labels: dowNames, datasets: [{ label: 'Revenue', data: dow, borderRadius: 8, borderSkipped: false, maxBarThickness: 42,
+                        backgroundColor: dow.map(function(v) { return v === dMax && v > 0 ? '#818cf8' : 'rgba(129, 140, 248, 0.35)'; }), hoverBackgroundColor: '#818cf8' }] },
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: tooltip({ callbacks: { label: function(c) { return ' ' + NX.money(c.parsed.y); } } }) }, scales: { x: axisX(7), y: axisY(true) } }
+                });
+                NX.empty('dowChart', dMax === 0);
+
+                // Top products (all-time units)
+                var products = s.products || {};
+                var prod = Object.keys(s.product_sales || {}).map(function(id) { var p = products[id]; return { name: p && p.name ? p.name : 'Product #' + id, v: parseInt(s.product_sales[id], 10) || 0 }; })
+                    .filter(function(p) { return p.v > 0; }).sort(function(a, b) { return b.v - a.v; }).slice(0, 7);
+                NX.chart('topProductsBarChart', {
+                    type: 'bar',
+                    data: { labels: prod.map(function(p) { return p.name.length > 22 ? p.name.slice(0, 21) + '…' : p.name; }), datasets: [{ label: 'Units sold', data: prod.map(function(p) { return p.v; }),
+                        backgroundColor: hGrad(rgb, 0.9, 0.25), hoverBackgroundColor: hex, borderRadius: 6, borderSkipped: false, maxBarThickness: 22 }] },
+                    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: tooltip({ callbacks: { label: function(c) { return ' ' + fmtInt(c.parsed.x) + ' sold'; } } }) },
+                        scales: { x: axisY(false, { grid: { color: 'rgba(255,255,255,0.05)' } }), y: { grid: { display: false }, border: { display: false }, ticks: { color: '#c3c7d4', padding: 6 } } } }
+                });
+                NX.empty('topProductsBarChart', prod.length === 0, 'No product sales yet');
+
+                // Revenue by category (estimated from catalogue price × units)
+                var cats = {};
+                Object.keys(s.product_sales || {}).forEach(function(id) {
+                    var p = products[id]; if (!p) return;
+                    var price = parseFloat(String(p.price).replace(',', '.')); if (isNaN(price)) return;
+                    var c = String(p.category || 'Other').trim(); cats[c] = (cats[c] || 0) + price * (parseInt(s.product_sales[id], 10) || 0);
+                });
+                var catKeys = Object.keys(cats).filter(function(k) { return cats[k] > 0; }).sort(function(a, b) { return cats[b] - cats[a]; });
+                var catTotal = catKeys.reduce(function(a, k) { return a + cats[k]; }, 0);
+                var palette = [hex, '#818cf8', '#f59e0b', '#ec4899', '#06b6d4', '#ef4444', '#a3e635'];
+                NX.chart('categoryRevenueChart', {
+                    type: 'doughnut', plugins: [centerText],
+                    data: { labels: catKeys, datasets: [{ data: catKeys.map(function(k) { return cats[k]; }), backgroundColor: palette, borderColor: 'rgba(16,17,26,1)', borderWidth: 3, hoverOffset: 8 }] },
+                    options: { responsive: true, maintainAspectRatio: false, cutout: '72%', layout: { padding: 6 },
+                        plugins: { nxCenter: { text: NX.money(catTotal, true), sub: 'EST. REVENUE' }, legend: { position: 'bottom' },
+                            tooltip: tooltip({ callbacks: { label: function(c) { return ' ' + c.label + ': ' + NX.money(c.parsed) + ' (' + Math.round(c.parsed / (catTotal || 1) * 100) + '%)'; } } }) } }
+                });
+                NX.empty('categoryRevenueChart', catTotal === 0, 'No category revenue yet');
+
+                // Ticket → sale funnel
+                var tickets = (s.analytics || {}).tickets_opened || 0, sales = s.total_transactions || 0;
+                var conv = tickets > 0 ? Math.min(100, Math.round(sales / tickets * 100)) : 0;
+                NX.chart('funnelChart', {
+                    type: 'doughnut', plugins: [centerText],
+                    data: { labels: ['Converted to sale', 'No purchase'], datasets: [{ data: [Math.min(sales, tickets || sales), Math.max(0, tickets - sales)], backgroundColor: [hex, 'rgba(248, 113, 113, 0.55)'], borderColor: 'rgba(16,17,26,1)', borderWidth: 3, hoverOffset: 8 }] },
+                    options: { responsive: true, maintainAspectRatio: false, cutout: '72%', layout: { padding: 6 },
+                        plugins: { nxCenter: { text: conv + '%', sub: 'CONVERSION' }, legend: { position: 'bottom' }, tooltip: tooltip({ callbacks: { label: function(c) { return ' ' + c.label + ': ' + fmtInt(c.parsed); } } }) } }
+                });
+                NX.empty('funnelChart', tickets === 0 && sales === 0, 'No tickets opened yet');
+                if ($('nx-funnel-note')) $('nx-funnel-note').textContent = fmtInt(tickets) + ' tickets · ' + fmtInt(sales) + ' sales';
+
+                // Member flow: joins vs leaves (+ net)
+                var jv = keys.map(function(k) { return parseInt((s.joins || {})[k], 10) || 0; });
+                var lv = keys.map(function(k) { return -(parseInt((s.leaves || {})[k], 10) || 0); });
+                NX.chart('joinsChart', {
+                    type: 'bar',
+                    data: { labels: keys.map(function(k) { return labelOf(k); }), datasets: [
+                        { type: 'bar', label: 'Joins', data: jv, backgroundColor: 'rgba(52, 211, 153, 0.7)', hoverBackgroundColor: '#34d399', borderRadius: 4, borderSkipped: false, maxBarThickness: 16, stack: 'flow', order: 2 },
+                        { type: 'bar', label: 'Leaves', data: lv, backgroundColor: 'rgba(248, 113, 113, 0.65)', hoverBackgroundColor: '#f87171', borderRadius: 4, borderSkipped: false, maxBarThickness: 16, stack: 'flow', order: 3 },
+                        { type: 'line', label: 'Net', data: jv.map(function(v, i) { return v + lv[i]; }), borderColor: '#ffffff', borderWidth: 1.5, pointRadius: 0, pointHoverRadius: 4, tension: 0.35, fill: false, order: 1 }
+                    ] },
+                    options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+                        plugins: { legend: { position: 'top', align: 'end' }, tooltip: tooltip({ callbacks: {
+                            title: function(items) { return items.length ? labelOf(keys[items[0].dataIndex], true) : ''; },
+                            label: function(c) { return ' ' + c.dataset.label + ': ' + fmtInt(Math.abs(c.parsed.y)); } } }) },
+                        scales: { x: Object.assign(axisX(8), { stacked: true }), y: axisY(false, { stacked: true, beginAtZero: true, ticks: { padding: 10, maxTicksLimit: 6, precision: 0, callback: function(v) { return Math.abs(v); } } }) } }
+                });
+                NX.empty('joinsChart', jT === 0 && lT === 0, 'No member activity in this period');
+
+                // Top customers
+                var tc = $('nx-top-customers');
+                if (tc) {
+                    var spend = s.user_spending || {};
+                    var top = Object.keys(spend).map(function(u) { return { u: u, v: parseFloat(spend[u]) || 0 }; }).filter(function(x) { return x.v > 0 && x.u !== 'Manual Entry'; }).sort(function(a, b) { return b.v - a.v; }).slice(0, 6);
+                    var maxV = top.length ? top[0].v : 1;
+                    tc.innerHTML = top.length ? top.map(function(x, i) {
+                        var name = (typeof escapeHTML === 'function') ? escapeHTML(x.u) : x.u;
+                        return '<div class="nx-cust"><div class="nx-cust-rank">' + (i + 1) + '</div><div class="nx-cust-main"><div class="nx-cust-row"><span class="nx-cust-name">' + name + '</span><span class="nx-cust-val">' + NX.money(x.v) + '</span></div><div class="nx-cust-bar"><i style="width:' + Math.max(4, Math.round(x.v / maxV * 100)) + '%"></i></div></div></div>';
+                    }).join('') : '<div class="nx-chart-empty show" style="position:static; padding:40px 0;">No customers yet</div>';
                 }
+            };
+            window.renderAnalyticsCharts = function() { NX.renderAnalytics(); };
+            NX.rerender = function() { NX._salesDirty = true; NX._anDirty = true; NX.renderSales(); NX.renderAnalytics(); };
+
+            // ---------- KPIs computed client-side (no more hard-coded values) ----------
+            NX.afterData = function(data) {
+                var s = stats(), ov = s.overrides || {}, rev = s.revenue || {};
+                var today = dayKey(Date.now()), yest = shiftKey(today, -1);
+                var tR = parseFloat(rev[today]) || 0, yR = parseFloat(rev[yest]) || 0;
+                if ($('ui-rev-trend')) $('ui-rev-trend').innerHTML = deltaBadge(tR, yR) + '<span style="color:var(--text-muted); font-weight:500;">vs yesterday (' + NX.money(yR) + ')</span>';
+                if ($('ui-active-subs') && !ov['active_subs']) {
+                    var now = Date.now(), subs = s.subscriptions || {}, active = 0, soon = 0;
+                    Object.keys(subs).forEach(function(k) { var e = subs[k] && subs[k].expiresAt; if (e > now) { active++; if (e - now < 3 * DAY) soon++; } });
+                    $('ui-active-subs').innerText = active;
+                    if ($('ui-subs-trend')) $('ui-subs-trend').innerHTML = soon ? '<span class="nx-delta down">' + soon + ' expiring</span><span style="color:var(--text-muted);font-weight:500;">within 3 days</span>' : '<span style="color:var(--text-muted);font-weight:500;">VIP passes running</span>';
+                }
+                if ($('ui-peak-hour') && !ov['peak']) {
+                    var h = ((s.analytics || {}).hourly_sales || []), mx = Math.max.apply(null, h.concat([0]));
+                    $('ui-peak-hour').innerText = mx > 0 ? (h.indexOf(mx) + ':00') : '—';
+                }
+                if ($('ui-online-total') && !ov['online_total'] && data.memberCount === 'N/A') {
+                    $('ui-online-total').innerHTML = '—';
+                    if ($('ui-online-trend')) $('ui-online-trend').innerHTML = '<span class="nx-delta down">Bot offline</span>';
+                } else if ($('ui-online-trend')) {
+                    $('ui-online-trend').innerHTML = '<span style="color:var(--text-muted);font-weight:500;">online / total members</span>';
+                }
+                if ($('ui-conv-trend')) $('ui-conv-trend').innerHTML = '<span style="color:var(--text-muted);font-weight:500;">sales per member joined</span>';
+                document.querySelectorAll('.nav-badge').forEach(function(b) { b.setAttribute('data-zero', (b.textContent.trim() === '' || b.textContent.trim() === '0') ? '1' : '0'); });
+                if (NX._salesDirty === undefined || isActive('overview')) NX.renderSales();
+                if (isActive('analytics')) NX.renderAnalytics(); else NX._anDirty = true;
+            };
+            if (typeof processInitData === 'function') {
+                var origPID = processInitData;
+                window.processInitData = function(data) { origPID(data); try { NX.afterData(data || {}); } catch (e) { console.error('NX.afterData', e); } };
+            }
+            var origToggleCurrency = window.toggleCurrency;
+            if (typeof origToggleCurrency === 'function') {
+                window.toggleCurrency = function() { origToggleCurrency.apply(this, arguments); try { NX.rerender(); NX.afterData({}); } catch (e) {} };
+            }
+
+            // ---------- Navigation: breadcrumb, deep links, scroll reset ----------
+            function navBtnFor(tab) {
+                var btns = document.querySelectorAll('.nav-btn');
+                for (var i = 0; i < btns.length; i++) { if ((btns[i].getAttribute('onclick') || '').indexOf('"' + tab + '"') !== -1) return btns[i]; }
+                return null;
+            }
+            NX.setCrumb = function(tab) {
+                var p = PAGES[tab] || ['Dashboard', tab], bc = $('topbar-breadcrumb');
+                if (bc) {
+                    bc.innerHTML = '<span class="nx-crumb-path">' + p[0] + '</span><span class="nx-crumb-title">' + p[1] + '</span>';
+                    bc.classList.remove('nx-swap'); void bc.offsetWidth; bc.classList.add('nx-swap');
+                }
+                document.title = p[1] + ' · Nexus';
+            };
+            var origSwitch = window.switchTab;
+            window.switchTab = function(tabId, btn) {
+                if (!$(tabId)) tabId = 'overview';
+                origSwitch(tabId, btn || navBtnFor(tabId));
+                var tEl = $(tabId); if (tEl) tEl.classList.add('active'); // don't wait for rAF (charts need the tab visible)
+                NX.setCrumb(tabId);
+                try { history.replaceState(null, '', '#' + tabId); } catch (e) {}
+                var mc = document.querySelector('.main-content'); if (mc) mc.scrollTop = 0;
+                if (tabId === 'overview') setTimeout(NX.renderSales, 40);
+                if (tabId === 'analytics') setTimeout(NX.renderAnalytics, 40);
+            };
+            window.addEventListener('hashchange', function() { var t = location.hash.slice(1); if (t && $(t) && !isActive(t)) window.switchTab(t); });
+            var startTab = location.hash.slice(1);
+            if (startTab && $(startTab) && PAGES[startTab] && startTab !== 'overview') window.switchTab(startTab); else NX.setCrumb('overview');
+
+            // ---------- Range selectors ----------
+            document.addEventListener('click', function(e) {
+                var b = e.target.closest ? e.target.closest('#nx-sales-range button[data-range], #nx-an-range button[data-range]') : null;
+                if (!b) return;
+                var d = parseInt(b.getAttribute('data-range'), 10);
+                if (b.parentNode.id === 'nx-sales-range') window.updateSalesChart(d); else NX.setAnalyticsRange(d);
             });
-        });
+
+            // ---------- Missing handlers referenced by the UI ----------
+            var notesTimer = null;
+            window.saveNotes = function() {
+                clearTimeout(notesTimer);
+                var el = $('personal-notes'); if (!el) return;
+                if ($('nx-notes-status')) $('nx-notes-status').textContent = 'Saving…';
+                notesTimer = setTimeout(function() {
+                    fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'save_notes', notes: el.value }) })
+                        .then(function(r) { if ($('nx-notes-status')) $('nx-notes-status').textContent = r.ok ? 'Saved ✓' : 'Save failed'; if (r.ok) { try { stats().notes = el.value; } catch (e) {} } })
+                        .catch(function() { if ($('nx-notes-status')) $('nx-notes-status').textContent = 'Save failed'; });
+                }, 700);
+            };
+            window.insertShortcut = function(inputId, value) {
+                var el = $(inputId); if (!el) return;
+                el.value = value; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true }));
+                el.focus(); el.style.transition = 'box-shadow .3s'; el.style.boxShadow = '0 0 0 3px rgba(' + theme('rgb') + ', .45)';
+                setTimeout(function() { el.style.boxShadow = ''; }, 700);
+            };
+            // Toast safety net: never let a missing element break an action handler
+            var origToast = window.showToast;
+            window.showToast = function(msg, type) {
+                if (!$('toast')) { var t = document.createElement('div'); t.id = 'toast'; t.setAttribute('role', 'status'); document.body.appendChild(t); }
+                try { return origToast(msg, type); } catch (e) { console.warn('toast', e); }
+            };
+            try { showToast = window.showToast; } catch (e) {}
+
+            // Friendlier member directory error (bot offline / guild unavailable)
+            var origLoadMembers = window.loadAllMembers;
+            if (typeof origLoadMembers === 'function') {
+                window.loadAllMembers = async function() {
+                    await origLoadMembers.apply(this, arguments);
+                    var r = $('memberResults');
+                    if (r && r.textContent.trim() === 'Network failure.') r.innerHTML = '<div class="nx-chart-empty show" style="position:static; padding:48px 0;"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg><span>Member directory unavailable — the Discord bot is offline or not in a server.</span></div>';
+                };
+            }
+
+            // Busy state for async buttons (prevents double submits)
+            document.addEventListener('click', function(e) {
+                var b = e.target.closest ? e.target.closest('button.admin-btn') : null;
+                if (!b || b.classList.contains('nx-busy') || b.id === 'logout-btn') return;
+                var oc = b.getAttribute('onclick') || '';
+                if (oc.indexOf('executeAction') === -1 && oc.indexOf('save') === -1 && oc.indexOf('Save') === -1) return;
+                b.classList.add('nx-busy');
+                setTimeout(function() { b.classList.remove('nx-busy'); }, 900);
+            }, true);
+        })();
 
     </script>
 </body>
