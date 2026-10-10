@@ -104,7 +104,78 @@ let rewarbleCircuitBreaker = { fails: 0, nextTry: 0 };
 const ADMIN_DISCORD_ID = "1520551977854042114";
 const CATEGORY_CUSTOMER_ID = "1521540733226713249";
 const CATEGORY_SUPPORT_ID = "1521541155005796484";
-const DASHBOARD_PIN = "1206";
+// Le PIN vient de l'environnement (jamais en dur dans le dépôt). Sans PIN, la connexion est désactivée.
+const DASHBOARD_PIN = process.env.DASHBOARD_PIN || "";
+if (!DASHBOARD_PIN) {
+    console.error("⚠️ WARNING: DASHBOARD_PIN is missing! Dashboard login is disabled.");
+}
+
+// Comparaison à temps constant ; un PIN vide ou absent n'authentifie jamais.
+function pinMatches(candidate) {
+    if (!DASHBOARD_PIN || typeof candidate !== 'string') return false;
+    const a = Buffer.from(candidate);
+    const b = Buffer.from(DASHBOARD_PIN);
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+// Les jetons de session ne sont jamais stockés en clair (sauvegardes, /api/init-data, Upstash).
+function hashToken(token) {
+    return crypto.createHash('sha256').update(String(token)).digest('hex');
+}
+
+// Échappement HTML pour toute donnée issue de Discord injectée dans du HTML généré côté serveur
+function escHtml(value) {
+    return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// Valeur CSV entre guillemets ; préfixe les formules (=, +, -, @) pour éviter l'injection dans Excel/Sheets
+function csvCell(value) {
+    let s = String(value ?? '');
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+    return '"' + s.replace(/"/g, '""') + '"';
+}
+
+// URL autorisée dans un lien (bloque javascript:, data:, etc.)
+function isSafeHttpUrl(value) {
+    if (typeof value !== 'string') return false;
+    try {
+        const u = new URL(value);
+        return u.protocol === 'https:' || u.protocol === 'http:';
+    } catch (e) {
+        return false;
+    }
+}
+
+// Ensemble des actions qui ciblent un membre Discord : l'identifiant doit être un snowflake
+const USER_TARGET_ACTIONS = new Set(['edit_referral_count', 'warn', 'clear_warns', 'toggle_blacklist', 'save_note', 'ban', 'kick', 'mute', 'send_dm', 'add_vip_days', 'revoke_vip']);
+function isSnowflake(value) {
+    return typeof value === 'string' && /^\d{17,20}$/.test(value);
+}
+
+// Copie des stats envoyée au dashboard, sans secrets (jetons de session hachés, clés passkey)
+function safeStatsSnapshot() {
+    const { activeSessions, passkeys, ...rest } = memoryStats;
+    return rest;
+}
+
+// Vérifie que la requête POST vient bien du même site (protection CSRF : le cookie est SameSite=None).
+function isSameOriginRequest(req) {
+    const origin = req.headers.origin;
+    if (!origin) return true; // Pas d'en-tête Origin : requête non-navigateur ou même origine ancienne
+    try {
+        return new URL(origin).host === req.headers.host;
+    } catch (e) {
+        return false;
+    }
+}
+
+// Adresse IP réelle du client. Derrière le proxy Render, X-Forwarded-For est ajouté à la fin :
+// la première valeur est contrôlable par le client, donc on prend la dernière.
+function getClientIp(req) {
+    const xff = req.headers['x-forwarded-for'];
+    if (xff) return String(xff).split(',').pop().trim();
+    return req.socket?.remoteAddress || '127.0.0.1';
+}
 
     // 🚀 [FUNCTION: getParisDateStr] - Déclaration de fonction
 function getParisDateStr(dateObj = new Date()) {
@@ -1892,9 +1963,10 @@ async function generateTranscript(channel) {
         </head><body><h2>Transcript of ${channel.name}</h2>`;
         
         messages.forEach(m => {
-            html += `<div class="msg"><span class="author">${m.author.username}</span> <span class="time">${m.createdAt.toLocaleString()}</span><br>${m.content}`;
+            // Contenu issu de Discord (non fiable) : échappé avant d'être injecté dans le transcript
+            html += `<div class="msg"><span class="author">${escHtml(m.author.username)}</span> <span class="time">${m.createdAt.toLocaleString()}</span><br>${escHtml(m.content)}`;
             if (m.attachments.size > 0) {
-                m.attachments.forEach(a => html += `<br><img src="${a.url}">`);
+                m.attachments.forEach(a => html += `<br><img src="${escHtml(a.url)}">`);
             }
             html += `</div>`;
         });
@@ -3177,8 +3249,14 @@ const server = http.createServer(async (req, res) => {
 
     // WebAuthn Passkey QR Code System Endpoints
     if (req.url === '/api/auth/session/create' && req.method === 'GET') {
+        // Purge des sessions d'auth expirées (endpoint public : sinon la mémoire grossit sans limite)
+        const nowMs = Date.now();
+        for (const id of Object.keys(authSessions)) {
+            if (nowMs - authSessions[id].createdAt > 5 * 60 * 1000) delete authSessions[id];
+        }
+        if (Object.keys(authSessions).length > 1000) return res.writeHead(503).end(JSON.stringify({ error: 'Too many pending sessions' }));
         const sessionId = crypto.randomUUID();
-        authSessions[sessionId] = { status: 'pending', challenge: null };
+        authSessions[sessionId] = { status: 'pending', challenge: null, createdAt: nowMs };
         return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ sessionId }));
     }
 
@@ -3189,9 +3267,11 @@ const server = http.createServer(async (req, res) => {
         if (!session) return res.writeHead(404).end(JSON.stringify({ error: 'Not found' }));
         
         if (session.status === 'authenticated') {
-            const sessionToken = require('crypto').randomBytes(32).toString('hex');
+            // Session à usage unique : le jeton n'est remis qu'une fois, puis la session d'auth est supprimée
+            delete authSessions[sessionId];
+            const sessionToken = crypto.randomBytes(32).toString('hex');
             if (!memoryStats.activeSessions) memoryStats.activeSessions = [];
-            memoryStats.activeSessions.push(sessionToken);
+            memoryStats.activeSessions.push(hashToken(sessionToken));
             if (memoryStats.activeSessions.length > 20) memoryStats.activeSessions.shift();
             syncCloud();
             res.setHeader('Set-Cookie', `auth_session=${sessionToken}; HttpOnly; SameSite=None; Secure; Path=/; Max-Age=86400`);
@@ -3212,9 +3292,22 @@ const server = http.createServer(async (req, res) => {
                 const rpID = req.headers.host.split(':')[0];
 
                 if (type === 'register') {
-                    if (pin !== DASHBOARD_PIN) {
+                    // Enregistrement uniquement tant qu'aucun passkey n'existe (sinon un PIN deviné donnerait accès permanent)
+                    if (memoryStats.passkeys && memoryStats.passkeys.length > 0) {
+                        return res.writeHead(403).end(JSON.stringify({ error: 'Passkey registration is closed' }));
+                    }
+                    // Même verrouillage que /api/login, appliqué au PIN ici aussi
+                    const regIp = getClientIp(req);
+                    const regLock = bruteForceLocks.get(regIp) || { attempts: 0, lockout: 0 };
+                    if (Date.now() < regLock.lockout) return res.writeHead(429).end(JSON.stringify({ error: 'Locked out.' }));
+                    if (!pinMatches(pin)) {
+                        regLock.attempts++;
+                        if (regLock.attempts >= 5) regLock.lockout = Date.now() + 15 * 60 * 1000;
+                        bruteForceLocks.set(regIp, regLock);
+                        systemLog('WARN', 'SECURITY', `Failed passkey registration PIN from IP: ${regIp}`);
                         return res.writeHead(401).end(JSON.stringify({ error: 'Invalid Admin PIN' }));
                     }
+                    bruteForceLocks.delete(regIp);
                     const options = await generateRegistrationOptions({
                         rpName: 'Nexus Core',
                         rpID,
@@ -3239,9 +3332,10 @@ const server = http.createServer(async (req, res) => {
                     session.challenge = options.challenge;
                     return res.writeHead(200, {'Content-Type': 'application/json'}).end(JSON.stringify({ options }));
                 }
+                return res.writeHead(400).end(JSON.stringify({ error: 'Unknown auth type' }));
             } catch (e) {
                 console.error(e);
-                res.writeHead(500).end(e.message);
+                res.writeHead(500).end(JSON.stringify({ error: 'Internal error' }));
             }
         });
         return;
@@ -3257,6 +3351,8 @@ const server = http.createServer(async (req, res) => {
                 if (!session) return res.writeHead(404).end('Session expired');
 
                 const expectedChallenge = session.challenge;
+                session.challenge = null; // Challenge à usage unique : pas de rejeu possible
+                if (!expectedChallenge) return res.writeHead(400).end(JSON.stringify({ verified: false }));
                 const rpID = req.headers.host.split(':')[0];
                 const origin = `https://${req.headers.host}`;
 
@@ -3321,7 +3417,7 @@ const server = http.createServer(async (req, res) => {
             memoryStats.bandwidth_bytes += (req.socket.bytesRead || 0) + (req.socket.bytesWritten || 0);
         });
     }
-    const clientIp = req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : (req.socket?.remoteAddress || '127.0.0.1');
+    const clientIp = getClientIp(req);
     const now = Date.now();
     let rl = rateLimits.get(clientIp) || { count: 0, resetTime: now + 60000 };
     if (now > rl.resetTime) rl = { count: 0, resetTime: now + 60000 };
@@ -3332,20 +3428,21 @@ const server = http.createServer(async (req, res) => {
     const isAuthenticated = (() => {
         let match = cookie.match(/auth_session=([a-zA-Z0-9]+)/);
         if (!match) return false;
-        return memoryStats.activeSessions && memoryStats.activeSessions.includes(match[1]);
+        return !!memoryStats.activeSessions && memoryStats.activeSessions.includes(hashToken(match[1]));
     })();
 
     // 🚀 [API_ROUTE: /download-code] - Route API backend
     if (req.url === '/download-code') {
-        if (!isAuthenticated && req.url !== '/debug') return res.writeHead(401).end('Unauthorized');
+        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
         res.writeHead(200, { 'Content-Type': 'application/javascript', 'Content-Disposition': 'attachment; filename="index.js"' });
         return res.end(fs.readFileSync(__filename));
     }
     // 🚀 [API_ROUTE: /api/logout] - Route API backend
     if (req.url === '/api/logout' && req.method === 'POST') {
-        if (req.headers.cookie && req.headers.cookie.includes('auth_session=')) {
-            const token = req.headers.cookie.split('auth_session=')[1].split(';')[0];
-            if (memoryStats.activeSessions) { memoryStats.activeSessions = memoryStats.activeSessions.filter(t => t !== token); syncCloud(); }
+        if (!isSameOriginRequest(req)) return res.writeHead(403).end('Forbidden');
+        if (isAuthenticated) {
+            const token = cookie.match(/auth_session=([a-zA-Z0-9]+)/)[1];
+            memoryStats.activeSessions = memoryStats.activeSessions.filter(t => t !== hashToken(token)); syncCloud();
         }
         res.writeHead(200, { 'Set-Cookie': 'auth_session=; Max-Age=0; HttpOnly; SameSite=None; Secure; Path=/', 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({ success: true }));
@@ -3354,19 +3451,16 @@ const server = http.createServer(async (req, res) => {
     if (req.url === '/api/login' && req.method === 'POST') {
         let body = ''; let bodySize = 0; req.on('data', chunk => { bodySize += chunk.length; if(bodySize > 5*1024*1024) req.socket.destroy(); else body += chunk; });
         req.on('end', () => {
+            if (!isSameOriginRequest(req)) return res.writeHead(403).end('Forbidden');
             let lock = bruteForceLocks.get(clientIp) || { attempts: 0, lockout: 0 };
-            if (now < lock.lockout) return res.writeHead(429).end('Locked out.');
+            if (Date.now() < lock.lockout) return res.writeHead(429).end('Locked out.');
             try {
                 const data = JSON.parse(body);
-                const crypto = require('crypto');
-                        const a = Buffer.from(data.pin || '');
-                        const b = Buffer.from(DASHBOARD_PIN);
-                        if (a.length === b.length && crypto.timingSafeEqual(a, b)) {
-                            
+                if (pinMatches(data.pin)) {
                     bruteForceLocks.delete(clientIp);
-                    const sessionToken = require('crypto').randomBytes(32).toString('hex');
+                    const sessionToken = crypto.randomBytes(32).toString('hex');
                     if (!memoryStats.activeSessions) memoryStats.activeSessions = [];
-                    memoryStats.activeSessions.push(sessionToken);
+                    memoryStats.activeSessions.push(hashToken(sessionToken));
                     if (memoryStats.activeSessions.length > 20) memoryStats.activeSessions.shift();
                     syncCloud();
                     res.writeHead(200, { 'Set-Cookie': `auth_session=${sessionToken}; Max-Age=86400; HttpOnly; SameSite=None; Secure; Path=/`, 'Content-Type': 'application/json' });
@@ -3380,6 +3474,12 @@ const server = http.createServer(async (req, res) => {
                 }
             } catch(e) { res.writeHead(400).end('Bad Request'); }
         }); return;
+    }
+
+    // 🔒 Garde centrale : toutes les routes /api/* déclarées après ce point exigent une session valide.
+    // (/api/auth/*, /api/login et /api/logout sont traitées plus haut et restent publiques.)
+    if (req.url.startsWith('/api/') && !isAuthenticated) {
+        return res.writeHead(401, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: 'Unauthorized' }));
     }
 
     // 🚀 [API_ROUTE: /dashboard] - Route API backend
@@ -3561,9 +3661,12 @@ const server = http.createServer(async (req, res) => {
     }
 
     // 🚀 [API_ROUTE: /api/init-data] - Route API backend
-    if (req.url.startsWith('/api/log')) { require('fs').appendFileSync('frontend_error.log', req.url + '\n'); return res.end(); }
-    if (req.url === '/debug') { res.writeHead(200); return res.end(JSON.stringify(memoryStats));
-        if (!isAuthenticated) return res.writeHead(401).end('Unauthorized'); res.writeHead(200); return res.end(JSON.stringify(memoryStats)); }
+    if (req.url.startsWith('/api/log')) {
+        // Erreurs front : journalisées tronquées pour éviter de remplir le disque
+        const entry = req.url.slice(0, 500);
+        try { require('fs').appendFileSync('frontend_error.log', entry + '\n'); } catch (e) {}
+        return res.end();
+    }
                     // 🌐 [API_ROUTE: /api/init-data] - Gestionnaire de route backend
     if (req.url.startsWith('/api/init-data') && req.method === 'GET') {
         // removed
@@ -3586,7 +3689,7 @@ const server = http.createServer(async (req, res) => {
             const todayLeaves = (memoryStats.leaves && memoryStats.leaves[todayStr]) || 0;
             const yesterdayLeaves = (memoryStats.leaves && memoryStats.leaves[yesterdayStr]) || 0;
             res.writeHead(200, { 'Content-Type': 'application/json' });
-            return res.end(JSON.stringify({ uptime: process.uptime(), memoryStats, maintenance: memoryStats.settings?.maintenance, pendingReviewsCount: memoryStats.pending_reviews?.length || 0, activeTickets: activeTickets, todayRevenue: (memoryStats.revenue && memoryStats.revenue[todayStr]) || 0, monthRevenue, ticketsOpened: memoryStats.analytics?.tickets_opened || 0, dropOffRate: memoryStats.analytics?.tickets_opened > 0 ? (100 - (memoryStats.total_transactions / memoryStats.analytics.tickets_opened) * 100).toFixed(1) : 0, peakHourStr: "N/A", conversionRate: ((memoryStats.total_transactions / (memoryStats.total_joins || 1)) * 100).toFixed(1), retentionRate: memberCount !== "N/A" ? ((memberCount / (memberCount + (memoryStats.total_leaves || 0))) * 100).toFixed(1) : "N/A", onlineCount, memberCount, MONTHLY_GOAL, todayJoins, yesterdayJoins, textChannels: guild ? guild.channels.cache.filter(c => c.type === 0).map(c => ({id: c.id, name: c.name})) : [] }));
+            return res.end(JSON.stringify({ uptime: process.uptime(), memoryStats: safeStatsSnapshot(), maintenance: memoryStats.settings?.maintenance, pendingReviewsCount: memoryStats.pending_reviews?.length || 0, activeTickets: activeTickets, todayRevenue: (memoryStats.revenue && memoryStats.revenue[todayStr]) || 0, monthRevenue, ticketsOpened: memoryStats.analytics?.tickets_opened || 0, dropOffRate: memoryStats.analytics?.tickets_opened > 0 ? (100 - (memoryStats.total_transactions / memoryStats.analytics.tickets_opened) * 100).toFixed(1) : 0, peakHourStr: "N/A", conversionRate: ((memoryStats.total_transactions / (memoryStats.total_joins || 1)) * 100).toFixed(1), retentionRate: memberCount !== "N/A" ? ((memberCount / (memberCount + (memoryStats.total_leaves || 0))) * 100).toFixed(1) : "N/A", onlineCount, memberCount, MONTHLY_GOAL, todayJoins, yesterdayJoins, textChannels: guild ? guild.channels.cache.filter(c => c.type === 0).map(c => ({id: c.id, name: c.name})) : [] }));
     } catch (apiErr) { console.error('API /init-data Error:', apiErr); res.writeHead(500); return res.end(JSON.stringify({error: 'Internal Server Error'})); } }
 
     
@@ -3629,7 +3732,7 @@ const server = http.createServer(async (req, res) => {
         let csv = "\uFEFFDate,Customer,Product,Price\n"; 
         if (Array.isArray(memoryStats.recent_transactions)) {
             memoryStats.recent_transactions.forEach(tx => {
-                csv += `"${tx.date}","${tx.username}","${tx.product}","£${tx.price}"\n`;
+                csv += [tx.date, tx.username, tx.product, '£' + tx.price].map(csvCell).join(',') + '\n';
             });
         }
         res.writeHead(200, { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="nexus_transactions.csv"' });
@@ -3816,12 +3919,16 @@ const server = http.createServer(async (req, res) => {
     // 🚀 [API_ROUTE: /api/action] - Route API backend
     if (req.url === '/api/action' && req.method === 'POST') {
         if (!isAuthenticated) return res.writeHead(401).end('Unauthorized');
+        if (!isSameOriginRequest(req)) return res.writeHead(403).end('Forbidden');
         let body = ''; let bodySize3 = 0; req.on('data', chunk => { bodySize3 += chunk.length; if(bodySize3 > 5*1024*1024) req.socket.destroy(); else body += chunk.toString(); });
         req.on('end', async () => {
             try {
                 const data = JSON.parse(body);
                 const guild = client.guilds.cache.first();
                 if (!guild) return res.writeHead(404).end('Guild not found');
+                if (USER_TARGET_ACTIONS.has(data.action) && !isSnowflake(data.userId)) {
+                    return res.writeHead(400).end('Invalid user ID');
+                }
 
                 systemLog('DEBUG', 'DASHBOARD', `Executed admin action: ${data.action}`);
 
@@ -4088,6 +4195,7 @@ const server = http.createServer(async (req, res) => {
                 }
                     // ⚡ [API_ACTION: add_buy_link] - Point de terminaison API Action
                 else if (data.action === 'add_buy_link') {
+                    if (!isSafeHttpUrl(data.url)) throw new Error("Invalid URL");
                     if (!memoryStats.buy_links) memoryStats.buy_links = {};
                     const newId = (Object.keys(memoryStats.buy_links).length + 1).toString() + Date.now();
                     memoryStats.buy_links[newId] = { label: data.label, url: data.url };
@@ -4095,6 +4203,7 @@ const server = http.createServer(async (req, res) => {
                 }
                     // ⚡ [API_ACTION: edit_buy_link] - Point de terminaison API Action
                 else if (data.action === 'edit_buy_link') {
+                    if (!isSafeHttpUrl(data.url)) throw new Error("Invalid URL");
                     if (memoryStats.buy_links && memoryStats.buy_links[data.id]) {
                         memoryStats.buy_links[data.id] = { label: data.label, url: data.url };
                         syncCloud();
@@ -4228,6 +4337,7 @@ const server = http.createServer(async (req, res) => {
                 }
                     // ⚡ [API_ACTION: edit_product] - Point de terminaison API Action
                 else if (data.action === 'edit_product') {
+                    if (data.link && !isSafeHttpUrl(data.link)) throw new Error("Invalid product link");
                     if (memoryStats.products && memoryStats.products[data.id]) {
                         const newCat = data.category || memoryStats.products[data.id].category || "✨ ITEMS";
                         memoryStats.products[data.id] = { name: data.name, price: data.price, link: data.link, category: newCat, stock: data.stock || "∞", desc: data.desc, upsellId: data.upsellId, upsellDiscount: data.upsellDiscount };
@@ -4237,6 +4347,7 @@ const server = http.createServer(async (req, res) => {
                 }
                     // ⚡ [API_ACTION: add_product] - Point de terminaison API Action
                 else if (data.action === 'add_product') {
+                    if (data.link && !isSafeHttpUrl(data.link)) throw new Error("Invalid product link");
                     if (!memoryStats.products) memoryStats.products = {};
                     if (!memoryStats.next_product_id) memoryStats.next_product_id = Date.now();
                         const newId = (memoryStats.next_product_id++).toString();
@@ -7261,6 +7372,8 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         function escapeInlineJS(str) { if (!str) return ''; return String(str).replace(/\\\\/g, '\\\\\\\\').replace(/'/g, "\\\\'").replace(/\"/g, '\\\\\"').replace(/\\n/g, '\\\\n').replace(/\\r/g, '\\\\r').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
     // 🚀 [FUNCTION: escapeHTML] - Déclaration de fonction
         function escapeHTML(str){ return str ? String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;') : ''; }
+    // Lien sûr uniquement en http(s) : bloque javascript: même échappé en HTML
+        function safeHref(u){ u = String(u || ''); return (u.indexOf('https://') === 0 || u.indexOf('http://') === 0) ? u : '#'; }
     // 🚀 [FUNCTION: escapeJS] - Déclaration de fonction
         function escapeJS(str) {
     if (!str) return '';
@@ -7373,7 +7486,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                   else if(cat.includes('UTILITY')) icon='🛠️';
                   else if(cat.includes('GAMING')) icon='🎮';
                   let pPrice = p.price==='Custom'?'Custom':'£'+p.price; 
-                  let pLink = p.link ? '<a href="' + escapeHTML(p.link) + '" target="_blank" style="color:var(--accent-green);text-decoration:none;">[🔗 Open Node]</a>' : '<span class="text-muted">Unlinked</span>'; 
+                  let pLink = p.link ? '<a href="' + escapeHTML(safeHref(p.link)) + '" target="_blank" style="color:var(--accent-green);text-decoration:none;">[🔗 Open Node]</a>' : '<span class="text-muted">Unlinked</span>'; 
                   let stockDisplay = p.stock === '∞' || !p.stock ? '∞' : p.stock; 
                   let upsellDisplay = p.upsellId ? \`<br><span style='color:var(--accent-purple);font-size:0.8em;'>🚀 Upsell: #\${p.upsellId} (-\${p.upsellDiscount||20}%)</span>\` : '';
                   let pDesc = p.desc ? '<div class="prod-desc">' + escapeHTML(p.desc) + upsellDisplay + '</div>' : '<div class="prod-desc" style="font-style:italic; opacity:0.5;">Awaiting parameters...'+upsellDisplay+'</div>';
@@ -7489,7 +7602,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
           let blHtml=''; 
           if(rawStats.buy_links){ 
               Object.entries(rawStats.buy_links).forEach(([id, l]) => { 
-                  blHtml += '<tr><td><strong>' + escapeHTML(l.label) + '</strong></td><td><a href="' + escapeHTML(l.url) + '" target="_blank" style="color:var(--accent-green); text-decoration:none;">Verify Gateway ↗</a></td><td><button class="admin-btn" style="padding:6px 12px; margin:0 8px 0 0;" onclick="window.editBuyLink(&quot;' + escapeInlineJS(id) + '&quot;)">✏️ Mod</button><button class="admin-btn" style="padding:6px 12px; color:var(--accent-red); margin:0;" onclick="window.deleteBuyLink(&quot;' + escapeInlineJS(id) + '&quot;)">🗑️ Purge</button></td></tr>'; 
+                  blHtml += '<tr><td><strong>' + escapeHTML(l.label) + '</strong></td><td><a href="' + escapeHTML(safeHref(l.url)) + '" target="_blank" style="color:var(--accent-green); text-decoration:none;">Verify Gateway ↗</a></td><td><button class="admin-btn" style="padding:6px 12px; margin:0 8px 0 0;" onclick="window.editBuyLink(&quot;' + escapeInlineJS(id) + '&quot;)">✏️ Mod</button><button class="admin-btn" style="padding:6px 12px; color:var(--accent-red); margin:0;" onclick="window.deleteBuyLink(&quot;' + escapeInlineJS(id) + '&quot;)">🗑️ Purge</button></td></tr>'; 
               }); 
           } 
           if(document.getElementById('target-buy-links')) document.getElementById('target-buy-links').innerHTML = blHtml || '<tr><td colspan="3" class="text-muted">Gateways missing.</td></tr>'; 
@@ -8179,7 +8292,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
 
                 html += '<div class="mod-card" style="--card-accent: ' + trustColor + '; animation-delay: ' + delay + 's;">' +
                             '<div class="mod-header">' +
-                                '<img src="' + m.avatar + '" class="mod-avatar">' +
+                                '<img src="' + escapeHTML(m.avatar) + '" class="mod-avatar">' +
                                 '<div class="mod-info">' +
                                     '<h3 class="mod-name">' + safeUsername + ' ' + statusIndicator + '</h3>' +
                                     '<div class="mod-id">' + m.id + '</div>' +
@@ -9584,9 +9697,15 @@ server.on('upgrade', (request, socket, head) => {
     const pathname = request.url;
 
     if (pathname === '/ws') {
+        // Anti Cross-Site WebSocket Hijacking : le cookie étant SameSite=None, on vérifie l'origine
+        if (!isSameOriginRequest(request)) {
+            socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
+            socket.destroy();
+            return;
+        }
         const cookie = request.headers.cookie || '';
         let match = cookie.match(/auth_session=([a-zA-Z0-9]+)/);
-        const isAuthenticated = match && memoryStats.activeSessions && memoryStats.activeSessions.includes(match[1]);
+        const isAuthenticated = match && memoryStats.activeSessions && memoryStats.activeSessions.includes(hashToken(match[1]));
         if (!isAuthenticated) {
             socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
             socket.destroy();
