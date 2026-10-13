@@ -4420,6 +4420,19 @@ const server = http.createServer(async (req, res) => {
                     const channel = guild.channels.cache.get(data.channelId);
                     if(channel) await channel.send(`📢 **Announcement**\n\n${data.message}`).catch(()=>{});
                 }
+                    // ⚡ [API_ACTION: delete_shop_tickets] - Supprime tous les tickets d'achat (shop-*), garde les tickets support
+                else if (data.action === 'delete_shop_tickets') {
+                    const targets = [...guild.channels.cache.filter(c => c.name && c.name.startsWith('shop-')).values()];
+                    let deleted = 0, failed = 0;
+                    for (const c of targets) {
+                        try { channelStates.delete(c.id); await c.delete('Bulk delete of shop tickets from dashboard'); deleted++; }
+                        catch (e) { failed++; systemLog('ERROR', 'TICKETS', `Failed to delete ${c.name}: ${e.message}`); }
+                    }
+                    systemLog('WARN', 'TICKETS', `Bulk delete from dashboard: ${deleted} shop ticket(s) deleted, ${failed} failed.`);
+                    if (deleted > 0) addActivity('ticket', `🗑️ ${deleted} shop ticket(s) deleted from dashboard`);
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    return res.end(JSON.stringify({ success: true, deleted, failed }));
+                }
                     // ⚡ [API_ACTION: close_all] - Point de terminaison API Action
                 else if (data.action === 'close_all') {
                     guild.channels.cache.forEach(c => {
@@ -5839,10 +5852,14 @@ const server = http.createServer(async (req, res) => {
                     <svg style='position:absolute; right:10px; top:50%; transform:translateY(-50%); pointer-events:none; opacity:0.5;' width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
                 </div>
             </div>
+            <div style='display:flex; gap:10px; flex-wrap:wrap; align-items:center;'><button class='admin-btn btn-red' id='btn-delete-shop-tickets' style='margin:0; padding:10px 18px; display:flex; align-items:center; gap:8px; border-radius:14px;' onclick='window.deleteAllShopTickets(this)' title='Delete every shop-* ticket channel (support tickets are kept)'>
+                <svg width='17' height='17' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='3 6 5 6 21 6'></polyline><path d='M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6'></path><path d='M10 11v6'></path><path d='M14 11v6'></path><path d='M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2'></path></svg>
+                Delete all shop tickets
+            </button>
             <button class='admin-btn btn-green' style='margin:0; padding:10px 20px; display:flex; align-items:center; gap:8px; border-radius:14px; box-shadow:0 5px 15px rgba(var(--accent-green-rgb), 0.2); transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);' onmouseover='this.style.transform="translateY(-2px)"; this.style.boxShadow="0 8px 25px rgba(var(--accent-green-rgb), 0.4)"' onmouseout='this.style.transform="none"; this.style.boxShadow="0 5px 15px rgba(var(--accent-green-rgb), 0.2)"' onclick='window.loadTicketsForChat()'>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-9.21l-5.69-5.69"></path></svg>
                 Synchronise
-            </button>
+            </button></div>
         </div>
     </div>
         
@@ -10285,6 +10302,29 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             }, true);
         })();
 
+
+        // 🚀 [UI_ACTION_ASYNC: deleteAllShopTickets] - Supprime tous les tickets shop-* (avec confirmation)
+        window.deleteAllShopTickets = async function(btn) {
+            let count = null;
+            try {
+                const r = await fetch('/api/tickets', { cache: 'no-store' });
+                if (r.ok) { const list = await r.json(); count = (Array.isArray(list) ? list : []).filter(function(t) { return String(t.name || '').indexOf('shop-') === 0; }).length; }
+            } catch (e) {}
+            if (count === 0) { showToast('No shop tickets to delete'); return; }
+            const ok = await window.customConfirm('DELETE ALL SHOP TICKETS', (count ? count + ' shop ticket(s)' : 'All shop tickets') + ' will be permanently deleted on Discord (no transcript is saved). Support tickets are kept. Continue?');
+            if (!ok) return;
+            if (btn) { btn.classList.add('nx-busy'); btn.disabled = true; }
+            try {
+                const res = await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'delete_shop_tickets' }) });
+                if (res.ok) {
+                    const d = await res.json().catch(function() { return {}; });
+                    showToast((d.deleted || 0) + ' shop ticket(s) deleted' + (d.failed ? ' · ' + d.failed + ' failed' : ''), d.failed ? 'error' : 'success');
+                    if (typeof window.loadTicketsForChat === 'function') window.loadTicketsForChat();
+                    if (typeof window.refreshDataSilently === 'function') window.refreshDataSilently(true);
+                } else { showToast('Delete failed (' + res.status + ')', 'error'); }
+            } catch (e) { showToast('Delete failed', 'error'); }
+            if (btn) { btn.classList.remove('nx-busy'); btn.disabled = false; }
+        };
     </script>
 </body>
 </html>`;
