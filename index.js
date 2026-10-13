@@ -236,8 +236,243 @@ let memoryStats = {
     referrals: {}, settings: { invite_reward_threshold: 10, maintenance: { active: false, endsAt: 0, channelId: "" } },
     products: {}, subscriptions: {}, buy_links: {}, pending_reviews: [], overrides: {},
     activity_feed: [],
-    last_update: Date.now() 
+    // Suivi du comportement d'achat (onglet Analytics > Purchase Behavior)
+    funnel: { since: Date.now(), ticket_opened: 0, voucher_attempt: 0, voucher_success: 0, voucher_failed: 0, checkout_completed: 0, review_submitted: 0 },
+    purchase_events: [], referred_by: {}, review_ratings: [0, 0, 0, 0, 0],
+    last_update: Date.now()
 };
+
+// Garantit la présence des structures de suivi (données chargées depuis un ancien backup)
+function ensureBehaviorTracking() {
+    if (!memoryStats.funnel || typeof memoryStats.funnel !== 'object') memoryStats.funnel = {};
+    const f = memoryStats.funnel;
+    if (!f.since) f.since = Date.now();
+    ['ticket_opened', 'voucher_attempt', 'voucher_success', 'voucher_failed', 'checkout_completed', 'review_submitted'].forEach(k => { f[k] = Number(f[k]) || 0; });
+    if (!Array.isArray(memoryStats.purchase_events)) memoryStats.purchase_events = [];
+    if (!memoryStats.referred_by || typeof memoryStats.referred_by !== 'object') memoryStats.referred_by = {};
+    if (!Array.isArray(memoryStats.review_ratings) || memoryStats.review_ratings.length !== 5) memoryStats.review_ratings = [0, 0, 0, 0, 0];
+}
+
+function trackFunnel(step) {
+    ensureBehaviorTracking();
+    memoryStats.funnel[step] = (memoryStats.funnel[step] || 0) + 1;
+}
+
+// Échec de code : compté dans le funnel et ventilé par raison
+function trackVoucherFailure(reason) {
+    trackFunnel('voucher_failed');
+    if (!memoryStats.funnel.fail_reasons || typeof memoryStats.funnel.fail_reasons !== 'object') memoryStats.funnel.fail_reasons = {};
+    memoryStats.funnel.fail_reasons[reason] = (memoryStats.funnel.fail_reasons[reason] || 0) + 1;
+}
+
+// Enregistre une commande finalisée (IDs et chiffres uniquement, pas de pseudo) pour l'onglet Purchase Behavior
+function recordPurchaseEvent(interaction, state, lineItems, vipDiscountUsed) {
+    try {
+        ensureBehaviorTracking();
+        const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+        const userId = interaction.user.id;
+        const username = interaction.user.username;
+        const hasPriorEvent = memoryStats.purchase_events.some(ev => ev.userId === userId);
+        // Historique antérieur au suivi : le voucher Rewarble ajoute déjà une ligne à user_history avant le checkout
+        const legacyHistory = (memoryStats.user_history && memoryStats.user_history[username]) || [];
+        const hasVoucherValue = typeof state.voucherValue === 'number' && isFinite(state.voucherValue);
+        const hasPriorLegacy = hasVoucherValue ? legacyHistory.length > 1 : legacyHistory.length > 0;
+        const items = lineItems.map(i => ({ id: String(i.id), listPrice: round2(i.listPrice), paid: round2(i.paid) }));
+        memoryStats.purchase_events.unshift({
+            ts: Date.now(),
+            userId: userId,
+            items: items,
+            cartCount: Array.isArray(state.cart) ? state.cart.length : items.length,
+            listTotal: round2(items.reduce((a, i) => a + i.listPrice, 0)),
+            paidTotal: round2(items.reduce((a, i) => a + i.paid, 0)),
+            voucherValue: hasVoucherValue ? round2(state.voucherValue) : null,
+            discount: state.promo ? 'promo' : (vipDiscountUsed ? 'vip' : 'none'),
+            promoCode: state.promo ? state.promo.name : null,
+            mystery: items.some(i => i.id === 'mystery_box'),
+            referred: !!memoryStats.referred_by[userId],
+            joinedAt: (interaction.member && interaction.member.joinedTimestamp) || null,
+            accountCreatedAt: interaction.user.createdTimestamp || null,
+            ticketOpenedAt: state.openedAt || (interaction.channel && interaction.channel.createdTimestamp) || null,
+            voucherAt: state.voucherAt || null,
+            repeat: hasPriorEvent || hasPriorLegacy
+        });
+        if (memoryStats.purchase_events.length > 500) memoryStats.purchase_events = memoryStats.purchase_events.slice(0, 500);
+        trackFunnel('checkout_completed');
+    } catch (e) {
+        systemLog('ERROR', 'ANALYTICS', `Failed to record purchase event: ${e.message}`);
+    }
+}
+
+// Agrège les données de suivi en séries prêtes à tracer (Purchase Behavior). Fonction pure : pas d'effet de bord.
+function computeBehaviorAnalytics(stats, nowMs = Date.now()) {
+    const events = Array.isArray(stats.purchase_events) ? stats.purchase_events : [];
+    const f = stats.funnel || {};
+    const since = f.since || nowMs;
+    const HOUR = 3600000, DAY = 24 * HOUR;
+    const round1 = (n) => Math.round(n * 10) / 10;
+    const round2 = (n) => Math.round(n * 100) / 100;
+    const pct = (a, b) => (b > 0 ? round1((a / b) * 100) : 0);
+    const median = (arr) => {
+        if (!arr.length) return null;
+        const s = [...arr].sort((a, b) => a - b), m = Math.floor(s.length / 2);
+        return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+    };
+    const bucketize = (values, edges, labels) => {
+        const counts = labels.map(() => 0);
+        values.forEach(v => {
+            let i = edges.findIndex(edge => v < edge);
+            if (i === -1) i = labels.length - 1;
+            counts[i]++;
+        });
+        return { labels, data: counts };
+    };
+
+    // Jour (lundi = 0) et heure à Paris
+    const parisFmt = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Paris', weekday: 'short', hour: '2-digit', hourCycle: 'h23' });
+    const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const parisDayHour = (ts) => {
+        const parts = parisFmt.formatToParts(new Date(ts));
+        const wd = parts.find(p => p.type === 'weekday').value;
+        const hr = parseInt(parts.find(p => p.type === 'hour').value, 10) % 24;
+        return { day: DAYS.indexOf(wd), hour: hr };
+    };
+
+    // Premier achat de chaque client (events triés du plus récent au plus ancien)
+    const firstByUser = new Map();
+    events.forEach(ev => { if (ev && ev.userId) firstByUser.set(ev.userId, ev); });
+    const firstPurchases = [...firstByUser.values()];
+
+    // --- KPIs ---
+    const paidTotals = events.map(ev => Number(ev.paidTotal) || 0);
+    const joinDelaysH = firstPurchases.filter(ev => ev.joinedAt && !ev.repeat).map(ev => Math.max(0, ev.ts - ev.joinedAt) / HOUR);
+    const medJoin = median(joinDelaysH);
+    const kpis = {
+        orders: events.length,
+        conversion: pct(f.checkout_completed || 0, f.ticket_opened || 0),
+        aov: events.length ? round2(paidTotals.reduce((a, b) => a + b, 0) / events.length) : 0,
+        repeatShare: pct(events.filter(ev => ev.repeat).length, events.length),
+        medianJoinToFirstHours: medJoin === null ? null : round1(medJoin),
+        discountedShare: pct(events.filter(ev => ev.discount && ev.discount !== 'none').length, events.length),
+        voucherFailRate: pct(f.voucher_failed || 0, f.voucher_attempt || 0)
+    };
+
+    // --- Funnel ---
+    const funnelSteps = [
+        ['Ticket opened', f.ticket_opened || 0],
+        ['Code entered', f.voucher_attempt || 0],
+        ['Code accepted', f.voucher_success || 0],
+        ['Order completed', f.checkout_completed || 0],
+        ['Review left', f.review_submitted || 0]
+    ];
+    const funnel = {
+        labels: funnelSteps.map(s => s[0]),
+        data: funnelSteps.map(s => s[1]),
+        dropPct: funnelSteps.map((s, i) => (i === 0 ? 0 : (funnelSteps[i - 1][1] > 0 ? round1(100 - (s[1] / funnelSteps[i - 1][1]) * 100) : 0)))
+    };
+
+    // --- Codes : raisons d'échec (suivi + historique antérieur au suivi) et montants ---
+    const REASON_LABELS = { invalid: 'Invalid / used code', invalid_format: 'Wrong format', limit_reached: 'Promo limit reached', zero_value: 'Zero-value code', timeout: 'API timeout', api_error: 'Provider error', api_unavailable: 'Provider down', unknown: 'Unknown (history)' };
+    const failCounts = Object.assign({}, f.fail_reasons || {});
+    const vlog = Array.isArray(stats.voucher_log) ? stats.voucher_log : [];
+    vlog.forEach(v => {
+        if (v.status !== 'failed') return;
+        const t = Date.parse(v.timestamp);
+        if (!isNaN(t) && t >= since) return; // déjà compté dans fail_reasons
+        const r = v.reason || 'unknown';
+        failCounts[r] = (failCounts[r] || 0) + 1;
+    });
+    const failKeys = Object.keys(failCounts).filter(k => failCounts[k] > 0);
+    const voucherFailReasons = { labels: failKeys.map(k => REASON_LABELS[k] || k), data: failKeys.map(k => failCounts[k]) };
+
+    const VALUE_TIERS = [5, 10, 15, 20];
+    const valueCounts = [0, 0, 0, 0, 0];
+    vlog.forEach(v => {
+        if (v.status !== 'success') return;
+        const val = Number(v.value) || 0;
+        const i = VALUE_TIERS.findIndex(t => Math.abs(t - val) < 0.01);
+        valueCounts[i === -1 ? 4 : i]++;
+    });
+    const voucherValues = { labels: ['£5', '£10', '£15', '£20', 'Other'], data: valueCounts };
+
+    // --- Délais ---
+    const joinToPurchase = bucketize(joinDelaysH, [1, 24, 24 * 7, 24 * 30], ['< 1h', '1–24h', '1–7 days', '7–30 days', '> 30 days']);
+    const ticketMinutes = events.filter(ev => ev.ticketOpenedAt).map(ev => Math.max(0, ev.ts - ev.ticketOpenedAt) / 60000);
+    const ticketToPay = bucketize(ticketMinutes, [2, 5, 15, 60], ['< 2 min', '2–5 min', '5–15 min', '15–60 min', '> 1h']);
+
+    // --- Leviers de remise ---
+    const LEVERS = [['promo', 'Promo code'], ['vip', 'VIP discount'], ['none', 'Full price']];
+    const discountMix = { labels: LEVERS.map(l => l[1]), data: LEVERS.map(l => events.filter(ev => (ev.discount || 'none') === l[0]).length) };
+    const aovByDiscount = {
+        labels: LEVERS.map(l => l[1]),
+        data: LEVERS.map(l => {
+            const sub = events.filter(ev => (ev.discount || 'none') === l[0]);
+            return sub.length ? round2(sub.reduce((a, ev) => a + (Number(ev.paidTotal) || 0), 0) / sub.length) : 0;
+        })
+    };
+
+    // --- Solde de code non dépensé ---
+    const leftovers = events.filter(ev => typeof ev.voucherValue === 'number').map(ev => Math.max(0, ev.voucherValue - (Number(ev.paidTotal) || 0)));
+    const leftoverBalance = bucketize(leftovers, [0.01, 2, 5.01], ['£0 (all spent)', '< £2', '£2–5', '> £5']);
+
+    // --- Panier ---
+    const cartSize = bucketize(events.map(ev => Number(ev.cartCount) || (ev.items || []).length || 1), [2, 3], ['1 item', '2 items', '3+ items']);
+    const mysteryShare = pct(events.filter(ev => ev.mystery).length, events.length);
+
+    // --- Nouveaux vs récurrents, 8 fenêtres de 7 jours ---
+    const dayLabel = (ts) => new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Paris', day: '2-digit', month: '2-digit' }).format(new Date(ts));
+    const weekly = { labels: [], newBuyers: [], returning: [] };
+    for (let w = 7; w >= 0; w--) {
+        const end = nowMs - w * 7 * DAY, start = end - 7 * DAY;
+        const inWeek = events.filter(ev => ev.ts > start && ev.ts <= end);
+        weekly.labels.push(dayLabel(start + DAY));
+        weekly.newBuyers.push(inWeek.filter(ev => !ev.repeat).length);
+        weekly.returning.push(inWeek.filter(ev => ev.repeat).length);
+    }
+
+    // --- Origine des acheteurs (clients distincts) ---
+    const referredBuyers = firstPurchases.filter(ev => events.some(e2 => e2.userId === ev.userId && e2.referred)).length;
+    const buyerSource = { labels: ['Referred (invite)', 'Organic'], data: [referredBuyers, firstPurchases.length - referredBuyers] };
+
+    // --- Heatmap jour × heure ---
+    const heatmap = DAYS.map(() => Array(24).fill(0));
+    events.forEach(ev => { if (!ev.ts) return; const dh = parisDayHour(ev.ts); if (dh.day >= 0) heatmap[dh.day][dh.hour]++; });
+
+    // --- Ancienneté du compte Discord au premier achat ---
+    const ageDays = firstPurchases.filter(ev => ev.accountCreatedAt).map(ev => Math.max(0, ev.ts - ev.accountCreatedAt) / DAY);
+    const accountAge = bucketize(ageDays, [30, 182, 365, 365 * 3], ['< 1 month', '1–6 months', '6–12 months', '1–3 years', '> 3 years']);
+
+    // --- Produits achetés ensemble ---
+    const productName = (id) => (id === 'mystery_box' ? 'Mystery Box' : ((stats.products && stats.products[id] && stats.products[id].name) || ('#' + id)));
+    const pairCounts = {};
+    events.forEach(ev => {
+        const ids = [...new Set((ev.items || []).map(i => i.id))].sort();
+        for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) {
+            const key = ids[i] + '|' + ids[j];
+            pairCounts[key] = (pairCounts[key] || 0) + 1;
+        }
+    });
+    const topPairKeys = Object.keys(pairCounts).sort((a, b) => pairCounts[b] - pairCounts[a]).slice(0, 8);
+    const topPairs = { labels: topPairKeys.map(k => k.split('|').map(productName).join(' + ')), data: topPairKeys.map(k => pairCounts[k]) };
+
+    // --- Notes des avis ---
+    const rr = Array.isArray(stats.review_ratings) && stats.review_ratings.length === 5 ? stats.review_ratings : [0, 0, 0, 0, 0];
+    const ratings = { labels: ['1★', '2★', '3★', '4★', '5★'], data: rr.map(n => Number(n) || 0) };
+
+    return {
+        since, kpis, funnel, voucherFailReasons, voucherValues, joinToPurchase, ticketToPay,
+        discountMix, aovByDiscount, leftoverBalance, cartSize, mysteryShare, weekly, buyerSource,
+        heatmap: { days: DAYS, data: heatmap }, accountAge, topPairs, ratings
+    };
+}
+
+function classifyVoucherError(e) {
+    const msg = String((e && e.message) || '');
+    if (msg === 'REWARBLE_402_INSUFFICIENT_FUNDS') return 'api_error';
+    if (msg === 'REWARBLE_ZERO_VALUE_OR_INVALID') return 'zero_value';
+    if ((e && e.code === 'ECONNABORTED') || /timeout/i.test(msg)) return 'timeout';
+    if (e && e.response && e.response.status >= 500) return 'api_error';
+    return 'invalid';
+}
 
 // 📦 INTEGRATION: Stock initialized to infinity ("∞")
 const INITIAL_PRODUCTS = {
@@ -454,7 +689,13 @@ function ensureMemoryInitialized() {
             if (!memoryStats.activity_feed) memoryStats.activity_feed = [];
             if (!memoryStats.custom_requests) memoryStats.custom_requests = [];
             if (!Array.isArray(memoryStats.patchnotes)) memoryStats.patchnotes = [];
-            
+            ensureBehaviorTracking();
+
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Analytics: Purchase Behavior"))) {
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🧠 Analytics: Purchase Behavior\n\n- **Suivi du parcours d achat** : le bot enregistre désormais chaque étape (ticket ouvert, code saisi, code accepté ou refusé avec sa raison, commande finalisée, avis laissé), ainsi que le panier, le levier de remise (promo, VIP, plein tarif), le délai arrivée → achat et l origine du client (parrainage).\n- **15 nouveaux graphiques** dans l onglet Analytics (section Purchase Behavior) + 7 KPI : funnel détaillé, raisons d échec des codes, montants de voucher, délais, leviers de remise, solde non dépensé, taille du panier, nouveaux vs récurrents, heatmap jour × heure, ancienneté des comptes, produits achetés ensemble, notes des avis.\n- **Correctif** : les ventes sont maintenant attribuées au bon produit (le graphique Top Performing Assets était faussé)." });
+                syncCloud();
+            }
+
             if (!memoryStats.patchnotes.some(p => p.text.includes("Intelligence Artificielle: Thinking High"))) {
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🧠 Intelligence Artificielle: Thinking High\n\n- Intégration de la nouvelle architecture Gemini 3.1 Pro via le SDK @google/genai.\n- Activation du paramètre 'ThinkingLevel.HIGH' pour l'analyse financière profonde et l'étude de marché afin de débloquer une capacité de réflexion et d'extrapolation optimale des données.\n- Résolution d'un défaut de synchronisation RAM empêchant les données restaurées (stats.json) de s'afficher sur l'interface." });
                 syncCloud();
@@ -2262,6 +2503,8 @@ client.on('interactionCreate', async (interaction) => {
                 text: feedback,
                 date: new Date().toLocaleString('en-US')
             });
+            trackFunnel('review_submitted');
+            memoryStats.review_ratings[numRating - 1]++;
             addActivity('review', `⭐ New ${numRating}/5 review submitted by ${interaction.user.username}`);
             notifyAdminPhone('NOUVELLE REVIEW', `⭐ ${numRating}/5 par ${interaction.user.username}\nEn attente de validation sur le dashboard.`);
             systemLog('INFO', 'REVIEWS', `New review submitted by ${interaction.user.username} [${numRating} Stars]`);
@@ -2360,6 +2603,7 @@ client.on('interactionCreate', async (interaction) => {
 
                 if (!memoryStats.analytics) memoryStats.analytics = { tickets_opened: 0, hourly_sales: Array(24).fill(0) };
                 memoryStats.analytics.tickets_opened = (memoryStats.analytics.tickets_opened || 0) + 1;
+                trackFunnel('ticket_opened');
                 syncCloud();
                 
                 let channelOpts = {
@@ -2388,7 +2632,7 @@ client.on('interactionCreate', async (interaction) => {
                 if (channel) {
                     addActivity('ticket', `🎫 New shop ticket opened by ${interaction.user.username}`);
                     systemLog('INFO', 'TICKET_SYS', `Shop ticket generated for ${interaction.user.username}`);
-                    channelStates.set(channel.id, { validated: false, processing: false, promo: null, redeemed: false, cart: [], cartTotal: 0, balance: 0 });
+                    channelStates.set(channel.id, { validated: false, processing: false, promo: null, redeemed: false, cart: [], cartTotal: 0, balance: 0, openedAt: Date.now() });
                     
                     let optCount = 0;
                     for (const id in memoryStats.products) {
@@ -2506,6 +2750,8 @@ client.on('interactionCreate', async (interaction) => {
                 let total = 0;
                 let cartList = "";
                 let hasCustom = false;
+                const lineItems = []; // pour l'analyse du comportement d'achat
+                let vipDiscountUsed = false;
                 
                 state.cart = interaction.values;
                 
@@ -2532,11 +2778,14 @@ client.on('interactionCreate', async (interaction) => {
                         if (!isVIPPurchase && memoryStats.subscriptions && memoryStats.subscriptions[interaction.user.id]) {
                             appliedDiscount = 20;
                         }
+                        if (appliedDiscount > 0 && !(state.promo && state.promo.discount >= appliedDiscount)) vipDiscountUsed = true;
                         if (state.promo && !isVIPPurchase) {
                             appliedDiscount = Math.max(appliedDiscount, state.promo.discount);
                         }
                         
+                        const listPrice = price;
                         if (appliedDiscount > 0) price = Math.max(0, price - (price * appliedDiscount / 100));
+                        lineItems.push({ id: selected, listPrice: listPrice, paid: price });
                         
                         total += price;
                         cartList += `- ${product.name} (£${price.toFixed(2)})` + (appliedDiscount > 0 ? ' *(Discount applied)*' : '') + `\n`;
@@ -2559,6 +2808,7 @@ client.on('interactionCreate', async (interaction) => {
                 if (state.promo) {
                     memoryStats.promo_codes[state.promo.name].used++;
                 }
+                recordPurchaseEvent(interaction, state, lineItems, vipDiscountUsed);
 
                 await interaction.update({ content: `📦 **Processing your order... The menu has been locked.**\n\n${cartList}\n💰 **Total paid: £${state.cartTotal.toFixed(2)}**`, components: [] }).catch(() => {});
                 
@@ -2608,6 +2858,13 @@ client.on('interactionCreate', async (interaction) => {
                     if (product.price === "Custom") {
                         logStat('custom_request', 0, { username: interaction.user.username, userId: interaction.user.id, productName: product.name });
                         continue;
+                    }
+
+                    // Attribution réelle des ventes par produit (le revenu est compté au voucher, sans produit)
+                    const soldId = isMysteryBox ? ((dropTier && dropTier.productId) || Object.keys(memoryStats.products)[0]) : selected;
+                    if (soldId) {
+                        if (!memoryStats.product_sales) memoryStats.product_sales = {};
+                        memoryStats.product_sales[soldId] = (memoryStats.product_sales[soldId] || 0) + 1;
                     }
                     
                     if (product.stock && product.stock !== "∞") {
@@ -2752,7 +3009,7 @@ client.on('messageCreate', async (message) => {
             }
             let state = channelStates.get(message.channel.id); 
             if (!state) {
-                state = { validated: false, processing: false, promo: null, redeemed: false, cart: [], cartTotal: 0, balance: 0 };
+                state = { validated: false, processing: false, promo: null, redeemed: false, cart: [], cartTotal: 0, balance: 0, openedAt: message.channel.createdTimestamp };
                 channelStates.set(message.channel.id, state);
             }
             if (state.validated || state.processing) return;
@@ -2774,6 +3031,7 @@ client.on('messageCreate', async (message) => {
                 return;
             }
 
+            trackFunnel('voucher_attempt');
             let promoApplied = null;
             try {
                 if (memoryStats.promo_codes && memoryStats.promo_codes[input]) {
@@ -2781,6 +3039,7 @@ client.on('messageCreate', async (message) => {
                     if (promo.used < promo.limit) promoApplied = { name: input, discount: promo.discount };
                     else { 
                         await message.reply(memoryStats.messages.code_limit_reached || '❌ Sorry, this code has reached its usage limit!').catch(()=>{}); 
+                        trackVoucherFailure('limit_reached');
                         state.processing = false; 
                         return;
                     }
@@ -2788,6 +3047,7 @@ client.on('messageCreate', async (message) => {
 
                 if (!promoApplied && !TEST_VOUCHERS[input] && input.length < 8) {
                     await message.reply(memoryStats.messages.invalid_code || '❌ Invalid format. Please enter a valid Rewarble code or Promo code.').catch(()=>{});
+                    trackVoucherFailure('invalid_format');
                     state.processing = false;
                     return;
                 }
@@ -2798,6 +3058,7 @@ client.on('messageCreate', async (message) => {
                 if (!promoApplied && !TEST_VOUCHERS[input]) {
                     if (Date.now() < rewarbleCircuitBreaker.nextTry) {
                         message.reply("⚠️ **System Alert :** Rewarble API is currently unstable. Please try again in a few minutes.").catch(()=>{});
+                        trackVoucherFailure('api_unavailable');
                         state.processing = false;
                         return;
                     }
@@ -2915,6 +3176,10 @@ client.on('messageCreate', async (message) => {
                 state.balance = voucherValue;
                 state.promo = promoApplied;
                 state.processing = false;
+                trackFunnel('voucher_success');
+                state.voucherAt = Date.now();
+                state.voucherValue = promoApplied ? null : voucherValue;
+                syncCloud();
                 
                 const pmenu = new StringSelectMenuBuilder()
                     .setCustomId('product_select')
@@ -2944,6 +3209,8 @@ client.on('messageCreate', async (message) => {
 
             } catch (e) { 
                 state.processing = false; 
+                const failReason = classifyVoucherError(e);
+                trackVoucherFailure(failReason);
                 if (e.message === "REWARBLE_402_INSUFFICIENT_FUNDS") {
                     systemLog('ERROR', 'REWARBLE_API', `402 Payment Required - Balance is depleted.`);
                     message.reply("⚠️ **Rewarble Error (402) :** Insufficient API balance.").catch(()=>{});
@@ -2962,6 +3229,7 @@ client.on('messageCreate', async (message) => {
                         channelName: message.channel.name || '',
                         value: 0,
                         status: 'failed',
+                        reason: failReason,
                         timestamp: new Date().toISOString()
                     });
                     if (memoryStats.voucher_log.length > 500) memoryStats.voucher_log = memoryStats.voucher_log.slice(0, 500); 
@@ -3006,6 +3274,8 @@ client.on('guildMemberAdd', async (member) => {
 
         if (invite && invite.inviter) {
             const inviterId = invite.inviter.id;
+            ensureBehaviorTracking();
+            memoryStats.referred_by[member.id] = inviterId;
             if (!memoryStats.referrals) memoryStats.referrals = {};
             if (!memoryStats.referrals[inviterId]) memoryStats.referrals[inviterId] = { count: 0, total_rewards: 0, invited: [], username: invite.inviter.username };
             memoryStats.referrals[inviterId].count++;
@@ -3689,6 +3959,17 @@ const server = http.createServer(async (req, res) => {
     } catch (apiErr) { console.error('API /init-data Error:', apiErr); res.writeHead(500); return res.end(JSON.stringify({error: 'Internal Server Error'})); } }
 
     
+    // 🚀 [API_ROUTE: /api/analytics/behavior] - Séries du module Purchase Behavior (protégé par la garde /api/*)
+    if (req.url.startsWith('/api/analytics/behavior') && req.method === 'GET') {
+        try {
+            res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+            return res.end(JSON.stringify(computeBehaviorAnalytics(memoryStats)));
+        } catch (e) {
+            systemLog('ERROR', 'ANALYTICS', `Behavior analytics failed: ${e.message}`);
+            return res.writeHead(500, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: 'Internal Server Error' }));
+        }
+    }
+
     // 🚀 [API_ROUTE: /api/backups] - Route API backend
     if (req.url === '/api/backups' && req.method === 'GET') {
         // removed
@@ -5740,6 +6021,31 @@ const server = http.createServer(async (req, res) => {
                    <div class='box' style='animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: 0.5s; position: relative; overflow: hidden;'><div class='ambient-glow' style='--glow-color: rgba(var(--accent-green-rgb), 0.5); top: -20px; left: -20px;'></div><h2>📊 Conversion Funnel</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Ratio of total tickets opened versus successful transactions.</p><div style='height:260px; position:relative;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='funnelChart' style='position:relative; z-index:10;'></canvas></div></div>
                    <div class='box' style='animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: 0.6s; position: relative; overflow: hidden;'><div class='ambient-glow' style='--glow-color: rgba(139,92,246, 0.5); top: -20px; left: -20px;'></div><h2>📈 Member Growth</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Evolution of new member joins over the last 14 days.</p><div style='height:260px; position:relative;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='joinsChart' style='position:relative; z-index:10;'></canvas></div></div>
                    <div class='box' style='animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: 0.7s; position: relative; overflow: hidden;'><div class='ambient-glow' style='--glow-color: rgba(239,68,68, 0.5); top: -20px; left: -20px;'></div><h2>📉 Members Left</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Evolution of members leaving over the last 14 days.</p><div style='height:260px; position:relative;'><div class="skeleton-chart-overlay" style="position:absolute; inset:0; z-index:5;"><div class="skeleton skeleton-table-row" style="height:100%; border-radius:12px;"></div></div><canvas id='leavesChart' style='position:relative; z-index:10;'></canvas></div></div>
+               </div>
+
+               <!-- 🧠 [UI_VIEW: purchase-behavior] - Comportement d'achat -->
+               <div style='margin-top:35px; margin-bottom:15px;'>
+                   <h2 style='margin:0;'>🧠 Purchase Behavior</h2>
+                   <p class='text-muted' style='font-size:0.85em; margin:6px 0 0 0;'>Why and how customers decide to buy. <span id='bh-since'></span></p>
+               </div>
+               <style>.bh-wide { grid-column: span 2; } @media (max-width: 1100px) { .bh-wide { grid-column: auto; } }</style>
+               <div id='bh-kpis' style='display:grid; grid-template-columns: repeat(auto-fit, minmax(135px, 1fr)); gap:14px; margin-bottom:14px;'></div>
+               <div style='display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); grid-auto-flow: dense; gap:14px;'>
+                   <div class='box' style='animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; position: relative; overflow: hidden; grid-column: 1 / -1;'><h2>🧭 Purchase Journey Funnel</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Where do customers drop off between opening a ticket and leaving a review?</p><div class='bh-wrap' style='height:300px; position:relative;'><canvas id='bhFunnelChart'></canvas></div></div>
+                   <div class='box' style='animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; position: relative; overflow: hidden;'><h2>🚫 Why Codes Fail</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Which code problems stop customers from paying?</p><div class='bh-wrap' style='height:260px; position:relative;'><canvas id='bhFailChart'></canvas></div></div>
+                   <div class='box' style='animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; position: relative; overflow: hidden;'><h2>💳 Voucher Amount Used</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Which voucher amount do buyers start with?</p><div class='bh-wrap' style='height:260px; position:relative;'><canvas id='bhVoucherChart'></canvas></div></div>
+                   <div class='box' style='animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; position: relative; overflow: hidden;'><h2>⏱️ Join → First Purchase</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>How fast does a new member become a customer?</p><div class='bh-wrap' style='height:260px; position:relative;'><canvas id='bhJoinChart'></canvas></div></div>
+                   <div class='box' style='animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; position: relative; overflow: hidden;'><h2>🎫 Time in Ticket Before Paying</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>How long does checkout take? Long times signal friction.</p><div class='bh-wrap' style='height:260px; position:relative;'><canvas id='bhTicketChart'></canvas></div></div>
+                   <div class='box' style='animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; position: relative; overflow: hidden;'><h2>🏷️ Purchase Trigger</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Which incentive drove the order: promo code, VIP discount or full price?</p><div class='bh-wrap' style='height:260px; position:relative;'><canvas id='bhLeverChart'></canvas></div></div>
+                   <div class='box' style='animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; position: relative; overflow: hidden;'><h2>💰 Avg Order Value by Trigger</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Do discounts make customers spend more or less per order?</p><div class='bh-wrap' style='height:260px; position:relative;'><canvas id='bhAovChart'></canvas></div></div>
+                   <div class='box' style='animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; position: relative; overflow: hidden;'><h2>🪙 Unspent Voucher Balance</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Are vouchers fully spent, or do price gaps leave money on the table?</p><div class='bh-wrap' style='height:260px; position:relative;'><canvas id='bhLeftoverChart'></canvas></div></div>
+                   <div class='box' style='animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; position: relative; overflow: hidden;'><h2>🛒 Cart Size</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>How many items per order? A Mystery Box share is shown below.</p><div class='bh-wrap' style='height:260px; position:relative;'><canvas id='bhCartChart'></canvas></div><p id='bh-mystery' class='text-muted' style='font-size:0.8em; margin:8px 0 0 0;'></p></div>
+                   <div class='box' style='animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; position: relative; overflow: hidden;'><h2>🤝 Buyer Origin</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Do invites bring paying customers?</p><div class='bh-wrap' style='height:260px; position:relative;'><canvas id='bhSourceChart'></canvas></div></div>
+                   <div class='box bh-wide' style='animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; position: relative; overflow: hidden;'><h2>🔁 New vs Returning Buyers</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Is revenue driven by new customers or by loyalty? (last 8 weeks)</p><div class='bh-wrap' style='height:260px; position:relative;'><canvas id='bhWeeklyChart'></canvas></div></div>
+                   <div class='box' style='animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; position: relative; overflow: hidden;'><h2>🪪 Discord Account Age</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Are buyers established users or brand-new accounts?</p><div class='bh-wrap' style='height:260px; position:relative;'><canvas id='bhAgeChart'></canvas></div></div>
+                   <div class='box bh-wide' style='animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; position: relative; overflow: hidden;'><h2>🧩 Bought Together</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Which products sell as a combo? Use them for bundles and upsells.</p><div class='bh-wrap' style='height:260px; position:relative;'><canvas id='bhPairsChart'></canvas></div></div>
+                   <div class='box' style='animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; position: relative; overflow: hidden;'><h2>⭐ Review Ratings</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>How satisfied are customers after buying?</p><div class='bh-wrap' style='height:260px; position:relative;'><canvas id='bhRatingChart'></canvas></div></div>
+                   <div class='box' style='animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; position: relative; overflow: hidden; grid-column: 1 / -1;'><h2>🔥 When Customers Buy</h2><p class='text-muted' style='font-size:0.85em; margin-bottom:15px;'>Orders by day and hour (Paris time). Darker = more orders.</p><div id='bh-heatmap' style='overflow-x:auto;'></div></div>
                </div>
            </div>
 
@@ -9114,8 +9420,194 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             if(document.getElementById('btn-chart-all')) document.getElementById('btn-chart-all').className = days === 0 ? 'admin-btn btn-pill active' : 'admin-btn btn-pill';
             window.renderSalesChart(days); 
         };
+    // 🧠 [FUNCTION: renderBehaviorCharts] - Module Purchase Behavior (pourquoi et comment les clients achètent)
+        var BH_CAT = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', '#9085e9', '#e66767'];
+        var BH_SURFACE = '#0b0b13';
+        window.bhCharts = window.bhCharts || {};
+        function bhAccent(alpha) { return 'rgba(' + getThemeVal('rgb') + ', ' + (alpha === undefined ? 1 : alpha) + ')'; }
+        function bhSum(arr) { return (arr || []).reduce(function(a, b) { return a + (Number(b) || 0); }, 0); }
+        function bhTooltip(labelFn) {
+            return { backgroundColor: 'rgba(0,0,0,0.85)', titleFont: { size: 13, family: 'Inter' }, bodyFont: { size: 13, family: 'Inter' }, padding: 10, cornerRadius: 8, borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1, callbacks: labelFn ? { label: labelFn } : {} };
+        }
+        function bhOptions(opts) {
+            opts = opts || {};
+            var o = {
+                responsive: true, maintainAspectRatio: false,
+                animation: { duration: 900, easing: 'easeOutQuart' },
+                plugins: {
+                    legend: { display: !!opts.legend, position: 'bottom', labels: { color: '#8e8e93', font: { family: 'Inter', size: 12 }, padding: 16, usePointStyle: true } },
+                    tooltip: bhTooltip(opts.tooltipLabel)
+                }
+            };
+            if (opts.doughnut) { o.cutout = '68%'; return o; }
+            var grid = { color: 'rgba(255,255,255,0.05)' };
+            var ticks = { color: '#8e8e93', font: { family: 'Inter', size: 11 } };
+            var valueTicks = { color: '#8e8e93', font: { family: 'Inter', size: 11 }, precision: 0 };
+            if (opts.money) valueTicks.callback = function(v) { return '£' + v; };
+            var catTicks = { color: '#8e8e93', font: { family: 'Inter', size: 11 }, callback: function(v) { var l = String(this.getLabelForValue(v)); return l.length > 26 ? l.slice(0, 25) + '…' : l; } };
+            var catAxis = { stacked: !!opts.stacked, grid: { display: false }, ticks: catTicks, border: { display: false } };
+            var valAxis = { stacked: !!opts.stacked, grid: grid, ticks: valueTicks, beginAtZero: true, border: { display: false } };
+            o.indexAxis = opts.horizontal ? 'y' : 'x';
+            o.scales = opts.horizontal ? { x: valAxis, y: catAxis } : { x: catAxis, y: valAxis };
+            return o;
+        }
+        function bhBarDataset(label, data, color) {
+            return { label: label, data: data, backgroundColor: color, hoverBackgroundColor: color, borderRadius: 4, borderSkipped: 'start', maxBarThickness: 38 };
+        }
+        function bhDoughnutDataset(data, count) {
+            var colors = BH_CAT.slice(0, count);
+            return { data: data, backgroundColor: colors, hoverBackgroundColor: colors, borderColor: BH_SURFACE, borderWidth: 2, hoverOffset: 8 };
+        }
+        function bhDraw(id, name, hasData, sinceStr, buildConfig) {
+            withErrorBoundary(id, name, function() {
+                var canvas = document.getElementById(id);
+                if (!canvas) return;
+                if (window.bhCharts[id] instanceof Chart) { window.bhCharts[id].destroy(); delete window.bhCharts[id]; }
+                var wrap = canvas.parentElement;
+                var empty = wrap.querySelector('.bh-empty');
+                if (!hasData) {
+                    canvas.style.display = 'none';
+                    if (!empty) {
+                        empty = document.createElement('div');
+                        empty.className = 'bh-empty';
+                        empty.style.cssText = 'position:absolute; inset:0; display:flex; align-items:center; justify-content:center; text-align:center; padding:20px; color:var(--text-muted); font-size:0.85em; border:1px dashed rgba(255,255,255,0.08); border-radius:12px;';
+                        wrap.appendChild(empty);
+                    }
+                    empty.textContent = 'No data yet — collecting since ' + sinceStr + '.';
+                    return;
+                }
+                canvas.style.display = '';
+                if (empty) empty.remove();
+                window.bhCharts[id] = new Chart(canvas.getContext('2d'), buildConfig());
+            });
+        }
+        function bhSimpleBar(id, name, series, sinceStr, opts) {
+            opts = opts || {};
+            bhDraw(id, name, bhSum(series.data) > 0, sinceStr, function() {
+                return { type: 'bar', data: { labels: series.labels, datasets: [bhBarDataset(opts.label || 'Orders', series.data, bhAccent(0.85))] }, options: bhOptions(opts) };
+            });
+        }
+        function bhDoughnut(id, name, series, sinceStr) {
+            bhDraw(id, name, bhSum(series.data) > 0, sinceStr, function() {
+                var total = bhSum(series.data);
+                return { type: 'doughnut', data: { labels: series.labels, datasets: [bhDoughnutDataset(series.data, series.labels.length)] }, options: bhOptions({ doughnut: true, legend: true, tooltipLabel: function(c) { return ' ' + c.label + ': ' + c.parsed + ' (' + (total ? Math.round(c.parsed / total * 100) : 0) + '%)'; } }) };
+            });
+        }
+        function bhFormatHours(h) {
+            if (h === null || h === undefined) return '—';
+            if (h < 48) return h + ' h';
+            return (Math.round(h / 24 * 10) / 10) + ' days';
+        }
+        function bhRenderKpis(k) {
+            var el = document.getElementById('bh-kpis');
+            if (!el) return;
+            var tiles = [
+                ['Orders tracked', String(k.orders)],
+                ['Ticket → order', k.conversion + '%'],
+                ['Avg order value', '£' + k.aov],
+                ['Returning buyers', k.repeatShare + '%'],
+                ['Median join → 1st buy', bhFormatHours(k.medianJoinToFirstHours)],
+                ['Orders with discount', k.discountedShare + '%'],
+                ['Code failure rate', k.voucherFailRate + '%']
+            ];
+            el.innerHTML = '';
+            tiles.forEach(function(t) {
+                var box = document.createElement('div');
+                box.className = 'box';
+                box.style.cssText = 'margin:0; padding:16px 18px;';
+                var label = document.createElement('div');
+                label.className = 'text-muted';
+                label.style.cssText = 'font-size:0.78em; letter-spacing:0.3px; margin-bottom:6px;';
+                label.textContent = t[0];
+                var value = document.createElement('div');
+                value.style.cssText = 'font-size:1.55em; font-weight:700; color:#fff;';
+                value.textContent = t[1];
+                box.appendChild(label);
+                box.appendChild(value);
+                el.appendChild(box);
+            });
+        }
+        function bhRenderHeatmap(hm, sinceStr) {
+            withErrorBoundary('bh-heatmap', 'Purchase Heatmap', function() {
+                var el = document.getElementById('bh-heatmap');
+                if (!el) return;
+                var max = 0;
+                hm.data.forEach(function(row) { row.forEach(function(v) { if (v > max) max = v; }); });
+                if (max === 0) {
+                    el.innerHTML = '';
+                    var empty = document.createElement('div');
+                    empty.style.cssText = 'padding:40px 20px; text-align:center; color:var(--text-muted); font-size:0.85em; border:1px dashed rgba(255,255,255,0.08); border-radius:12px;';
+                    empty.textContent = 'No data yet — collecting since ' + sinceStr + '.';
+                    el.appendChild(empty);
+                    return;
+                }
+                var html = '<div style="display:grid; grid-template-columns: 38px repeat(24, minmax(18px, 1fr)); gap:2px; min-width:560px; font-size:0.72em; color:#8e8e93;">';
+                html += '<div></div>';
+                for (var h = 0; h < 24; h++) html += '<div style="text-align:center;">' + (h % 3 === 0 ? h + 'h' : '') + '</div>';
+                hm.data.forEach(function(row, d) {
+                    html += '<div style="display:flex; align-items:center;">' + hm.days[d] + '</div>';
+                    row.forEach(function(v, h) {
+                        var bg = v > 0 ? bhAccent(0.15 + 0.85 * (v / max)) : 'rgba(255,255,255,0.03)';
+                        var tip = hm.days[d] + ' ' + h + ':00–' + (h + 1) + ':00 · ' + v + (v === 1 ? ' order' : ' orders');
+                        html += '<div title="' + tip + '" style="height:22px; border-radius:4px; background:' + bg + ';"></div>';
+                    });
+                });
+                html += '</div>';
+                html += '<div style="display:flex; align-items:center; gap:8px; margin-top:12px; font-size:0.75em; color:#8e8e93;">Fewer<div style="width:120px; height:8px; border-radius:4px; background:linear-gradient(90deg, ' + bhAccent(0.15) + ', ' + bhAccent(1) + ');"></div>More (max ' + max + ')</div>';
+                el.innerHTML = html;
+            });
+        }
+        async function renderBehaviorCharts() {
+            var tab = document.getElementById('analytics');
+            if (!tab || !tab.classList.contains('active')) return;
+            var d;
+            try {
+                var res = await fetch('/api/analytics/behavior?t=' + Date.now());
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                d = await res.json();
+            } catch (e) {
+                console.error('[Behavior] fetch failed:', e);
+                return;
+            }
+            var sinceStr = new Date(d.since).toLocaleDateString('en-GB');
+            var sinceEl = document.getElementById('bh-since');
+            if (sinceEl) sinceEl.textContent = 'Tracking since ' + sinceStr + '.';
+            bhRenderKpis(d.kpis);
+
+            bhDraw('bhFunnelChart', 'Purchase Journey Funnel', bhSum(d.funnel.data) > 0, sinceStr, function() {
+                return { type: 'bar', data: { labels: d.funnel.labels, datasets: [bhBarDataset('Customers', d.funnel.data, bhAccent(0.85))] },
+                    options: bhOptions({ horizontal: true, tooltipLabel: function(c) { var drop = d.funnel.dropPct[c.dataIndex]; return ' ' + c.parsed.x + ' customers' + (c.dataIndex > 0 ? ' · ' + drop + '% lost vs previous step' : ''); } }) };
+            });
+            bhDoughnut('bhFailChart', 'Code Failure Reasons', d.voucherFailReasons, sinceStr);
+            bhSimpleBar('bhVoucherChart', 'Voucher Amounts', d.voucherValues, sinceStr, { label: 'Codes accepted' });
+            bhSimpleBar('bhJoinChart', 'Join to First Purchase', d.joinToPurchase, sinceStr, { label: 'First purchases' });
+            bhSimpleBar('bhTicketChart', 'Time in Ticket', d.ticketToPay, sinceStr);
+            bhDoughnut('bhLeverChart', 'Purchase Trigger', d.discountMix, sinceStr);
+            bhDraw('bhAovChart', 'Avg Order by Trigger', bhSum(d.discountMix.data) > 0, sinceStr, function() {
+                return { type: 'bar', data: { labels: d.aovByDiscount.labels, datasets: [bhBarDataset('Avg order', d.aovByDiscount.data, bhAccent(0.85))] },
+                    options: bhOptions({ money: true, tooltipLabel: function(c) { return ' £' + c.parsed.y.toFixed(2) + ' avg · ' + d.discountMix.data[c.dataIndex] + ' orders'; } }) };
+            });
+            bhSimpleBar('bhLeftoverChart', 'Unspent Balance', d.leftoverBalance, sinceStr);
+            bhSimpleBar('bhCartChart', 'Cart Size', d.cartSize, sinceStr);
+            var myst = document.getElementById('bh-mystery');
+            if (myst) myst.textContent = bhSum(d.cartSize.data) > 0 ? '🎁 Mystery Box included in ' + d.mysteryShare + '% of orders.' : '';
+            bhDraw('bhWeeklyChart', 'New vs Returning Buyers', bhSum(d.weekly.newBuyers) + bhSum(d.weekly.returning) > 0, sinceStr, function() {
+                return { type: 'bar', data: { labels: d.weekly.labels, datasets: [
+                        bhBarDataset('New buyers', d.weekly.newBuyers, BH_CAT[0]),
+                        bhBarDataset('Returning buyers', d.weekly.returning, BH_CAT[1])
+                    ] }, options: bhOptions({ stacked: true, legend: true }) };
+            });
+            bhDoughnut('bhSourceChart', 'Buyer Origin', d.buyerSource, sinceStr);
+            bhRenderHeatmap(d.heatmap, sinceStr);
+            bhSimpleBar('bhAgeChart', 'Discord Account Age', d.accountAge, sinceStr, { label: 'Buyers' });
+            bhSimpleBar('bhPairsChart', 'Bought Together', d.topPairs, sinceStr, { horizontal: true, label: 'Orders' });
+            bhSimpleBar('bhRatingChart', 'Review Ratings', d.ratings, sinceStr, { label: 'Reviews' });
+        }
+        window.renderBehaviorCharts = renderBehaviorCharts;
+
     // 🚀 [FUNCTION: renderAnalyticsCharts] - Déclaration de fonction
         function renderAnalyticsCharts() {
+            renderBehaviorCharts();
             document.querySelectorAll('.skeleton-chart-overlay').forEach(el => el.remove());
            if(typeof Chart === 'undefined') return;
            
