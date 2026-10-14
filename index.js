@@ -347,7 +347,7 @@ async function loadCloudStats() {
         }
     } catch (e) { 
         if (e.response && (e.response.status === 400 || e.response.status === 403 || e.response.status === 429)) {
-             global.upstashDisabled = true;
+             global.upstashDisabled = true; global.upstashDisabledUntil = Date.now() + 30 * 60 * 1000;
              systemLog('WARN', 'UPSTASH', `Quota Exceeded or Auth Error (${e.response.status}). Response: ${JSON.stringify(e.response?.data)}. Disabling Cloud Sync temporarily.`);
         } else {
              systemLog('ERROR', 'UPSTASH', `Cloud GET Error: ${e.message}`); 
@@ -1084,9 +1084,12 @@ async function syncCloud(isManualForce = false) {
 
     // Sauvegarde Cloud (Upstash) - With Debounce
     const url = process.env.UPSTASH_REDIS_REST_URL;
-    if (global.broadcastToDashboard) global.broadcastToDashboard('stats_update', {});
+    if (global.broadcastToDashboard && !global.nxStatsBroadcastTimer) {
+        global.nxStatsBroadcastTimer = setTimeout(() => { global.nxStatsBroadcastTimer = null; try { global.broadcastToDashboard('stats_update', {}); } catch (e) {} }, 5000);
+    }
 
     const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+    if (global.upstashDisabled && Date.now() > (global.upstashDisabledUntil || 0)) { global.upstashDisabled = false; systemLog('INFO', 'UPSTASH', 'Cooldown over — retrying cloud sync.'); }
     if (!url || !token || global.upstashDisabled) return;
     
     if (isManualForce) {
@@ -1157,8 +1160,8 @@ async function performCloudSync(url, token) {
         });
     } catch (err) { 
         if (err.response && (err.response.status === 400 || err.response.status === 403 || err.response.status === 429)) {
-             global.upstashDisabled = true;
-             systemLog('WARN', 'UPSTASH', `Quota Exceeded or Auth Error (${err.response.status}). Response: ${JSON.stringify(err.response?.data)}. Disabling Cloud Sync temporarily.`);
+             global.upstashDisabled = true; global.upstashDisabledUntil = Date.now() + 30 * 60 * 1000;
+             systemLog('WARN', 'UPSTASH', `Quota Exceeded or Auth Error (${err.response.status}). Response: ${JSON.stringify(err.response?.data)}. Payload: ${Math.round(JSON.stringify(memoryStats).length / 1024)} KB. Disabling Cloud Sync for 30 min.`);
         } else {
              systemLog('ERROR', 'UPSTASH', `Cloud Sync Error: ${err.message}`); 
         }
@@ -2039,13 +2042,18 @@ async function sendShopSetup(channel, templateOverride = null) {
 const client = new Client({ 
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildPresences, GatewayIntentBits.GuildInvites, GatewayIntentBits.GuildMessageTyping, GatewayIntentBits.DirectMessageTyping],
     partials: [Partials.GuildMember, Partials.User, Partials.Message],
-    rest: { timeout: 60000, retries: 0 } 
+    rest: { timeout: 15000, retries: 3 } // ⚙️ STABILITY: defaults discord.js (avant: 60s / 0 retry => réponses perdues)
 });
 
 // 🚀 [EVENT_LISTENER: error] - Écouteur d'événement Discord
+let nxLastRateLog = 0;
 client.rest.on('rateLimited', data => {
-            console.log("RATE LIMITED:", data);
-                    });
+    if (Date.now() - nxLastRateLog > 5000) {
+        nxLastRateLog = Date.now();
+        systemLog('WARN', 'DISCORD_REST', `Rate limited on ${data.route || data.url || '?'} — retry in ${data.timeToReset || data.retryAfter || '?'}ms (global: ${!!data.global})`);
+    }
+});
+try { client.rest.on('invalidRequestWarning', d => systemLog('CRITICAL', 'DISCORD_REST', `High invalid request count (${d.count}) — risk of temporary Cloudflare ban.`)); } catch (e) {}
         client.on('error', error => {
     systemLog('ERROR', 'DISCORD_CORE', `Network Error: ${error.message}`);
     console.error('⚠️ Discord Client Network Error:', error.message);
@@ -2090,7 +2098,7 @@ client.once('ready', async () => {
                     CircuitBreaker.recordSuccess();
                 } 
                 catch (e) {
-                    if (!(e.response && (e.response.status === 400 || e.response.status === 402 || e.response.status === 401))) {
+                    if (!(e.response && e.response.status < 500 && e.response.status !== 429)) {
                         down = true;
                         CircuitBreaker.recordFailure();
                     } else {
@@ -2098,12 +2106,13 @@ client.once('ready', async () => {
                     }
                 }
             }
-            if (down) {
+            global.nxRewarbleDownCount = down ? (global.nxRewarbleDownCount || 0) + 1 : 0;
+            if (down && global.nxRewarbleDownCount >= 2) {
                 systemLog('WARN', 'REWARBLE_API', 'API appears unreachable during routine heartbeat check.');
                 const admin = await client.users.fetch(ADMIN_DISCORD_ID).catch(()=>null);
                 if (admin) admin.send("🚨 **SYSTEM ALERT** 🚨\n- The Rewarble API is currently DOWN or unreachable. Purchases might fail.").catch(()=>{});
             }
-        } catch(e) { console.error("Error:", e); fetch("/api/log?msg="+encodeURIComponent(e.stack || e.message)); }
+        } catch(e) { systemLog('ERROR', 'REWARBLE_API', 'Heartbeat error: ' + (e.stack || e.message)); }
     }, 15 * 60 * 1000);
 });
 
@@ -2736,9 +2745,11 @@ client.on('messageCreate', async (message) => {
                     }
                     const apiResponse = await axios.post(REWARBLE_API_URL, { code: input }, { 
                         headers: { 'Authorization': `Bearer ${REWARBLE_API_KEY}` },
-                        timeout: 8000 
+                        timeout: 20000
                     }).then(res => { rewarbleCircuitBreaker.fails = 0; return res; }).catch(err => {
                         if (err.response && err.response.status === 402) { throw new Error("REWARBLE_402_INSUFFICIENT_FUNDS"); }
+                        const rwStatus = err.response ? err.response.status : 0;
+                        if (err.response && rwStatus < 500 && rwStatus !== 429) { rewarbleCircuitBreaker.fails = 0; throw err; } // invalid/used code: API is fine
                         rewarbleCircuitBreaker.fails++;
                         if (rewarbleCircuitBreaker.fails >= 5) {
                             rewarbleCircuitBreaker.nextTry = Date.now() + 5 * 60 * 1000;
@@ -2882,6 +2893,14 @@ client.on('messageCreate', async (message) => {
                     message.reply("⚠️ **Rewarble Error (402) :** Insufficient API balance.").catch(()=>{});
                     const adminUser = await client.users.fetch(ADMIN_DISCORD_ID).catch(() => null);
                     if (adminUser) adminUser.send("🚨 **CRITICAL REWARBLE ALERT:** Insufficient balance!").catch(() => {});
+                } else if (e.code === 'ECONNABORTED' || e.code === 'ETIMEDOUT' || e.code === 'ECONNRESET' || /timeout/i.test(e.message || '')) {
+                    systemLog('ERROR', 'REWARBLE_API', `Timeout while redeeming a code for ${message.author.username} (${e.code || e.message}). Manual check may be needed.`);
+                    message.reply("⏳ **Rewarble is responding slowly.** Your code may still be valid — please wait 1 minute and send it again.\nIf it then says the code was already used, open a **Support** ticket and our team will verify it manually.").catch(()=>{});
+                    const adminUser = await client.users.fetch(ADMIN_DISCORD_ID).catch(() => null);
+                    if (adminUser) adminUser.send(`⚠️ **Rewarble timeout** for ${message.author.username} in #${message.channel.name}. Check this code manually if the customer complains: \`${input}\``).catch(() => {});
+                    if (!Array.isArray(memoryStats.voucher_log)) memoryStats.voucher_log = [];
+                    memoryStats.voucher_log.unshift({ code: input || '???', username: message.author.username, userId: message.author.id, channelId: message.channel.id, channelName: message.channel.name || '', value: 0, status: 'timeout', timestamp: new Date().toISOString() });
+                    if (memoryStats.voucher_log.length > 500) memoryStats.voucher_log = memoryStats.voucher_log.slice(0, 500);
                 } else {
                     systemLog('WARN', 'VALIDATION', `Invalid code or network error for ${message.author.username}: ${e.message}`);
                     message.reply("❌ Invalid code or API timeout. Please check your voucher and try again.").catch(()=>{});
@@ -3357,6 +3376,11 @@ const server = http.createServer(async (req, res) => {
         }
     }
 
+    // 🩺 [API_ROUTE: /health] - Health check léger (Render + keep-alive)
+    if (req.url === '/health') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ ok: true, discord: client.isReady(), ws_ping: client.ws.ping, uptime: Math.floor(process.uptime()) }));
+    }
     // 🚀 [API_ROUTE: /download-code] - Route API backend
     if (req.url === '/download-code') {
         if (!isAuthenticated && req.url !== '/debug') return res.writeHead(401).end('Unauthorized');
@@ -3596,10 +3620,18 @@ const server = http.createServer(async (req, res) => {
         let memberCount = "N/A"; let onlineCount = "N/A"; let activeTickets = 0;
         const guild = client.guilds.cache.first();
         if (guild) {
-            try {
-                const response = await axios.get("https://discord.com/api/v10/guilds/" + guild.id + "?with_counts=true", { headers: { Authorization: "Bot " + DISCORD_BOT_TOKEN } });
-                memberCount = response.data.approximate_member_count; onlineCount = response.data.approximate_presence_count;
-            } catch (err) { memberCount = guild.memberCount; }
+            const gc = global.nxGuildCounts;
+            if (gc && gc.guildId === guild.id && Date.now() - gc.at < 120000) { memberCount = gc.members; onlineCount = gc.online; }
+            else {
+                try {
+                    const response = await axios.get("https://discord.com/api/v10/guilds/" + guild.id + "?with_counts=true", { headers: { Authorization: "Bot " + DISCORD_BOT_TOKEN }, timeout: 4000 });
+                    memberCount = response.data.approximate_member_count; onlineCount = response.data.approximate_presence_count;
+                } catch (err) {
+                    memberCount = guild.memberCount; onlineCount = gc && gc.guildId === guild.id ? gc.online : "N/A";
+                    if (err.response && err.response.status === 429) systemLog('WARN', 'DISCORD_REST', 'Guild counts rate-limited (429) — using cached values.');
+                }
+                global.nxGuildCounts = { guildId: guild.id, members: memberCount, online: onlineCount, at: Date.now() };
+            }
             activeTickets = guild.channels.cache.filter(c => c.name.startsWith('shop-') || c.name.startsWith('support-')).size;
         }
         const todayStr = getParisDateStr();
@@ -3759,7 +3791,7 @@ const server = http.createServer(async (req, res) => {
             rewarbleLatency = Date.now() - startRewarble;
             CircuitBreaker.recordSuccess();
         } catch (e) {
-            if (e.response && (e.response.status === 400 || e.response.status === 402 || e.response.status === 401)) {
+            if (e.response && e.response.status < 500 && e.response.status !== 429) {
                 rewarbleStatus = 'online';
                 CircuitBreaker.recordSuccess();
             } else {
@@ -7365,10 +7397,13 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
 
                 // 🔌 [WS_EVENT_FRONTEND: stats_update] - Réception WebSocket Client
                 if (data.type === 'stats_update') {
-                    window.refreshDataSilently(true);
+                    if (!window.nxRefreshTimer) window.nxRefreshTimer = setTimeout(function() { window.nxRefreshTimer = null; if (document.hidden) { window.nxRefreshPending = true; } else { window.refreshDataSilently(true); } }, 4000);
                 }
             };
-            ws.onclose = () => { setTimeout(() => { ws = new WebSocket(protocol + '//' + window.location.host + '/ws'); }, 2000); };
+            const nxOnMessage = ws.onmessage;
+            const nxReconnect = () => { setTimeout(() => { try { ws = new WebSocket(protocol + '//' + window.location.host + '/ws'); ws.onmessage = nxOnMessage; ws.onclose = nxReconnect; } catch (e) { nxReconnect(); } }, 3000); };
+            ws.onclose = nxReconnect;
+            document.addEventListener('visibilitychange', () => { if (!document.hidden && window.nxRefreshPending) { window.nxRefreshPending = false; window.refreshDataSilently(true); } });
 
            try{
                const res = await fetch('/api/init-data?t=' + Date.now());
@@ -10292,15 +10327,23 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
     } else { res.writeHead(200, { 'Content-Type': 'text/plain' }); res.end('API Bot'); }
 });
 
-server.listen(3000).on('error', (e) => {
+const NX_PORT = process.env.PORT || 3000;
+server.listen(NX_PORT).on('error', (e) => {
     if (e.code === 'EADDRINUSE') {
-        console.log('Port 3000 in use, trying to close old server...');
+        console.log(`Port ${NX_PORT} in use, trying to close old server...`);
         setTimeout(() => {
             server.close();
-            server.listen(3000);
+            server.listen(NX_PORT);
         }, 1000);
     }
 });
+
+// 💓 KEEP-ALIVE: Render free instances sleep after 15 min without HTTP traffic (the Discord bot dies with it)
+if (process.env.RENDER_EXTERNAL_URL) {
+    const nxSelfUrl = process.env.RENDER_EXTERNAL_URL.replace(/\/$/, '') + '/health';
+    setInterval(() => { axios.get(nxSelfUrl, { timeout: 15000 }).catch(() => {}); }, 10 * 60 * 1000);
+    systemLog('INFO', 'SYSTEM', `Keep-alive enabled (${nxSelfUrl} every 10 min).`);
+}
 
 server.on('upgrade', (request, socket, head) => {
     const pathname = request.url;
