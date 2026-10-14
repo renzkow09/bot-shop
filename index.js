@@ -2298,6 +2298,18 @@ client.on('interactionCreate', async (interaction) => {
                 
                 if (existingChannel) {
                     userTicketLocks.delete(interaction.user.id);
+                    // 🩹 Ticket vide (créé pendant une panne) : on renvoie le message de bienvenue
+                    try {
+                        const recent = await existingChannel.messages.fetch({ limit: 20 });
+                        if (!recent.some(m => m.author && m.author.id === client.user.id)) {
+                            if (!channelStates.has(existingChannel.id)) channelStates.set(existingChannel.id, { validated: false, processing: false, promo: null, redeemed: false, cart: [], cartTotal: 0, balance: 0 });
+                            const repairRow = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('request_close_ticket').setLabel('🔒 Request Close').setStyle(ButtonStyle.Danger));
+                            const hasItems = Object.values(memoryStats.products || {}).some(p => !(p.stock && p.stock !== "∞" && parseInt(p.stock) <= 0)) || (memoryStats.mystery_box && memoryStats.mystery_box.enabled);
+                            const tpl = hasItems ? memoryStats.messages.shop_welcome : memoryStats.messages.shop_empty;
+                            await existingChannel.send({ content: tpl.replace('{user}', '<@' + interaction.user.id + '>'), components: [repairRow] });
+                            systemLog('INFO', 'TICKET_SYS', `Welcome message re-sent in empty ticket ${existingChannel.name}`);
+                        }
+                    } catch (e) { systemLog('WARN', 'TICKET_SYS', `Could not check/repair ticket ${existingChannel.name}: ${e.message}`); }
                     return interaction.editReply({ content: `✅ You already have an open ticket: <#${existingChannel.id}>` }).catch(() => {});
                 }
 
@@ -2339,14 +2351,9 @@ client.on('interactionCreate', async (interaction) => {
                         if (p.stock && p.stock !== "∞" && parseInt(p.stock) <= 0) continue;
                         optCount++;
                     }
-                if (memoryStats.mystery_box && memoryStats.mystery_box.enabled && optCount < 25) {
-                    const mbPrice = memoryStats.mystery_box.price || 10;
-                    pmenu.addOptions(new StringSelectMenuOptionBuilder()
-                        .setLabel(`🎁 Mystery Box (£${mbPrice})`)
-                        .setDescription(`Feeling lucky? Win premium random drops!`)
-                        .setValue(`mystery_box`));
-                    optCount++;
-                }
+                // 🐛 FIX: 'pmenu' n'existe pas ici (ReferenceError => ticket vide sans message de bienvenue).
+                // La Mystery Box est ajoutée au menu produits après validation du code.
+                if (memoryStats.mystery_box && memoryStats.mystery_box.enabled && optCount < 25) optCount++;
 
                     
                     
@@ -2876,6 +2883,14 @@ client.on('messageCreate', async (message) => {
                         .setLabel(String(p.name + (p.price === "Custom" ? " (Custom)" : " (£" + p.price + ")")).substring(0, 100))
                         .setDescription(String(p.category || 'Item').substring(0, 100))
                         .setValue(id));
+                    optCount++;
+                }
+                if (memoryStats.mystery_box && memoryStats.mystery_box.enabled && optCount < 25) {
+                    const mbPrice = memoryStats.mystery_box.price || 10;
+                    pmenu.addOptions(new StringSelectMenuOptionBuilder()
+                        .setLabel(`🎁 Mystery Box (£${mbPrice})`)
+                        .setDescription(`Feeling lucky? Win premium random drops!`)
+                        .setValue(`mystery_box`));
                     optCount++;
                 }
                 if (optCount > 0) pmenu.setMaxValues(Math.min(optCount, 10)); 
