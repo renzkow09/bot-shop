@@ -350,7 +350,8 @@ async function loadCloudStats() {
              global.upstashDisabled = true; global.upstashDisabledUntil = Date.now() + 30 * 60 * 1000;
              systemLog('WARN', 'UPSTASH', `Quota Exceeded or Auth Error (${e.response.status}). Response: ${JSON.stringify(e.response?.data)}. Disabling Cloud Sync temporarily.`);
         } else {
-             systemLog('ERROR', 'UPSTASH', `Cloud GET Error: ${e.message}`); 
+             if (e.code === 'ENOTFOUND') { global.upstashDisabled = true; global.upstashDisabledUntil = Date.now() + 30 * 60 * 1000; }
+             systemLog('ERROR', 'UPSTASH', `Cloud GET Error: ${e.message}${e.code === 'ENOTFOUND' ? ' — Upstash database not found (deleted?). Falling back to Discord backup.' : ''}`); 
         }
         const discordSuccess = await fetchBackupFromDiscord();
         if (!discordSuccess && fs.existsSync(STATS_FILE)) {
@@ -1163,7 +1164,8 @@ async function performCloudSync(url, token) {
              global.upstashDisabled = true; global.upstashDisabledUntil = Date.now() + 30 * 60 * 1000;
              systemLog('WARN', 'UPSTASH', `Quota Exceeded or Auth Error (${err.response.status}). Response: ${JSON.stringify(err.response?.data)}. Payload: ${Math.round(JSON.stringify(memoryStats).length / 1024)} KB. Disabling Cloud Sync for 30 min.`);
         } else {
-             systemLog('ERROR', 'UPSTASH', `Cloud Sync Error: ${err.message}`); 
+             if (err.code === 'ENOTFOUND') { global.upstashDisabled = true; global.upstashDisabledUntil = Date.now() + 30 * 60 * 1000; systemLog('CRITICAL', 'UPSTASH', `Upstash database not found (${err.hostname || 'host'}) — it was probably deleted. Create a new one and update UPSTASH_REDIS_REST_URL / TOKEN on Render. Cloud sync paused 30 min.`); }
+             else systemLog('ERROR', 'UPSTASH', `Cloud Sync Error: ${err.message}`); 
         }
     }
 }
@@ -3379,7 +3381,7 @@ const server = http.createServer(async (req, res) => {
     // 🩺 [API_ROUTE: /health] - Health check léger (Render + keep-alive)
     if (req.url === '/health') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify({ ok: true, discord: client.isReady(), ws_ping: client.ws.ping, uptime: Math.floor(process.uptime()) }));
+        return res.end(JSON.stringify({ ok: true, discord: client.isReady(), ws_ping: client.ws.ping, ws_status: client.ws ? client.ws.status : null, gateway: global.nxGatewayInfo || null, uptime: Math.floor(process.uptime()) }));
     }
     // 🚀 [API_ROUTE: /download-code] - Route API backend
     if (req.url === '/download-code') {
@@ -10388,6 +10390,29 @@ if (DISCORD_BOT_TOKEN) {
         }
         systemLog('CRITICAL', 'DISCORD_CORE', 'Exhausted all login retries. Bot will remain in degraded mode (Dashboard only).');
     };
+    // 🩺 DIAGNOSTIC: vérifie l'accès à Discord AVANT la connexion (rate limit / blocage IP / quota de connexions)
+    (async () => {
+        try {
+            const g = await axios.get('https://discord.com/api/v10/gateway/bot', { headers: { Authorization: 'Bot ' + DISCORD_BOT_TOKEN }, timeout: 10000, validateStatus: () => true });
+            const isHtml = typeof g.data === 'string' && /cloudflare|<html/i.test(g.data);
+            if (g.status === 200) {
+                const l = g.data.session_start_limit || {};
+                global.nxGatewayInfo = { status: 200, remaining: l.remaining, total: l.total, resetInMin: Math.round((l.reset_after || 0) / 60000) };
+                systemLog(l.remaining > 0 ? 'INFO' : 'CRITICAL', 'DISCORD_GW', `Gateway OK — connection quota: ${l.remaining}/${l.total} remaining (reset in ${Math.round((l.reset_after || 0) / 60000)} min).`);
+            } else {
+                global.nxGatewayInfo = { status: g.status, cloudflare: isHtml, retryAfter: g.headers['retry-after'] || null };
+                systemLog('CRITICAL', 'DISCORD_GW', `Discord API answered ${g.status}${isHtml ? ' (Cloudflare block on this server IP)' : ''}${g.headers['retry-after'] ? ' — retry after ' + g.headers['retry-after'] + 's' : ''}. ${g.status === 401 ? 'Invalid bot token!' : ''}`);
+            }
+        } catch (e) { global.nxGatewayInfo = { error: e.message }; systemLog('CRITICAL', 'DISCORD_GW', `Cannot reach Discord API: ${e.message}`); }
+    })();
+    const NX_GW_KEYS = /429|rate.?limit|session.?limit|remaining|identify|invalid|error|retrying|waiting|fetched gateway|connecting|disconnect|zombie|close code|ready/i;
+    client.on('debug', (m) => { if (NX_GW_KEYS.test(m) && !/Heartbeat/i.test(m)) systemLog('DEBUG', 'DISCORD_GW', String(m).replace(DISCORD_BOT_TOKEN, '[token]').slice(0, 300)); });
+    setTimeout(function nxLoginWatchdog() {
+        if (!client.isReady()) {
+            systemLog('CRITICAL', 'DISCORD_CORE', `Bot still NOT connected to Discord after login started (ws status: ${client.ws ? client.ws.status : '?'}). Gateway info: ${JSON.stringify(global.nxGatewayInfo || {})}`);
+            setTimeout(nxLoginWatchdog, 5 * 60 * 1000);
+        }
+    }, 90 * 1000);
     loginWithRetry();
 } else {
     systemLog('WARN', 'SYSTEM', 'Skipping Discord login because DISCORD_BOT_TOKEN is missing.');
