@@ -2275,7 +2275,10 @@ client.on('interactionCreate', async (interaction) => {
                 setTimeout(() => processedInteractions.delete(interaction.id), 60000);
 
                 if (userTicketLocks.has(interaction.user.id) || channelCreationLocks.has(interaction.user.id)) {
-                    await interaction.deferUpdate().catch(()=>{});
+                    // 🩹 Plus de clic "silencieux" : on répond toujours au client
+                    const lockedName = 'shop-' + (interaction.user.username.toLowerCase().replace(/[^a-z0-9]/g, '') || interaction.user.id);
+                    const lockedCh = interaction.guild.channels.cache.find(c => c.name === lockedName);
+                    await interaction.reply({ content: lockedCh ? `✅ Your ticket is ready: <#${lockedCh.id}>` : '⏳ Your ticket is being created, please wait a few seconds...', ephemeral: true }).catch(() => {});
                     return;
                 }
                 userTicketLocks.add(interaction.user.id);
@@ -2377,7 +2380,10 @@ client.on('interactionCreate', async (interaction) => {
                 setTimeout(() => processedInteractions.delete(interaction.id), 60000);
 
                 if (userTicketLocks.has(interaction.user.id) || channelCreationLocks.has(interaction.user.id)) {
-                    await interaction.deferUpdate().catch(()=>{});
+                    // 🩹 Plus de clic "silencieux" : on répond toujours au client
+                    const lockedName = 'support-' + (interaction.user.username.toLowerCase().replace(/[^a-z0-9]/g, '') || interaction.user.id);
+                    const lockedCh = interaction.guild.channels.cache.find(c => c.name === lockedName);
+                    await interaction.reply({ content: lockedCh ? `✅ Your ticket is ready: <#${lockedCh.id}>` : '⏳ Your ticket is being created, please wait a few seconds...', ephemeral: true }).catch(() => {});
                     return;
                 }
                 userTicketLocks.add(interaction.user.id);
