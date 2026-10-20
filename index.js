@@ -150,6 +150,7 @@ function systemLog(level, component, message) {
     if (globalLogs.length > MAX_LOGS) globalLogs.shift();
 
     console.log(`[${timeStr}] [${level}] [${component}] ${safeMessage}`);
+    if (global.nxMonitor && component !== 'ALERT') { try { global.nxMonitor.onLog(level, component, safeMessage); } catch (e) {} }
 
     if (level === 'ERROR' || level === 'CRITICAL') {
         try {
@@ -2103,6 +2104,7 @@ client.once('ready', async () => {
     systemLog('INFO', 'DISCORD_CORE', `Bot logged in successfully as ${client.user.tag}`);
     console.log(`✅ Bot logged in as ${client.user.tag}`);
     await loadCloudStats();
+    if (global.nxMonitor) global.nxMonitor.onReady();
     setInterval(backupToDiscord, 3600000); // 1 hour
     setTimeout(backupToDiscord, 10000); // First backup 10s after boot
     client.guilds.cache.forEach(async guild => {
@@ -2655,6 +2657,9 @@ client.on('messageCreate', async (message) => {
 
         if (message.author.id === ADMIN_DISCORD_ID) {
             if (message.content === '!setup') { await sendShopSetup(message.channel); return; }
+            if (message.content === '!testalert' && global.nxMonitor) { const r = await global.nxMonitor.test(); await message.reply(`🔔 Alerte de test envoyée — MP : ${r.dm ? '✅' : '❌'} | Push ntfy : ${r.push ? '✅' : '—'} (sujet \`${global.nxMonitor.ntfyTopic()}\`)`).catch(() => {}); return; }
+            if (message.content === '!alerts' && global.nxMonitor) { const st = global.nxMonitor.status(); await message.reply(st.active.length ? '🔴 **Problèmes en cours :**\n' + st.active.map(a => `• ${a.title} — depuis ${new Date(a.since).toLocaleTimeString('fr-BE', { timeZone: 'Europe/Brussels', hour: '2-digit', minute: '2-digit' })}`).join('\n') : '✅ Aucun problème détecté.').catch(() => {}); return; }
+            if (message.content === '!report' && global.nxMonitor) { await global.nxMonitor.dailyReport(true); return; }
             if (message.content.startsWith('!say ')) {
                 const textToSend = message.content.substring(5);
                 if (textToSend) { if (message.channel) await message.channel.send(textToSend).catch(() => {}); await message.delete().catch(() => {}); }
@@ -3657,6 +3662,11 @@ const server = http.createServer(async (req, res) => {
 
     // === [ANCHOR: API_ROUTES_GET] ===
     // 🚀 [API_ROUTE: /api/logs] - Route API backend
+    // 🔔 [API_ROUTE: /api/alerts] - Problèmes en cours + historique des alertes
+    if (req.url === '/api/alerts' && req.method === 'GET') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify(global.nxMonitor ? global.nxMonitor.status() : { active: [], history: [] }));
+    }
     if (req.url === '/api/logs' && req.method === 'GET') {
         // bypassed
         res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate' });
@@ -4502,6 +4512,12 @@ const server = http.createServer(async (req, res) => {
                 else if (data.action === 'announce') {
                     const channel = guild.channels.cache.get(data.channelId);
                     if(channel) await channel.send(`📢 **Announcement**\n\n${data.message}`).catch(()=>{});
+                }
+                    // 🔔 [API_ACTION: test_alert] - Envoie une alerte de test (MP + push)
+                else if (data.action === 'test_alert') {
+                    const r = global.nxMonitor ? await global.nxMonitor.test() : { dm: false, push: false };
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    return res.end(JSON.stringify({ success: true, ...r, topic: global.nxMonitor ? global.nxMonitor.ntfyTopic() : null }));
                 }
                     // ⚡ [API_ACTION: close_all] - Point de terminaison API Action
                 else if (data.action === 'close_all') {
@@ -6546,10 +6562,13 @@ const server = http.createServer(async (req, res) => {
                                 <div style='font-size:0.8em; color:rgba(255,255,255,0.35); margin-top:3px; display:flex; align-items:center; gap:8px;'><div style='width:6px; height:6px; border-radius:50%; background:#10b981; box-shadow:0 0 8px rgba(16,185,129,0.6); animation:pulseDot 2s ease-in-out infinite;'></div> Live telemetry — core nodes, security &amp; API gateways</div>
                             </div>
                         </div>
+                        <div style='display:flex; gap:8px; flex-wrap:wrap;'>
+                        <button class='admin-btn' id='test-alert-btn' onclick='window.nxTestAlert(this)' style='margin:0; display:flex; align-items:center; gap:8px;'>🔔 Tester les alertes</button>
                         <button class='admin-btn btn-deep-scan' id='deep-scan-btn' onclick='window.runDiagnostics()' style='margin:0; display:flex; align-items:center; gap:8px;'>
                             <svg id='deep-scan-icon' width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.92-10.27l-3.27-3.27"/></svg>
                             Deep Scan
                         </button>
+                        </div>
                     </div>
                     
                     <!-- Main Metrics 2x2 Grid -->
@@ -10371,6 +10390,16 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
             }, true);
         })();
 
+        window.nxTestAlert = async function(btn) {
+            if (btn) btn.disabled = true;
+            try {
+                const r = await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'test_alert' }) });
+                const d = await r.json().catch(function() { return {}; });
+                if (r.ok) showToast('Test envoyé — MP : ' + (d.dm ? 'OK' : 'échec') + ' | Push : ' + (d.push ? 'OK' : 'non') + (d.topic ? ' (ntfy : ' + d.topic + ')' : ''), d.dm || d.push ? 'success' : 'error');
+                else showToast('Test impossible (' + r.status + ')', 'error');
+            } catch (e) { showToast('Test impossible', 'error'); }
+            if (btn) btn.disabled = false;
+        };
     </script>
 </body>
 </html>`;
@@ -10417,6 +10446,254 @@ server.on('upgrade', (request, socket, head) => {
     }
 });
 
+
+// =====================================================================
+// 🚨 [ANCHOR: NX_MONITOR] — Détection des problèmes + alertes à l'admin
+//   - Écoute systemLog (erreurs connues -> alertes claires)
+//   - Vérifications périodiques (connexion Discord, catégories, lag, mémoire, base de données)
+//   - Envoi : MP Discord + repli push ntfy (fonctionne même si Discord bloque le bot)
+//   - Anti-spam : 1 alerte par problème, rappel toutes les 60 min, message "✅ Résolu" avec durée
+//   - Rapport quotidien à 9h (heure de Bruxelles)
+// =====================================================================
+const nxMonitor = (() => {
+    const TZ = process.env.ALERT_TZ || 'Europe/Brussels';
+    const INTERVAL = parseInt(process.env.NX_MON_INTERVAL_MS, 10) || 30000;
+    const DISCONNECT_GRACE = parseInt(process.env.NX_DISCONNECT_GRACE_MS, 10) || 120000;
+    const REMIND_EVERY = parseInt(process.env.NX_REMIND_MS, 10) || 60 * 60 * 1000;
+    const NTFY_SERVER = (process.env.NTFY_SERVER || 'https://ntfy.sh').replace(/\/$/, '');
+    const MEM_LIMIT_MB = parseInt(process.env.NX_MEM_LIMIT_MB, 10) || 512;
+    const REPORT_HOUR = process.env.DAILY_REPORT_HOUR === undefined ? 9 : parseInt(process.env.DAILY_REPORT_HOUR, 10);
+    const SEV = {
+        critical: { emoji: '🔴', label: 'CRITIQUE', prio: 5, tag: 'rotating_light' },
+        warning: { emoji: '🟠', label: 'ATTENTION', prio: 4, tag: 'warning' },
+        info: { emoji: 'ℹ️', label: 'INFO', prio: 3, tag: 'information_source' },
+        resolved: { emoji: '✅', label: 'RÉSOLU', prio: 3, tag: 'white_check_mark' }
+    };
+    const active = new Map();      // key -> { title, severity, since, lastSent, detail }
+    const history = [];            // dernières alertes (dashboard / rapport)
+    const counters = new Map();    // key -> [timestamps]
+    let discordDownSince = null;
+    let lagHigh = 0, lagLow = 0;
+    let lastUpstashErrorAt = 0;
+    let started = Date.now();
+
+    const fmtTime = (t) => new Intl.DateTimeFormat('fr-BE', { timeZone: TZ, hour: '2-digit', minute: '2-digit' }).format(new Date(t));
+    const fmtDateTime = (t) => new Intl.DateTimeFormat('fr-BE', { timeZone: TZ, day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(t));
+    const fmtDur = (ms) => { const m = Math.round(ms / 60000); if (m < 1) return "moins d'1 min"; if (m < 60) return m + ' min'; const h = Math.floor(m / 60); return h + ' h ' + String(m % 60).padStart(2, '0'); };
+    const local = (level, msg) => { try { systemLog(level, 'ALERT', msg); } catch (e) { console.log('[ALERT]', msg); } };
+    const bump = (key, windowMs) => { const now = Date.now(); const arr = (counters.get(key) || []).filter(t => now - t < windowMs); arr.push(now); counters.set(key, arr); return arr.length; };
+
+    function ntfyTopic() {
+        if (process.env.NTFY_TOPIC) return process.env.NTFY_TOPIC;
+        try {
+            if (!memoryStats.settings) memoryStats.settings = {};
+            if (!memoryStats.settings.ntfy_topic) {
+                memoryStats.settings.ntfy_topic = 'nexus-' + require('crypto').randomBytes(8).toString('hex');
+                syncCloud();
+            }
+            return memoryStats.settings.ntfy_topic;
+        } catch (e) { return null; }
+    }
+
+    async function sendNtfy(title, body, severity) {
+        const topic = ntfyTopic(); if (!topic) return false;
+        const s = SEV[severity] || SEV.info;
+        try {
+            await axios.post(NTFY_SERVER, { topic, title, message: body, priority: s.prio, tags: [s.tag] }, { timeout: 10000 });
+            return true;
+        } catch (e) { console.log('[ALERT] ntfy failed:', e.message); return false; }
+    }
+
+    async function sendDM(text) {
+        if (!client || typeof client.isReady !== 'function' || !client.isReady()) return false;
+        try {
+            const admin = await Promise.race([client.users.fetch(ADMIN_DISCORD_ID), new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000))]);
+            if (!admin) return false;
+            await Promise.race([admin.send(text.slice(0, 1900)), new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000))]);
+            return true;
+        } catch (e) { console.log('[ALERT] DM failed:', e.message); return false; }
+    }
+
+    // Envoi : MP Discord ; si impossible (ou critique) -> push ntfy aussi
+    async function deliver(severity, title, lines, forcePush) {
+        const s = SEV[severity] || SEV.info;
+        const body = lines.filter(Boolean).join('\n');
+        const dmText = `${s.emoji} **${title}**\n${body}`;
+        const dmOk = await sendDM(dmText);
+        let pushOk = false;
+        if (!dmOk || severity === 'critical' || forcePush) pushOk = await sendNtfy(`${s.emoji} ${title}`, body.replace(/\*\*/g, ''), severity);
+        history.unshift({ at: Date.now(), severity, title, body, dm: dmOk, push: pushOk, reminder: /^Toujours en cours/.test(title) });
+        if (history.length > 100) history.pop();
+        return { dm: dmOk, push: pushOk };
+    }
+
+    function raise(key, severity, title, detail, action) {
+        const now = Date.now();
+        const cur = active.get(key);
+        if (cur) {
+            cur.detail = detail || cur.detail;
+            if (now - cur.lastSent >= REMIND_EVERY) {
+                cur.lastSent = now;
+                deliver(cur.severity, `Toujours en cours : ${cur.title}`, [`🕒 Depuis ${fmtTime(cur.since)} (${fmtDur(now - cur.since)})`, cur.detail && `📋 ${cur.detail}`, action && `👉 ${action}`]);
+            }
+            return;
+        }
+        active.set(key, { title, severity, since: now, lastSent: now, detail });
+        local(severity === 'critical' ? 'CRITICAL' : 'WARN', `${title} — ${detail || ''}`);
+        deliver(severity, title, [`🕒 ${fmtDateTime(now)} (heure de Bruxelles)`, detail && `📋 ${detail}`, action && `👉 ${action}`]);
+    }
+
+    function resolve(key, note) {
+        const cur = active.get(key); if (!cur) return;
+        active.delete(key);
+        const now = Date.now();
+        local('INFO', `Résolu : ${cur.title} (${fmtDur(now - cur.since)})`);
+        deliver('resolved', `Résolu : ${cur.title}`, [`🕒 ${fmtTime(now)} — incident de ${fmtDur(now - cur.since)} (depuis ${fmtTime(cur.since)})`, note && `📋 ${note}`]);
+    }
+
+    function info(title, lines) { deliver('info', title, lines); }
+
+    // ---------- 1. Événements du journal -> alertes ----------
+    function onLog(level, component, msg) {
+        if (component === 'ALERT') return;
+        try {
+            const m = String(msg || '');
+            if (component === 'DISCORD_GW' && /answered 429/.test(m)) {
+                const sec = parseInt((m.match(/retry after (\d+)s/) || [])[1], 10);
+                const until = sec ? Date.now() + sec * 1000 : null;
+                raise('discord_ban', 'critical', 'Discord bloque le bot (429)', `L'adresse IP du serveur est bloquée par Discord${until ? ` jusqu'à environ ${fmtDateTime(until)} (${fmtDur(sec * 1000)})` : ''}. Le bot ne peut ni se connecter ni répondre.`, "Change de région sur Render (nouveau service) ou attends la fin du blocage. Ne redéploie pas en boucle.");
+            } else if (component === 'DISCORD_GW' && /answered 401/.test(m)) {
+                raise('discord_token', 'critical', 'Token Discord invalide', 'Discord refuse le token du bot (401).', 'Régénère le token sur discord.com/developers et mets-le dans DISCORD_BOT_TOKEN sur Render.');
+            } else if (component === 'DISCORD_GW' && /Cannot reach Discord API/.test(m)) {
+                raise('discord_unreachable', 'critical', 'Discord injoignable', m, "Problème réseau côté serveur. Vérifie status.discord.com et Render.");
+            } else if (component === 'DISCORD_CORE' && /Failed to login/.test(m) && /token/i.test(m)) {
+                raise('discord_token', 'critical', 'Connexion Discord refusée', m, 'Vérifie DISCORD_BOT_TOKEN sur Render.');
+            } else if (component === 'REWARBLE_API' && /402/.test(m)) {
+                raise('rewarble_402', 'critical', 'Solde Rewarble épuisé', 'Les codes des clients sont refusés (402 Payment Required).', 'Recharge ton compte Rewarble immédiatement.');
+            } else if (component === 'REWARBLE_API' && /Circuit breaker tripped/.test(m)) {
+                raise('rewarble_down', 'critical', 'Rewarble ne répond plus', 'Plusieurs échecs réseau d\'affilée : la validation des codes est suspendue 5 min.', 'Vérifie le statut de Rewarble. Les clients doivent réessayer dans quelques minutes.');
+            } else if (component === 'REWARBLE_API' && /Timeout while redeeming/.test(m)) {
+                const n = bump('rewarble_timeout', 15 * 60000);
+                if (n >= 2) raise('rewarble_slow', 'warning', 'Rewarble très lent', `${n} codes en timeout en 15 min. Dernier : ${m.replace(/^Timeout while redeeming a code for /, '')}`, 'Vérifie ces codes à la main (ils sont dans tes MP / Voucher log).');
+            } else if (component === 'REWARBLE_API' && /unreachable during routine heartbeat/.test(m)) {
+                raise('rewarble_down', 'warning', 'Rewarble injoignable', 'Le test de routine de l\'API Rewarble a échoué 2 fois.', 'Les achats risquent d\'échouer. Vérifie le statut de Rewarble.');
+            } else if (component === 'STORE' && /Sale executed/.test(m)) {
+                resolve('rewarble_402', 'Une vente vient de passer.'); resolve('rewarble_down', 'Une vente vient de passer.'); resolve('rewarble_slow');
+            } else if (component === 'TICKET' && /Failed to create channel/.test(m)) {
+                raise('ticket_fail', 'critical', 'Les tickets ne s\'ouvrent plus', m.replace('Failed to create channel: ', 'Erreur Discord : '), 'Vérifie les permissions du bot (Gérer les salons) et le nombre de salons (max 50 par catégorie, 500 par serveur).');
+            } else if (component === 'TICKET_SYS' && /ticket generated/.test(m)) {
+                resolve('ticket_fail', 'Un ticket vient d\'être créé avec succès.');
+            } else if (component === 'TICKET_SYS' && /Category full/.test(m)) {
+                raise('category_overflow', 'warning', 'Catégorie de tickets pleine (50/50)', m, 'Supprime les anciens tickets.');
+            } else if (component === 'INTERACTION' && /Failed processing interaction/.test(m)) {
+                const n = bump('interaction_err', 10 * 60000);
+                if (n >= 3) raise('interaction_err', 'warning', 'Erreurs sur les boutons', `${n} erreurs en 10 min. Dernière : ${m.replace('Failed processing interaction: ', '')}`, 'Envoie-moi cette erreur pour correction.');
+            } else if (component === 'SYSTEM' && (level === 'ERROR' || level === 'CRITICAL') && /Uncaught|Unhandled/.test(m)) {
+                const n = bump('crash_err', 10 * 60000);
+                if (n >= 3) raise('crash_err', 'warning', 'Erreurs internes répétées', `${n} erreurs en 10 min. Dernière : ${m.slice(0, 300)}`, 'Envoie-moi cette erreur pour correction.');
+            } else if (component === 'UPSTASH' && (level === 'ERROR' || level === 'CRITICAL' || /Disabling Cloud Sync|not found/.test(m))) {
+                lastUpstashErrorAt = Date.now();
+                raise('upstash', 'warning', 'Base de données (Upstash) indisponible', m.slice(0, 300), 'Les données restent sauvegardées sur Discord. Vérifie ta base sur console.upstash.com.');
+            }
+        } catch (e) { console.log('[ALERT] onLog error', e.message); }
+    }
+
+    // ---------- 2. Vérifications périodiques ----------
+    function check() {
+        const now = Date.now();
+        try {
+            // Connexion Discord
+            if (DISCORD_BOT_TOKEN) {
+                const ready = typeof client.isReady === 'function' && client.isReady();
+                if (!ready) {
+                    if (!discordDownSince) discordDownSince = now;
+                    if (now - discordDownSince >= DISCONNECT_GRACE) {
+                        const gi = global.nxGatewayInfo || {};
+                        const reason = gi.status === 429 ? 'Discord bloque l\'adresse IP du serveur (429).' : gi.status === 401 ? 'Token invalide (401).' : gi.error ? `Erreur réseau : ${gi.error}` : `État de la connexion : ${(['prêt', 'connexion en cours', 'reconnexion en cours', 'inactif (non connecté)', 'presque prêt', 'déconnecté', 'attente des serveurs', 'identification', 'reprise de session'])[client.ws ? client.ws.status : -1] || 'inconnu'}.`;
+                        raise('discord_offline', 'critical', 'Bot déconnecté de Discord', `Hors ligne depuis ${fmtTime(discordDownSince)}. ${reason} Les clients voient "The application didn't respond in time".`, gi.status === 429 ? 'Change de région sur Render ou attends la fin du blocage.' : 'Vérifie les logs Render.');
+                    }
+                } else {
+                    discordDownSince = null;
+                    resolve('discord_offline', 'Le bot est reconnecté à Discord.');
+                    resolve('discord_ban', 'Le bot est reconnecté à Discord.');
+                    resolve('discord_unreachable');
+                    resolve('discord_token');
+                }
+            }
+            // Remplissage des catégories de tickets (limite Discord : 50)
+            const guild = client.guilds && client.guilds.cache && client.guilds.cache.first();
+            if (guild) {
+                [[CATEGORY_CUSTOMER_ID, 'CUSTOMER', 'cat_customer'], [CATEGORY_SUPPORT_ID, 'SUPPORT', 'cat_support']].forEach(([id, name, key]) => {
+                    const n = guild.channels.cache.filter(c => c.parentId === id).size;
+                    if (n >= 45) raise(key, n >= 50 ? 'critical' : 'warning', `Catégorie ${name} presque pleine (${n}/50)`, `Discord limite une catégorie à 50 salons. À 50, les nouveaux tickets iront dans une catégorie de secours.`, `Supprime les anciens tickets de la catégorie ${name}.`);
+                    else if (n < 40) resolve(key, `${n}/50 salons.`);
+                });
+                const total = guild.channels.cache.size;
+                if (total >= 450) raise('guild_channels', 'warning', `Serveur presque plein (${total}/500 salons)`, 'Discord limite un serveur à 500 salons.', 'Supprime les anciens tickets.');
+                else if (total < 420) resolve('guild_channels');
+            }
+            // Lenteur (event loop)
+            if (typeof eventLoopLag === 'number') {
+                if (eventLoopLag > 1000) { lagHigh++; lagLow = 0; } else if (eventLoopLag < 200) { lagLow++; lagHigh = 0; }
+                if (lagHigh >= 3) raise('lag', 'warning', 'Bot ralenti', `Délai de traitement de ${eventLoopLag} ms (normal < 50 ms). Les boutons peuvent répondre en retard.`, 'Si ça dure, redémarre le service sur Render.');
+                if (lagLow >= 3) resolve('lag');
+            }
+            // Mémoire
+            const rssMb = Math.round(process.memoryUsage().rss / 1048576);
+            if (rssMb > MEM_LIMIT_MB * 0.85) raise('memory', 'warning', 'Mémoire presque saturée', `${rssMb} Mo utilisés sur ${MEM_LIMIT_MB} Mo. Risque de redémarrage forcé par Render.`, 'Redémarre le service si ça persiste.');
+            else if (rssMb < MEM_LIMIT_MB * 0.7) resolve('memory');
+            // Base de données
+            if (active.has('upstash') && !global.upstashDisabled && now - lastUpstashErrorAt > 10 * 60000) resolve('upstash', 'Synchronisation à nouveau possible.');
+            // Rapport quotidien
+            dailyReport(false);
+        } catch (e) { console.log('[ALERT] check error', e.message); }
+    }
+
+    // ---------- 3. Rapport quotidien ----------
+    function dayKey(t) { return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris' }).format(new Date(t)); }
+    function dailyReport(force) {
+        if (REPORT_HOUR < 0 && !force) return;
+        const now = Date.now();
+        const hour = parseInt(new Intl.DateTimeFormat('en-GB', { timeZone: TZ, hour: '2-digit', hour12: false }).format(new Date(now)), 10);
+        const today = dayKey(now);
+        if (!force) {
+            if (hour !== REPORT_HOUR) return;
+            if (!memoryStats.settings) memoryStats.settings = {};
+            if (memoryStats.settings.nx_last_report === today) return;
+            memoryStats.settings.nx_last_report = today; syncCloud();
+        }
+        const y = dayKey(now - 86400000);
+        const rev = parseFloat((memoryStats.revenue || {})[y]) || 0;
+        let sales = 0;
+        (memoryStats.recent_transactions || []).forEach(tx => { const t = new Date(tx.date).getTime(); if (!isNaN(t) && dayKey(t) === y) sales++; });
+        const incidents = history.filter(h => now - h.at < 86400000 && !h.reminder && h.title !== "Test d'alerte" && (h.severity === 'critical' || h.severity === 'warning'));
+        const guild = client.guilds && client.guilds.cache && client.guilds.cache.first();
+        const custN = guild ? guild.channels.cache.filter(c => c.parentId === CATEGORY_CUSTOMER_ID).size : '?';
+        const lines = [
+            `🕒 ${fmtDateTime(now)}`,
+            `💰 Hier : **£${rev.toFixed(2)}** — ${sales} vente(s)`,
+            `🎫 Tickets ouverts (CUSTOMER) : ${custN}/50`,
+            `🤖 Discord : ${client.isReady && client.isReady() ? 'connecté ✅' : 'DÉCONNECTÉ 🔴'} — Base de données : ${global.upstashDisabled ? 'en pause 🟠' : 'OK ✅'}`,
+            incidents.length ? `⚠️ Incidents (24 h) : ${incidents.length}\n${incidents.slice(0, 5).map(h => `• ${fmtTime(h.at)} — ${h.title}`).join('\n')}` : '✅ Aucun incident sur les dernières 24 h',
+            active.size ? `🔴 Problèmes encore en cours : ${[...active.values()].map(a => a.title).join(', ')}` : null
+        ];
+        return deliver('info', 'Rapport quotidien Nexus', lines);
+    }
+
+    // ---------- Démarrage ----------
+    setInterval(check, INTERVAL);
+    return {
+        onLog, raise, resolve, info, check, dailyReport, deliver, ntfyTopic,
+        status: () => ({ active: [...active.entries()].map(([k, v]) => ({ key: k, ...v })), history: history.slice(0, 30), ntfyTopic: ntfyTopic(), uptimeMin: Math.round((Date.now() - started) / 60000) }),
+        onReady: () => {
+            const topic = ntfyTopic();
+            const commit = (process.env.RENDER_GIT_COMMIT || '').slice(0, 7);
+            info('Bot démarré', [`🕒 ${fmtDateTime(Date.now())}${commit ? ` — version ${commit}` : ''}`, topic ? `📲 Alertes push (même si Discord bloque le bot) : installe l'app **ntfy** et abonne-toi au sujet \`${topic}\`` : null]);
+        },
+        test: () => deliver('warning', 'Test d\'alerte', [`🕒 ${fmtDateTime(Date.now())}`, '📋 Ceci est un test : si tu lis ce message, les alertes fonctionnent.', `📲 Sujet ntfy : ${ntfyTopic()}`], true)
+    };
+})();
+global.nxMonitor = nxMonitor;
 
 // === [ANCHOR: STARTUP_DEBUG] ===
 systemLog('INFO', 'SYSTEM', 'Starting Nexus Bot instance...');
