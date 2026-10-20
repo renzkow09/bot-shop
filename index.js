@@ -2953,6 +2953,18 @@ client.on('messageCreate', async (message) => {
                 channelStates.set(message.channel.id, state);
             }
             if (state.validated || state.processing) return;
+            // 🎟️ Code promo collé APRÈS le code Rewarble : on l'applique au panier
+            {
+                const promoKey = message.content.trim().toUpperCase();
+                const promoAfter = memoryStats.promo_codes && memoryStats.promo_codes[promoKey];
+                if (promoAfter && state.balance > 0 && state.balance !== Infinity && !state.promo && (parseFloat(promoAfter.discount) || 0) < 100) {
+                    if ((promoAfter.used || 0) >= (promoAfter.limit || 0)) return message.reply(memoryStats.messages.code_limit_reached || '❌ Sorry, this code has reached its usage limit!').catch(()=>{});
+                    state.promo = { name: promoKey, discount: parseFloat(promoAfter.discount) || 0 };
+                    state.pendingPromo = null;
+                    systemLog('INFO', 'VALIDATION', `Promo ${promoKey} (-${state.promo.discount}%) applied after voucher for ${message.author.username}`);
+                    return message.reply(`🎟️ **Promo code applied: -${state.promo.discount}%** on your items *(VIP pass excluded)*.\n💰 **Balance:** £${state.balance.toFixed(2)}\n\n🛒 Select your items in the menu above — the discount is applied automatically.`).catch(()=>{});
+                }
+            }
             if (state.balance > 0 || state.promo) {
                 return message.reply(memoryStats.messages.already_validated || '✅ Your code is already validated! Please select your items from the menu.').catch(()=>{});
             }
@@ -2982,6 +2994,17 @@ client.on('messageCreate', async (message) => {
                         state.processing = false; 
                         return;
                     }
+                }
+
+                // 🎟️ Code promo de réduction collé AVANT le code Rewarble : une réduction ne paie pas la commande.
+                //    On le garde en mémoire et on demande d'abord le code Rewarble (il sera appliqué automatiquement ensuite).
+                if (promoApplied && (parseFloat(promoApplied.discount) || 0) < 100) {
+                    state.pendingPromo = promoApplied;
+                    state.processing = false;
+                    systemLog('INFO', 'VALIDATION', `Promo ${input} pasted before voucher by ${message.author.username} — asked for Rewarble code first`);
+                    const tpl = (memoryStats.messages && memoryStats.messages.promo_needs_voucher) || '🎟️ **Promo code {code} recognized (-{discount}%)!**\n\nA promo code only gives a discount — it does not pay for your order.\n💳 **First paste your Rewarble voucher code here.** Your -{discount}% discount will then be applied automatically to your items.\n\n*No Rewarble code yet? Buy one with the 💳 Buy buttons in the shop channel, then come back to this ticket.*';
+                    await message.reply(tpl.replace(/\{code\}/g, input).replace(/\{discount\}/g, String(promoApplied.discount))).catch(()=>{});
+                    return;
                 }
 
                 if (!promoApplied && !TEST_VOUCHERS[input] && input.length < 8) {
@@ -3112,8 +3135,15 @@ client.on('messageCreate', async (message) => {
                     if (memoryStats.voucher_log.length > 500) memoryStats.voucher_log = memoryStats.voucher_log.slice(0, 500);
                 }
                 
+                // 🎟️ Code promo collé avant : on l'applique maintenant que le code Rewarble est validé
+                let pendingApplied = null;
+                if (!promoApplied && state.pendingPromo && voucherValue > 0 && voucherValue !== Infinity) {
+                    const pp = memoryStats.promo_codes && memoryStats.promo_codes[state.pendingPromo.name];
+                    if (pp && (pp.used || 0) < (pp.limit || 0)) pendingApplied = { name: state.pendingPromo.name, discount: parseFloat(pp.discount) || 0 };
+                    state.pendingPromo = null;
+                }
                 state.balance = voucherValue;
-                state.promo = promoApplied;
+                state.promo = promoApplied || pendingApplied;
                 state.processing = false;
                 
                 const pmenu = new StringSelectMenuBuilder()
@@ -3144,7 +3174,7 @@ client.on('messageCreate', async (message) => {
                 
                 if(optCount > 0) {
                     const row = new ActionRowBuilder().addComponents(pmenu);
-                    let balText = promoApplied ? `${promoApplied.discount}% OFF (Promo)` : `£${state.balance.toFixed(2)}`;
+                    let balText = promoApplied ? `${promoApplied.discount}% OFF (Promo)` : `£${state.balance.toFixed(2)}` + (pendingApplied ? ` + 🎟️ promo **-${pendingApplied.discount}%** on your items` : '');
                     await message.reply({ content: `✅ **Code validated successfully!**\n💰 **Balance Available:** ${balText}\n\n**🛒 Step 2: Select items from the menu below.**`, components: [row] }).catch(()=>{});
                 } else {
                     await message.reply({ content: `✅ **Code validated successfully!**\n❌ Unfortunately, the shop is currently empty.` }).catch(()=>{});
