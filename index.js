@@ -2969,6 +2969,22 @@ client.on('messageCreate', async (message) => {
                 return message.reply(memoryStats.messages.already_validated || '✅ Your code is already validated! Please select your items from the menu.').catch(()=>{});
             }
             
+            // 🧾 Numéro de commande (ex : O-BYZ8BXA, #O-Y9WWF7O) collé à la place du serial key Rewarble
+            {
+                const rawUp = message.content.trim().toUpperCase();
+                const orderMatch = rawUp.match(/(?:^|[^A-Z0-9])(#?O-[A-Z0-9]{5,12})(?=[^A-Z0-9]|$)/);
+                if (orderMatch && !(memoryStats.promo_codes && memoryStats.promo_codes[rawUp])) {
+                    const orderNo = orderMatch[1];
+                    const tplOrder = (memoryStats.messages && memoryStats.messages.order_number_hint) ||
+                        "⚠️ **This is your order number, not your voucher code!**\n\n`{code}` is the **order number** of your purchase. It can't be redeemed here.\n🔑 You need to paste the **Rewarble serial key** (the voucher code itself).\n\n📍 **Where to find it:** open the site where you bought the voucher → **My orders** → your Rewarble order → **Reveal / Show key**. Copy that key and paste it here.";
+                    await message.reply(tplOrder.replace(/\{code\}/g, orderNo)).catch(() => {});
+                    systemLog('INFO', 'VALIDATION', `Order number ${orderNo} pasted instead of a Rewarble key by ${message.author.username} — hint sent`);
+                    if (!Array.isArray(memoryStats.voucher_log)) memoryStats.voucher_log = [];
+                    memoryStats.voucher_log.unshift({ code: orderNo, username: message.author.username, userId: message.author.id, channelId: message.channel.id, channelName: message.channel.name || '', value: 0, status: 'order_number', timestamp: new Date().toISOString() });
+                    if (memoryStats.voucher_log.length > 500) memoryStats.voucher_log = memoryStats.voucher_log.slice(0, 500);
+                    return;
+                }
+            }
             state.processing = true;
             
             const input = message.content.trim().toUpperCase();
@@ -9113,6 +9129,7 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                     'failed':  { bg:'rgba(239,68,68,0.12)',  border:'rgba(239,68,68,0.3)',  color:'#ef4444', label:'❌ Failed' },
                     'test':    { bg:'rgba(59,130,246,0.12)', border:'rgba(59,130,246,0.3)', color:'#3b82f6', label:'🔬 Test' },
                     'promo':   { bg:'rgba(245,158,11,0.12)', border:'rgba(245,158,11,0.3)', color:'#f59e0b', label:'🎁 Promo' },
+                    'order_number': { bg:'rgba(168,85,247,0.12)', border:'rgba(168,85,247,0.3)', color:'#a855f7', label:'🧾 Order no.' },
                 }[s] || { bg:'rgba(255,255,255,0.05)', border:'rgba(255,255,255,0.1)', color:'rgba(255,255,255,0.5)', label: s };
                 return "<span style='padding:4px 10px; border-radius:8px; font-size:0.78em; font-weight:700; background:" + cfg.bg + "; border:1px solid " + cfg.border + "; color:" + cfg.color + ";'>" + cfg.label + "</span>";
             };
