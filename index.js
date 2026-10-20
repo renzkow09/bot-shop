@@ -2314,22 +2314,20 @@ client.on('interactionCreate', async (interaction) => {
                     return;
                 }
                 userTicketLocks.add(interaction.user.id);
-                setTimeout(() => userTicketLocks.delete(interaction.user.id), 60000);
+                setTimeout(() => userTicketLocks.delete(interaction.user.id), 15000); // filet de sécurité (libéré dès la fin)
                 channelCreationLocks.set(interaction.user.id, true);
                 try {
 
-                await interaction.reply({ content: '⏳ Channel is being created, please wait...', ephemeral: true }).catch(() => {});
+                // ⚡ Accusé de réception envoyé sans attendre : la création du salon démarre en même temps
+                const nxAckP = interaction.reply({ content: '⏳ Channel is being created, please wait...', ephemeral: true }).catch(() => {});
+                const nxEdit = async (o) => { await nxAckP; return interaction.editReply(o); };
 
                 const rawName = interaction.user.username.toLowerCase().replace(/[^a-z0-9]/g, '');
                 const sanitizedName = rawName.length > 0 ? rawName : interaction.user.id;
                 // Fresh fetch to prevent stale cache duplicate channels
                 let existingChannel = null;
-                try {
-                    await interaction.guild.channels.fetch();
-                    existingChannel = interaction.guild.channels.cache.find(c => c.name === `shop-${sanitizedName}`);
-                } catch(e) {
-                    existingChannel = interaction.guild.channels.cache.find(c => c.name === `shop-${sanitizedName}`);
-                }
+                // ⚡ Cache Gateway (toujours à jour) au lieu de re-télécharger tous les salons du serveur
+                existingChannel = interaction.guild.channels.cache.find(c => c.name === `shop-${sanitizedName}`);
                 
                 if (existingChannel) {
                     userTicketLocks.delete(interaction.user.id);
@@ -2345,7 +2343,7 @@ client.on('interactionCreate', async (interaction) => {
                             systemLog('INFO', 'TICKET_SYS', `Welcome message re-sent in empty ticket ${existingChannel.name}`);
                         }
                     } catch (e) { systemLog('WARN', 'TICKET_SYS', `Could not check/repair ticket ${existingChannel.name}: ${e.message}`); }
-                    return interaction.editReply({ content: `✅ You already have an open ticket: <#${existingChannel.id}>` }).catch(() => {});
+                    return nxEdit({ content: `✅ You already have an open ticket: <#${existingChannel.id}>` }).catch(() => {});
                 }
 
                 if (!memoryStats.analytics) memoryStats.analytics = { tickets_opened: 0, hourly_sales: Array(24).fill(0) };
@@ -2368,7 +2366,7 @@ client.on('interactionCreate', async (interaction) => {
                 } catch (createErr) {
                     systemLog('ERROR', 'TICKET', 'Failed to create channel: ' + createErr.message);
                     console.error('Channel creation failed:', createErr);
-                    return interaction.editReply({ content: `❌ Critical Error: The bot failed to create a channel. Please check that I have "Manage Channels" permission and that the server has not reached the 500 channels limit.\nDetails: ${createErr.message}` }).catch(() => {});
+                    return nxEdit({ content: `❌ Critical Error: The bot failed to create a channel. Please check that I have "Manage Channels" permission and that the server has not reached the 500 channels limit.\nDetails: ${createErr.message}` }).catch(() => {});
                 }
 
                 if (channel) {
@@ -2391,17 +2389,16 @@ client.on('interactionCreate', async (interaction) => {
                     const closeBtnRow = new ActionRowBuilder().addComponents(
                         new ButtonBuilder().setCustomId('request_close_ticket').setLabel('🔒 Request Close').setStyle(ButtonStyle.Danger)
                     );
-                    if(optCount > 0) {
-                        await channel.send({ content: memoryStats.messages.shop_welcome.replace('{user}', '<@' + interaction.user.id + '>'), components: [closeBtnRow] }).catch(() => {});
-                    } else {
-                        await channel.send({ content: memoryStats.messages.shop_empty.replace('{user}', '<@' + interaction.user.id + '>'), components: [closeBtnRow] }).catch(() => {});
-                    }
-
-                    await interaction.editReply({ content: memoryStats.messages.ticket_ready.replace('{channel}', '<#' + channel.id + '>') }).catch(() => {});
+                    const welcomeTpl = optCount > 0 ? memoryStats.messages.shop_welcome : memoryStats.messages.shop_empty;
+                    // ⚡ Message "prêt" + message de bienvenue envoyés en parallèle
+                    await Promise.all([
+                        channel.send({ content: welcomeTpl.replace('{user}', '<@' + interaction.user.id + '>'), components: [closeBtnRow] }).catch(() => {}),
+                        nxEdit({ content: memoryStats.messages.ticket_ready.replace('{channel}', '<#' + channel.id + '>') }).catch(() => {})
+                    ]);
                 } else {
-                    await interaction.editReply({ content: `❌ Error creating the room.` }).catch(() => {}); 
+                    await nxEdit({ content: `❌ Error creating the room.` }).catch(() => {}); 
                 }
-                } finally { channelCreationLocks.delete(interaction.user.id); }
+                } finally { channelCreationLocks.delete(interaction.user.id); userTicketLocks.delete(interaction.user.id); }
             } else if (interaction.customId === 'open_support_ticket') {
                 if (processedInteractions.has(interaction.id)) return;
                 processedInteractions.add(interaction.id);
@@ -2416,7 +2413,7 @@ client.on('interactionCreate', async (interaction) => {
                     return;
                 }
                 userTicketLocks.add(supportLockKey);
-                setTimeout(() => userTicketLocks.delete(supportLockKey), 60000);
+                setTimeout(() => userTicketLocks.delete(supportLockKey), 15000); // filet de sécurité (libéré dès la fin)
                 channelCreationLocks.set(supportLockKey, true);
                 try {
 
@@ -2427,12 +2424,8 @@ client.on('interactionCreate', async (interaction) => {
                 
                 // Fresh fetch to prevent stale cache duplicate channels
                 let existingChannel = null;
-                try {
-                    await interaction.guild.channels.fetch();
-                    existingChannel = interaction.guild.channels.cache.find(c => c.name === `support-${sanitizedName}`);
-                } catch(e) {
-                    existingChannel = interaction.guild.channels.cache.find(c => c.name === `support-${sanitizedName}`);
-                }
+                // ⚡ Cache Gateway (toujours à jour) au lieu de re-télécharger tous les salons du serveur
+                existingChannel = interaction.guild.channels.cache.find(c => c.name === `support-${sanitizedName}`);
                 
                 if (existingChannel) {
                     userTicketLocks.delete(supportLockKey);
@@ -2467,7 +2460,7 @@ client.on('interactionCreate', async (interaction) => {
                 } else {
                     await interaction.editReply({ content: `❌ Error creating the room.` }).catch(() => {});
                 }
-                } finally { channelCreationLocks.delete(supportLockKey); }
+                } finally { channelCreationLocks.delete(supportLockKey); userTicketLocks.delete(supportLockKey); }
             }
         }
         
