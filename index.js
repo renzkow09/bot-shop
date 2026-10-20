@@ -1205,6 +1205,214 @@ async function checkSubscriptions() {
     }
 }
 
+// === [ANCHOR: AI_ANALYTICS_EXPORT] ===
+// 🤖 Construit un rapport Markdown complet (consignes + KPIs + tableaux CSV + JSON) à donner à une IA.
+function buildAiAnalyticsExport() {
+    const st = memoryStats || {};
+    const num = (v) => { const n = parseFloat(String(v == null ? '' : v).replace(/[^0-9.\-]/g, '')); return isFinite(n) ? n : 0; };
+    const r2 = (n) => Math.round(n * 100) / 100;
+    const pct = (a, b) => b ? r2(a / b * 100) + ' %' : 'n/a';
+    const gbp = (n) => '£' + r2(n);
+    const now = new Date();
+    const dayStr = (offset) => getParisDateStr(new Date(now.getTime() - offset * 86400000));
+    const sumRange = (obj, from, to) => { let t = 0; for (let i = from; i < to; i++) t += num((obj || {})[dayStr(i)]); return t; };
+    const revenue = st.revenue || {}, joins = st.joins || {}, leaves = st.leaves || {};
+    const allDays = Object.keys({ ...revenue, ...joins, ...leaves }).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort();
+    const firstDay = allDays[0] || dayStr(0);
+    const txs = Array.isArray(st.recent_transactions) ? st.recent_transactions : [];
+    const totalRev = num(st.total_revenue), totalTx = num(st.total_transactions);
+    const ticketsOpened = num(st.analytics && st.analytics.tickets_opened);
+
+    // --- Clients (pseudonymisés) ---
+    const alias = new Map(); let aliasN = 0;
+    const who = (name) => { const k = String(name || '?').toLowerCase(); if (!alias.has(k)) alias.set(k, 'Client-' + String(++aliasN).padStart(3, '0')); return alias.get(k); };
+    const spending = Object.entries(st.user_spending || {}).map(([u, v]) => ({ u, v: num(v) })).sort((a, b) => b.v - a.v);
+    spending.forEach(x => who(x.u));
+    const hist = st.user_history || {};
+    const txCountByUser = {};
+    (Array.isArray(st.recent_transactions) ? st.recent_transactions : []).forEach(t => { const k = String(t.username || '?').toLowerCase(); txCountByUser[k] = (txCountByUser[k] || 0) + 1; });
+    const purchasesOf = (u) => Math.max(Array.isArray(hist[u]) ? hist[u].length : 0, txCountByUser[String(u).toLowerCase()] || 0);
+    const customers = spending.length;
+    const repeat = spending.filter(x => purchasesOf(x.u) >= 2).length;
+    const top10Share = spending.slice(0, 10).reduce((t, x) => t + x.v, 0);
+    const buckets = [[0, 5], [5, 10], [10, 25], [25, 50], [50, 100], [100, 250], [250, 1e9]];
+    const bucketRows = buckets.map(([a, b]) => [b >= 1e9 ? '≥ £' + a : '£' + a + '–' + b, spending.filter(x => x.v > a && x.v <= b || (a === 0 && x.v === 0)).length]);
+
+    // --- Produits ---
+    const products = st.products || {};
+    const sales = st.product_sales || {};
+    const prodRows = Object.entries(products).map(([id, p]) => {
+        const sold = num(sales[id]); const price = num(p.price);
+        return { id, name: p.name || id, category: p.category || '', price, stock: p.stock == null ? '∞' : String(p.stock), sold, est_revenue: r2(sold * price), upsell: p.upsellId ? (p.upsellId + ' (-' + (p.upsellDiscount || 0) + '%)') : '' };
+    }).sort((a, b) => b.sold - a.sold);
+    const txByProduct = {};
+    txs.forEach(t => { const k = t.product || '?'; if (!txByProduct[k]) txByProduct[k] = { count: 0, revenue: 0 }; txByProduct[k].count++; txByProduct[k].revenue += num(t.price); });
+
+    // --- Transactions : jour de la semaine / heure / panier ---
+    const dows = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+    const dowCount = Array(7).fill(0), dowRev = Array(7).fill(0);
+    const priceDist = {};
+    txs.forEach(t => {
+        const d = new Date(t.date); const p = num(t.price);
+        priceDist[gbp(p)] = (priceDist[gbp(p)] || 0) + 1;
+        if (!isNaN(d)) { const i = (d.getDay() + 6) % 7; dowCount[i]++; dowRev[i] += p; }
+    });
+    const hourly = (st.analytics && Array.isArray(st.analytics.hourly_sales)) ? st.analytics.hourly_sales : Array(24).fill(0);
+
+    // --- Cartes cadeaux (Rewarble) ---
+    const vlog = Array.isArray(st.voucher_log) ? st.voucher_log : [];
+    const vStatus = {}; const vValues = {};
+    vlog.forEach(v => { const s0 = v.status || '?'; vStatus[s0] = (vStatus[s0] || 0) + 1; if (s0 === 'success') vValues[gbp(num(v.value))] = (vValues[gbp(num(v.value))] || 0) + 1; });
+
+    // --- Promos (codes masqués) / parrainage / avis / abonnements ---
+    const mask = (c) => { c = String(c); return c.length <= 3 ? '***' : c.slice(0, 3) + '***'; };
+    const promos = Object.entries(st.promo_codes || {}).map(([c, p]) => ({ code: mask(c), discount_pct: num(p.discount), used: num(p.used), limit: num(p.limit), created: p.createdAt || '' }));
+    const refs = Object.values(st.referrals || {});
+    const refInvited = refs.reduce((t, r) => t + num(r.count), 0);
+    const refRewards = refs.reduce((t, r) => t + num(r.total_rewards), 0);
+    const reviews = (Array.isArray(st.pending_reviews) ? st.pending_reviews : []).map(r => ({ product: r.product, rating: num(r.rating), text: String(r.text || '').slice(0, 400) }));
+    const avgRating = reviews.length ? r2(reviews.reduce((t, r) => t + r.rating, 0) / reviews.length) : null;
+    const subs = Object.values(st.subscriptions || {});
+    const subsActive = subs.filter(x => num(x.expiresAt) > Date.now()).length;
+    const subsSoon = subs.filter(x => num(x.expiresAt) > Date.now() && num(x.expiresAt) - Date.now() < 7 * 86400000).length;
+    const customReq = Array.isArray(st.custom_requests) ? st.custom_requests : [];
+    const crStatus = {}; customReq.forEach(c => { crStatus[c.status || '?'] = (crStatus[c.status || '?'] || 0) + 1; });
+    const mb = st.mystery_box || null;
+    const buyLinks = Object.values(st.buy_links || {}).map(b => b.label).filter(Boolean);
+    const msgs = st.messages || {};
+
+    // --- Périodes ---
+    const per = (a, b) => ({ revenue: r2(sumRange(revenue, a, b)), joins: sumRange(joins, a, b), leaves: sumRange(leaves, a, b) });
+    const p7 = per(0, 7), p7b = per(7, 14), p30 = per(0, 30), p30b = per(30, 60), p90 = per(0, 90);
+    const evo = (a, b) => b ? ((a - b) / b * 100 >= 0 ? '+' : '') + r2((a - b) / b * 100) + ' %' : 'n/a';
+    const months = {};
+    allDays.forEach(d => { const m = d.slice(0, 7); if (!months[m]) months[m] = { revenue: 0, joins: 0, leaves: 0 }; months[m].revenue += num(revenue[d]); months[m].joins += num(joins[d]); months[m].leaves += num(leaves[d]); });
+
+    // --- Markdown ---
+    const L = [];
+    const table = (head, rows) => { L.push('| ' + head.join(' | ') + ' |'); L.push('|' + head.map(() => '---').join('|') + '|'); rows.forEach(r => L.push('| ' + r.map(c => String(c).replace(/\|/g, '/').replace(/\n/g, ' ')).join(' | ') + ' |')); L.push(''); };
+    L.push('# Nexus Shop — Export analytique pour analyse IA');
+    L.push('');
+    L.push('> Généré le ' + new Intl.DateTimeFormat('fr-BE', { timeZone: 'Europe/Brussels', dateStyle: 'full', timeStyle: 'short' }).format(now) + ' (heure de Bruxelles). Données depuis le ' + firstDay + '. Monnaie : livre sterling (£).');
+    L.push('> Données anonymisées : les clients sont remplacés par des alias (Client-001…), les codes promo sont masqués, aucun code de carte cadeau ni identifiant Discord.');
+    L.push('');
+    L.push('## 1. Consignes pour l\'IA');
+    L.push('');
+    L.push('Tu es un consultant senior en e-commerce et en growth. Analyse les données ci-dessous d\'une boutique de produits numériques vendue via un bot Discord (« Nexus »).');
+    L.push('Fonctionnement : le client ouvre un ticket (salon privé), achète une carte cadeau Rewarble (5, 10, 15 ou 20 £), saisit le code dans le ticket, puis choisit ses produits. Les nouveaux membres arrivent sur le serveur Discord (joins) et certains partent (leaves). Il existe un système de parrainage, des codes promo, une Mystery Box, un pass VIP par abonnement et des avis clients.');
+    L.push('');
+    L.push('Réponds en français et structure ta réponse ainsi :');
+    L.push('1. **Diagnostic** : santé globale de la boutique en 5 à 8 points chiffrés (tendances, saisonnalité, points forts, points faibles).');
+    L.push('2. **Entonnoir de conversion** : membres → tickets ouverts → codes saisis → ventes. Où se perdent les clients et pourquoi ?');
+    L.push('3. **Produits & prix** : best-sellers, produits morts, prix et paliers de carte cadeau, bundles, upsells et Mystery Box à ajuster.');
+    L.push('4. **Clients** : fidélisation, réachat, dépendance aux gros clients, actions pour augmenter le panier moyen et la valeur vie client.');
+    L.push('5. **Acquisition & rétention** : croissance des membres, taux de départ, efficacité du parrainage et des promos.');
+    L.push('6. **Moments clés** : meilleurs jours et heures pour lancer promos, annonces et drops.');
+    L.push('7. **Textes du bot** : améliorations concrètes des messages (section 11) pour mieux convertir.');
+    L.push('8. **Plan d\'action** : 10 recommandations classées par impact estimé / effort, avec l\'indicateur à suivre pour chacune.');
+    L.push('9. **Données manquantes** : quelles métriques ajouter pour mieux piloter la boutique.');
+    L.push('Signale toute anomalie ou incohérence dans les chiffres plutôt que de l\'ignorer.');
+    L.push('');
+    L.push('## 2. Indicateurs clés');
+    L.push('');
+    table(['Indicateur', 'Valeur'], [
+        ['Chiffre d\'affaires total', gbp(totalRev)],
+        ['Nombre de ventes total', totalTx],
+        ['Panier moyen', totalTx ? gbp(totalRev / totalTx) : 'n/a'],
+        ['CA 7 derniers jours (vs 7 jours précédents)', gbp(p7.revenue) + ' (' + evo(p7.revenue, p7b.revenue) + ')'],
+        ['CA 30 derniers jours (vs 30 jours précédents)', gbp(p30.revenue) + ' (' + evo(p30.revenue, p30b.revenue) + ')'],
+        ['CA 90 derniers jours', gbp(p90.revenue)],
+        ['Objectif mensuel', gbp(MONTHLY_GOAL)],
+        ['Membres arrivés / partis (total)', num(st.total_joins) + ' / ' + num(st.total_leaves) + ' (taux de départ ' + pct(num(st.total_leaves), num(st.total_joins)) + ')'],
+        ['Membres arrivés / partis (30 j)', p30.joins + ' / ' + p30.leaves],
+        ['Tickets shop ouverts (total)', ticketsOpened],
+        ['Conversion tickets → ventes', pct(totalTx, ticketsOpened)],
+        ['Clients uniques', customers],
+        ['Clients ayant acheté 2 fois ou plus', repeat + ' (' + pct(repeat, customers) + ')'],
+        ['Part du CA réalisée par le top 10 clients', pct(top10Share, totalRev)],
+        ['Codes carte cadeau saisis (succès / total)', (vStatus.success || 0) + ' / ' + vlog.length + ' (' + pct(vStatus.success || 0, vlog.length) + ')'],
+        ['Abonnements VIP actifs (expirent sous 7 j)', subsActive + ' (' + subsSoon + ')'],
+        ['Parrainages : invitations / récompenses', refInvited + ' / ' + refRewards],
+        ['Avis clients (note moyenne)', reviews.length + (avgRating != null ? ' (' + avgRating + '/5)' : '')]
+    ]);
+    L.push('## 3. Évolution mensuelle');
+    L.push('');
+    table(['Mois', 'CA', 'Arrivées', 'Départs', 'Croissance nette'], Object.keys(months).sort().map(m => [m, gbp(months[m].revenue), months[m].joins, months[m].leaves, months[m].joins - months[m].leaves]));
+    L.push('## 4. Détail quotidien (CSV, 120 derniers jours)');
+    L.push('');
+    L.push('```csv');
+    L.push('date,revenue_gbp,joins,leaves');
+    for (let i = 119; i >= 0; i--) { const d = dayStr(i); if (d < firstDay) continue; L.push(d + ',' + r2(num(revenue[d])) + ',' + num(joins[d]) + ',' + num(leaves[d])); }
+    L.push('```');
+    L.push('');
+    L.push('## 5. Produits');
+    L.push('');
+    table(['ID', 'Produit', 'Catégorie', 'Prix', 'Stock', 'Ventes', 'CA estimé', 'Upsell'], prodRows.map(p => [p.id, p.name, p.category, gbp(p.price), p.stock, p.sold, gbp(p.est_revenue), p.upsell || '—']));
+    if (Object.keys(sales).some(id => !products[id])) { L.push('Ventes de produits supprimés ou spéciaux : ' + Object.keys(sales).filter(id => !products[id]).map(id => id + ' = ' + num(sales[id])).join(', ')); L.push(''); }
+    L.push('Ventes par produit sur les ' + txs.length + ' transactions récentes enregistrées :');
+    L.push('');
+    table(['Produit', 'Ventes', 'CA'], Object.entries(txByProduct).sort((a, b) => b[1].revenue - a[1].revenue).map(([k, v]) => [k, v.count, gbp(v.revenue)]));
+    if (mb) { L.push('Mystery Box : ' + (mb.enabled ? 'activée' : 'désactivée') + ', prix ' + gbp(num(mb.price || 10)) + (Array.isArray(mb.items) ? ', ' + mb.items.length + ' lots possibles' : '') + '.'); L.push(''); }
+    if (buyLinks.length) { L.push('Paliers de cartes cadeaux proposés : ' + buyLinks.join(', ') + '.'); L.push(''); }
+    L.push('## 6. Moments d\'achat');
+    L.push('');
+    L.push('Ventes par heure (heure du serveur, UTC — ajouter 1 h en hiver / 2 h en été pour Bruxelles) :');
+    L.push('');
+    table(['Heure UTC', 'Ventes'], hourly.map((v, h) => [String(h).padStart(2, '0') + 'h', num(v)]));
+    L.push('Ventes par jour de la semaine (transactions récentes) :');
+    L.push('');
+    table(['Jour', 'Ventes', 'CA'], dows.map((d, i) => [d, dowCount[i], gbp(dowRev[i])]));
+    L.push('Répartition des montants par transaction :');
+    L.push('');
+    table(['Montant', 'Nombre'], Object.entries(priceDist).sort((a, b) => num(a[0]) - num(b[0])));
+    L.push('## 7. Clients (anonymisés)');
+    L.push('');
+    table(['Tranche de dépense totale', 'Clients'], bucketRows);
+    L.push('Top 25 clients :');
+    L.push('');
+    table(['Client', 'Dépense totale', 'Achats enregistrés'], spending.slice(0, 25).map(x => [who(x.u), gbp(x.v), purchasesOf(x.u)]));
+    L.push('## 8. Cartes cadeaux (Rewarble)');
+    L.push('');
+    table(['Statut', 'Nombre'], Object.entries(vStatus).sort((a, b) => b[1] - a[1]));
+    table(['Valeur des cartes validées', 'Nombre'], Object.entries(vValues).sort((a, b) => num(a[0]) - num(b[0])));
+    L.push('## 9. Promotions, parrainage, abonnements, commandes perso');
+    L.push('');
+    if (promos.length) table(['Code (masqué)', 'Réduction', 'Utilisés', 'Limite', 'Créé le'], promos.map(p => [p.code, p.discount_pct + ' %', p.used, p.limit, p.created]));
+    else { L.push('Aucun code promo.'); L.push(''); }
+    L.push('Parrainage : ' + refs.length + ' parrains, ' + refInvited + ' invitations comptées, ' + refRewards + ' récompenses données. Top parrains : ' + (refs.map(r => num(r.count)).sort((a, b) => b - a).slice(0, 10).join(', ') || '—') + ' invitations.');
+    L.push('');
+    L.push('Abonnements VIP : ' + subs.length + ' au total, ' + subsActive + ' actifs.');
+    L.push('');
+    L.push('Commandes personnalisées : ' + customReq.length + (customReq.length ? ' (' + Object.entries(crStatus).map(([k, v]) => k + ' : ' + v).join(', ') + ')' : '') + '.');
+    L.push('');
+    L.push('## 10. Avis clients');
+    L.push('');
+    if (reviews.length) table(['Produit', 'Note', 'Commentaire'], reviews.slice(0, 50).map(r => [r.product || '?', r.rating + '/5', r.text || '—']));
+    else { L.push('Aucun avis enregistré.'); L.push(''); }
+    L.push('## 11. Textes envoyés par le bot');
+    L.push('');
+    Object.entries(msgs).forEach(([k, v]) => { if (typeof v !== 'string' || !v.trim()) return; L.push('**' + k + '**'); L.push(''); L.push('```text'); L.push(v.slice(0, 1000).replace(/```/g, '~~~')); L.push('```'); L.push(''); });
+    L.push('## 12. Données brutes agrégées (JSON)');
+    L.push('');
+    L.push('```json');
+    L.push(JSON.stringify({
+        generated_at: now.toISOString(), currency: 'GBP', data_since: firstDay,
+        totals: { revenue: totalRev, transactions: totalTx, joins: num(st.total_joins), leaves: num(st.total_leaves), tickets_opened: ticketsOpened, unique_customers: customers, repeat_customers: repeat },
+        periods: { last7: p7, prev7: p7b, last30: p30, prev30: p30b, last90: p90 },
+        monthly: months, hourly_sales_utc: hourly.map(num),
+        weekday_sales: dows.map((d, i) => ({ day: d, count: dowCount[i], revenue: r2(dowRev[i]) })),
+        products: prodRows, recent_sales_by_product: txByProduct,
+        vouchers: { by_status: vStatus, success_values: vValues },
+        promos, referrals: { referrers: refs.length, invited: refInvited, rewards: refRewards },
+        subscriptions: { total: subs.length, active: subsActive, expiring_7d: subsSoon },
+        mystery_box: mb ? { enabled: !!mb.enabled, price: num(mb.price || 10) } : null,
+        customers_top25: spending.slice(0, 25).map(x => ({ client: who(x.u), spent: r2(x.v), purchases: purchasesOf(x.u) }))
+    }));
+    L.push('```');
+    L.push('');
+    return L.join('\n');
+}
+
 // === [ANCHOR: BOT_STATISTICS_LOGGER] ===
     // 🚀 [FUNCTION: logStat] - Déclaration de fonction
 function logStat(type, value = 1, extraData = null) {
@@ -3741,6 +3949,22 @@ const server = http.createServer(async (req, res) => {
         return readStream.pipe(res);
     }
 
+    // 🤖 [API_ROUTE: /api/export-ai] - Export complet des analytics (Markdown) prêt à envoyer à une IA
+    //    Données agrégées et anonymisées : aucun pseudo, ID Discord, code de carte cadeau, clé ou réglage sensible.
+    if (req.url.split('?')[0] === '/api/export-ai' && req.method === 'GET') {
+        try {
+            const md = buildAiAnalyticsExport();
+            const fname = 'nexus_analytics_IA_' + getParisDateStr() + '.md';
+            systemLog('INFO', 'DASHBOARD', 'Analytics exported for AI review (' + Math.round(md.length / 1024) + ' KB).');
+            res.writeHead(200, { 'Content-Type': 'text/markdown; charset=utf-8', 'Content-Disposition': 'attachment; filename="' + fname + '"', 'Cache-Control': 'no-store' });
+            return res.end(md);
+        } catch (e) {
+            systemLog('ERROR', 'DASHBOARD', 'AI analytics export failed: ' + e.message);
+            res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+            return res.end('Export failed: ' + e.message);
+        }
+    }
+
     // 🚀 [API_ROUTE: /api/export] - Route API backend
     if (req.url === '/api/export' && req.method === 'GET') {
         // removed
@@ -6061,7 +6285,7 @@ const server = http.createServer(async (req, res) => {
         </div>
 </div>
 <div id='analytics' class='tab-content'>
-               <div class='nx-page-head'><div><h1 class='nx-page-title'>Analytics</h1><p class='nx-page-sub'>Sales performance, buying patterns and community growth.</p></div><div class='nx-seg' id='nx-an-range'><button data-range='7'>7D</button><button data-range='30' class='active'>30D</button><button data-range='90'>90D</button><button data-range='0'>All</button></div></div>
+               <div class='nx-page-head'><div><h1 class='nx-page-title'>Analytics</h1><p class='nx-page-sub'>Sales performance, buying patterns and community growth.</p></div><div style='display:flex; gap:10px; align-items:center; flex-wrap:wrap;'><a class='admin-btn btn-green' id='btn-export-ai' href='/api/export-ai' download onclick='showToast("Preparing AI export...", "success")' title='Download all analytics (anonymised) as a Markdown file ready to send to an AI for feedback' style='margin:0; padding:8px 16px; font-size:0.82em; text-decoration:none; display:inline-flex; align-items:center; gap:7px; border-radius:12px;'><svg width='15' height='15' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><path d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4'/><polyline points='7 10 12 15 17 10'/><line x1='12' y1='15' x2='12' y2='3'/></svg>Export for AI</a><div class='nx-seg' id='nx-an-range'><button data-range='7'>7D</button><button data-range='30' class='active'>30D</button><button data-range='90'>90D</button><button data-range='0'>All</button></div></div></div>
                <div class='nx-kpi-row'><div class='nx-kpi' style='--kpi-c:var(--accent-green)'><div class='nx-kpi-label'>Revenue</div><div class='nx-kpi-value' id='nx-kpi-rev'>—</div><div class='nx-kpi-foot' id='nx-kpi-rev-foot'>&nbsp;</div></div><div class='nx-kpi' style='--kpi-c:#818cf8'><div class='nx-kpi-label'>Orders</div><div class='nx-kpi-value' id='nx-kpi-orders'>—</div><div class='nx-kpi-foot' id='nx-kpi-orders-foot'>&nbsp;</div></div><div class='nx-kpi' style='--kpi-c:#f59e0b'><div class='nx-kpi-label'>Avg. order value</div><div class='nx-kpi-value' id='nx-kpi-aov'>—</div><div class='nx-kpi-foot' id='nx-kpi-aov-foot'>&nbsp;</div></div><div class='nx-kpi' style='--kpi-c:#ec4899'><div class='nx-kpi-label'>Best day</div><div class='nx-kpi-value' id='nx-kpi-best'>—</div><div class='nx-kpi-foot' id='nx-kpi-best-foot'>&nbsp;</div></div><div class='nx-kpi' style='--kpi-c:#06b6d4'><div class='nx-kpi-label'>Net members</div><div class='nx-kpi-value' id='nx-kpi-net'>—</div><div class='nx-kpi-foot' id='nx-kpi-net-foot'>&nbsp;</div></div></div>
                <div style='margin-bottom:14px;'><div class='box'><div class='nx-chart-head'><div><h3 class='nx-chart-title'>Revenue &amp; orders</h3><div class='nx-chart-sub'>Daily revenue (line) and number of orders (bars)</div></div></div><div class='nx-chart-box tall'><canvas id='nxRevOrdersChart'></canvas></div></div></div>
                <div class='nx-grid-2'><div class='box'><div class='nx-chart-head'><div><h3 class='nx-chart-title'>Peak sales hours</h3><div class='nx-chart-sub'>All-time sales by hour of day (server time)</div></div><span class='nx-chart-sub' id='nx-peak-note' style='margin:0;'></span></div><div class='nx-chart-box'><canvas id='hourlyChart'></canvas></div></div><div class='box'><div class='nx-chart-head'><div><h3 class='nx-chart-title'>Revenue by weekday</h3><div class='nx-chart-sub'>Which days perform best in the selected period</div></div></div><div class='nx-chart-box'><canvas id='dowChart'></canvas></div></div></div>
