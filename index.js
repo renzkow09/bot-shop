@@ -1264,6 +1264,38 @@ function logStat(type, value = 1, extraData = null) {
 // === [ANCHOR: DISCORD_SHOP_EMBED_GENERATOR] ===
     // 🚀 [FUNCTION: sendShopSetup] - Déclaration de fonction
 
+// 🗂️ [FUNCTION: nxCreateTicketChannel] - Crée un ticket même si la catégorie est pleine (limite Discord : 50 salons/catégorie)
+async function nxCreateTicketChannel(guild, channelOpts, preferredParentId, overflowName) {
+    const fits = (cat) => cat && cat.type === ChannelType.GuildCategory && guild.channels.cache.filter(c => c.parentId === cat.id).size < 50;
+    const preferred = guild.channels.cache.get(preferredParentId);
+    if (fits(preferred)) {
+        channelOpts.parent = preferred.id;
+    } else {
+        let overflow = guild.channels.cache.find(c => c.type === ChannelType.GuildCategory && c.name.startsWith(overflowName) && fits(c));
+        if (!overflow) {
+            try {
+                const n = guild.channels.cache.filter(c => c.type === ChannelType.GuildCategory && c.name.startsWith(overflowName)).size + 2;
+                overflow = await guild.channels.create({ name: `${overflowName} ${n}`, type: ChannelType.GuildCategory, permissionOverwrites: [{ id: guild.id, deny: ['ViewChannel'], type: 0 }, { id: client.user.id, allow: ['ViewChannel', 'SendMessages', 'ManageChannels'], type: 1 }] });
+                systemLog('WARN', 'TICKET_SYS', `Category full (50 channels) — created overflow category "${overflow.name}". Delete old tickets to free space.`);
+                const adminUser = await client.users.fetch(ADMIN_DISCORD_ID).catch(() => null);
+                if (adminUser) adminUser.send(`⚠️ **Ticket category full (50/50).** New tickets now go to **${overflow.name}**. Delete old tickets to keep things tidy (server limit: 500 channels).`).catch(() => {});
+            } catch (e) { systemLog('ERROR', 'TICKET_SYS', `Could not create overflow category: ${e.message}`); }
+        }
+        if (overflow) channelOpts.parent = overflow.id; else delete channelOpts.parent;
+    }
+    try {
+        return await guild.channels.create(channelOpts);
+    } catch (e) {
+        // Dernier recours : sans catégorie plutôt que pas de ticket du tout
+        if (channelOpts.parent && /parent/i.test(JSON.stringify(e.rawError || {}) + e.message)) {
+            systemLog('WARN', 'TICKET_SYS', `Parent category rejected (${e.message}) — creating ticket without category.`);
+            delete channelOpts.parent;
+            return await guild.channels.create(channelOpts);
+        }
+        throw e;
+    }
+}
+
     // 🚀 [FUNCTION: generateTranscript] - Déclaration de fonction
 async function generateTranscript(channel) {
     try {
@@ -2329,14 +2361,10 @@ client.on('interactionCreate', async (interaction) => {
                     ]
                 };
 
-                const customerCat = interaction.guild.channels.cache.get(CATEGORY_CUSTOMER_ID);
-                if (customerCat && customerCat.type === ChannelType.GuildCategory) {
-                    channelOpts.parent = CATEGORY_CUSTOMER_ID;
-                }
 
                 let channel = null;
                 try {
-                    channel = await interaction.guild.channels.create(channelOpts);
+                    channel = await nxCreateTicketChannel(interaction.guild, channelOpts, CATEGORY_CUSTOMER_ID, '🛒 CUSTOMER');
                 } catch (createErr) {
                     systemLog('ERROR', 'TICKET', 'Failed to create channel: ' + createErr.message);
                     console.error('Channel creation failed:', createErr);
@@ -2378,17 +2406,18 @@ client.on('interactionCreate', async (interaction) => {
                 if (processedInteractions.has(interaction.id)) return;
                 processedInteractions.add(interaction.id);
                 setTimeout(() => processedInteractions.delete(interaction.id), 60000);
+                const supportLockKey = 'support:' + interaction.user.id; // 🩹 verrou séparé du bouton Redeem Code
 
-                if (userTicketLocks.has(interaction.user.id) || channelCreationLocks.has(interaction.user.id)) {
+                if (userTicketLocks.has(supportLockKey) || channelCreationLocks.has(supportLockKey)) {
                     // 🩹 Plus de clic "silencieux" : on répond toujours au client
                     const lockedName = 'support-' + (interaction.user.username.toLowerCase().replace(/[^a-z0-9]/g, '') || interaction.user.id);
                     const lockedCh = interaction.guild.channels.cache.find(c => c.name === lockedName);
                     await interaction.reply({ content: lockedCh ? `✅ Your ticket is ready: <#${lockedCh.id}>` : '⏳ Your ticket is being created, please wait a few seconds...', ephemeral: true }).catch(() => {});
                     return;
                 }
-                userTicketLocks.add(interaction.user.id);
-                setTimeout(() => userTicketLocks.delete(interaction.user.id), 60000);
-                channelCreationLocks.set(interaction.user.id, true);
+                userTicketLocks.add(supportLockKey);
+                setTimeout(() => userTicketLocks.delete(supportLockKey), 60000);
+                channelCreationLocks.set(supportLockKey, true);
                 try {
 
                 await interaction.reply({ content: '⏳ Channel is being created, please wait...', ephemeral: true }).catch(() => {});
@@ -2406,7 +2435,7 @@ client.on('interactionCreate', async (interaction) => {
                 }
                 
                 if (existingChannel) {
-                    userTicketLocks.delete(interaction.user.id);
+                    userTicketLocks.delete(supportLockKey);
                     return interaction.editReply({ content: `✅ You already have an open ticket: <#${existingChannel.id}>` }).catch(() => {});
                 }
 
@@ -2419,14 +2448,10 @@ client.on('interactionCreate', async (interaction) => {
                     ]
                 };
 
-                const supportCat = interaction.guild.channels.cache.get(CATEGORY_SUPPORT_ID);
-                if (supportCat && supportCat.type === ChannelType.GuildCategory) {
-                    channelOpts.parent = CATEGORY_SUPPORT_ID;
-                }
 
                 let channel = null;
                 try {
-                    channel = await interaction.guild.channels.create(channelOpts);
+                    channel = await nxCreateTicketChannel(interaction.guild, channelOpts, CATEGORY_SUPPORT_ID, '🎧 SUPPORT');
                 } catch (createErr) {
                     systemLog('ERROR', 'TICKET', 'Failed to create channel: ' + createErr.message);
                     console.error('Channel creation failed:', createErr);
@@ -2436,12 +2461,13 @@ client.on('interactionCreate', async (interaction) => {
                 if (channel) {
                     addActivity('ticket', `🎧 New support ticket opened by ${interaction.user.username}`);
                     systemLog('INFO', 'TICKET_SYS', `Support ticket generated for ${interaction.user.username}`);
-                    await channel.send(`🎧 **Support Ticket for <@${interaction.user.id}>**`).catch(() => {});
+                    const supportRow = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('request_close_ticket').setLabel('🔒 Close Ticket').setStyle(ButtonStyle.Danger));
+                    await channel.send({ content: `🎧 **Support Ticket for <@${interaction.user.id}>**\nPlease describe your issue in one message (order, voucher code, screenshot...). A team member will answer you here as soon as possible.`, components: [supportRow] }).catch(() => {});
                     await interaction.editReply({ content: memoryStats.messages.ticket_ready.replace('{channel}', '<#' + channel.id + '>') }).catch(() => {});
                 } else {
                     await interaction.editReply({ content: `❌ Error creating the room.` }).catch(() => {});
                 }
-                } finally { channelCreationLocks.delete(interaction.user.id); }
+                } finally { channelCreationLocks.delete(supportLockKey); }
             }
         }
         
@@ -2669,6 +2695,14 @@ client.on('messageCreate', async (message) => {
            if (memoryStats.settings && memoryStats.settings.ai_enabled === false) {
                return;
            }
+           // 🩹 Ne jamais répondre au staff (admin / modérateurs) dans les tickets support
+           const isStaff = message.author.id === ADMIN_DISCORD_ID || (message.member && message.member.permissions && (message.member.permissions.has('Administrator') || message.member.permissions.has('ManageChannels')));
+           if (isStaff) return;
+           // 🩹 Anti-spam : au plus 1 réponse automatique par ticket toutes les 3 minutes
+           if (!global.nxSupportReplyAt) global.nxSupportReplyAt = new Map();
+           const lastAuto = global.nxSupportReplyAt.get(message.channel.id) || 0;
+           if (Date.now() - lastAuto < 3 * 60 * 1000) return;
+           global.nxSupportReplyAt.set(message.channel.id, Date.now());
            try {
                let catalogStr = Object.values(memoryStats.products).map(p => p.name + " (£" + p.price + ")").join(", ");
                let userMsg = message.content.toLowerCase();
@@ -2676,12 +2710,13 @@ client.on('messageCreate', async (message) => {
                let replyText = "Our human team will be with you shortly! In the meantime, could you provide more details?";
                let sentiment = "Neutral";
                
-               if (userMsg.includes("price") || userMsg.includes("cost") || userMsg.includes("how much")) {
+               const hasWord = (w) => new RegExp('(^|[^a-z])' + w + '([^a-z]|$)').test(userMsg);
+               if (hasWord("price") || hasWord("prices") || hasWord("cost") || userMsg.includes("how much")) {
                    replyText = "It looks like you're asking about prices. Here is our current catalog:\n" + catalogStr;
-               } else if (userMsg.includes("refund") || userMsg.includes("scam") || userMsg.includes("not working") || userMsg.includes("broken")) {
+               } else if (hasWord("refund") || hasWord("scam") || userMsg.includes("not working") || hasWord("broken")) {
                    replyText = "I'm sorry you are experiencing issues. Please provide your order ID or voucher code, and an admin will review this immediately.";
                    sentiment = "Urgent";
-               } else if (userMsg.includes("hello") || userMsg.includes("hi") || userMsg.includes("hey") || userMsg.includes("help")) {
+               } else if (hasWord("hello") || hasWord("hi") || hasWord("hey") || hasWord("help") || hasWord("bonjour") || hasWord("salut")) {
                    replyText = "Hello! Welcome to support. How can we help you today? You can ask me about our products or state your issue for a human admin.";
                    sentiment = "Happy";
                }
