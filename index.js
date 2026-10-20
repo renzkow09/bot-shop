@@ -4519,6 +4519,33 @@ const server = http.createServer(async (req, res) => {
                     res.writeHead(200, { 'Content-Type': 'application/json' });
                     return res.end(JSON.stringify({ success: true, ...r, topic: global.nxMonitor ? global.nxMonitor.ntfyTopic() : null }));
                 }
+                    // 🗑️ [API_ACTION: delete_support_tickets] - Supprime tous les salons support-* (+ catégories de secours vides)
+                else if (data.action === 'delete_support_tickets') {
+                    const targets = [...guild.channels.cache.filter(c => c.type !== ChannelType.GuildCategory && c.name && c.name.startsWith('support-')).values()];
+                    if (global.nxSupportPurgeRunning) {
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        return res.end(JSON.stringify({ success: false, running: true, total: targets.length }));
+                    }
+                    global.nxSupportPurgeRunning = true;
+                    systemLog('WARN', 'TICKETS', `Bulk delete of ${targets.length} support channel(s) started from dashboard.`);
+                    (async () => {
+                        let deleted = 0, failed = 0;
+                        try {
+                            for (const c of targets) {
+                                try { channelStates.delete(c.id); await c.delete('Bulk delete of support tickets from dashboard'); deleted++; }
+                                catch (e) { if (e && e.code === 10003) deleted++; else { failed++; systemLog('ERROR', 'TICKETS', `Failed to delete ${c.name}: ${e.message}`); } }
+                                await new Promise(r => setTimeout(r, 400)); // rythme doux pour ne pas se faire limiter par Discord
+                            }
+                            // Catégories de secours "🎧 SUPPORT 2/3..." devenues vides
+                            const extraCats = guild.channels.cache.filter(c => c.type === ChannelType.GuildCategory && c.id !== CATEGORY_SUPPORT_ID && /^🎧 SUPPORT \d+$/.test(c.name) && !guild.channels.cache.some(x => x.parentId === c.id));
+                            for (const cat of extraCats.values()) { await cat.delete('Empty support overflow category').catch(() => {}); await new Promise(r => setTimeout(r, 400)); }
+                        } finally { global.nxSupportPurgeRunning = false; }
+                        systemLog('WARN', 'TICKETS', `Bulk delete from dashboard: ${deleted} support channel(s) deleted, ${failed} failed.`);
+                        if (deleted > 0) addActivity('ticket', `🗑️ ${deleted} support ticket(s) deleted from dashboard`);
+                    })();
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    return res.end(JSON.stringify({ success: true, started: true, total: targets.length }));
+                }
                     // ⚡ [API_ACTION: close_all] - Point de terminaison API Action
                 else if (data.action === 'close_all') {
                     guild.channels.cache.forEach(c => {
@@ -5938,10 +5965,14 @@ const server = http.createServer(async (req, res) => {
                     <svg style='position:absolute; right:10px; top:50%; transform:translateY(-50%); pointer-events:none; opacity:0.5;' width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
                 </div>
             </div>
+            <div style='display:flex; gap:10px; flex-wrap:wrap; align-items:center;'><button class='admin-btn btn-red' id='btn-delete-support-tickets' style='margin:0; padding:10px 18px; display:flex; align-items:center; gap:8px; border-radius:14px;' onclick='window.deleteAllSupportTickets(this)' title='Supprime tous les salons support-* sur Discord (les tickets shop sont conservés)'>
+                <svg width='17' height='17' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='3 6 5 6 21 6'></polyline><path d='M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6'></path><path d='M10 11v6'></path><path d='M14 11v6'></path><path d='M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2'></path></svg>
+                Delete all support tickets
+            </button>
             <button class='admin-btn btn-green' style='margin:0; padding:10px 20px; display:flex; align-items:center; gap:8px; border-radius:14px; box-shadow:0 5px 15px rgba(var(--accent-green-rgb), 0.2); transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);' onmouseover='this.style.transform="translateY(-2px)"; this.style.boxShadow="0 8px 25px rgba(var(--accent-green-rgb), 0.4)"' onmouseout='this.style.transform="none"; this.style.boxShadow="0 5px 15px rgba(var(--accent-green-rgb), 0.2)"' onclick='window.loadTicketsForChat()'>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-9.21l-5.69-5.69"></path></svg>
                 Synchronise
-            </button>
+            </button></div>
         </div>
     </div>
         
@@ -10399,6 +10430,36 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
                 else showToast('Test impossible (' + r.status + ')', 'error');
             } catch (e) { showToast('Test impossible', 'error'); }
             if (btn) btn.disabled = false;
+        };
+
+        // 🗑️ [UI_ACTION_ASYNC: deleteAllSupportTickets] - Supprime tous les salons support-* (avec confirmation)
+        window.deleteAllSupportTickets = async function(btn) {
+            let count = null;
+            try {
+                const r = await fetch('/api/tickets', { cache: 'no-store' });
+                if (r.ok) { const list = await r.json(); count = (Array.isArray(list) ? list : []).filter(function(t) { return String(t.name || '').indexOf('support-') === 0; }).length; }
+            } catch (e) {}
+            if (count === 0) { showToast('No support tickets to delete'); return; }
+            const ok = await window.customConfirm('DELETE ALL SUPPORT TICKETS', (count ? count + ' support ticket(s)' : 'All support tickets') + ' will be permanently deleted on Discord (no transcript is saved). Shop tickets are kept. Continue?');
+            if (!ok) return;
+            if (btn) { btn.classList.add('nx-busy'); btn.disabled = true; }
+            try {
+                const res = await fetch('/api/action', { method: 'POST', body: JSON.stringify({ action: 'delete_support_tickets' }) });
+                const d = await res.json().catch(function() { return {}; });
+                if (res.ok && d.started) {
+                    const secs = Math.max(2, Math.ceil((d.total || 0) * 0.6));
+                    showToast('Deleting ' + (d.total || 0) + ' support ticket(s)... (~' + secs + 's)', 'success');
+                    setTimeout(function() {
+                        if (typeof window.loadTicketsForChat === 'function') window.loadTicketsForChat();
+                        if (typeof window.refreshDataSilently === 'function') window.refreshDataSilently(true);
+                        showToast('Support tickets deleted', 'success');
+                        if (btn) { btn.classList.remove('nx-busy'); btn.disabled = false; }
+                    }, secs * 1000 + 1500);
+                    return;
+                } else if (d.running) { showToast('A deletion is already running, please wait', 'error'); }
+                else { showToast('Delete failed (' + res.status + ')', 'error'); }
+            } catch (e) { showToast('Delete failed', 'error'); }
+            if (btn) { btn.classList.remove('nx-busy'); btn.disabled = false; }
         };
     </script>
 </body>
