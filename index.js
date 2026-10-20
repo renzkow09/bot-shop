@@ -592,7 +592,7 @@ function ensureMemoryInitialized() {
             }
             
             const defaultMessages = {
-                shop_welcome: "👋 Welcome {user}!\n\n**🛒 How to buy — 3 steps**\n**1.** Buy a **Rewarble** voucher with the 💳 buttons in the shop channel.\n**2.** Paste your **Rewarble key** here — *not* the order number (`O-XXXXXXX`).\n**3.** Pick your items in the menu → delivered instantly in your **DMs**.\n\n⚠️ **Before paying, open your DMs:** Server name → *Privacy Settings* → *Direct Messages* ✅\n🎟️ Promo code? Paste it **after** your Rewarble key.\n💡 Your voucher balance must cover the items you choose.",
+                shop_welcome: "👋 Welcome {user}!\n\n🔑 **Paste your Rewarble key here** — not the order number (`O-XXXXXXX`).\nThe product menu will appear automatically.\n\n⚠️ Your items are delivered in your **DMs** — make sure they are open.",
                 shop_empty: "👋 Welcome {user}!\n\n🛍️ **Shop Status**\nThe shop is currently empty. We are restocking our inventory, please check back later!",
                 ticket_ready: "✅ Your channel is ready: {channel}",
                 vip_welcome: "👑 **WELCOME TO VIP!** Your 30-Day pass is now active. Enjoy your exclusive content and 20% off all future purchases in the shop!",
@@ -943,6 +943,11 @@ function ensureMemoryInitialized() {
                 if (memoryStats.messages.shop_welcome === "👋 Welcome {user}!\n\n**🔒 Secure Checkout**\nTo begin, please paste your Rewarble voucher or Promo code directly in this chat.\n\n✅ *Once verified, the product menu will appear automatically.*") memoryStats.messages.shop_welcome = defaultMessages.shop_welcome;
                 if (memoryStats.messages.invalid_code === "❌ Invalid format. Please enter a valid Rewarble code or Promo code.") memoryStats.messages.invalid_code = defaultMessages.invalid_code;
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🧭 Purchase Help v2\n\n- Message d'accueil du ticket : achat en 3 étapes, clé Rewarble (pas le numéro de commande), MP ouverts avant de payer, promo après la clé.\n- Boutons « Where is my key? » et « Need help » dans chaque ticket.\n- Erreurs de code détaillées : clé déjà utilisée, introuvable, expirée, incomplète, Rewarble indisponible.\n- Le code est retrouvé même s'il est collé dans une phrase." });
+                syncCloud();
+            }
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Purchase Help v3"))) {
+                if (memoryStats.messages.shop_welcome === "👋 Welcome {user}!\n\n**🛒 How to buy — 3 steps**\n**1.** Buy a **Rewarble** voucher with the 💳 buttons in the shop channel.\n**2.** Paste your **Rewarble key** here — *not* the order number (`O-XXXXXXX`).\n**3.** Pick your items in the menu → delivered instantly in your **DMs**.\n\n⚠️ **Before paying, open your DMs:** Server name → *Privacy Settings* → *Direct Messages* ✅\n🎟️ Promo code? Paste it **after** your Rewarble key.\n💡 Your voucher balance must cover the items you choose.") memoryStats.messages.shop_welcome = defaultMessages.shop_welcome;
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "✂️ Purchase Help v3\n\n- Message d'accueil du ticket raccourci : les étapes d'achat sont déjà dans le menu boutique. Il ne reste que l'essentiel (coller la clé Rewarble, pas le numéro de commande ; MP ouverts).\n- Retrait de l'encadré de rappels ajouté à la fiche boutique." });
                 syncCloud();
             }
             if (!memoryStats.patchnotes.some(p => p.text.includes("Codebase Reconnaissance Tagging"))) {
@@ -2277,8 +2282,6 @@ async function sendShopSetup(channel, templateOverride = null) {
         shopEmbed.setFooter({ text: 'Powered by Nexus Premium • Secure & Automatic 🔒' });
     }
 
-    // 💡 Rappels qui évitent les erreurs les plus fréquentes (tous les thèmes)
-    try { if ((shopEmbed.data.fields || []).length < 25) shopEmbed.addFields({ name: '💡 Good to know', value: '• Paste your **Rewarble key** — not the order number (`O-XXXXXXX`)\n• Open your **DMs** before paying: items are delivered there\n• Promo code? Paste it **after** your key' }); } catch (e) {}
     console.log("SENDING PREVIEW TO", channel.id, "EMBEDS:", JSON.stringify(shopEmbed.toJSON()), "COMPONENTS:", JSON.stringify(componentsToSend.map(c => c.toJSON())));
     
         await channel.send({ embeds: [shopEmbed], components: componentsToSend }).then(m => {
