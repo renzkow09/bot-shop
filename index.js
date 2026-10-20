@@ -4637,7 +4637,26 @@ const server = http.createServer(async (req, res) => {
                 else if (data.action === 'post_review') {
                     const reviewChannel = await client.channels.fetch(REVIEW_CHANNEL_ID).catch(() => null);
                     if (!reviewChannel) throw new Error("Review channel not found.");
-                    await reviewChannel.send(`> 🌟 **NEW FEEDBACK** 🌟\n> ━━━━━━━━━━━━━━━━━━━━\n> 📝 » **Feedback:** "${data.text}"\n> 📈 » **Rating:** ${data.rating}/5 ⭐\n> 👤 » **By:** ${data.author}`).catch(() => { throw new Error("Missing permissions to send messages in the channel."); });
+                    // 📩 Avis reçu en MP : produit choisi + mention de la source + badge "achat vérifié" calculé à partir des vraies ventes
+                    const author = String(data.author || '').trim().slice(0, 64);
+                    const text = String(data.text || '').trim().slice(0, 1500);
+                    const rating = Math.min(5, Math.max(1, parseInt(data.rating, 10) || 5));
+                    if (!author || !text) throw new Error('Customer and review text are required.');
+                    const pid = String(data.productId || '');
+                    let productName = '';
+                    if (pid === 'mystery_box') productName = '🎁 Mystery Box';
+                    else if (pid && pid !== '__other' && memoryStats.products && memoryStats.products[pid]) productName = memoryStats.products[pid].name || pid;
+                    const low = (v) => String(v || '').toLowerCase();
+                    const buyerKey = Object.keys(memoryStats.user_spending || {}).find(u => low(u) === low(author));
+                    const boughtThis = productName && (
+                        (Array.isArray((memoryStats.user_history || {})[buyerKey]) && memoryStats.user_history[buyerKey].some(h => low(h.product) === low(productName))) ||
+                        (Array.isArray(memoryStats.recent_transactions) && memoryStats.recent_transactions.some(t => low(t.username) === low(author) && low(t.product) === low(productName))));
+                    const badge = boughtThis ? '✅ Verified purchase' : (buyerKey ? '✅ Verified buyer' : '');
+                    const lines = ['> 🌟 **CUSTOMER REVIEW** 🌟', '> ━━━━━━━━━━━━━━━━━━━━'];
+                    if (productName) lines.push(`> 📦 » **Product:** ${productName}`);
+                    lines.push(`> 📝 » **Feedback:** "${text}"`, `> 📈 » **Rating:** ${rating}/5 ⭐`, `> 👤 » **By:** ${author}${badge ? ' · ' + badge : ''}`, '> 📩 *Received by DM*');
+                    await reviewChannel.send({ content: lines.join('\n'), allowedMentions: { parse: [] } }).catch(() => { throw new Error("Missing permissions to send messages in the channel."); });
+                    systemLog('INFO', 'REVIEWS', `DM review posted for ${author} (${productName || 'no product'}, ${rating}/5${badge ? ', ' + badge : ', not verified'}).`);
                 }
                     // ⚡ [API_ACTION: update_ref_threshold] - Point de terminaison API Action
                 else if (data.action === 'update_ref_threshold') {
@@ -7415,10 +7434,11 @@ const server = http.createServer(async (req, res) => {
                 </div>
                
                 <div class='box'>
-                    <h2>🌟 Manual Injection (Reviews)</h2>
-                    <div style='display:flex; gap:15px; margin-bottom:15px; margin-top:20px;'><input type='text' id='rev-author' placeholder='Client Designation' style='flex:1;'><select id='rev-rating' style='flex:1;'><option value='5'>5/5 ⭐ - Optimal</option><option value='4'>4/5 ⭐ - Sub-optimal</option><option value='3'>3/5 ⭐ - Acceptable</option><option value='2'>2/5 ⭐ - Flawed</option><option value='1'>1/5 ⭐ - Critical</option></select></div>
-                    <textarea id='rev-msg' placeholder='Inject feedback string...' style='margin-bottom:15px; min-height:100px;'></textarea>
-                    <button class='admin-btn' style='width:100%; padding:15px;' onclick='window.sendReview()'>📤 Broadcast Review</button>
+                    <h2>📩 Post a review received by DM</h2>
+                    <p class='text-muted' style='margin:6px 0 0; font-size:0.85em;'>The post is labelled « 📩 Received by DM ». The « ✅ Verified purchase » badge is added automatically only if this customer really bought this product (or « ✅ Verified buyer » if they bought something).</p>
+                    <div style='display:flex; gap:15px; margin-bottom:15px; margin-top:16px; flex-wrap:wrap;'><input type='text' id='rev-author' list='rev-buyers' autocomplete='off' placeholder='Customer username' style='flex:1; min-width:160px;' onfocus='window.nxFillReviewForm()'><datalist id='rev-buyers'></datalist><select id='rev-product' style='flex:1; min-width:160px;' onfocus='window.nxFillReviewForm()' onmousedown='window.nxFillReviewForm()'><option value=''>📦 Choose the product…</option></select><select id='rev-rating' style='flex:1; min-width:140px;'><option value='5'>5/5 ⭐</option><option value='4'>4/5 ⭐</option><option value='3'>3/5 ⭐</option><option value='2'>2/5 ⭐</option><option value='1'>1/5 ⭐</option></select></div>
+                    <textarea id='rev-msg' placeholder='Paste the review exactly as the customer wrote it…' style='margin-bottom:15px; min-height:100px;'></textarea>
+                    <button class='admin-btn' style='width:100%; padding:15px;' onclick='window.sendReview()'>📤 Post review</button>
                 </div>
             </div>
            <div id='backups' class='tab-content'>
@@ -8768,7 +8788,36 @@ let PIN='', rawStats={}, PRODUCT_DATA={}, lastTxCount=0, currentMonthRevenue=0, 
         window.executeAction = async function(p, showModal=false) { /* pin removed */ const res=await fetch('/api/action',{method:'POST',body:JSON.stringify(p)}); if(res.ok) { window.refreshDataSilently(); showToast('Action Successful'); } else { showToast('Action Failed', 'error'); } };
         
         // 🚀 [UI_ACTION_ASYNC: sendReview] - Action asynchrone d'interface Dashboard
-        window.sendReview = async function() { const author = document.getElementById('rev-author').value; const rating = document.getElementById('rev-rating').value; const text = document.getElementById('rev-msg').value; if(!author || !text) return showToast('Parameters missing', 'error'); await window.executeAction({ action: 'post_review', author: author, rating: rating, text: text }); document.getElementById('rev-author').value = ''; document.getElementById('rev-msg').value = ''; };
+        window.nxFillReviewForm = function() {
+            try {
+                var prods = (PRODUCT_DATA && Object.keys(PRODUCT_DATA).length) ? PRODUCT_DATA : ((rawStats && rawStats.products) || {});
+                var sel = document.getElementById('rev-product');
+                if (sel) {
+                    var cur = sel.value, html = '<option value="">📦 Choose the product…</option>';
+                    Object.keys(prods).forEach(function(id) { var p = prods[id] || {}; html += '<option value="' + escapeHTML(String(id)) + '">' + escapeHTML(String(p.name || id)) + (p.price ? ' (£' + escapeHTML(String(p.price)) + ')' : '') + '</option>'; });
+                    if (rawStats && rawStats.mystery_box && rawStats.mystery_box.enabled) html += '<option value="mystery_box">🎁 Mystery Box</option>';
+                    html += '<option value="__other">Other / not listed</option>';
+                    if (sel.getAttribute('data-sig') !== html) { sel.innerHTML = html; sel.setAttribute('data-sig', html); sel.value = cur; }
+                }
+                var dl = document.getElementById('rev-buyers');
+                if (dl && rawStats && rawStats.user_spending) {
+                    var names = Object.keys(rawStats.user_spending).sort(function(a, b) { return (rawStats.user_spending[b] || 0) - (rawStats.user_spending[a] || 0); }).slice(0, 300);
+                    var dh = names.map(function(n) { return '<option value="' + escapeHTML(n) + '">'; }).join('');
+                    if (dl.getAttribute('data-sig') !== String(names.length) + names[0]) { dl.innerHTML = dh; dl.setAttribute('data-sig', String(names.length) + names[0]); }
+                }
+            } catch (e) {}
+        };
+        (function() { var n = 0; var t = setInterval(function() { n++; window.nxFillReviewForm(); var sel = document.getElementById('rev-product'); if ((sel && sel.options.length > 2) || n > 30) clearInterval(t); }, 2000); })();
+        window.sendReview = async function() {
+            const author = document.getElementById('rev-author').value.trim();
+            const productId = document.getElementById('rev-product').value;
+            const rating = document.getElementById('rev-rating').value;
+            const text = document.getElementById('rev-msg').value.trim();
+            if (!author || !text) return showToast('Customer and review text are required', 'error');
+            if (!productId) return showToast('Choose the product', 'error');
+            await window.executeAction({ action: 'post_review', author: author, productId: productId, rating: rating, text: text });
+            document.getElementById('rev-author').value = ''; document.getElementById('rev-msg').value = ''; document.getElementById('rev-product').value = '';
+        };
         // 🚀 [UI_ACTION_ASYNC: loadAllMembers] - Action asynchrone d'interface Dashboard
         window.loadAllMembers = async function() { if(document.getElementById('memberResults')) document.getElementById('memberResults').innerHTML = '<p class="text-muted" style="font-family:monospace;">Syncing directory...</p>'; try { const res = await fetch('/api/members'); if (!res.ok) throw new Error('Error'); allMembersData = await res.json(); isMembersLoaded = true; window.sortMembersLocally(); } catch (e) { if(document.getElementById('memberResults')) document.getElementById('memberResults').innerHTML = '<p class="text-pink">Network failure.</p>'; } };
         // 🚀 [UI_ACTION: sortMembersLocally] - Action d'interface Dashboard
