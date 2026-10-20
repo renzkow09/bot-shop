@@ -592,7 +592,7 @@ function ensureMemoryInitialized() {
             }
             
             const defaultMessages = {
-                shop_welcome: "👋 Welcome {user}!\n\n**🔒 Secure Checkout**\nTo begin, please paste your Rewarble voucher or Promo code directly in this chat.\n\n✅ *Once verified, the product menu will appear automatically.*",
+                shop_welcome: "👋 Welcome {user}!\n\n**🛒 How to buy — 3 steps**\n**1.** Buy a **Rewarble** voucher with the 💳 buttons in the shop channel.\n**2.** Paste your **Rewarble key** here — *not* the order number (`O-XXXXXXX`).\n**3.** Pick your items in the menu → delivered instantly in your **DMs**.\n\n⚠️ **Before paying, open your DMs:** Server name → *Privacy Settings* → *Direct Messages* ✅\n🎟️ Promo code? Paste it **after** your Rewarble key.\n💡 Your voucher balance must cover the items you choose.",
                 shop_empty: "👋 Welcome {user}!\n\n🛍️ **Shop Status**\nThe shop is currently empty. We are restocking our inventory, please check back later!",
                 ticket_ready: "✅ Your channel is ready: {channel}",
                 vip_welcome: "👑 **WELCOME TO VIP!** Your 30-Day pass is now active. Enjoy your exclusive content and 20% off all future purchases in the shop!",
@@ -601,7 +601,7 @@ function ensureMemoryInitialized() {
                 checkout_success_dm: "✨ **Purchase Successful!** Here is your item: {product}",
                 checkout_failed_dm: "⚠️ I couldn't DM you the product '{product}'. Please check your privacy settings.",
                 checkout_complete_channel: "✅ **Products delivered to your DMs!** Closing ticket in 5 seconds...",
-                invalid_code: "❌ Invalid format. Please enter a valid Rewarble code or Promo code.",
+                invalid_code: "❌ **This doesn\'t look like a complete Rewarble key.**\nCopy the **full key** from your order (every character) and paste it **alone** in this chat.\n🔑 Not sure where it is? Press **Where is my key?** above.",
                 already_validated: "✅ Your code is already validated! Please select your items from the menu.",
                 code_limit_reached: "❌ Sorry, this code has reached its usage limit!"
             };
@@ -937,6 +937,12 @@ function ensureMemoryInitialized() {
                 memoryStats.messages.shop_welcome = defaultMessages.shop_welcome;
                 memoryStats.messages.shop_empty = defaultMessages.shop_empty;
                 memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "💼 Welcome Messages : Clair, Simple et Rassurant\n\n- **Feature** : Réajustement du ton des messages de la boutique. Le ton 'enfantin' nuisait à la confiance client (transaction financière).\n- **Détails** : Retour à un vocabulaire professionnel, sécurisant ('Secure Checkout', 'verified') tout en gardant une structure extrêmement simple à lire (2 étapes claires). L'écrasement des variables a été forcé." });
+                syncCloud();
+            }
+            if (!memoryStats.patchnotes.some(p => p.text.includes("Purchase Help v2"))) {
+                if (memoryStats.messages.shop_welcome === "👋 Welcome {user}!\n\n**🔒 Secure Checkout**\nTo begin, please paste your Rewarble voucher or Promo code directly in this chat.\n\n✅ *Once verified, the product menu will appear automatically.*") memoryStats.messages.shop_welcome = defaultMessages.shop_welcome;
+                if (memoryStats.messages.invalid_code === "❌ Invalid format. Please enter a valid Rewarble code or Promo code.") memoryStats.messages.invalid_code = defaultMessages.invalid_code;
+                memoryStats.patchnotes.push({ date: new Date().toISOString(), text: "🧭 Purchase Help v2\n\n- Message d'accueil du ticket : achat en 3 étapes, clé Rewarble (pas le numéro de commande), MP ouverts avant de payer, promo après la clé.\n- Boutons « Where is my key? » et « Need help » dans chaque ticket.\n- Erreurs de code détaillées : clé déjà utilisée, introuvable, expirée, incomplète, Rewarble indisponible.\n- Le code est retrouvé même s'il est collé dans une phrase." });
                 syncCloud();
             }
             if (!memoryStats.patchnotes.some(p => p.text.includes("Codebase Reconnaissance Tagging"))) {
@@ -2271,6 +2277,8 @@ async function sendShopSetup(channel, templateOverride = null) {
         shopEmbed.setFooter({ text: 'Powered by Nexus Premium • Secure & Automatic 🔒' });
     }
 
+    // 💡 Rappels qui évitent les erreurs les plus fréquentes (tous les thèmes)
+    try { if ((shopEmbed.data.fields || []).length < 25) shopEmbed.addFields({ name: '💡 Good to know', value: '• Paste your **Rewarble key** — not the order number (`O-XXXXXXX`)\n• Open your **DMs** before paying: items are delivered there\n• Promo code? Paste it **after** your key' }); } catch (e) {}
     console.log("SENDING PREVIEW TO", channel.id, "EMBEDS:", JSON.stringify(shopEmbed.toJSON()), "COMPONENTS:", JSON.stringify(componentsToSend.map(c => c.toJSON())));
     
         await channel.send({ embeds: [shopEmbed], components: componentsToSend }).then(m => {
@@ -2404,6 +2412,12 @@ const processedInteractions = new Set();
 // 🚀 [EVENT_LISTENER: interactionCreate] - Écouteur d'événement Discord
 client.on('interactionCreate', async (interaction) => {
     try {
+        // 🔑 Aide : où trouver la clé Rewarble (réponse privée instantanée)
+        if (interaction.isButton && interaction.isButton() && interaction.customId === 'help_find_key') {
+            const keyHelp = (memoryStats.messages && memoryStats.messages.key_help) ||
+                "🔑 **Where to find your Rewarble key**\n\n**1.** Open the site where you bought the voucher (e.g. Eneba) → **My orders**.\n**2.** Open your **Rewarble** order → click **Reveal key / Show code**.\n**3.** Copy the **key** that appears and paste it **alone** in your ticket.\n\n❌ **Not the key:** the order number (`O-XXXXXXX` / `#O-XXXXXXX`), the receipt number, or the amount.\n💡 Tip: use the site's **Copy** button so no character is missing.\n\nStill stuck? Press **🎧 Need help** and our team will check it with you.";
+            return interaction.reply({ content: keyHelp, ephemeral: true }).catch(() => {});
+        }
         // --- MAINTENANCE SHIELD ---
         const mMode = memoryStats.settings?.maintenance;
         if (mMode && mMode.active && (interaction.isButton() || interaction.isStringSelectMenu())) {
@@ -2546,7 +2560,7 @@ client.on('interactionCreate', async (interaction) => {
                         const recent = await existingChannel.messages.fetch({ limit: 20 });
                         if (!recent.some(m => m.author && m.author.id === client.user.id)) {
                             if (!channelStates.has(existingChannel.id)) channelStates.set(existingChannel.id, { validated: false, processing: false, promo: null, redeemed: false, cart: [], cartTotal: 0, balance: 0 });
-                            const repairRow = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('request_close_ticket').setLabel('🔒 Request Close').setStyle(ButtonStyle.Danger));
+                            const repairRow = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('help_find_key').setLabel('🔑 Where is my key?').setStyle(ButtonStyle.Primary), new ButtonBuilder().setCustomId('open_support_ticket').setLabel('🎧 Need help').setStyle(ButtonStyle.Secondary), new ButtonBuilder().setCustomId('request_close_ticket').setLabel('🔒 Request Close').setStyle(ButtonStyle.Danger));
                             const hasItems = Object.values(memoryStats.products || {}).some(p => !(p.stock && p.stock !== "∞" && parseInt(p.stock) <= 0)) || (memoryStats.mystery_box && memoryStats.mystery_box.enabled);
                             const tpl = hasItems ? memoryStats.messages.shop_welcome : memoryStats.messages.shop_empty;
                             await existingChannel.send({ content: tpl.replace('{user}', '<@' + interaction.user.id + '>'), components: [repairRow] });
@@ -2597,6 +2611,8 @@ client.on('interactionCreate', async (interaction) => {
                     
                     
                     const closeBtnRow = new ActionRowBuilder().addComponents(
+                        new ButtonBuilder().setCustomId('help_find_key').setLabel('🔑 Where is my key?').setStyle(ButtonStyle.Primary),
+                        new ButtonBuilder().setCustomId('open_support_ticket').setLabel('🎧 Need help').setStyle(ButtonStyle.Secondary),
                         new ButtonBuilder().setCustomId('request_close_ticket').setLabel('🔒 Request Close').setStyle(ButtonStyle.Danger)
                     );
                     const welcomeTpl = optCount > 0 ? memoryStats.messages.shop_welcome : memoryStats.messages.shop_empty;
@@ -2987,7 +3003,20 @@ client.on('messageCreate', async (message) => {
             }
             state.processing = true;
             
-            const input = message.content.trim().toUpperCase();
+            let input = message.content.trim().toUpperCase().replace(/^[`"'*_\s]+|[`"'*_.!\s]+$/g, '');
+            // 🔎 Code collé dans une phrase ("here is my code ABCD-1234...") : on extrait la clé
+            if (/\s/.test(input) && !(memoryStats.promo_codes && memoryStats.promo_codes[input])) {
+                const toks = input.replace(/[`"'*_|<>()\[\]]/g, ' ').split(/[\s,;]+/).map(t => t.replace(/^[:.#]+|[:.!?]+$/g, '')).filter(Boolean);
+                const keyToks = toks.filter(t => t.length >= 8 && t.length <= 40 && /[0-9]/.test(t) && /[A-Z]/.test(t) && /^[A-Z0-9-]+$/.test(t));
+                const promoTok = toks.find(t => memoryStats.promo_codes && memoryStats.promo_codes[t]);
+                if (keyToks.length === 1) input = keyToks[0];
+                else if (!keyToks.length && promoTok) input = promoTok;
+                else if (!keyToks.length) {
+                    // clé coupée par des espaces ("ABCD EFGH 1234")
+                    const joined = input.replace(/\s+/g, '');
+                    if (/^[A-Z0-9-]{10,40}$/.test(joined) && /[0-9]/.test(joined) && toks.every(t => /^[A-Z0-9-]{2,12}$/.test(t))) input = joined;
+                }
+            }
             
             const isPromo = memoryStats.promo_codes && memoryStats.promo_codes[input];
             if (message.author.id !== ADMIN_DISCORD_ID && TEST_VOUCHERS[input]) { state.processing = false; return message.reply('❌ Invalid code.').catch(()=>{}); }
@@ -2995,7 +3024,7 @@ client.on('messageCreate', async (message) => {
             const isChatter = input.includes(' ') || input.length > 25 || (!input.match(/[0-9]/) && !isPromo && !isTest);
             
             if (isChatter) {
-                await message.reply('💬 **System Notification** : This channel is an automated checkout system and is not monitored for chat.\n\n➡️ *If you need assistance or wish to speak with our team, please open a **Support** ticket.*').catch(()=>{});
+                await message.reply('🤖 **I couldn\'t find a Rewarble key in your message.**\nThis ticket is automatic: paste **only your Rewarble key** (copy it from your order) and the menu will appear.\n\n🔑 Can\'t find it? Press **Where is my key?** above.\n🎧 Need a human? Press **Need help**.').catch(()=>{});
                 state.processing = false;
                 return;
             }
@@ -3027,6 +3056,24 @@ client.on('messageCreate', async (message) => {
                     await message.reply(memoryStats.messages.invalid_code || '❌ Invalid format. Please enter a valid Rewarble code or Promo code.').catch(()=>{});
                     state.processing = false;
                     return;
+                }
+
+                if (!promoApplied && !TEST_VOUCHERS[input]) {
+                    const prevOk = (memoryStats.voucher_log || []).find(v => v && v.status === 'success' && String(v.code || '').toUpperCase() === input);
+                    if (prevOk) {
+                        const when = prevOk.timestamp ? new Date(prevOk.timestamp).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : 'earlier';
+                        state.processing = false;
+                        await message.reply(`⚠️ **This key was already redeemed in our shop (${when}).**\nEach Rewarble key works **only once**. If you bought a new voucher, paste its **new key**.\n🎧 You think this is a mistake? Press **Need help** and we'll check it.`).catch(()=>{});
+                        state.processing = false;
+                        return;
+                    }
+                    if (!state.failedKeys) state.failedKeys = [];
+                    if (state.failedKeys.includes(input)) {
+                        state.processing = false;
+                        await message.reply('🔁 **You already sent this exact key and Rewarble refused it.**\nCheck it character by character (**0** vs **O**, **1** vs **I**, missing dash) or use the **Copy** button on your order page.\n🎧 Still blocked? Press **Need help**.').catch(()=>{});
+                        state.processing = false;
+                        return;
+                    }
                 }
 
                 let voucherValue = 0; 
@@ -3212,8 +3259,34 @@ client.on('messageCreate', async (message) => {
                     memoryStats.voucher_log.unshift({ code: input || '???', username: message.author.username, userId: message.author.id, channelId: message.channel.id, channelName: message.channel.name || '', value: 0, status: 'timeout', timestamp: new Date().toISOString() });
                     if (memoryStats.voucher_log.length > 500) memoryStats.voucher_log = memoryStats.voucher_log.slice(0, 500);
                 } else {
-                    systemLog('WARN', 'VALIDATION', `Invalid code or network error for ${message.author.username}: ${e.message}`);
-                    message.reply("❌ Invalid code or API timeout. Please check your voucher and try again.").catch(()=>{});
+                    // 🧭 Message d'erreur selon la cause réelle
+                    const rwStatus = e.response ? e.response.status : 0;
+                    let rwBody = e.response ? e.response.data : null;
+                    let rwText = '';
+                    try { rwText = typeof rwBody === 'string' ? rwBody : JSON.stringify(rwBody || {}); } catch (x) {}
+                    rwText = (rwText + ' ' + (e.message || '')).split(input).join('[key]').slice(0, 300);
+                    const t = rwText.toLowerCase();
+                    let reason = 'invalid';
+                    if (/already|redeemed|been used|is used|claimed|consumed/.test(t)) reason = 'used';
+                    else if (/expire/.test(t)) reason = 'expired';
+                    else if (/currency/.test(t)) reason = 'currency';
+                    else if (rwStatus === 401 || (rwStatus === 403 && /token|api.?key|auth|credential|unauthori/.test(t))) reason = 'config';
+                    else if (rwStatus === 429 || rwStatus >= 500) reason = 'unavailable';
+                    if (!state.failedKeys) state.failedKeys = [];
+                    state.failedKeys.push(input);
+                    state.failCount = (state.failCount || 0) + 1;
+                    const reasonMsg = {
+                        used: "❌ **This key has already been used.**\nEach Rewarble key works only once. If you just bought a voucher, make sure you copied the **new** key.",
+                        expired: "❌ **This key has expired.**\nContact the site where you bought it, or buy a new voucher with the 💳 buttons.",
+                        currency: "❌ **This voucher's currency isn't accepted.**\nBuy your voucher with the 💳 buttons in the shop channel to get the right one.",
+                        config: "⚠️ **Our payment system has a temporary problem — your key was NOT used.**\nPlease try again in a few minutes. The team has been notified.",
+                        unavailable: "⏳ **Rewarble is temporarily unavailable — your key was NOT used.**\nPlease send it again in 1-2 minutes.",
+                        invalid: "❌ **Rewarble doesn't recognize this key.**\nCheck that you copied the **full Rewarble key** (not the order number) — use the **Copy** button on your order page, then paste it alone here."
+                    }[reason];
+                    const extra = state.failCount >= 3 ? "\n\n🎧 **Several tries failed** — press **Need help** and our team will verify your purchase manually." : "\n🔑 Need help finding it? Press **Where is my key?** above.";
+                    systemLog('WARN', 'VALIDATION', `Code refused for ${message.author.username} (reason: ${reason}, HTTP ${rwStatus || '-'}): ${rwText.replace(/\s+/g, ' ').slice(0, 200)}`);
+                    message.reply(reasonMsg + extra).catch(()=>{});
+                    if (reason === 'config' && Date.now() - (global.nxRwCfgAlertAt || 0) > 30 * 60 * 1000) { global.nxRwCfgAlertAt = Date.now(); const adminUser = await client.users.fetch(ADMIN_DISCORD_ID).catch(() => null); if (adminUser) adminUser.send(`🚨 **Rewarble API refused our credentials (HTTP ${rwStatus}).** Check REWARBLE_API_KEY on Render.`).catch(() => {}); }
                     // Log failed attempt
                     if (!Array.isArray(memoryStats.voucher_log)) memoryStats.voucher_log = [];
                     memoryStats.voucher_log.unshift({
@@ -3224,6 +3297,7 @@ client.on('messageCreate', async (message) => {
                         channelName: message.channel.name || '',
                         value: 0,
                         status: 'failed',
+                        reason: reason,
                         timestamp: new Date().toISOString()
                     });
                     if (memoryStats.voucher_log.length > 500) memoryStats.voucher_log = memoryStats.voucher_log.slice(0, 500); 
